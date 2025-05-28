@@ -210,17 +210,95 @@ class RefreshTables(Resource):
             logger.error(f"刷新表配置失败: {e}")
             return {'error': str(e)}, 500
 
+@api.route('/reload-config')
+class ReloadConfig(Resource):
+    @api.doc('reload_config')
+    def post(self):
+        """重新加载配置文件（热重载，无需重启进程）"""
+        try:
+            # 如果Martin支持SIGHUP信号重载配置
+            if martin_service.process and martin_service.process.poll() is None:
+                import signal
+                import os
+                
+                # 先重新生成配置文件
+                if not martin_service.write_config_file():
+                    return {'message': '配置文件生成失败', 'status': 'failed'}, 500
+                
+                # 发送SIGHUP信号给Martin进程（如果支持的话）
+                try:
+                    # 在Windows上可能不支持SIGHUP
+                    if hasattr(signal, 'SIGHUP'):
+                        os.kill(martin_service.process.pid, signal.SIGHUP)
+                        tables_count = len(martin_service.get_postgis_tables())
+                        return {
+                            'message': '配置重载成功',
+                            'status': 'reloaded',
+                            'tables_count': tables_count
+                        }, 200
+                    else:
+                        # Windows系统回退到重启服务
+                        return refresh_tables()
+                except Exception as e:
+                    logger.warning(f"信号发送失败，回退到重启服务: {e}")
+                    # 回退到重启服务
+                    success = martin_service.refresh_tables()
+                    if success:
+                        tables_count = len(martin_service.get_postgis_tables())
+                        return {
+                            'message': '配置重载成功（通过重启）',
+                            'status': 'reloaded_via_restart',
+                            'tables_count': tables_count
+                        }, 200
+                    else:
+                        return {'message': '配置重载失败', 'status': 'failed'}, 500
+            else:
+                return {'message': 'Martin服务未运行', 'status': 'not_running'}, 503
+                
+        except Exception as e:
+            logger.error(f"重载配置失败: {e}")
+            return {'error': str(e)}, 500
+
 @api.route('/config')
-class ServiceConfig(Resource):
+class MartinConfigAPI(Resource):
     @api.doc('get_martin_config')
     def get(self):
-        """获取当前 Martin 配置"""
+        """获取Martin配置"""
         try:
             config = martin_service.generate_config()
-            return config, 200
+            return {
+                'success': True,
+                'config': config
+            }
         except Exception as e:
             logger.error(f"获取配置失败: {e}")
-            return {'error': str(e)}, 500
+            return {
+                'success': False,
+                'message': f"获取配置失败: {str(e)}"
+            }, 500
+
+@api.route('/logs')
+class MartinLogsAPI(Resource):
+    @api.doc('get_martin_logs')
+    def get(self):
+        """获取Martin服务日志"""
+        try:
+            logs = martin_service.get_process_logs()
+            version = martin_service.get_martin_version()
+            status = martin_service.get_status()
+            
+            return {
+                'success': True,
+                'logs': logs,
+                'version': version,
+                'status': status
+            }
+        except Exception as e:
+            logger.error(f"获取日志失败: {e}")
+            return {
+                'success': False,
+                'message': f"获取日志失败: {str(e)}"
+            }, 500
 
 # 注册错误处理器
 @martin_bp.errorhandler(404)

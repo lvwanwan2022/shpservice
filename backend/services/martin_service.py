@@ -109,8 +109,6 @@ class MartinService:
     
     def generate_config(self) -> Dict:
         """生成 Martin 配置文件内容"""
-        tables = self.get_postgis_tables()
-        
         # 处理 worker_processes 配置
         worker_processes = self.config['worker_processes']
         if worker_processes == 'auto':
@@ -124,20 +122,18 @@ class MartinService:
             'postgres': {
                 'connection_string': self.config['postgres_connection'],
                 'pool_size': self.config['pool_size'],
-                'tables': {}
+                # 启用自动发现 - Martin会自动发现数据库中的所有空间表
+                'auto_publish': {
+                    'tables': {
+                        'source_id_format': '{schema}.{table}',
+                        'from_schemas': [self.db_config['schema']],  # 只发现指定schema
+                        # 可选：过滤条件
+                        'id_regex': '^geojson_.*',  # 只发布以geojson_开头的表
+                    },
+                    'functions': False  # 不自动发布函数
+                }
             }
         }
-        
-        # 添加发现的表作为瓦片源
-        for table in tables:
-            table_id = table['source_id']
-            config['postgres']['tables'][table_id] = {
-                'schema': table['schema'],
-                'table': table['table'],
-                'geometry_column': table['geometry_column'],
-                'srid': table['srid'],
-                'geometry_type': table['geometry_type']
-            }
         
         return config
     
@@ -194,18 +190,42 @@ class MartinService:
         try:
             # 启动 Martin 进程
             cmd = [self.martin_executable, '--config', self.config_file_path]
+            logger.info(f"正在启动 Martin 服务: {' '.join(cmd)}")
+            
             self.process = subprocess.Popen(cmd, 
                                           stdout=subprocess.PIPE,
-                                          stderr=subprocess.PIPE)
+                                          stderr=subprocess.PIPE,
+                                          text=True,
+                                          bufsize=1,
+                                          universal_newlines=True)
             
-            # 等待服务启动
+            # 等待服务启动并收集初始日志
+            logger.info("等待 Martin 服务启动...")
             time.sleep(3)
             
+            # 检查进程是否仍在运行
+            if self.process.poll() is not None:
+                # 进程已退出，获取错误信息
+                stdout, stderr = self.process.communicate()
+                logger.error("Martin 服务启动失败")
+                if stdout:
+                    logger.error(f"标准输出: {stdout}")
+                if stderr:
+                    logger.error(f"错误输出: {stderr}")
+                return False
+            
             if self.is_running():
-                logger.info(f"Martin 服务已启动: {self.base_url}")
+                logger.info(f"Martin 服务已成功启动: {self.base_url}")
+                # 显示一些启动信息
+                catalog = self.get_catalog()
+                if catalog and 'tiles' in catalog:
+                    tables_count = len(catalog['tiles'])
+                    logger.info(f"发现并发布了 {tables_count} 个数据表")
+                    for table_name in catalog['tiles'].keys():
+                        logger.info(f"  - {table_name}")
                 return True
             else:
-                logger.error("Martin 服务启动失败")
+                logger.error("Martin 服务启动失败 - 健康检查未通过")
                 return False
                 
         except Exception as e:
@@ -275,13 +295,32 @@ class MartinService:
         """获取 MVT 瓦片 URL 模板"""
         return f"{self.base_url}/{table_id}/{{z}}/{{x}}/{{y}}.pbf"
     
-    def refresh_tables(self) -> bool:
-        """刷新表配置（重新生成配置并重启服务）"""
-        if self.is_running():
-            self.stop_service()
-            time.sleep(1)
+    def get_process_logs(self, lines: int = 50) -> Dict[str, str]:
+        """获取Martin进程的日志输出"""
+        logs = {'stdout': '', 'stderr': '', 'status': 'not_running'}
         
-        return self.start_service()
+        if self.process is None:
+            logs['status'] = 'no_process'
+            return logs
+            
+        # 检查进程状态
+        if self.process.poll() is None:
+            logs['status'] = 'running'
+        else:
+            logs['status'] = 'terminated'
+            
+        try:
+            # 尝试读取已缓存的输出
+            if hasattr(self, '_stdout_lines'):
+                logs['stdout'] = '\n'.join(self._stdout_lines[-lines:])
+            if hasattr(self, '_stderr_lines'):
+                logs['stderr'] = '\n'.join(self._stderr_lines[-lines:])
+                
+        except Exception as e:
+            logger.error(f"读取日志失败: {e}")
+            logs['error'] = str(e)
+            
+        return logs
     
     def get_status(self) -> Dict:
         """获取服务状态信息"""
@@ -292,4 +331,57 @@ class MartinService:
             'base_url': self.base_url,
             'config_file': self.config_file_path,
             'tables_count': len(self.get_postgis_tables())
-        } 
+        }
+    
+    def get_martin_version(self) -> str:
+        """获取Martin版本信息"""
+        try:
+            result = subprocess.run([self.martin_executable, '--version'], 
+                                  capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception as e:
+            logger.error(f"获取Martin版本失败: {e}")
+        return "未知版本"
+    
+    def refresh_tables(self) -> bool:
+        """刷新表配置 - 重新生成配置文件并重启Martin服务"""
+        try:
+            logger.info("开始刷新Martin表配置...")
+            
+            # 1. 停止当前服务
+            if self.is_running():
+                logger.info("停止当前Martin服务...")
+                self.stop_service()
+                
+                # 等待服务完全停止
+                import time
+                time.sleep(2)
+            
+            # 2. 重新生成配置文件
+            logger.info("重新生成配置文件...")
+            if not self.write_config_file():
+                logger.error("配置文件生成失败")
+                return False
+            
+            # 3. 重新启动服务
+            logger.info("重新启动Martin服务...")
+            if not self.start_service():
+                logger.error("Martin服务启动失败")
+                return False
+            
+            # 4. 等待服务启动并验证
+            import time
+            time.sleep(3)  # 给服务一些启动时间
+            
+            if self.is_running():
+                tables_count = len(self.get_postgis_tables())
+                logger.info(f"Martin表配置刷新成功，发现 {tables_count} 个表")
+                return True
+            else:
+                logger.error("Martin服务启动后验证失败")
+                return False
+                
+        except Exception as e:
+            logger.error(f"刷新表配置失败: {e}")
+            return False 

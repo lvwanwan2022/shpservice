@@ -4,22 +4,7 @@ cache_size_mb: 512
 postgres:
   connection_string: postgresql://postgres:123456@localhost:5432/Geometry
   pool_size: 20
-  tables:
-    public.geojson_871a8a1d-0cdd-4a99-b8be-d9f0d78886cd:
-      schema: public
-      table: geojson_871a8a1d-0cdd-4a99-b8be-d9f0d78886cd
-      geometry_column: geom
-      srid: 4326
-      geometry_type: GEOMETRY
-    public.geojson_12:
-      schema: public
-      table: geojson_12
-      geometry_column: geom
-      srid: 4326
-      geometry_type: GEOMETRY
-    public.geojson_19:
-      schema: public
-      table: geojson_19
-      geometry_column: geom
-      srid: 4326
-      geometry_type: GEOMETRY
+  auto_publish:
+    tables:
+      from_schemas: ["public"]
+      id_regex: "^geojson_.*"  # 只发布符合规则的表
