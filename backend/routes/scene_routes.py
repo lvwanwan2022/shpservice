@@ -256,21 +256,59 @@ def add_layer(scene_id):
         schema:
           type: object
           required:
-            - file_id
-            - layer_name
+            - layer_id
           properties:
-            file_id:
+            layer_id:
               type: integer
-              description: 文件ID
+              description: 图层ID（Martin服务使用负数虚拟ID）
             layer_name:
               type: string
               description: 图层名称
-            visibility:
+            service_type:
+              type: string
+              description: 服务类型（martin或geoserver）
+            martin_file_id:
+              type: string
+              description: Martin服务文件ID（UUID）
+            martin_service_id:
+              type: integer
+              description: Martin服务ID
+            mvt_url:
+              type: string
+              description: MVT瓦片URL
+            tilejson_url:
+              type: string
+              description: TileJSON URL
+            file_id:
+              type: integer
+              description: 原始文件ID
+            file_type:
+              type: string
+              description: 文件类型
+            discipline:
+              type: string
+              description: 专业
+            layer_order:
+              type: integer
+              description: 图层顺序
+            visible:
               type: boolean
               description: 是否可见
-            style_config:
+            opacity:
+              type: number
+              description: 透明度 (0.0-1.0)
+            style_name:
+              type: string
+              description: 样式名称
+            custom_style:
               type: object
-              description: 样式配置
+              description: 自定义样式配置
+            queryable:
+              type: boolean
+              description: 是否可查询
+            selectable:
+              type: boolean
+              description: 是否可选择
     responses:
       200:
         description: 图层添加成功
@@ -280,42 +318,169 @@ def add_layer(scene_id):
         description: 场景不存在
     """
     try:
+        # 记录请求信息
+        current_app.logger.info(f"收到添加图层请求: scene_id={scene_id}")
+        
         data = request.json
+        current_app.logger.info(f"请求数据: {data}")
+        
+        # 检查请求数据是否为空
+        if not data:
+            current_app.logger.error("请求数据为空")
+            return jsonify({'error': '请求数据不能为空'}), 400
         
         # 检查场景是否存在
+        current_app.logger.info(f"检查场景是否存在: scene_id={scene_id}")
         scene = scene_service.get_scene_by_id(scene_id)
         if not scene:
+            current_app.logger.error(f"场景不存在: scene_id={scene_id}")
             return jsonify({'error': '场景不存在'}), 404
         
-        # 验证必填字段
-        if not data.get('file_id'):
-            return jsonify({'error': '缺少必填字段: file_id'}), 400
+        current_app.logger.info(f"场景存在: {scene['name']}")
         
-        if not data.get('layer_name'):
-            return jsonify({'error': '缺少必填字段: layer_name'}), 400
+        # 验证必填字段
+        if not data.get('layer_id'):
+            current_app.logger.error("缺少必填字段: layer_id")
+            return jsonify({'error': '缺少必填字段: layer_id'}), 400
+        
+        layer_id = data.get('layer_id')
+        service_type = data.get('service_type', 'geoserver')
+        
+        # 根据服务类型检查图层是否存在
+        from models.db import execute_query
+        
+        if service_type == 'martin':
+            # Martin服务验证
+            current_app.logger.info(f"验证Martin服务图层: layer_id={layer_id}")
+            
+            # 检查必要的Martin服务字段
+            martin_file_id = data.get('martin_file_id')
+            martin_service_id = data.get('martin_service_id')
+            
+            # 优先使用martin_service_id，如果没有则通过martin_file_id查找
+            if martin_service_id:
+                martin_check = execute_query(
+                    "SELECT * FROM geojson_martin_services WHERE id = %s AND status = 'active'", 
+                    (martin_service_id,)
+                )
+                if not martin_check:
+                    current_app.logger.error(f"Martin服务不存在: martin_service_id={martin_service_id}")
+                    return jsonify({'error': f'Martin服务不存在'}), 400
+                
+                current_app.logger.info(f"Martin服务存在: {martin_check[0]['table_name']}")
+                
+            elif martin_file_id:
+                martin_check = execute_query(
+                    "SELECT * FROM geojson_martin_services WHERE file_id = %s AND status = 'active'", 
+                    (martin_file_id,)
+                )
+                if not martin_check:
+                    current_app.logger.error(f"Martin服务不存在: file_id={martin_file_id}")
+                    return jsonify({'error': f'Martin服务不存在'}), 400
+                
+                # 获取martin_service_id
+                martin_service_id = martin_check[0]['id']
+                current_app.logger.info(f"Martin服务存在: {martin_check[0]['table_name']}")
+                
+            else:
+                current_app.logger.error("Martin服务缺少必要字段: martin_service_id或martin_file_id")
+                return jsonify({'error': 'Martin服务缺少必要字段'}), 400
+            
+        else:
+            # GeoServer服务验证（原有逻辑）
+            current_app.logger.info(f"验证GeoServer图层: layer_id={layer_id}")
+            
+            layer_check = execute_query("SELECT * FROM geoserver_layers WHERE id = %s", (layer_id,))
+            if not layer_check:
+                current_app.logger.error(f"GeoServer图层不存在: layer_id={layer_id}")
+                return jsonify({'error': f'图层ID {layer_id} 不存在'}), 400
+            
+            current_app.logger.info(f"GeoServer图层存在: {layer_check[0]['name']}")
+        
+        # 检查图层是否已经在场景中
+        if service_type == 'martin':
+            # 对于Martin服务，检查martin_service_id是否已存在
+            existing_check = execute_query(
+                "SELECT * FROM scene_layers WHERE scene_id = %s AND martin_service_id = %s", 
+                (scene_id, martin_service_id)
+            )
+        else:
+            # 对于GeoServer服务，检查layer_id是否已存在
+            existing_check = execute_query(
+                "SELECT * FROM scene_layers WHERE scene_id = %s AND layer_id = %s AND martin_service_id IS NULL", 
+                (scene_id, layer_id)
+            )
+            
+        if existing_check:
+            current_app.logger.error(f"图层已存在于场景中: service_type={service_type}")
+            return jsonify({'error': '图层已存在于该场景中'}), 400
         
         # 准备图层数据
         layer_data = {
             'scene_id': scene_id,
-            'file_id': data.get('file_id'),
-            'layer_name': data.get('layer_name'),
-            'visibility': data.get('visibility', True),
-            'style_config': data.get('style_config', {})
+            'layer_id': layer_id,
+            'layer_name': data.get('layer_name', f'图层_{layer_id}'),
+            'layer_order': data.get('layer_order', 0),
+            'visible': data.get('visible', True),
+            'opacity': data.get('opacity', 1.0),
+            'style_name': data.get('style_name'),
+            'custom_style': data.get('custom_style'),
+            'queryable': data.get('queryable', True),
+            'selectable': data.get('selectable', True)
         }
         
-        # 添加图层
-        layer_id = scene_service.add_layer(layer_data)
+        # 添加服务类型特定的字段
+        if service_type == 'martin':
+            layer_data.update({
+                'service_type': 'martin',
+                'martin_file_id': data.get('martin_file_id'),
+                'martin_service_id': data.get('martin_service_id'),
+                'mvt_url': data.get('mvt_url'),
+                'tilejson_url': data.get('tilejson_url'),
+                'file_id': data.get('file_id'),
+                'file_type': data.get('file_type'),
+                'discipline': data.get('discipline')
+            })
+        else:
+            layer_data.update({
+                'service_type': 'geoserver',
+                'geoserver_layer_name': data.get('geoserver_layer_name'),
+                'wms_url': data.get('wms_url'),
+                'wfs_url': data.get('wfs_url'),
+                'file_id': data.get('file_id'),
+                'file_type': data.get('file_type'),
+                'discipline': data.get('discipline')
+            })
+        
+        current_app.logger.info(f"准备添加图层: {layer_data}")
+        
+        # 添加图层到场景
+        scene_layer_id = scene_service.add_layer_to_scene(layer_data)
+        
+        current_app.logger.info(f"图层添加成功: scene_layer_id={scene_layer_id}")
         
         return jsonify({
-            'id': layer_id,
+            'id': scene_layer_id,
             'message': '图层添加成功'
         }), 200
     
     except Exception as e:
-        current_app.logger.error(f"添加图层错误: {str(e)}")
-        return jsonify({'error': '服务器内部错误'}), 500
+        import traceback
+        error_msg = f"添加图层错误: {str(e)}"
+        current_app.logger.error(error_msg)
+        current_app.logger.error(f"错误详情: {traceback.format_exc()}")
+        
+        # 返回更详细的错误信息（仅在调试模式下）
+        if current_app.debug:
+            return jsonify({
+                'error': '服务器内部错误',
+                'details': str(e),
+                'traceback': traceback.format_exc()
+            }), 500
+        else:
+            return jsonify({'error': '服务器内部错误'}), 500
 
-@scene_bp.route('/<int:scene_id>/layers/<int:layer_id>', methods=['PUT'])
+@scene_bp.route('/<int:scene_id>/layers/<layer_id>', methods=['PUT'])
 def update_layer(scene_id, layer_id):
     """更新场景图层
     ---
@@ -329,24 +494,36 @@ def update_layer(scene_id, layer_id):
         description: 场景ID
       - name: layer_id
         in: path
-        type: integer
+        type: string
         required: true
-        description: 图层ID
+        description: 图层ID（可以是正数或负数）
       - name: body
         in: body
         required: true
         schema:
           type: object
           properties:
-            layer_name:
-              type: string
-              description: 图层名称
-            visibility:
+            layer_order:
+              type: integer
+              description: 图层顺序
+            visible:
               type: boolean
               description: 是否可见
-            style_config:
+            opacity:
+              type: number
+              description: 透明度 (0.0-1.0)
+            style_name:
+              type: string
+              description: 样式名称
+            custom_style:
               type: object
-              description: 样式配置
+              description: 自定义样式配置
+            queryable:
+              type: boolean
+              description: 是否可查询
+            selectable:
+              type: boolean
+              description: 是否可选择
     responses:
       200:
         description: 图层更新成功
@@ -354,6 +531,12 @@ def update_layer(scene_id, layer_id):
         description: 场景或图层不存在
     """
     try:
+        # 转换layer_id为整数
+        try:
+            layer_id = int(layer_id)
+        except ValueError:
+            return jsonify({'error': '无效的图层ID'}), 400
+        
         data = request.json
         
         # 检查场景是否存在
@@ -361,26 +544,28 @@ def update_layer(scene_id, layer_id):
         if not scene:
             return jsonify({'error': '场景不存在'}), 404
         
-        # 获取图层列表，检查图层是否存在
-        layers = scene_service.get_layers_by_scene(scene_id)
-        layer_exists = False
-        for layer in layers:
-            if layer['id'] == layer_id:
-                layer_exists = True
-                break
+        # 检查场景图层是否存在
+        from models.db import execute_query
+        scene_layer_check = execute_query(
+            "SELECT * FROM scene_layers WHERE scene_id = %s AND layer_id = %s", 
+            (scene_id, layer_id)
+        )
+        if not scene_layer_check:
+            return jsonify({'error': '场景中不存在该图层'}), 404
         
-        if not layer_exists:
-            return jsonify({'error': '图层不存在'}), 404
+        # 准备更新数据
+        update_data = {}
+        allowed_fields = [
+            'layer_order', 'visible', 'opacity', 'style_name', 
+            'custom_style', 'queryable', 'selectable'
+        ]
         
-        # 准备图层数据
-        layer_data = {
-            'layer_name': data.get('layer_name'),
-            'visibility': data.get('visibility'),
-            'style_config': data.get('style_config')
-        }
+        for field in allowed_fields:
+            if field in data:
+                update_data[field] = data[field]
         
-        # 更新图层
-        scene_service.update_layer(layer_id, layer_data)
+        # 更新场景图层
+        scene_service.update_scene_layer(scene_id, layer_id, update_data)
         
         return jsonify({
             'message': '图层更新成功'
@@ -390,7 +575,7 @@ def update_layer(scene_id, layer_id):
         current_app.logger.error(f"更新图层错误: {str(e)}")
         return jsonify({'error': '服务器内部错误'}), 500
 
-@scene_bp.route('/<int:scene_id>/layers/<int:layer_id>', methods=['DELETE'])
+@scene_bp.route('/<int:scene_id>/layers/<layer_id>', methods=['DELETE'])
 def delete_layer(scene_id, layer_id):
     """删除场景图层
     ---
@@ -404,9 +589,9 @@ def delete_layer(scene_id, layer_id):
         description: 场景ID
       - name: layer_id
         in: path
-        type: integer
+        type: string
         required: true
-        description: 图层ID
+        description: 图层ID（可以是正数或负数）
     responses:
       200:
         description: 图层删除成功
@@ -414,24 +599,38 @@ def delete_layer(scene_id, layer_id):
         description: 场景或图层不存在
     """
     try:
+        # 转换layer_id为整数
+        try:
+            layer_id = int(layer_id)
+        except ValueError:
+            return jsonify({'error': '无效的图层ID'}), 400
+        
+        current_app.logger.info(f"删除图层请求: scene_id={scene_id}, layer_id={layer_id}")
+        
         # 检查场景是否存在
         scene = scene_service.get_scene_by_id(scene_id)
         if not scene:
+            current_app.logger.error(f"场景不存在: scene_id={scene_id}")
             return jsonify({'error': '场景不存在'}), 404
         
-        # 获取图层列表，检查图层是否存在
-        layers = scene_service.get_layers_by_scene(scene_id)
-        layer_exists = False
-        for layer in layers:
-            if layer['id'] == layer_id:
-                layer_exists = True
-                break
+        # 直接检查scene_layers表中是否存在该图层
+        from models.db import execute_query
+        scene_layer_check = execute_query(
+            "SELECT * FROM scene_layers WHERE scene_id = %s AND layer_id = %s", 
+            (scene_id, layer_id)
+        )
         
-        if not layer_exists:
-            return jsonify({'error': '图层不存在'}), 404
+        if not scene_layer_check:
+            current_app.logger.error(f"场景中不存在该图层: scene_id={scene_id}, layer_id={layer_id}")
+            return jsonify({'error': '场景中不存在该图层'}), 404
         
-        # 删除图层
-        scene_service.delete_layer(layer_id)
+        current_app.logger.info(f"找到图层记录: {scene_layer_check[0]}")
+        
+        # 删除图层记录（直接从scene_layers表删除，不是从geoserver_layers删除）
+        delete_sql = "DELETE FROM scene_layers WHERE scene_id = %s AND layer_id = %s"
+        execute_query(delete_sql, (scene_id, layer_id))
+        
+        current_app.logger.info(f"图层删除成功: scene_id={scene_id}, layer_id={layer_id}")
         
         return jsonify({
             'message': '图层删除成功'

@@ -2,12 +2,12 @@
 # -*- coding: utf-8 -*-
 
 from flask import Blueprint, request, jsonify, current_app
-from services.scene_service import SceneService
-from services.file_service import FileService
+from services.layer_service import LayerService
+from services.geoserver_service import GeoServerService
 
 layer_bp = Blueprint('layer', __name__)
-scene_service = SceneService()
-file_service = FileService()
+layer_service = LayerService()
+geoserver_service = GeoServerService()
 
 @layer_bp.route('', methods=['GET'])
 def list_layers():
@@ -16,36 +16,72 @@ def list_layers():
     tags:
       - 图层管理
     parameters:
-      - name: scene_id
+      - name: workspace_id
         in: query
         type: integer
-        required: false
-        description: 场景ID
+        description: 工作空间ID
+      - name: enabled
+        in: query
+        type: boolean
+        description: 是否启用
+      - name: queryable
+        in: query
+        type: boolean
+        description: 是否可查询
+      - name: file_id
+        in: query
+        type: integer
+        description: 关联文件ID
+      - name: page
+        in: query
+        type: integer
+        default: 1
+        description: 页码
+      - name: page_size
+        in: query
+        type: integer
+        default: 20
+        description: 每页数量
     responses:
       200:
         description: 图层列表
     """
     try:
-        scene_id = request.args.get('scene_id')
+        # 获取查询参数
+        filters = {}
         
-        if scene_id:
-            # 获取指定场景的图层
-            layers = scene_service.get_layers_by_scene(int(scene_id))
-        else:
-            # 获取所有可用于添加到场景的文件/图层
-            sql = """
-            SELECT f.id, f.file_name, f.file_type, f.dimension, f.discipline,
-                f.geoserver_layer, f.wms_url, f.wfs_url, f.is_public,
-                u.username as uploader
-            FROM files f
-            LEFT JOIN users u ON f.user_id = u.id
-            WHERE f.geoserver_layer IS NOT NULL
-            ORDER BY f.upload_date DESC
-            """
-            layers = execute_query(sql)
+        if request.args.get('workspace_id'):
+            filters['workspace_id'] = int(request.args.get('workspace_id'))
+        
+        if request.args.get('enabled') is not None:
+            filters['enabled'] = request.args.get('enabled').lower() == 'true'
+        
+        if request.args.get('queryable') is not None:
+            filters['queryable'] = request.args.get('queryable').lower() == 'true'
+        
+        if request.args.get('file_id'):
+            filters['file_id'] = int(request.args.get('file_id'))
+        
+        if request.args.get('name'):
+            filters['name'] = request.args.get('name')
+        
+        # 获取分页参数
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('page_size', 20))
+        
+        # 获取排序参数
+        sort_by = request.args.get('sort_by', 'created_at')
+        sort_order = request.args.get('sort_order', 'desc')
+        
+        # 获取图层列表
+        layers, total = layer_service.get_layers(filters, page, page_size, sort_by, sort_order)
         
         return jsonify({
-            'layers': layers
+            'layers': layers,
+            'total': total,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': (total + page_size - 1) // page_size
         }), 200
     
     except Exception as e:
@@ -71,93 +107,604 @@ def get_layer(layer_id):
         description: 图层不存在
     """
     try:
-        # 查询图层和关联的文件信息
-        sql = """
-        SELECT l.*, f.file_name, f.file_type, f.dimension, f.discipline,
-               f.geoserver_layer, f.wms_url, f.wfs_url, f.is_public,
-               s.name as scene_name
-        FROM layers l
-        JOIN files f ON l.file_id = f.id
-        JOIN scenes s ON l.scene_id = s.id
-        WHERE l.id = %(layer_id)s
-        """
-        
-        result = execute_query(sql, {'layer_id': layer_id})
-        
-        if not result:
+        layer = layer_service.get_layer_by_id(layer_id)
+        if not layer:
             return jsonify({'error': '图层不存在'}), 404
         
-        return jsonify(result[0]), 200
+        return jsonify(layer), 200
     
     except Exception as e:
         current_app.logger.error(f"获取图层详情错误: {str(e)}")
         return jsonify({'error': '服务器内部错误'}), 500
 
-@layer_bp.route('/styles', methods=['GET'])
-def get_layer_styles():
-    """获取图层样式选项
+@layer_bp.route('/publish/<int:file_id>', methods=['POST'])
+def publish_layer(file_id):
+    """发布图层服务
     ---
     tags:
       - 图层管理
     parameters:
-      - name: file_type
-        in: query
-        type: string
+      - name: file_id
+        in: path
+        type: integer
         required: true
-        description: 文件类型(shp/dem/dom/dwg/dxf/geojson)
+        description: 文件ID
+      - name: body
+        in: body
+        schema:
+          type: object
+          properties:
+            workspace_name:
+              type: string
+              description: 工作空间名称
+            layer_name:
+              type: string
+              description: 图层名称
+            title:
+              type: string
+              description: 图层标题
+            abstract:
+              type: string
+              description: 图层摘要
+            style_name:
+              type: string
+              description: 样式名称
+            srs:
+              type: string
+              description: 坐标参考系统
+            enabled:
+              type: boolean
+              description: 是否启用
+            queryable:
+              type: boolean
+              description: 是否可查询
     responses:
       200:
-        description: 图层样式选项
+        description: 图层发布成功
+      400:
+        description: 参数错误
+      404:
+        description: 文件不存在
     """
     try:
-        file_type = request.args.get('file_type', '').lower()
+        data = request.json or {}
         
-        # 根据文件类型返回不同的样式选项
-        styles = {}
-        
-        if file_type in ['shp', 'dwg', 'dxf', 'geojson']:
-            # 矢量数据样式
-            styles = {
-                'point': {
-                    'size': [3, 5, 8, 10, 15],
-                    'color': ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'],
-                    'shape': ['circle', 'square', 'triangle', 'star']
-                },
-                'line': {
-                    'width': [1, 2, 3, 5, 8],
-                    'color': ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'],
-                    'style': ['solid', 'dashed', 'dotted', 'dash-dot']
-                },
-                'polygon': {
-                    'fill_color': ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'],
-                    'outline_color': ['#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF'],
-                    'outline_width': [0, 1, 2, 3, 5],
-                    'opacity': [0.1, 0.3, 0.5, 0.7, 1.0]
-                }
-            }
-        elif file_type in ['dem']:
-            # DEM栅格数据样式
-            styles = {
-                'palette': ['elevation', 'rainbow', 'terrain', 'grayscale'],
-                'opacity': [0.1, 0.3, 0.5, 0.7, 1.0],
-                'contrast': [-10, -5, 0, 5, 10],
-                'brightness': [-10, -5, 0, 5, 10]
-            }
-        elif file_type in ['dom']:
-            # DOM栅格数据样式
-            styles = {
-                'opacity': [0.1, 0.3, 0.5, 0.7, 1.0],
-                'contrast': [-10, -5, 0, 5, 10],
-                'brightness': [-10, -5, 0, 5, 10],
-                'saturation': [-10, -5, 0, 5, 10]
-            }
+        # 发布图层
+        layer_id = layer_service.publish_layer(file_id, data)
         
         return jsonify({
-            'styles': styles
+            'id': layer_id,
+            'message': '图层发布成功'
+        }), 200
+    
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    
+    except FileNotFoundError as e:
+        return jsonify({'error': str(e)}), 404
+    
+    except Exception as e:
+        current_app.logger.error(f"发布图层错误: {str(e)}")
+        return jsonify({'error': '服务器内部错误'}), 500
+
+@layer_bp.route('/<int:layer_id>', methods=['PUT'])
+def update_layer(layer_id):
+    """更新图层
+    ---
+    tags:
+      - 图层管理
+    parameters:
+      - name: layer_id
+        in: path
+        type: integer
+        required: true
+        description: 图层ID
+      - name: body
+        in: body
+        schema:
+          type: object
+          properties:
+            title:
+              type: string
+              description: 图层标题
+            abstract:
+              type: string
+              description: 图层摘要
+            default_style:
+              type: string
+              description: 默认样式
+            enabled:
+              type: boolean
+              description: 是否启用
+            queryable:
+              type: boolean
+              description: 是否可查询
+            opaque:
+              type: boolean
+              description: 是否不透明
+            attribution:
+              type: string
+              description: 归属信息
+    responses:
+      200:
+        description: 图层更新成功
+      404:
+        description: 图层不存在
+    """
+    try:
+        data = request.json
+        
+        # 检查图层是否存在
+        layer = layer_service.get_layer_by_id(layer_id)
+        if not layer:
+            return jsonify({'error': '图层不存在'}), 404
+        
+        # 更新图层
+        layer_service.update_layer(layer_id, data)
+        
+        return jsonify({'message': '图层更新成功'}), 200
+    
+    except Exception as e:
+        current_app.logger.error(f"更新图层错误: {str(e)}")
+        return jsonify({'error': '服务器内部错误'}), 500
+
+@layer_bp.route('/<int:layer_id>', methods=['DELETE'])
+def delete_layer(layer_id):
+    """删除图层
+    ---
+    tags:
+      - 图层管理
+    parameters:
+      - name: layer_id
+        in: path
+        type: integer
+        required: true
+        description: 图层ID
+    responses:
+      200:
+        description: 图层删除成功
+      404:
+        description: 图层不存在
+    """
+    try:
+        # 检查图层是否存在
+        layer = layer_service.get_layer_by_id(layer_id)
+        if not layer:
+            return jsonify({'error': '图层不存在'}), 404
+        
+        # 删除图层
+        layer_service.delete_layer(layer_id)
+        
+        return jsonify({'message': '图层删除成功'}), 200
+    
+    except Exception as e:
+        current_app.logger.error(f"删除图层错误: {str(e)}")
+        return jsonify({'error': '服务器内部错误'}), 500
+
+@layer_bp.route('/<int:layer_id>/capabilities', methods=['GET'])
+def get_layer_capabilities(layer_id):
+    """获取图层能力信息
+    ---
+    tags:
+      - 图层管理
+    parameters:
+      - name: layer_id
+        in: path
+        type: integer
+        required: true
+        description: 图层ID
+      - name: service_type
+        in: query
+        type: string
+        enum: [WMS, WFS, WCS]
+        description: 服务类型
+    responses:
+      200:
+        description: 图层能力信息
+      404:
+        description: 图层不存在
+    """
+    try:
+        service_type = request.args.get('service_type', 'WMS').upper()
+        
+        # 检查图层是否存在
+        layer = layer_service.get_layer_by_id(layer_id)
+        if not layer:
+            return jsonify({'error': '图层不存在'}), 404
+        
+        # 获取能力信息
+        capabilities = layer_service.get_layer_capabilities(layer_id, service_type)
+        
+        return jsonify(capabilities), 200
+    
+    except Exception as e:
+        current_app.logger.error(f"获取图层能力信息错误: {str(e)}")
+        return jsonify({'error': '服务器内部错误'}), 500
+
+@layer_bp.route('/<int:layer_id>/preview', methods=['GET'])
+def preview_layer(layer_id):
+    """预览图层
+    ---
+    tags:
+      - 图层管理
+    parameters:
+      - name: layer_id
+        in: path
+        type: integer
+        required: true
+        description: 图层ID
+      - name: bbox
+        in: query
+        type: string
+        description: 边界框 (minx,miny,maxx,maxy)
+      - name: width
+        in: query
+        type: integer
+        default: 512
+        description: 图片宽度
+      - name: height
+        in: query
+        type: integer
+        default: 512
+        description: 图片高度
+      - name: srs
+        in: query
+        type: string
+        default: EPSG:4326
+        description: 坐标参考系统
+    responses:
+      200:
+        description: 图层预览图片URL
+      404:
+        description: 图层不存在
+    """
+    try:
+        # 检查图层是否存在
+        layer = layer_service.get_layer_by_id(layer_id)
+        if not layer:
+            return jsonify({'error': '图层不存在'}), 404
+        
+        # 获取预览参数
+        bbox = request.args.get('bbox')
+        width = int(request.args.get('width', 512))
+        height = int(request.args.get('height', 512))
+        srs = request.args.get('srs', 'EPSG:4326')
+        
+        # 生成预览URL
+        preview_url = layer_service.get_layer_preview_url(
+            layer_id, bbox, width, height, srs
+        )
+        
+        return jsonify({
+            'preview_url': preview_url
         }), 200
     
     except Exception as e:
-        current_app.logger.error(f"获取图层样式选项错误: {str(e)}")
+        current_app.logger.error(f"预览图层错误: {str(e)}")
         return jsonify({'error': '服务器内部错误'}), 500
 
-from models.db import execute_query 
+@layer_bp.route('/statistics', methods=['GET'])
+def get_layer_statistics():
+    """获取图层统计信息
+    ---
+    tags:
+      - 图层管理
+    responses:
+      200:
+        description: 图层统计信息
+    """
+    try:
+        stats = layer_service.get_layer_statistics()
+        return jsonify(stats), 200
+    
+    except Exception as e:
+        current_app.logger.error(f"获取图层统计错误: {str(e)}")
+        return jsonify({'error': '服务器内部错误'}), 500
+
+@layer_bp.route('/<int:layer_id>/style', methods=['PUT'])
+def update_layer_style(layer_id):
+    """更新图层样式
+    ---
+    tags:
+      - 图层管理
+    parameters:
+      - name: layer_id
+        in: path
+        type: integer
+        required: true
+        description: 图层ID
+      - name: body
+        in: body
+        schema:
+          type: object
+          properties:
+            style_config:
+              type: object
+              description: 样式配置
+              properties:
+                point:
+                  type: object
+                  properties:
+                    color:
+                      type: string
+                      description: 点颜色 (如 #FF0000)
+                    size:
+                      type: number
+                      description: 点大小
+                    shape:
+                      type: string
+                      description: 点形状 (circle, square, triangle, star, cross, x)
+                    opacity:
+                      type: number
+                      description: 透明度 (0-1)
+                line:
+                  type: object
+                  properties:
+                    color:
+                      type: string
+                      description: 线颜色 (如 #0000FF)
+                    width:
+                      type: number
+                      description: 线宽
+                    style:
+                      type: string
+                      description: 线型 (solid, dashed, dotted, dashdot)
+                    opacity:
+                      type: number
+                      description: 透明度 (0-1)
+                    linecap:
+                      type: string
+                      description: 线端点样式 (round, butt, square)
+                    linejoin:
+                      type: string
+                      description: 线连接样式 (round, bevel, miter)
+                polygon:
+                  type: object
+                  properties:
+                    fillColor:
+                      type: string
+                      description: 填充颜色 (如 #00FF00)
+                    fillOpacity:
+                      type: number
+                      description: 填充透明度 (0-1)
+                    strokeColor:
+                      type: string
+                      description: 边框颜色 (如 #000000)
+                    strokeWidth:
+                      type: number
+                      description: 边框宽度
+                    strokeOpacity:
+                      type: number
+                      description: 边框透明度 (0-1)
+    responses:
+      200:
+        description: 样式更新成功
+      400:
+        description: 样式配置错误
+      404:
+        description: 图层不存在
+      500:
+        description: 服务器内部错误
+    """
+    try:
+        data = request.json
+        if not data or 'style_config' not in data:
+            return jsonify({
+                'success': False,
+                'error': '缺少样式配置参数',
+                'error_type': 'missing_parameter'
+            }), 400
+        
+        style_config = data['style_config']
+        
+        # 检查图层是否存在
+        layer = layer_service.get_layer_by_id(layer_id)
+        if not layer:
+            return jsonify({
+                'success': False,
+                'error': f'图层ID {layer_id} 不存在',
+                'error_type': 'not_found'
+            }), 404
+        
+        current_app.logger.info(f"开始更新图层 {layer_id} 的样式")
+        current_app.logger.info(f"接收到的样式配置: {style_config}")
+        
+        # 更新图层样式
+        style_result = layer_service.update_layer_style(layer_id, style_config)
+        
+        if style_result.get('success'):
+            # 样式更新成功
+            return jsonify({
+                'success': True,
+                'message': style_result.get('message', '样式更新成功'),
+                'data': {
+                    'layer_id': layer_id,
+                    'style_id': style_result.get('style_id'),
+                    'style_name': style_result.get('style_name'),
+                    'geoserver_updated': style_result.get('geoserver_updated', False)
+                }
+            }), 200
+        else:
+            # 样式更新失败
+            error_type = style_result.get('error_type', 'unknown_error')
+            error_message = style_result.get('error', '未知错误')
+            
+            if error_type == 'validation_error':
+                return jsonify({
+                    'success': False,
+                    'error': error_message,
+                    'error_type': error_type
+                }), 400
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': error_message,
+                    'error_type': error_type
+                }), 500
+    
+    except Exception as e:
+        current_app.logger.error(f"更新图层样式时发生未处理的错误: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': '服务器内部错误',
+            'error_type': 'internal_error'
+        }), 500
+
+@layer_bp.route('/<int:layer_id>/style', methods=['GET'])
+def get_layer_style(layer_id):
+    """获取图层样式信息
+    ---
+    tags:
+      - 图层管理
+    parameters:
+      - name: layer_id
+        in: path
+        type: integer
+        required: true
+        description: 图层ID
+    responses:
+      200:
+        description: 图层样式信息
+      404:
+        description: 图层不存在
+      500:
+        description: 服务器内部错误
+    """
+    try:
+        # 检查图层是否存在
+        layer = layer_service.get_layer_by_id(layer_id)
+        if not layer:
+            return jsonify({
+                'success': False,
+                'error': f'图层ID {layer_id} 不存在',
+                'error_type': 'not_found'
+            }), 404
+        
+        current_app.logger.info(f"获取图层 {layer_id} 的样式信息")
+        
+        # 获取图层的样式配置
+        style_result = layer_service.get_layer_style_config(layer_id)
+        
+        if style_result.get('success'):
+            return jsonify({
+                'success': True,
+                'data': {
+                    'layer_id': layer_id,
+                    'layer_name': layer['name'],
+                    'workspace_name': layer['workspace_name'],
+                    'file_type': layer.get('file_type'),
+                    'style_config': style_result.get('style_config'),
+                    'style_name': style_result.get('style_name'),
+                    'geoserver_styles': style_result.get('geoserver_styles')
+                }
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': style_result.get('error', '获取样式信息失败'),
+                'error_type': style_result.get('error_type', 'unknown_error')
+            }), 500
+    
+    except Exception as e:
+        current_app.logger.error(f"获取图层样式时发生未处理的错误: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': '服务器内部错误',
+            'error_type': 'internal_error'
+        }), 500
+
+@layer_bp.route('/style/template/<geometry_type>', methods=['GET'])
+def get_style_template(geometry_type):
+    """获取样式模板
+    ---
+    tags:
+      - 图层管理
+    parameters:
+      - name: geometry_type
+        in: path
+        type: string
+        required: true
+        description: 几何类型 (point, line, polygon)
+    responses:
+      200:
+        description: 样式模板
+      400:
+        description: 几何类型不支持
+    """
+    try:
+        from services.sld_template_service import SLDTemplateService
+        
+        sld_service = SLDTemplateService()
+        
+        # 验证几何类型
+        valid_types = ['point', 'line', 'polygon']
+        if geometry_type.lower() not in valid_types:
+            return jsonify({
+                'success': False,
+                'error': f'不支持的几何类型: {geometry_type}，支持的类型: {valid_types}',
+                'error_type': 'invalid_geometry_type'
+            }), 400
+        
+        # 生成默认样式配置
+        default_config = {
+            'point': {
+                'color': '#FF0000',
+                'size': 6,
+                'shape': 'circle',
+                'opacity': 1.0
+            },
+            'line': {
+                'color': '#0000FF',
+                'width': 2,
+                'style': 'solid',
+                'opacity': 1.0,
+                'linecap': 'round',
+                'linejoin': 'round'
+            },
+            'polygon': {
+                'fillColor': '#00FF00',
+                'fillOpacity': 0.7,
+                'strokeColor': '#000000',
+                'strokeWidth': 1,
+                'strokeOpacity': 1.0
+            }
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'geometry_type': geometry_type,
+                'default_style_config': {geometry_type: default_config[geometry_type]},
+                'supported_options': {
+                    'point': {
+                        'color': 'string (十六进制颜色，如 #FF0000)',
+                        'size': 'number (点大小)',
+                        'shape': 'string (circle, square, triangle, star, cross, x)',
+                        'opacity': 'number (0-1)'
+                    },
+                    'line': {
+                        'color': 'string (十六进制颜色，如 #0000FF)',
+                        'width': 'number (线宽)',
+                        'style': 'string (solid, dashed, dotted, dashdot, longdash, shortdash)',
+                        'opacity': 'number (0-1)',
+                        'linecap': 'string (round, butt, square)',
+                        'linejoin': 'string (round, bevel, miter)'
+                    },
+                    'polygon': {
+                        'fillColor': 'string (十六进制颜色，如 #00FF00)',
+                        'fillOpacity': 'number (0-1)',
+                        'strokeColor': 'string (十六进制颜色，如 #000000)',
+                        'strokeWidth': 'number (边框宽度)',
+                        'strokeOpacity': 'number (0-1)'
+                    }
+                }
+            }
+        }), 200
+    
+    except Exception as e:
+        current_app.logger.error(f"获取样式模板错误: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': '服务器内部错误',
+            'error_type': 'internal_error'
+        }), 500 
