@@ -7,4 +7,4 @@ postgres:
   auto_publish:
     tables:
       from_schemas: ["public"]
-      id_regex: "^geojson_.*"  # 只发布符合规则的表
+      id_regex: "^vector_.*"  # 只发布符合规则的表

@@ -166,26 +166,16 @@ class SceneService:
         if service_type == 'martin' and not martin_service_id:
             martin_file_id = layer_data.get('martin_file_id')
             if martin_file_id:
-                # 首先查询GeoJSON Martin服务
-                geojson_sql = """
-                SELECT id FROM geojson_martin_services 
+                # 查询统一的Vector Martin服务表
+                vector_martin_sql = """
+                SELECT id, vector_type FROM vector_martin_services 
                 WHERE file_id = %s AND status = 'active'
                 """
-                geojson_result = execute_query(geojson_sql, (martin_file_id,))
+                vector_result = execute_query(vector_martin_sql, (martin_file_id,))
                 
-                # 如果没有找到，查询SHP Martin服务
-                if not geojson_result:
-                    shp_sql = """
-                    SELECT id FROM shp_martin_services 
-                    WHERE file_id = %s AND status = 'active'
-                    """
-                    shp_result = execute_query(shp_sql, (martin_file_id,))
-                    if shp_result:
-                        martin_service_id = shp_result[0]['id']
-                        martin_service_type = 'shp'
-                else:
-                    martin_service_id = geojson_result[0]['id']
-                    martin_service_type = 'geojson'
+                if vector_result:
+                    martin_service_id = vector_result[0]['id']
+                    martin_service_type = vector_result[0]['vector_type']
         elif service_type == 'martin' and martin_service_id:
             # 如果有martin_service_id，从layer_data中获取service_type信息
             # 前端应该传递服务类型信息
@@ -194,23 +184,13 @@ class SceneService:
                 martin_service_type = layer_service_type
             else:
                 # 如果没有明确的服务类型，需要查询确定
-                # 首先尝试GeoJSON表
-                geojson_check_sql = """
-                SELECT id FROM geojson_martin_services 
+                vector_check_sql = """
+                SELECT vector_type FROM vector_martin_services 
                 WHERE id = %s AND status = 'active'
                 """
-                geojson_check = execute_query(geojson_check_sql, (martin_service_id,))
-                if geojson_check:
-                    martin_service_type = 'geojson'
-                else:
-                    # 再尝试SHP表
-                    shp_check_sql = """
-                    SELECT id FROM shp_martin_services 
-                    WHERE id = %s AND status = 'active'
-                    """
-                    shp_check = execute_query(shp_check_sql, (martin_service_id,))
-                    if shp_check:
-                        martin_service_type = 'shp'
+                vector_check = execute_query(vector_check_sql, (martin_service_id,))
+                if vector_check:
+                    martin_service_type = vector_check[0]['vector_type']
         
         # 插入新的场景图层
         sql = """
@@ -363,7 +343,7 @@ class SceneService:
                 
                 # 根据服务类型查询对应的表
                 if martin_service_type == 'geojson':
-                    geojson_martin_sql = """
+                    martin_sql = """
                     SELECT 
                         'geojson' as service_type,
                         ms.id,
@@ -377,13 +357,13 @@ class SceneService:
                         f.id as file_id,
                         f.file_type,
                         f.discipline
-                    FROM geojson_martin_services ms
+                    FROM vector_martin_services ms
                     LEFT JOIN files f ON ms.original_filename = f.file_name
-                    WHERE ms.id = %(martin_service_id)s AND ms.status = 'active'
+                    WHERE ms.id = %(martin_service_id)s AND ms.status = 'active' AND ms.vector_type = 'geojson'
                     """
-                    martin_result = execute_query(geojson_martin_sql, {'martin_service_id': martin_service_id})
+                    martin_result = execute_query(martin_sql, {'martin_service_id': martin_service_id})
                 elif martin_service_type == 'shp':
-                    shp_martin_sql = """
+                    martin_sql = """
                     SELECT 
                         'shp' as service_type,
                         ms.id,
@@ -397,17 +377,16 @@ class SceneService:
                         f.id as file_id,
                         f.file_type,
                         f.discipline
-                    FROM shp_martin_services ms
+                    FROM vector_martin_services ms
                     LEFT JOIN files f ON ms.original_filename = f.file_name
-                    WHERE ms.id = %(martin_service_id)s AND ms.status = 'active'
+                    WHERE ms.id = %(martin_service_id)s AND ms.status = 'active' AND ms.vector_type = 'shp'
                     """
-                    martin_result = execute_query(shp_martin_sql, {'martin_service_id': martin_service_id})
+                    martin_result = execute_query(martin_sql, {'martin_service_id': martin_service_id})
                 else:
-                    # 如果没有服务类型信息，尝试两个表（兼容旧数据）
-                    # 先查询GeoJSON Martin服务
-                    geojson_martin_sql = """
+                    # 如果没有服务类型信息，查询统一表，根据ID获取
+                    martin_sql = """
                     SELECT 
-                        'geojson' as service_type,
+                        ms.vector_type as service_type,
                         ms.id,
                         ms.file_id as martin_file_id,
                         ms.original_filename,
@@ -419,33 +398,11 @@ class SceneService:
                         f.id as file_id,
                         f.file_type,
                         f.discipline
-                    FROM geojson_martin_services ms
+                    FROM vector_martin_services ms
                     LEFT JOIN files f ON ms.original_filename = f.file_name
                     WHERE ms.id = %(martin_service_id)s AND ms.status = 'active'
                     """
-                    martin_result = execute_query(geojson_martin_sql, {'martin_service_id': martin_service_id})
-                    
-                    # 如果没找到，再查询SHP Martin服务
-                    if not martin_result:
-                        shp_martin_sql = """
-                        SELECT 
-                            'shp' as service_type,
-                            ms.id,
-                            ms.file_id as martin_file_id,
-                            ms.original_filename,
-                            ms.table_name,
-                            ms.mvt_url,
-                            ms.tilejson_url,
-                            ms.service_url,
-                            ms.status,
-                            f.id as file_id,
-                            f.file_type,
-                            f.discipline
-                        FROM shp_martin_services ms
-                        LEFT JOIN files f ON ms.original_filename = f.file_name
-                        WHERE ms.id = %(martin_service_id)s AND ms.status = 'active'
-                        """
-                        martin_result = execute_query(shp_martin_sql, {'martin_service_id': martin_service_id})
+                    martin_result = execute_query(martin_sql, {'martin_service_id': martin_service_id})
                 
                 if martin_result:
                     martin_info = martin_result[0]

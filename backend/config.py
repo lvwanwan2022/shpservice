@@ -48,6 +48,7 @@ MARTIN_CONFIG = {
     'enabled': True,
     'port': 3000,
     'host': '0.0.0.0',
+    'base_url': 'http://localhost:3000',  # Martin服务基础URL
     'worker_processes': 'auto',
     'postgres_connection': f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}",
     'auto_publish_tables': True,  # 自动发现并发布 PostGIS 表

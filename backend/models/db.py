@@ -440,19 +440,20 @@ def init_database():
         )
         """
         
-        # 创建GeoJSON Martin服务表
-        create_geojson_martin_services_table = """
-        CREATE TABLE IF NOT EXISTS geojson_martin_services (
+        # 创建统一的矢量Martin服务表（合并geojson和shp服务）
+        create_vector_martin_services_table = """
+        CREATE TABLE IF NOT EXISTS vector_martin_services (
             id SERIAL PRIMARY KEY,
             file_id VARCHAR(36) NOT NULL UNIQUE,
             original_filename VARCHAR(255) NOT NULL,
             file_path TEXT NOT NULL,
+            vector_type VARCHAR(20) NOT NULL, -- 'geojson' 或 'shp'
             table_name VARCHAR(100) NOT NULL,
             service_url TEXT,
             mvt_url TEXT,
             tilejson_url TEXT,
             style JSONB,
-            geojson_info JSONB,
+            vector_info JSONB,  -- 存储原始矢量文件信息
             postgis_info JSONB,
             status VARCHAR(20) DEFAULT 'active',
             user_id INTEGER REFERENCES users(id),
@@ -461,43 +462,14 @@ def init_database():
         )
         """
         
-        # 创建SHP Martin服务表
-        create_shp_martin_services_table = """
-        CREATE TABLE IF NOT EXISTS shp_martin_services (
-            id SERIAL PRIMARY KEY,
-            file_id VARCHAR(36) NOT NULL UNIQUE,
-            original_filename VARCHAR(255) NOT NULL,
-            file_path TEXT NOT NULL,
-            table_name VARCHAR(100) NOT NULL,
-            service_url TEXT,
-            mvt_url TEXT,
-            tilejson_url TEXT,
-            style JSONB,
-            shp_info JSONB,
-            postgis_info JSONB,
-            status VARCHAR(20) DEFAULT 'active',
-            user_id INTEGER REFERENCES users(id),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-        
-        # 创建GeoJSON Martin服务表的索引
-        create_geojson_martin_services_indexes = [
-            "CREATE INDEX IF NOT EXISTS idx_geojson_martin_services_file_id ON geojson_martin_services(file_id)",
-            "CREATE INDEX IF NOT EXISTS idx_geojson_martin_services_table_name ON geojson_martin_services(table_name)",
-            "CREATE INDEX IF NOT EXISTS idx_geojson_martin_services_status ON geojson_martin_services(status)",
-            "CREATE INDEX IF NOT EXISTS idx_geojson_martin_services_user_id ON geojson_martin_services(user_id)",
-            "CREATE INDEX IF NOT EXISTS idx_geojson_martin_services_service_url ON geojson_martin_services(service_url)"
-        ]
-        
-        # 创建SHP Martin服务表的索引
-        create_shp_martin_services_indexes = [
-            "CREATE INDEX IF NOT EXISTS idx_shp_martin_services_file_id ON shp_martin_services(file_id)",
-            "CREATE INDEX IF NOT EXISTS idx_shp_martin_services_table_name ON shp_martin_services(table_name)",
-            "CREATE INDEX IF NOT EXISTS idx_shp_martin_services_status ON shp_martin_services(status)",
-            "CREATE INDEX IF NOT EXISTS idx_shp_martin_services_user_id ON shp_martin_services(user_id)",
-            "CREATE INDEX IF NOT EXISTS idx_shp_martin_services_service_url ON shp_martin_services(service_url)"
+        # 创建矢量Martin服务表的索引
+        create_vector_martin_services_indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_vector_martin_services_file_id ON vector_martin_services(file_id)",
+            "CREATE INDEX IF NOT EXISTS idx_vector_martin_services_table_name ON vector_martin_services(table_name)",
+            "CREATE INDEX IF NOT EXISTS idx_vector_martin_services_vector_type ON vector_martin_services(vector_type)",
+            "CREATE INDEX IF NOT EXISTS idx_vector_martin_services_status ON vector_martin_services(status)",
+            "CREATE INDEX IF NOT EXISTS idx_vector_martin_services_user_id ON vector_martin_services(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_vector_martin_services_service_url ON vector_martin_services(service_url)"
         ]
         
         # 创建场景图层表的索引
@@ -533,8 +505,7 @@ def init_database():
             create_geoserver_layergroups_table,
             create_scenes_table,
             create_scene_layers_table,
-            create_geojson_martin_services_table,
-            create_shp_martin_services_table
+            create_vector_martin_services_table
         ]
         
         for table_sql in tables:
@@ -552,8 +523,7 @@ def init_database():
             create_geoserver_styles_indexes +
             create_geoserver_layergroups_indexes +
             create_scenes_indexes +
-            create_geojson_martin_services_indexes +
-            create_shp_martin_services_indexes +
+            create_vector_martin_services_indexes +
             create_scene_layers_indexes
         )
         
@@ -609,65 +579,6 @@ def _migrate_database():
         else:
             print("✅ projection_policy 字段已存在")
         
-        # 检查 geojson_martin_services 表是否有新字段
-        check_martin_fields_sql = """
-        SELECT 
-            EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name = 'geojson_martin_services' 
-                AND column_name = 'mvt_url'
-                AND table_schema = 'public'
-            ) as has_mvt_url,
-            EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name = 'geojson_martin_services' 
-                AND column_name = 'tilejson_url'
-                AND table_schema = 'public'
-            ) as has_tilejson_url,
-            EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name = 'geojson_martin_services' 
-                AND column_name = 'style'
-                AND table_schema = 'public'
-            ) as has_style
-        """
-        
-        result = execute_query(check_martin_fields_sql)
-        martin_fields = result[0]
-        
-        if not martin_fields['has_mvt_url']:
-            print("添加 mvt_url 字段到 geojson_martin_services 表...")
-            add_mvt_url_sql = """
-            ALTER TABLE geojson_martin_services 
-            ADD COLUMN mvt_url TEXT
-            """
-            execute_query(add_mvt_url_sql, fetch=False)
-            print("✅ mvt_url 字段添加成功")
-        else:
-            print("✅ mvt_url 字段已存在")
-            
-        if not martin_fields['has_tilejson_url']:
-            print("添加 tilejson_url 字段到 geojson_martin_services 表...")
-            add_tilejson_url_sql = """
-            ALTER TABLE geojson_martin_services 
-            ADD COLUMN tilejson_url TEXT
-            """
-            execute_query(add_tilejson_url_sql, fetch=False)
-            print("✅ tilejson_url 字段添加成功")
-        else:
-            print("✅ tilejson_url 字段已存在")
-            
-        if not martin_fields['has_style']:
-            print("添加 style 字段到 geojson_martin_services 表...")
-            add_style_sql = """
-            ALTER TABLE geojson_martin_services 
-            ADD COLUMN style JSONB
-            """
-            execute_query(add_style_sql, fetch=False)
-            print("✅ style 字段添加成功")
-        else:
-            print("✅ style 字段已存在")
-        
         # 检查 scene_layers 表是否有 martin_service_type 字段
         check_scene_layers_fields_sql = """
         SELECT 
@@ -709,6 +620,118 @@ def _migrate_database():
             print("✅ layer_type 字段添加成功")
         else:
             print("✅ layer_type 字段已存在")
+        
+        # 检查并迁移Martin服务表到统一的vector_martin_services表
+        check_vector_table_sql = """
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.tables 
+            WHERE table_name = 'vector_martin_services' 
+            AND table_schema = 'public'
+        )
+        """
+        
+        result = execute_query(check_vector_table_sql)
+        has_vector_table = result[0]['exists']
+        
+        if not has_vector_table:
+            print("创建vector_martin_services表...")
+            # 表会在init_database中创建，这里只是检查
+        else:
+            print("✅ vector_martin_services表已存在")
+        
+        # 数据迁移：从旧的geojson_martin_services和shp_martin_services迁移数据
+        print("检查数据迁移...")
+        
+        # 检查旧表是否存在
+        check_old_tables_sql = """
+        SELECT 
+            EXISTS (
+                SELECT 1 FROM information_schema.tables 
+                WHERE table_name = 'geojson_martin_services' 
+                AND table_schema = 'public'
+            ) as has_geojson_table,
+            EXISTS (
+                SELECT 1 FROM information_schema.tables 
+                WHERE table_name = 'shp_martin_services' 
+                AND table_schema = 'public'
+            ) as has_shp_table
+        """
+        
+        result = execute_query(check_old_tables_sql)
+        old_tables = result[0]
+        
+        # 迁移GeoJSON Martin服务数据
+        if old_tables['has_geojson_table']:
+            # 检查是否已经迁移过
+            check_geojson_migrated_sql = """
+            SELECT COUNT(*) as count FROM vector_martin_services WHERE vector_type = 'geojson'
+            """
+            result = execute_query(check_geojson_migrated_sql)
+            migrated_count = result[0]['count']
+            
+            # 检查原表数据数量
+            check_geojson_count_sql = "SELECT COUNT(*) as count FROM geojson_martin_services"
+            result = execute_query(check_geojson_count_sql)
+            original_count = result[0]['count']
+            
+            if migrated_count < original_count:
+                print(f"迁移GeoJSON Martin服务数据: {original_count} 条记录...")
+                migrate_geojson_sql = """
+                INSERT INTO vector_martin_services 
+                (file_id, original_filename, file_path, vector_type, table_name, service_url, mvt_url, tilejson_url, style, vector_info, postgis_info, status, user_id, created_at, updated_at)
+                SELECT 
+                    file_id, original_filename, file_path, 'geojson' as vector_type, table_name, service_url, mvt_url, tilejson_url, style, geojson_info as vector_info, postgis_info, status, user_id, created_at, updated_at
+                FROM geojson_martin_services 
+                WHERE file_id NOT IN (SELECT file_id FROM vector_martin_services WHERE vector_type = 'geojson')
+                """
+                execute_query(migrate_geojson_sql, fetch=False)
+                print("✅ GeoJSON Martin服务数据迁移完成")
+            else:
+                print("✅ GeoJSON Martin服务数据已迁移")
+        
+        # 迁移SHP Martin服务数据
+        if old_tables['has_shp_table']:
+            # 检查是否已经迁移过
+            check_shp_migrated_sql = """
+            SELECT COUNT(*) as count FROM vector_martin_services WHERE vector_type = 'shp'
+            """
+            result = execute_query(check_shp_migrated_sql)
+            migrated_count = result[0]['count']
+            
+            # 检查原表数据数量
+            check_shp_count_sql = "SELECT COUNT(*) as count FROM shp_martin_services"
+            result = execute_query(check_shp_count_sql)
+            original_count = result[0]['count']
+            
+            if migrated_count < original_count:
+                print(f"迁移SHP Martin服务数据: {original_count} 条记录...")
+                migrate_shp_sql = """
+                INSERT INTO vector_martin_services 
+                (file_id, original_filename, file_path, vector_type, table_name, service_url, mvt_url, tilejson_url, style, vector_info, postgis_info, status, user_id, created_at, updated_at)
+                SELECT 
+                    file_id, original_filename, file_path, 'shp' as vector_type, table_name, service_url, mvt_url, tilejson_url, style, shp_info as vector_info, postgis_info, status, user_id, created_at, updated_at
+                FROM shp_martin_services 
+                WHERE file_id NOT IN (SELECT file_id FROM vector_martin_services WHERE vector_type = 'shp')
+                """
+                execute_query(migrate_shp_sql, fetch=False)
+                print("✅ SHP Martin服务数据迁移完成")
+            else:
+                print("✅ SHP Martin服务数据已迁移")
+        
+        # 更新scene_layers表中的martin_service_type字段
+        print("更新scene_layers表中的martin_service_type字段...")
+        update_scene_layers_sql = """
+        UPDATE scene_layers 
+        SET martin_service_type = (
+            SELECT vector_type 
+            FROM vector_martin_services 
+            WHERE vector_martin_services.id = scene_layers.martin_service_id
+        )
+        WHERE martin_service_id IS NOT NULL 
+        AND martin_service_type IS NULL
+        """
+        execute_query(update_scene_layers_sql, fetch=False)
+        print("✅ scene_layers表martin_service_type字段更新完成")
         
         print("数据库迁移完成")
         
