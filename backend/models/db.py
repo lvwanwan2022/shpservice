@@ -423,18 +423,20 @@ def init_database():
         create_scene_layers_table = """
         CREATE TABLE IF NOT EXISTS scene_layers (
             id SERIAL PRIMARY KEY,
-            scene_id INTEGER REFERENCES scenes(id) ON DELETE CASCADE,
-            layer_id INTEGER,
-            martin_service_id INTEGER REFERENCES geojson_martin_services(id) ON DELETE CASCADE,
-            layer_order INTEGER DEFAULT 0,
-            visible BOOLEAN DEFAULT TRUE,
-            opacity NUMERIC(3,2) DEFAULT 1.0,
+            scene_id INTEGER NOT NULL REFERENCES scenes(id) ON DELETE CASCADE,
+            layer_id INTEGER NOT NULL,
+            martin_service_id INTEGER,
+            martin_service_type VARCHAR(20) DEFAULT NULL,
+            layer_type VARCHAR(20) DEFAULT 'geoserver',
+            layer_order INTEGER DEFAULT 1,
+            visible BOOLEAN DEFAULT true,
+            opacity REAL DEFAULT 1.0,
             style_name VARCHAR(100),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             custom_style JSONB,
-            queryable BOOLEAN DEFAULT TRUE,
-            selectable BOOLEAN DEFAULT TRUE,
-            UNIQUE(scene_id, layer_id)
+            queryable BOOLEAN DEFAULT true,
+            selectable BOOLEAN DEFAULT true,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """
         
@@ -459,6 +461,27 @@ def init_database():
         )
         """
         
+        # 创建SHP Martin服务表
+        create_shp_martin_services_table = """
+        CREATE TABLE IF NOT EXISTS shp_martin_services (
+            id SERIAL PRIMARY KEY,
+            file_id VARCHAR(36) NOT NULL UNIQUE,
+            original_filename VARCHAR(255) NOT NULL,
+            file_path TEXT NOT NULL,
+            table_name VARCHAR(100) NOT NULL,
+            service_url TEXT,
+            mvt_url TEXT,
+            tilejson_url TEXT,
+            style JSONB,
+            shp_info JSONB,
+            postgis_info JSONB,
+            status VARCHAR(20) DEFAULT 'active',
+            user_id INTEGER REFERENCES users(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+        
         # 创建GeoJSON Martin服务表的索引
         create_geojson_martin_services_indexes = [
             "CREATE INDEX IF NOT EXISTS idx_geojson_martin_services_file_id ON geojson_martin_services(file_id)",
@@ -466,6 +489,15 @@ def init_database():
             "CREATE INDEX IF NOT EXISTS idx_geojson_martin_services_status ON geojson_martin_services(status)",
             "CREATE INDEX IF NOT EXISTS idx_geojson_martin_services_user_id ON geojson_martin_services(user_id)",
             "CREATE INDEX IF NOT EXISTS idx_geojson_martin_services_service_url ON geojson_martin_services(service_url)"
+        ]
+        
+        # 创建SHP Martin服务表的索引
+        create_shp_martin_services_indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_shp_martin_services_file_id ON shp_martin_services(file_id)",
+            "CREATE INDEX IF NOT EXISTS idx_shp_martin_services_table_name ON shp_martin_services(table_name)",
+            "CREATE INDEX IF NOT EXISTS idx_shp_martin_services_status ON shp_martin_services(status)",
+            "CREATE INDEX IF NOT EXISTS idx_shp_martin_services_user_id ON shp_martin_services(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_shp_martin_services_service_url ON shp_martin_services(service_url)"
         ]
         
         # 创建场景图层表的索引
@@ -501,7 +533,8 @@ def init_database():
             create_geoserver_layergroups_table,
             create_scenes_table,
             create_scene_layers_table,
-            create_geojson_martin_services_table
+            create_geojson_martin_services_table,
+            create_shp_martin_services_table
         ]
         
         for table_sql in tables:
@@ -520,6 +553,7 @@ def init_database():
             create_geoserver_layergroups_indexes +
             create_scenes_indexes +
             create_geojson_martin_services_indexes +
+            create_shp_martin_services_indexes +
             create_scene_layers_indexes
         )
         
@@ -633,6 +667,48 @@ def _migrate_database():
             print("✅ style 字段添加成功")
         else:
             print("✅ style 字段已存在")
+        
+        # 检查 scene_layers 表是否有 martin_service_type 字段
+        check_scene_layers_fields_sql = """
+        SELECT 
+            EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'scene_layers' 
+                AND column_name = 'martin_service_type'
+                AND table_schema = 'public'
+            ) as has_martin_service_type,
+            EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'scene_layers' 
+                AND column_name = 'layer_type'
+                AND table_schema = 'public'
+            ) as has_layer_type
+        """
+        
+        result = execute_query(check_scene_layers_fields_sql)
+        scene_layers_fields = result[0]
+        
+        if not scene_layers_fields['has_martin_service_type']:
+            print("添加 martin_service_type 字段到 scene_layers 表...")
+            add_martin_service_type_sql = """
+            ALTER TABLE scene_layers 
+            ADD COLUMN martin_service_type VARCHAR(20) DEFAULT NULL
+            """
+            execute_query(add_martin_service_type_sql, fetch=False)
+            print("✅ martin_service_type 字段添加成功")
+        else:
+            print("✅ martin_service_type 字段已存在")
+        
+        if not scene_layers_fields['has_layer_type']:
+            print("添加 layer_type 字段到 scene_layers 表...")
+            add_layer_type_sql = """
+            ALTER TABLE scene_layers 
+            ADD COLUMN layer_type VARCHAR(20) DEFAULT 'geoserver'
+            """
+            execute_query(add_layer_type_sql, fetch=False)
+            print("✅ layer_type 字段添加成功")
+        else:
+            print("✅ layer_type 字段已存在")
         
         print("数据库迁移完成")
         

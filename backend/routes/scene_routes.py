@@ -359,28 +359,69 @@ def add_layer(scene_id):
             
             # 优先使用martin_service_id，如果没有则通过martin_file_id查找
             if martin_service_id:
-                martin_check = execute_query(
-                    "SELECT * FROM geojson_martin_services WHERE id = %s AND status = 'active'", 
-                    (martin_service_id,)
-                )
+                # 根据layer_service_type确定查询哪个表
+                layer_service_type = data.get('layer_service_type', 'geojson')
+                
+                if layer_service_type == 'shp':
+                    martin_check = execute_query(
+                        "SELECT * FROM shp_martin_services WHERE id = %s AND status = 'active'", 
+                        (martin_service_id,)
+                    )
+                else:
+                    martin_check = execute_query(
+                        "SELECT * FROM geojson_martin_services WHERE id = %s AND status = 'active'", 
+                        (martin_service_id,)
+                    )
+                
                 if not martin_check:
-                    current_app.logger.error(f"Martin服务不存在: martin_service_id={martin_service_id}")
+                    current_app.logger.error(f"Martin服务不存在: martin_service_id={martin_service_id}, service_type={layer_service_type}")
                     return jsonify({'error': f'Martin服务不存在'}), 400
                 
                 current_app.logger.info(f"Martin服务存在: {martin_check[0]['table_name']}")
                 
+                # 获取martin_service_id
+                martin_service_id = martin_check[0]['id']
+                current_app.logger.info(f"Martin服务存在: {martin_check[0]['table_name']}, service_type={layer_service_type}")
+                
             elif martin_file_id:
-                martin_check = execute_query(
-                    "SELECT * FROM geojson_martin_services WHERE file_id = %s AND status = 'active'", 
-                    (martin_file_id,)
-                )
+                # 优先查询指定类型的表，如果没有则查询另一个表
+                layer_service_type = data.get('layer_service_type', 'geojson')
+                martin_check = None
+                
+                if layer_service_type == 'shp':
+                    martin_check = execute_query(
+                        "SELECT * FROM shp_martin_services WHERE file_id = %s AND status = 'active'", 
+                        (martin_file_id,)
+                    )
+                    if not martin_check:
+                        # 如果SHP表中没有，尝试查询GeoJSON表
+                        martin_check = execute_query(
+                            "SELECT * FROM geojson_martin_services WHERE file_id = %s AND status = 'active'", 
+                            (martin_file_id,)
+                        )
+                        if martin_check:
+                            layer_service_type = 'geojson'
+                else:
+                    martin_check = execute_query(
+                        "SELECT * FROM geojson_martin_services WHERE file_id = %s AND status = 'active'", 
+                        (martin_file_id,)
+                    )
+                    if not martin_check:
+                        # 如果GeoJSON表中没有，尝试查询SHP表
+                        martin_check = execute_query(
+                            "SELECT * FROM shp_martin_services WHERE file_id = %s AND status = 'active'", 
+                            (martin_file_id,)
+                        )
+                        if martin_check:
+                            layer_service_type = 'shp'
+                
                 if not martin_check:
                     current_app.logger.error(f"Martin服务不存在: file_id={martin_file_id}")
                     return jsonify({'error': f'Martin服务不存在'}), 400
                 
                 # 获取martin_service_id
                 martin_service_id = martin_check[0]['id']
-                current_app.logger.info(f"Martin服务存在: {martin_check[0]['table_name']}")
+                current_app.logger.info(f"Martin服务存在: {martin_check[0]['table_name']}, service_type={layer_service_type}")
                 
             else:
                 current_app.logger.error("Martin服务缺少必要字段: martin_service_id或martin_file_id")
@@ -435,6 +476,7 @@ def add_layer(scene_id):
                 'service_type': 'martin',
                 'martin_file_id': data.get('martin_file_id'),
                 'martin_service_id': data.get('martin_service_id'),
+                'layer_service_type': data.get('layer_service_type', 'geojson'),
                 'mvt_url': data.get('mvt_url'),
                 'tilejson_url': data.get('tilejson_url'),
                 'file_id': data.get('file_id'),

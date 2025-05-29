@@ -134,6 +134,26 @@ except ImportError:
 except Exception as e:
     logger.warning(f"⚠️ GeoJSON Martin 路由注册失败: {str(e)}")
 
+# SHP Martin 服务路由
+try:
+    from routes.shp_martin_routes import shp_martin_bp
+    app.register_blueprint(shp_martin_bp)
+    logger.info("✅ SHP Martin 服务路由注册成功")
+except ImportError:
+    logger.info("SHP Martin 路由不存在，跳过")
+except Exception as e:
+    logger.warning(f"⚠️ SHP Martin 路由注册失败: {str(e)}")
+
+# 统一Martin 服务路由
+try:
+    from routes.martin_service_routes import martin_service_bp
+    app.register_blueprint(martin_service_bp)
+    logger.info("✅ 统一Martin 服务路由注册成功")
+except ImportError:
+    logger.info("统一Martin 路由不存在，跳过")
+except Exception as e:
+    logger.warning(f"⚠️ 统一Martin 路由注册失败: {str(e)}")
+
 # GeoJSON 直接服务路由
 try:
     from routes.geojson_direct_routes import geojson_direct_bp

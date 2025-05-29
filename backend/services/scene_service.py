@@ -159,33 +159,77 @@ class SceneService:
         
         # 确定是否为Martin服务
         martin_service_id = layer_data.get('martin_service_id')
+        martin_service_type = None
         service_type = layer_data.get('service_type', 'geoserver')
         
         # 如果是Martin服务但没有提供martin_service_id，尝试通过martin_file_id查找
         if service_type == 'martin' and not martin_service_id:
             martin_file_id = layer_data.get('martin_file_id')
             if martin_file_id:
-                martin_sql = """
+                # 首先查询GeoJSON Martin服务
+                geojson_sql = """
                 SELECT id FROM geojson_martin_services 
                 WHERE file_id = %s AND status = 'active'
                 """
-                martin_result = execute_query(martin_sql, (martin_file_id,))
-                if martin_result:
-                    martin_service_id = martin_result[0]['id']
+                geojson_result = execute_query(geojson_sql, (martin_file_id,))
+                
+                # 如果没有找到，查询SHP Martin服务
+                if not geojson_result:
+                    shp_sql = """
+                    SELECT id FROM shp_martin_services 
+                    WHERE file_id = %s AND status = 'active'
+                    """
+                    shp_result = execute_query(shp_sql, (martin_file_id,))
+                    if shp_result:
+                        martin_service_id = shp_result[0]['id']
+                        martin_service_type = 'shp'
+                else:
+                    martin_service_id = geojson_result[0]['id']
+                    martin_service_type = 'geojson'
+        elif service_type == 'martin' and martin_service_id:
+            # 如果有martin_service_id，从layer_data中获取service_type信息
+            # 前端应该传递服务类型信息
+            layer_service_type = layer_data.get('layer_service_type')
+            if layer_service_type and layer_service_type in ['geojson', 'shp']:
+                martin_service_type = layer_service_type
+            else:
+                # 如果没有明确的服务类型，需要查询确定
+                # 首先尝试GeoJSON表
+                geojson_check_sql = """
+                SELECT id FROM geojson_martin_services 
+                WHERE id = %s AND status = 'active'
+                """
+                geojson_check = execute_query(geojson_check_sql, (martin_service_id,))
+                if geojson_check:
+                    martin_service_type = 'geojson'
+                else:
+                    # 再尝试SHP表
+                    shp_check_sql = """
+                    SELECT id FROM shp_martin_services 
+                    WHERE id = %s AND status = 'active'
+                    """
+                    shp_check = execute_query(shp_check_sql, (martin_service_id,))
+                    if shp_check:
+                        martin_service_type = 'shp'
         
         # 插入新的场景图层
         sql = """
         INSERT INTO scene_layers
-        (scene_id, layer_id, martin_service_id, layer_order, visible, opacity, style_name, custom_style, queryable, selectable)
+        (scene_id, layer_id, martin_service_id, martin_service_type, layer_type, layer_order, visible, opacity, style_name, custom_style, queryable, selectable)
         VALUES
-        (%(scene_id)s, %(layer_id)s, %(martin_service_id)s, %(layer_order)s, %(visible)s, %(opacity)s, %(style_name)s, %(custom_style)s, %(queryable)s, %(selectable)s)
+        (%(scene_id)s, %(layer_id)s, %(martin_service_id)s, %(martin_service_type)s, %(layer_type)s, %(layer_order)s, %(visible)s, %(opacity)s, %(style_name)s, %(custom_style)s, %(queryable)s, %(selectable)s)
         RETURNING id
         """
+        
+        # 根据service_type确定layer_type
+        layer_type = 'martin' if service_type == 'martin' else 'geoserver'
         
         params = {
             'scene_id': layer_data.get('scene_id'),
             'layer_id': layer_data.get('layer_id'),
             'martin_service_id': martin_service_id,
+            'martin_service_type': martin_service_type,
+            'layer_type': layer_type,
             'layer_order': layer_order,
             'visible': layer_data.get('visible', True),
             'opacity': layer_data.get('opacity', 1.0),
@@ -276,6 +320,7 @@ class SceneService:
             sl.id as scene_layer_id,
             sl.layer_id,
             sl.martin_service_id,
+            sl.martin_service_type,
             sl.layer_order,
             sl.visible as visibility,
             sl.opacity,
@@ -313,23 +358,94 @@ class SceneService:
             
             # 判断是否为Martin服务
             if martin_service_id:
-                # Martin服务处理 - 通过martin_service_id直接查询
-                martin_sql = """
-                SELECT 
-                    ms.id,
-                    ms.file_id as martin_file_id,
-                    ms.original_filename,
-                    ms.table_name,
-                    ms.service_url,
-                    ms.status,
-                    f.id as file_id,
-                    f.file_type,
-                    f.discipline
-                FROM geojson_martin_services ms
-                LEFT JOIN files f ON ms.original_filename = f.file_name
-                WHERE ms.id = %(martin_service_id)s AND ms.status = 'active'
-                """
-                martin_result = execute_query(martin_sql, {'martin_service_id': martin_service_id})
+                martin_service_type = layer.get('martin_service_type')
+                martin_result = None
+                
+                # 根据服务类型查询对应的表
+                if martin_service_type == 'geojson':
+                    geojson_martin_sql = """
+                    SELECT 
+                        'geojson' as service_type,
+                        ms.id,
+                        ms.file_id as martin_file_id,
+                        ms.original_filename,
+                        ms.table_name,
+                        ms.mvt_url,
+                        ms.tilejson_url,
+                        ms.service_url,
+                        ms.status,
+                        f.id as file_id,
+                        f.file_type,
+                        f.discipline
+                    FROM geojson_martin_services ms
+                    LEFT JOIN files f ON ms.original_filename = f.file_name
+                    WHERE ms.id = %(martin_service_id)s AND ms.status = 'active'
+                    """
+                    martin_result = execute_query(geojson_martin_sql, {'martin_service_id': martin_service_id})
+                elif martin_service_type == 'shp':
+                    shp_martin_sql = """
+                    SELECT 
+                        'shp' as service_type,
+                        ms.id,
+                        ms.file_id as martin_file_id,
+                        ms.original_filename,
+                        ms.table_name,
+                        ms.mvt_url,
+                        ms.tilejson_url,
+                        ms.service_url,
+                        ms.status,
+                        f.id as file_id,
+                        f.file_type,
+                        f.discipline
+                    FROM shp_martin_services ms
+                    LEFT JOIN files f ON ms.original_filename = f.file_name
+                    WHERE ms.id = %(martin_service_id)s AND ms.status = 'active'
+                    """
+                    martin_result = execute_query(shp_martin_sql, {'martin_service_id': martin_service_id})
+                else:
+                    # 如果没有服务类型信息，尝试两个表（兼容旧数据）
+                    # 先查询GeoJSON Martin服务
+                    geojson_martin_sql = """
+                    SELECT 
+                        'geojson' as service_type,
+                        ms.id,
+                        ms.file_id as martin_file_id,
+                        ms.original_filename,
+                        ms.table_name,
+                        ms.mvt_url,
+                        ms.tilejson_url,
+                        ms.service_url,
+                        ms.status,
+                        f.id as file_id,
+                        f.file_type,
+                        f.discipline
+                    FROM geojson_martin_services ms
+                    LEFT JOIN files f ON ms.original_filename = f.file_name
+                    WHERE ms.id = %(martin_service_id)s AND ms.status = 'active'
+                    """
+                    martin_result = execute_query(geojson_martin_sql, {'martin_service_id': martin_service_id})
+                    
+                    # 如果没找到，再查询SHP Martin服务
+                    if not martin_result:
+                        shp_martin_sql = """
+                        SELECT 
+                            'shp' as service_type,
+                            ms.id,
+                            ms.file_id as martin_file_id,
+                            ms.original_filename,
+                            ms.table_name,
+                            ms.mvt_url,
+                            ms.tilejson_url,
+                            ms.service_url,
+                            ms.status,
+                            f.id as file_id,
+                            f.file_type,
+                            f.discipline
+                        FROM shp_martin_services ms
+                        LEFT JOIN files f ON ms.original_filename = f.file_name
+                        WHERE ms.id = %(martin_service_id)s AND ms.status = 'active'
+                        """
+                        martin_result = execute_query(shp_martin_sql, {'martin_service_id': martin_service_id})
                 
                 if martin_result:
                     martin_info = martin_result[0]
@@ -350,13 +466,14 @@ class SceneService:
                         'wfs_url': None,
                         'wcs_url': None,
                         # Martin服务特有字段
-                        'service_type': 'martin',
+                        'service_type': 'martin',  # 统一设置为martin，不使用具体的子类型
+                        'martin_service_subtype': martin_info['service_type'],  # 子类型单独存储
                         'martin_service_id': martin_service_id,
                         'martin_file_id': martin_info['martin_file_id'],
                         'martin_table_name': martin_info['table_name'],
                         'service_url': martin_info['service_url'],
-                        'mvt_url': f'{martin_info["service_url"]}/{{z}}/{{x}}/{{y}}.pbf',
-                        'tilejson_url': martin_info['service_url'],
+                        'mvt_url': martin_info['mvt_url'],
+                        'tilejson_url': martin_info['tilejson_url'],
                         'file_id': martin_info['file_id']
                     })
                 else:
@@ -372,6 +489,7 @@ class SceneService:
                         'discipline': 'unknown',
                         'workspace_name': 'martin',
                         'service_type': 'martin',
+                        'martin_service_subtype': 'unknown',
                         'martin_service_id': martin_service_id,
                         'geoserver_layer': None,
                         'wms_url': None,

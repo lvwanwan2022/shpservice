@@ -187,18 +187,19 @@ def get_file_list():
                CONCAT(gw.name, ':', gl.name) as geoserver_layer_name, 
                gl.wms_url as geoserver_wms_url, 
                gl.wfs_url as geoserver_wfs_url,
-               ms.id as martin_service_id,
-               ms.file_id as martin_file_id,
-               ms.table_name as martin_table_name,
-               ms.mvt_url as martin_mvt_url,
-               ms.tilejson_url as martin_tilejson_url,
-               ms.style as martin_style,
-               ms.status as martin_status
+               COALESCE(gms.id, sms.id) as martin_service_id,
+               COALESCE(gms.file_id, sms.file_id) as martin_file_id,
+               COALESCE(gms.table_name, sms.table_name) as martin_table_name,
+               COALESCE(gms.mvt_url, sms.mvt_url) as martin_mvt_url,
+               COALESCE(gms.tilejson_url, sms.tilejson_url) as martin_tilejson_url,
+               COALESCE(gms.style, sms.style) as martin_style,
+               COALESCE(gms.status, sms.status) as martin_status
         FROM files f
         LEFT JOIN users u ON f.user_id = u.id
         LEFT JOIN geoserver_layers gl ON f.id = gl.file_id
         LEFT JOIN geoserver_workspaces gw ON gl.workspace_id = gw.id
-        LEFT JOIN geojson_martin_services ms ON f.file_name = ms.original_filename AND ms.status = 'active'
+        LEFT JOIN geojson_martin_services gms ON f.file_name = gms.original_filename AND gms.status = 'active'
+        LEFT JOIN shp_martin_services sms ON f.file_name = sms.original_filename AND sms.status = 'active'
         """
         
         # 构建WHERE条件
@@ -262,7 +263,8 @@ def get_file_list():
         LEFT JOIN users u ON f.user_id = u.id
         LEFT JOIN geoserver_layers gl ON f.id = gl.file_id
         LEFT JOIN geoserver_workspaces gw ON gl.workspace_id = gw.id
-        LEFT JOIN geojson_martin_services ms ON f.file_name = ms.original_filename AND ms.status = 'active'
+        LEFT JOIN geojson_martin_services gms ON f.file_name = gms.original_filename AND gms.status = 'active'
+        LEFT JOIN shp_martin_services sms ON f.file_name = sms.original_filename AND sms.status = 'active'
         """
         
         if where_conditions:
@@ -484,26 +486,46 @@ def publish_martin_service(file_id):
         
         # 检查文件类型是否支持Martin服务
         file_type = file_info.get('file_type', '').lower()
-        if file_type != 'geojson':
-            return jsonify({'error': 'Martin服务仅支持GeoJSON文件'}), 400
+        if file_type not in ['geojson', 'shp']:
+            return jsonify({'error': 'Martin服务仅支持GeoJSON和SHP文件'}), 400
         
-        # 检查是否已发布到Martin
-        check_sql = """
-        SELECT id, file_id FROM geojson_martin_services 
-        WHERE original_filename = %s AND status = 'active'
-        """
-        existing = execute_query(check_sql, (file_info['file_name'],))
-        if existing:
-            return jsonify({
-                'error': '文件已发布到Martin服务',
-                'martin_file_id': existing[0]['file_id']
-            }), 400
-        
-        # 发布到Martin服务
-        from services.geojson_martin_service import GeoJsonMartinService
-        martin_service = GeoJsonMartinService()
-        
-        result = martin_service.publish_existing_file(file_id)
+        if file_type == 'geojson':
+            # GeoJSON文件处理
+            # 检查是否已发布到Martin
+            check_sql = """
+            SELECT id, file_id FROM geojson_martin_services 
+            WHERE original_filename = %s AND status = 'active'
+            """
+            existing = execute_query(check_sql, (file_info['file_name'],))
+            if existing:
+                return jsonify({
+                    'error': '文件已发布到Martin服务',
+                    'martin_file_id': existing[0]['file_id']
+                }), 400
+            
+            # 发布到Martin服务
+            from services.geojson_martin_service import GeoJsonMartinService
+            martin_service = GeoJsonMartinService()
+            result = martin_service.publish_existing_file(file_id)
+            
+        elif file_type == 'shp':
+            # SHP文件处理
+            # 检查是否已发布到Martin
+            check_sql = """
+            SELECT id, file_id FROM shp_martin_services 
+            WHERE original_filename = %s AND status = 'active'
+            """
+            existing = execute_query(check_sql, (file_info['file_name'],))
+            if existing:
+                return jsonify({
+                    'error': '文件已发布到Martin服务',
+                    'martin_file_id': existing[0]['file_id']
+                }), 400
+            
+            # 发布到Martin服务
+            from services.shp_martin_service import ShpMartinService
+            martin_service = ShpMartinService()
+            result = martin_service.publish_existing_file(file_id)
         
         return jsonify({
             'success': True,
@@ -575,26 +597,48 @@ def unpublish_martin_service(file_id):
         if not file_info:
             return jsonify({'error': '文件不存在'}), 404
         
-        # 查找Martin服务记录
-        check_sql = """
+        file_type = file_info.get('file_type', '').lower()
+        martin_file_id = None
+        service_type = None
+        
+        # 查找GeoJSON Martin服务记录
+        geojson_check_sql = """
         SELECT file_id FROM geojson_martin_services 
         WHERE original_filename = %s AND status = 'active'
         """
-        existing = execute_query(check_sql, (file_info['file_name'],))
-        if not existing:
+        geojson_existing = execute_query(geojson_check_sql, (file_info['file_name'],))
+        
+        # 查找SHP Martin服务记录
+        shp_check_sql = """
+        SELECT file_id FROM shp_martin_services 
+        WHERE original_filename = %s AND status = 'active'
+        """
+        shp_existing = execute_query(shp_check_sql, (file_info['file_name'],))
+        
+        if geojson_existing:
+            martin_file_id = geojson_existing[0]['file_id']
+            service_type = 'geojson'
+        elif shp_existing:
+            martin_file_id = shp_existing[0]['file_id']
+            service_type = 'shp'
+        else:
             return jsonify({'error': '文件未发布到Martin服务'}), 404
         
-        martin_file_id = existing[0]['file_id']
-        
-        # 删除Martin服务
-        from services.geojson_martin_service import GeoJsonMartinService
-        martin_service = GeoJsonMartinService()
-        
-        result = martin_service.delete_service(martin_file_id)
+        # 根据服务类型删除对应的Martin服务
+        if service_type == 'geojson':
+            from services.geojson_martin_service import GeoJsonMartinService
+            martin_service = GeoJsonMartinService()
+            result = martin_service.delete_service(martin_file_id)
+        elif service_type == 'shp':
+            from services.shp_martin_service import ShpMartinService
+            martin_service = ShpMartinService()
+            # 需要为SHP Martin服务添加delete_service方法
+            result = martin_service.delete_service(martin_file_id)
         
         return jsonify({
             'success': True,
-            'message': 'Martin服务取消发布成功'
+            'message': 'Martin服务取消发布成功',
+            'service_type': service_type
         }), 200
     
     except Exception as e:
