@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import re
 import requests
 import json
 import zipfile
@@ -89,9 +90,15 @@ class GeoServerService:
                 raise Exception(f"创建工作空间失败: {response.text}")
     
     def publish_shapefile(self, shp_zip_path, store_name, file_id):
-        """发布Shapefile服务
+        """发布Shapefile服务 - 解压验证版本
         
-        注意：每次发布都会创建一个新的store，store名称格式为"文件名_store"
+        发布流程：
+        1. 解压ZIP文件到临时目录
+        2. 验证Shapefile文件完整性
+        3. 在GeoServer中创建数据存储
+        4. 上传解压后的文件到GeoServer
+        5. 创建数据库记录
+        6. 清理临时文件
         
         Args:
             shp_zip_path: Shapefile ZIP包路径
@@ -101,10 +108,11 @@ class GeoServerService:
         Returns:
             发布结果信息
         """
+        extracted_folder = None
         try:
-            print(f"开始发布Shapefile: {shp_zip_path}")
+            print(f"开始发布Shapefile（解压验证版本）: {shp_zip_path}")
             
-            # 修复文件路径问题
+            # 1. 修复文件路径问题
             corrected_path = self._correct_path(shp_zip_path)
             print(f"修正后的文件路径: {corrected_path}")
             
@@ -112,47 +120,58 @@ class GeoServerService:
             if not corrected_path.endswith('.zip'):
                 raise ValueError("Shapefile必须是zip格式")
             
-            # 根据文件名生成store名称（文件名_store格式）
-            import os
+            # 2. 解压并验证ZIP文件
+            extracted_folder = self._extract_and_validate_shapefile_simple(corrected_path)
+            print(f"✅ ZIP文件解压并验证成功: {extracted_folder}")
+            
+            # 3. 根据文件名生成store名称
             filename = os.path.splitext(os.path.basename(corrected_path))[0]
-            # 清理文件名，只保留字母、数字、下划线和中划线
-            import re
             clean_filename = re.sub(r'[^a-zA-Z0-9_\-\u4e00-\u9fff]', '_', filename)
             generated_store_name = f"{clean_filename}_store"
             print(f"自动生成的存储名称: {generated_store_name}")
             
-            # 从ZIP文件中提取SHP文件
-            shp_name = self._extract_shp_name_from_zip(corrected_path)
-            if not shp_name:
-                shp_name = generated_store_name
+            # 4. 获取SHP文件名并处理文件重命名
+            original_shp_name = self._get_shp_name_from_folder(extracted_folder)
+            print(f"解压文件夹中的原始SHP文件名: {original_shp_name}")
             
-            print(f"预期的Shapefile图层名称: {shp_name}")
+            # 检查并重命名包含中文或特殊字符的文件
+            safe_shp_name = self._ensure_safe_shapefile_names(extracted_folder, original_shp_name, clean_filename)
+            print(f"处理后的SHP文件名: {safe_shp_name}")
             
-            # 获取工作空间ID
+            # 5. 获取工作空间ID
             workspace_id = self._get_workspace_id()
             
-            # 1. 创建数据存储
+            # 6. 在数据库中创建数据存储记录
             store_id = self._create_datastore_in_db(generated_store_name, workspace_id, 'Shapefile', file_id)
+            print(f"✅ 数据存储记录创建成功，store_id={store_id}")
             
-            # 2. 上传Shapefile到GeoServer
-            self._upload_shapefile_to_geoserver(corrected_path, generated_store_name)
+            # 7. 在GeoServer中创建空的数据存储
+            self._create_empty_shapefile_datastore(generated_store_name)
+            print(f"✅ GeoServer中空数据存储创建成功")
             
-            # 3. 等待GeoServer处理
+            # 8. 上传解压后的Shapefile到GeoServer
+            self._upload_extracted_shapefile_to_geoserver(extracted_folder, generated_store_name)
+            print(f"✅ Shapefile文件已上传到GeoServer")
+            
+            # 9. 等待GeoServer处理
             time.sleep(3)
             
-            # 4. 获取实际的要素类型信息
-            featuretype_info = self._get_featuretype_info(generated_store_name, shp_name)
+            # 10. 获取要素类型信息（让GeoServer自动确定要素类型名称）
+            featuretype_info = self._get_featuretype_info(generated_store_name)
+            print(f"✅ 获取要素类型信息成功")
             
-            # 5. 在数据库中创建要素类型记录
+            # 11. 在数据库中创建要素类型记录
             featuretype_id = self._create_featuretype_in_db(featuretype_info, store_id)
+            print(f"✅ 要素类型记录创建成功，featuretype_id={featuretype_id}")
             
-            # 6. 在数据库中创建图层记录
+            # 12. 在数据库中创建图层记录
             layer_info = self._create_layer_in_db(featuretype_info, workspace_id, featuretype_id, file_id, 'datastore')
+            print(f"✅ 图层记录创建成功，layer_id={layer_info['id']}")
             
-            # 7. 返回服务信息
-            return {
+            # 13. 返回服务信息
+            result = {
                 "success": True,
-                "store_name": generated_store_name,  # 返回生成的store名称
+                "store_name": generated_store_name,
                 "layer_name": layer_info['full_name'],
                 "wms_url": layer_info['wms_url'],
                 "wfs_url": layer_info['wfs_url'],
@@ -160,12 +179,28 @@ class GeoServerService:
                 "filename": filename
             }
             
+            print(f"✅ Shapefile服务发布成功: {result['layer_name']}")
+            return result
+            
         except Exception as e:
-            print(f"发布Shapefile失败: {str(e)}")
-            # 清理可能创建的资源
-            cleanup_store_name = generated_store_name if 'generated_store_name' in locals() else store_name
-            self._cleanup_failed_publish(cleanup_store_name, 'datastore')
+            print(f"❌ 发布Shapefile失败: {str(e)}")
+            
+            # 清理可能创建的GeoServer资源
+            if 'generated_store_name' in locals():
+                self._cleanup_failed_publish(generated_store_name, 'datastore')
+            
+            # 重新抛出异常，让调用方知道发布失败
             raise Exception(f"发布Shapefile失败: {str(e)}")
+            
+        finally:
+            # 清理解压的临时文件夹
+            if extracted_folder and os.path.exists(extracted_folder):
+                import shutil
+                try:
+                    shutil.rmtree(extracted_folder)
+                    print(f"✅ 清理临时文件夹: {extracted_folder}")
+                except Exception as cleanup_error:
+                    print(f"⚠️ 清理临时文件夹失败: {cleanup_error}")
     
     def publish_geotiff(self, tif_path, store_name, file_id):
         """发布GeoTIFF服务
@@ -897,169 +932,191 @@ class GeoServerService:
             print(f"验证图层 {layer_name} 异常: {str(e)}")
             return False
     
-    def _extract_shp_name_from_zip(self, zip_path):
-        """从ZIP文件中提取SHP文件
+    def _extract_and_validate_shapefile_simple(self, zip_path):
+        """简化的解压和验证Shapefile文件方法
         
         Args:
             zip_path: ZIP文件路径
             
         Returns:
-            SHP文件名（不含扩展名）
-        """
-        try:
-            import zipfile
-            import re
+            str: 解压后的文件夹路径
             
-            with zipfile.ZipFile(zip_path, 'r') as zip_file:
-                file_list = zip_file.namelist()
-                print(f"ZIP文件内容: {file_list}")
-                
-                # 查找.shp文件
-                shp_files = [f for f in file_list if f.lower().endswith('.shp')]
-                
-                if shp_files:
-                    # 取第一个shp文件
-                    shp_file = shp_files[0]
-                    # 提取文件名（不含路径和扩展名）
-                    shp_name = os.path.splitext(os.path.basename(shp_file))[0]
-                    print(f"从ZIP中提取的SHP文件: {shp_name}")
-                    
-                    # 如果文件名包含中文或特殊字符，需要进行清理
-                    # 但保留原始名称用于显示，生成安全的英文名称用于GeoServer
-                    original_name = shp_name
-                    
-                    # 检查是否包含中文字符或特殊字符
-                    if re.search(r'[\u4e00-\u9fff]', shp_name) or any(char in shp_name for char in ['(', ')', ' ', '（', '）']):
-                        print(f"检测到中文或特殊字符，原始文件名: {original_name}")
-                        # 从ZIP文件路径生成安全的名称
-                        zip_basename = os.path.splitext(os.path.basename(zip_path))[0]
-                        # 清理文件名，只保留字母、数字、下划线和中划线
-                        safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', zip_basename)
-                        print(f"生成安全的文件名: {safe_name}")
-                        return safe_name
-                    else:
-                        return shp_name
-                else:
-                    print("ZIP文件中未找到.shp文件")
-                    # 如果没找到shp文件，使用ZIP文件名
-                    zip_basename = os.path.splitext(os.path.basename(zip_path))[0]
-                    safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', zip_basename)
-                    print(f"使用ZIP文件名生成: {safe_name}")
-                    return safe_name
-                    
-        except Exception as e:
-            print(f"提取SHP文件名失败: {str(e)}")
-            # 发生错误时，使用ZIP文件名作为备选
-            try:
-                zip_basename = os.path.splitext(os.path.basename(zip_path))[0]
-                safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', zip_basename)
-                print(f"错误处理：使用ZIP文件名: {safe_name}")
-                return safe_name
-            except:
-                return "default_layer"
-    
-    def _upload_shapefile_to_geoserver(self, shp_zip_path, store_name):
-        """上传Shapefile到GeoServer
-        
-        解决中文文件名导致的解压问题：
-        1. 检查ZIP文件中是否含有中文文件名
-        2. 如果有，重新打包ZIP文件，将中文文件名转换为英文
-        3. 上传处理后的ZIP文件
+        Raises:
+            Exception: 如果文件不完整或格式不正确
         """
         import zipfile
+        import os
         import tempfile
-        import shutil
-        import re
         
-        print(f"准备上传Shapefile到GeoServer: {shp_zip_path}")
+        print(f"开始解压Shapefile: {zip_path}")
+        
+        # 创建临时解压目录
+        temp_dir = tempfile.mkdtemp()
+        filename = os.path.splitext(os.path.basename(zip_path))[0]
+        extracted_folder = os.path.join(temp_dir, filename)
+        os.makedirs(extracted_folder, exist_ok=True)
         
         try:
-            # 检查ZIP文件内容
-            with zipfile.ZipFile(shp_zip_path, 'r') as zip_file:
-                file_list = zip_file.namelist()
-                print(f"原始ZIP文件内容: {file_list}")
-                
-                # 检查是否需要重新打包（包含中文字符或特殊字符）
-                needs_repack = False
-                for filename in file_list:
-                    # 检查文件名是否包含中文字符或其他可能导致问题的字符
-                    if re.search(r'[\u4e00-\u9fff]', filename) or any(char in filename for char in ['(', ')', ' ', '（', '）']):
-                        needs_repack = True
-                        break
-                
-                if needs_repack:
-                    print("检测到中文文件名或特殊字符，需要重新打包ZIP文件")
-                    
-                    # 创建临时目录
-                    with tempfile.TemporaryDirectory() as temp_dir:
-                        print(f"创建临时目录: {temp_dir}")
-                        
-                        # 提取所有文件到临时目录并重命名
-                        extracted_files = {}
-                        base_name = store_name.replace('_store', '')  # 使用store名称作为基础文件名
-                        
-                        for original_name in file_list:
-                            if original_name.endswith('/'):  # 跳过目录
-                                continue
-                                
-                            # 提取文件
-                            file_data = zip_file.read(original_name)
-                            
-                            # 获取文件扩展名
-                            _, ext = os.path.splitext(original_name.lower())
-                            
-                            # 生成新的文件名（使用store名称 + 扩展名）
-                            new_name = f"{base_name}{ext}"
-                            new_path = os.path.join(temp_dir, new_name)
-                            
-                            # 写入文件
-                            with open(new_path, 'wb') as f:
-                                f.write(file_data)
-                            
-                            extracted_files[original_name] = new_name
-                            print(f"重命名文件: {original_name} -> {new_name}")
-                        
-                        # 创建新的ZIP文件
-                        new_zip_path = os.path.join(temp_dir, f"{base_name}_cleaned.zip")
-                        with zipfile.ZipFile(new_zip_path, 'w', zipfile.ZIP_DEFLATED) as new_zip:
-                            for root, dirs, files in os.walk(temp_dir):
-                                for file in files:
-                                    if file.endswith('.zip'):  # 跳过我们正在创建的ZIP文件
-                                        continue
-                                    file_path = os.path.join(root, file)
-                                    arcname = os.path.relpath(file_path, temp_dir)
-                                    new_zip.write(file_path, arcname)
-                                    print(f"添加到新ZIP: {arcname}")
-                        
-                        print(f"创建清理后的ZIP文件: {new_zip_path}")
-                        
-                        # 使用新的ZIP文件上传
-                        upload_zip_path = new_zip_path
-                else:
-                    print("ZIP文件无需重新打包")
-                    upload_zip_path = shp_zip_path
+            # 解压ZIP文件
+            with zipfile.ZipFile(zip_path, 'r') as zip_file:
+                zip_file.extractall(extracted_folder)
+                print(f"ZIP文件解压完成: {extracted_folder}")
             
-            # 上传ZIP文件到GeoServer
-            datastore_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}/file.shp"
-            headers = {'Content-type': 'application/zip'}
+            # 获取解压后的文件列表
+            extracted_files = []
+            for root, dirs, files in os.walk(extracted_folder):
+                for file in files:
+                    extracted_files.append(file.lower())
             
-            with open(upload_zip_path, 'rb') as f:
+            print(f"解压后的文件列表: {extracted_files}")
+            
+            # 简单验证：检查必需文件是否存在
+            has_shp = any(f.endswith('.shp') for f in extracted_files)
+            has_dbf = any(f.endswith('.dbf') for f in extracted_files)
+            has_shx = any(f.endswith('.shx') for f in extracted_files)
+            
+            if not has_shp:
+                raise Exception("ZIP文件中未找到.shp文件")
+            if not has_dbf:
+                raise Exception("ZIP文件中未找到.dbf文件")
+            if not has_shx:
+                raise Exception("ZIP文件中未找到.shx文件")
+            
+            print(f"✅ Shapefile文件验证通过")
+            return extracted_folder
+            
+        except Exception as e:
+            # 如果验证失败，清理解压的文件
+            if os.path.exists(extracted_folder):
+                import shutil
+                shutil.rmtree(extracted_folder)
+            raise Exception(f"Shapefile文件解压或验证失败: {str(e)}")
+    
+    def _get_shp_name_from_folder(self, folder_path):
+        """从解压的文件夹中获取SHP文件名
+        
+        Args:
+            folder_path: 文件夹路径
+            
+        Returns:
+            str: SHP文件的基础名称（不含扩展名）
+        """
+        for root, dirs, files in os.walk(folder_path):
+            for file in files:
+                if file.lower().endswith('.shp'):
+                    return os.path.splitext(file)[0]
+        
+        raise Exception("在解压文件夹中未找到.shp文件")
+    
+    def _ensure_safe_shapefile_names(self, folder_path, original_name, safe_base_name):
+        """确保Shapefile文件名是GeoServer友好的
+        
+        如果原始文件名包含中文或特殊字符，就重命名为安全的英文名称
+        
+        Args:
+            folder_path: 解压后的文件夹路径
+            original_name: 原始SHP文件名（不含扩展名）
+            safe_base_name: 安全的基础名称
+            
+        Returns:
+            str: 最终的SHP文件名（不含扩展名）
+        """
+        import re
+        import os
+        
+        # 检查原始文件名是否包含中文或特殊字符
+        has_chinese = re.search(r'[\u4e00-\u9fff]', original_name)
+        has_special_chars = any(char in original_name for char in ['(', ')', ' ', '（', '）', '-', '+', '=', '@', '#', '$', '%', '^', '&', '*'])
+        
+        if not (has_chinese or has_special_chars):
+            print(f"文件名安全，无需重命名: {original_name}")
+            return original_name
+        
+        print(f"检测到不安全的文件名，需要重命名: {original_name}")
+        print(f"使用安全名称: {safe_base_name}")
+        
+        # 需要重命名的文件扩展名
+        extensions = ['.shp', '.shx', '.dbf', '.prj', '.cpg', '.sbn', '.sbx', '.qix']
+        
+        renamed_count = 0
+        for ext in extensions:
+            original_file = os.path.join(folder_path, f"{original_name}{ext}")
+            new_file = os.path.join(folder_path, f"{safe_base_name}{ext}")
+            
+            if os.path.exists(original_file):
+                try:
+                    os.rename(original_file, new_file)
+                    print(f"✅ 重命名文件: {original_name}{ext} -> {safe_base_name}{ext}")
+                    renamed_count += 1
+                except Exception as e:
+                    print(f"⚠️ 重命名文件失败: {original_file} -> {new_file}, 错误: {e}")
+        
+        if renamed_count > 0:
+            print(f"✅ 成功重命名 {renamed_count} 个文件")
+            return safe_base_name
+        else:
+            print(f"⚠️ 没有文件被重命名，使用原始名称")
+            return original_name
+    
+    def _upload_extracted_shapefile_to_geoserver(self, folder_path, store_name):
+        """上传解压后的Shapefile文件到GeoServer
+        
+        直接上传.shp文件，GeoServer会自动找到同目录下的配套文件
+        
+        Args:
+            folder_path: 解压后的文件夹路径
+            store_name: 数据存储名称
+        """
+        import os
+        
+        print(f"准备上传解压后的Shapefile到GeoServer: {folder_path}")
+        
+        # 找到.shp文件
+        shp_file_path = None
+        for root, dirs, files in os.walk(folder_path):
+            for file in files:
+                if file.lower().endswith('.shp'):
+                    shp_file_path = os.path.join(root, file)
+                    break
+            if shp_file_path:
+                break
+        
+        if not shp_file_path:
+            raise Exception(f"在文件夹中未找到.shp文件: {folder_path}")
+        
+        print(f"找到SHP文件: {shp_file_path}")
+        print(f"文件大小: {os.path.getsize(shp_file_path)} 字节")
+        
+        # 上传.shp文件到GeoServer
+        # GeoServer会自动查找同目录下的.dbf, .shx, .prj等配套文件
+        datastore_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}/file.shp"
+        headers = {'Content-Type': 'application/octet-stream'}
+        
+        print(f"上传URL: {datastore_url}")
+        
+        try:
+            with open(shp_file_path, 'rb') as f:
                 response = requests.put(
                     datastore_url,
                     data=f,
                     headers=headers,
                     auth=self.auth,
-                    timeout=120  # 增加超时时间
+                    timeout=300  # 5分钟超时
                 )
             
             print(f"Shapefile上传响应状态码: {response.status_code}")
-            print(f"Shapefile上传响应内容: {response.text}")
+            if response.text:
+                print(f"响应内容: {response.text[:500]}...")
             
             if response.status_code not in [201, 200]:
-                raise Exception(f"上传Shapefile失败: {response.text}")
+                raise Exception(f"上传Shapefile失败: HTTP {response.status_code} - {response.text}")
             
             print("✅ Shapefile上传成功")
             
+        except requests.exceptions.Timeout:
+            raise Exception("上传Shapefile超时，请检查文件大小和网络连接")
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"上传Shapefile网络错误: {str(e)}")
         except Exception as e:
             print(f"❌ Shapefile上传失败: {str(e)}")
             raise e
@@ -1148,8 +1205,45 @@ class GeoServerService:
         except Exception as e:
             print(f"清理现有数据存储失败: {e}")
     
-    def _get_featuretype_info(self, store_name, featuretype_name):
-        """获取要素类型信息"""
+    def _get_featuretype_info(self, store_name, featuretype_name=None):
+        """获取要素类型信息
+        
+        Args:
+            store_name: 数据存储名称
+            featuretype_name: 要素类型名称（可选，如果不提供则获取第一个）
+        
+        Returns:
+            要素类型信息
+        """
+        # 如果没有提供featuretype_name，先获取数据存储中的要素类型列表
+        if not featuretype_name:
+            featuretypes_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}/featuretypes.json"
+            print(f"获取要素类型列表URL: {featuretypes_url}")
+            
+            response = requests.get(featuretypes_url, auth=self.auth)
+            print(f"获取要素类型列表响应状态码: {response.status_code}")
+            
+            if response.status_code != 200:
+                raise Exception(f"获取要素类型列表失败: {response.text}")
+            
+            # 解析要素类型列表
+            data = response.json()
+            print(f"要素类型列表数据: {data}")
+            
+            if 'featureTypes' in data and 'featureType' in data['featureTypes']:
+                feature_types = data['featureTypes']['featureType']
+                
+                if isinstance(feature_types, list) and len(feature_types) > 0:
+                    featuretype_name = feature_types[0]['name']
+                elif isinstance(feature_types, dict):
+                    featuretype_name = feature_types['name']
+            
+            if not featuretype_name:
+                raise Exception(f"数据存储 {store_name} 中没有找到要素类型")
+            
+            print(f"找到要素类型名称: {featuretype_name}")
+        
+        # 获取要素类型详细信息
         url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}/featuretypes/{featuretype_name}.json"
         print(f"获取要素类型信息URL: {url}")
         
@@ -1684,3 +1778,180 @@ class GeoServerService:
                 time.sleep(1)
         except Exception as e:
             print(f"清理现有覆盖存储失败: {e}")
+    
+    def _create_empty_shapefile_datastore(self, store_name):
+        """在GeoServer中创建空的Shapefile数据存储
+        
+        这是创建Shapefile数据存储的推荐方式：
+        1. 先创建空的datastore
+        2. 然后上传文件到已存在的datastore
+        
+        Args:
+            store_name: 数据存储名称
+        """
+        print(f"在GeoServer中创建空的Shapefile数据存储: {store_name}")
+        
+        # 先清理可能存在的同名数据存储
+        self._cleanup_existing_datastore(store_name)
+        
+        # 构建Shapefile数据存储配置
+        datastore_config = {
+            "dataStore": {
+                "name": store_name,
+                "type": "Shapefile",
+                "enabled": True,
+                "workspace": {
+                    "name": self.workspace,
+                    "href": f"{self.rest_url}/workspaces/{self.workspace}.json"
+                },
+                "connectionParameters": {
+                    "entry": [
+                        {"@key": "url", "$": f"file:data/{self.workspace}/{store_name}/"},
+                        {"@key": "namespace", "$": f"http://{self.workspace}"},
+                        {"@key": "create spatial index", "$": "true"},
+                        {"@key": "charset", "$": "UTF-8"}
+                    ]
+                }
+            }
+        }
+        
+        # 发送请求创建数据存储
+        url = f"{self.rest_url}/workspaces/{self.workspace}/datastores"
+        headers = {'Content-Type': 'application/json'}
+        
+        response = requests.post(
+            url, 
+            json=datastore_config,
+            auth=self.auth,
+            headers=headers,
+            timeout=60
+        )
+        
+        print(f"创建Shapefile数据存储响应状态码: {response.status_code}")
+        if response.text:
+            print(f"响应内容: {response.text[:500]}...")
+        
+        if response.status_code not in [201, 200]:
+            raise Exception(f"创建Shapefile数据存储失败: HTTP {response.status_code} - {response.text}")
+        
+        # 验证数据存储是否创建成功
+        time.sleep(1)  # 等待GeoServer处理
+        
+        verify_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}.json"
+        verify_response = requests.get(verify_url, auth=self.auth)
+        
+        if verify_response.status_code != 200:
+            raise Exception(f"Shapefile数据存储创建后验证失败: {verify_response.text}")
+        
+        print(f"✅ Shapefile数据存储创建并验证成功: {store_name}")
+    
+    def _upload_zip_to_geoserver_datastore(self, zip_path, store_name):
+        """直接上传ZIP文件到GeoServer数据存储
+        
+        采用GeoServer官方推荐的方式，通过REST API直接上传ZIP文件。
+        GeoServer会自动：
+        1. 解压ZIP文件
+        2. 验证Shapefile文件完整性
+        3. 处理中文文件名和特殊字符
+        4. 创建数据存储和要素类型
+        
+        Args:
+            zip_path: ZIP文件路径
+            store_name: 数据存储名称
+        """
+        print(f"直接上传ZIP文件到GeoServer数据存储: {zip_path}")
+        
+        # 验证文件是否存在
+        if not os.path.exists(zip_path):
+            raise Exception(f"ZIP文件不存在: {zip_path}")
+        
+        # 使用GeoServer REST API上传ZIP文件
+        # PUT /workspaces/{ws}/datastores/{ds}/file.shp
+        datastore_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}/file.shp"
+        headers = {'Content-Type': 'application/zip'}
+        
+        print(f"上传URL: {datastore_url}")
+        print(f"文件大小: {os.path.getsize(zip_path)} 字节")
+        
+        try:
+            with open(zip_path, 'rb') as f:
+                response = requests.put(
+                    datastore_url,
+                    data=f,
+                    headers=headers,
+                    auth=self.auth,
+                    timeout=300  # 5分钟超时，适合大文件
+                )
+            
+            print(f"ZIP上传响应状态码: {response.status_code}")
+            if response.text:
+                print(f"响应内容: {response.text[:500]}...")
+            
+            if response.status_code not in [201, 200]:
+                raise Exception(f"上传ZIP文件失败: HTTP {response.status_code} - {response.text}")
+            
+            print("✅ ZIP文件上传成功，GeoServer正在自动处理...")
+            
+        except requests.exceptions.Timeout:
+            raise Exception("上传ZIP文件超时，请检查文件大小和网络连接")
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"上传ZIP文件网络错误: {str(e)}")
+        except Exception as e:
+            raise Exception(f"上传ZIP文件失败: {str(e)}")
+    
+    def _get_auto_created_featuretype_info(self, store_name):
+        """获取GeoServer自动创建的要素类型信息
+        
+        当ZIP文件上传成功后，GeoServer会自动创建要素类型。
+        此方法尝试获取这些自动创建的要素类型信息。
+        
+        Args:
+            store_name: 数据存储名称
+            
+        Returns:
+            要素类型信息
+        """
+        print(f"获取数据存储 {store_name} 中自动创建的要素类型...")
+        
+        # 首先获取数据存储中的要素类型列表
+        featuretypes_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}/featuretypes.json"
+        
+        try:
+            response = requests.get(featuretypes_url, auth=self.auth)
+            
+            if response.status_code != 200:
+                raise Exception(f"获取要素类型列表失败: HTTP {response.status_code} - {response.text}")
+            
+            data = response.json()
+            print(f"要素类型列表响应: {data}")
+            
+            # 解析要素类型列表
+            featuretype_name = None
+            if 'featureTypes' in data and 'featureType' in data['featureTypes']:
+                feature_types = data['featureTypes']['featureType']
+                
+                if isinstance(feature_types, list) and len(feature_types) > 0:
+                    featuretype_name = feature_types[0]['name']
+                elif isinstance(feature_types, dict):
+                    featuretype_name = feature_types['name']
+            
+            if not featuretype_name:
+                raise Exception("未找到自动创建的要素类型")
+            
+            print(f"找到自动创建的要素类型: {featuretype_name}")
+            
+            # 获取要素类型的详细信息
+            featuretype_detail_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}/featuretypes/{featuretype_name}.json"
+            detail_response = requests.get(featuretype_detail_url, auth=self.auth)
+            
+            if detail_response.status_code != 200:
+                raise Exception(f"获取要素类型详细信息失败: HTTP {detail_response.status_code} - {detail_response.text}")
+            
+            featuretype_info = detail_response.json()
+            print(f"✅ 成功获取要素类型详细信息: {featuretype_name}")
+            
+            return featuretype_info
+            
+        except Exception as e:
+            print(f"❌ 获取自动创建的要素类型失败: {str(e)}")
+            raise Exception(f"获取自动创建的要素类型失败: {str(e)}")

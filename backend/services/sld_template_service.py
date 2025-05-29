@@ -49,15 +49,28 @@ class SLDTemplateService:
         line_style = {**default_styles['line'], **style_config.get('line', {})}
         polygon_style = {**default_styles['polygon'], **style_config.get('polygon', {})}
         
-        # 确定主要几何类型并生成对应的SLD
-        if 'point' in style_config:
-            return self._generate_point_sld(style_name, point_style)
-        elif 'line' in style_config:
-            return self._generate_line_sld(style_name, line_style)
-        elif 'polygon' in style_config:
-            return self._generate_polygon_sld(style_name, polygon_style)
+        # 检查配置中包含的几何类型
+        has_point = 'point' in style_config and bool(style_config['point'])
+        has_line = 'line' in style_config and bool(style_config['line'])
+        has_polygon = 'polygon' in style_config and bool(style_config['polygon'])
+        
+        # 统计有效的几何类型数量
+        geometry_types_count = sum([has_point, has_line, has_polygon])
+        
+        # 根据几何类型数量决定生成策略
+        if geometry_types_count == 1:
+            # 只有一种几何类型，生成专用的单一样式
+            if has_point:
+                return self._generate_point_sld(style_name, point_style)
+            elif has_line:
+                return self._generate_line_sld(style_name, line_style)
+            elif has_polygon:
+                return self._generate_polygon_sld(style_name, polygon_style)
+        elif geometry_types_count > 1:
+            # 多种几何类型，生成通用样式
+            return self._generate_generic_sld(style_name, point_style, line_style, polygon_style)
         else:
-            # 如果没有指定类型，生成通用样式
+            # 没有指定具体的几何类型，生成包含所有类型的通用样式
             return self._generate_generic_sld(style_name, point_style, line_style, polygon_style)
     
     def _generate_point_sld(self, style_name: str, point_style: Dict) -> str:
@@ -197,9 +210,141 @@ class SLDTemplateService:
     def _generate_generic_sld(self, style_name: str, point_style: Dict, line_style: Dict, polygon_style: Dict) -> str:
         """生成通用样式SLD（包含点、线、面）"""
         
-        # 如果需要支持多种几何类型，生成包含多个规则的SLD
-        # 这里简化处理，默认生成点样式
-        return self._generate_point_sld(style_name, point_style)
+        # 获取点形状的WellKnownName
+        shape_map = {
+            'circle': 'circle',
+            'square': 'square',
+            'triangle': 'triangle',
+            'star': 'star',
+            'cross': 'cross',
+            'x': 'x'
+        }
+        well_known_name = shape_map.get(point_style.get('shape', 'square'), 'square')
+        
+        # 处理线型虚线样式
+        dash_array = self._get_stroke_dash_array(line_style.get('style', 'solid'))
+        dash_param = f'              <CssParameter name="stroke-dasharray">{dash_array}</CssParameter>\n' if dash_array else ''
+        
+        # 处理面的描边
+        stroke_section = ""
+        if polygon_style.get('strokeColor') and polygon_style.get('strokeWidth', 0) > 0:
+            stroke_section = f'''
+            <Stroke>
+              <CssParameter name="stroke">{polygon_style['strokeColor']}</CssParameter>
+              <CssParameter name="stroke-width">{polygon_style['strokeWidth']}</CssParameter>
+              <CssParameter name="stroke-opacity">{polygon_style['strokeOpacity']}</CssParameter>
+            </Stroke>'''
+        
+        sld_content = f'''<?xml version="1.0" encoding="UTF-8"?>
+<sld:StyledLayerDescriptor xmlns:sld="http://www.opengis.net/sld" xmlns="http://www.opengis.net/sld" xmlns:gml="http://www.opengis.net/gml" xmlns:ogc="http://www.opengis.net/ogc" version="1.0.0">
+  <sld:NamedLayer>
+    <sld:Name>{style_name}</sld:Name>
+    <sld:UserStyle>
+      <sld:Name>{style_name}</sld:Name>
+      <sld:Title>Multi-geometry Style</sld:Title>
+      <sld:Abstract>A comprehensive style supporting points, lines, and polygons</sld:Abstract>
+      <sld:FeatureTypeStyle>
+        <sld:Name>multi_geometry_style</sld:Name>
+        
+        <!-- Point Rule -->
+        <sld:Rule>
+          <sld:Name>point_rule</sld:Name>
+          <sld:Title>Point Style</sld:Title>
+          <sld:Abstract>Point symbolizer</sld:Abstract>
+          <ogc:Filter>
+            <ogc:Or>
+              <ogc:PropertyIsEqualTo>
+                <ogc:Function name="geometryType">
+                  <ogc:PropertyName>the_geom</ogc:PropertyName>
+                </ogc:Function>
+                <ogc:Literal>Point</ogc:Literal>
+              </ogc:PropertyIsEqualTo>
+              <ogc:PropertyIsEqualTo>
+                <ogc:Function name="geometryType">
+                  <ogc:PropertyName>the_geom</ogc:PropertyName>
+                </ogc:Function>
+                <ogc:Literal>MultiPoint</ogc:Literal>
+              </ogc:PropertyIsEqualTo>
+            </ogc:Or>
+          </ogc:Filter>
+          <sld:PointSymbolizer>
+            <sld:Graphic>
+              <sld:Mark>
+                <sld:WellKnownName>{well_known_name}</sld:WellKnownName>
+                <sld:Fill>
+                  <sld:CssParameter name="fill">{point_style['color']}</sld:CssParameter>
+                  <sld:CssParameter name="fill-opacity">{point_style['opacity']}</sld:CssParameter>
+                </sld:Fill>
+              </sld:Mark>
+              <sld:Size>{point_style['size']}</sld:Size>
+            </sld:Graphic>
+          </sld:PointSymbolizer>
+        </sld:Rule>
+        
+        <!-- Line Rule -->
+        <sld:Rule>
+          <sld:Name>line_rule</sld:Name>
+          <sld:Title>Line Style</sld:Title>
+          <sld:Abstract>Line symbolizer</sld:Abstract>
+          <ogc:Filter>
+            <ogc:Or>
+              <ogc:PropertyIsEqualTo>
+                <ogc:Function name="geometryType">
+                  <ogc:PropertyName>the_geom</ogc:PropertyName>
+                </ogc:Function>
+                <ogc:Literal>LineString</ogc:Literal>
+              </ogc:PropertyIsEqualTo>
+              <ogc:PropertyIsEqualTo>
+                <ogc:Function name="geometryType">
+                  <ogc:PropertyName>the_geom</ogc:PropertyName>
+                </ogc:Function>
+                <ogc:Literal>MultiLineString</ogc:Literal>
+              </ogc:PropertyIsEqualTo>
+            </ogc:Or>
+          </ogc:Filter>
+          <sld:LineSymbolizer>
+            <sld:Stroke>
+              <sld:CssParameter name="stroke">{line_style['color']}</sld:CssParameter>
+              <sld:CssParameter name="stroke-width">{line_style['width']}</sld:CssParameter>
+              <sld:CssParameter name="stroke-opacity">{line_style['opacity']}</sld:CssParameter>
+{dash_param}            </sld:Stroke>
+          </sld:LineSymbolizer>
+        </sld:Rule>
+        
+        <!-- Polygon Rule -->
+        <sld:Rule>
+          <sld:Name>polygon_rule</sld:Name>
+          <sld:Title>Polygon Style</sld:Title>
+          <sld:Abstract>Polygon symbolizer</sld:Abstract>
+          <ogc:Filter>
+            <ogc:Or>
+              <ogc:PropertyIsEqualTo>
+                <ogc:Function name="geometryType">
+                  <ogc:PropertyName>the_geom</ogc:PropertyName>
+                </ogc:Function>
+                <ogc:Literal>Polygon</ogc:Literal>
+              </ogc:PropertyIsEqualTo>
+              <ogc:PropertyIsEqualTo>
+                <ogc:Function name="geometryType">
+                  <ogc:PropertyName>the_geom</ogc:PropertyName>
+                </ogc:Function>
+                <ogc:Literal>MultiPolygon</ogc:Literal>
+              </ogc:PropertyIsEqualTo>
+            </ogc:Or>
+          </ogc:Filter>
+          <sld:PolygonSymbolizer>
+            <sld:Fill>
+              <sld:CssParameter name="fill">{polygon_style['fillColor']}</sld:CssParameter>
+              <sld:CssParameter name="fill-opacity">{polygon_style['fillOpacity']}</sld:CssParameter>
+            </sld:Fill>{stroke_section}
+          </sld:PolygonSymbolizer>
+        </sld:Rule>
+      </sld:FeatureTypeStyle>
+    </sld:UserStyle>
+  </sld:NamedLayer>
+</sld:StyledLayerDescriptor>'''
+        
+        return sld_content
     
     def _get_stroke_dash_array(self, line_style: str) -> Optional[str]:
         """获取线型对应的虚线数组"""
