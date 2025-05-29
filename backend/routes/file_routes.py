@@ -115,6 +115,11 @@ def get_file_list():
         required: false
         default: 20
         description: 每页数量
+      - name: user_id
+        in: query
+        type: integer
+        required: false
+        description: 用户ID过滤
       - name: discipline
         in: query
         type: string
@@ -165,6 +170,7 @@ def get_file_list():
         # 获取查询参数
         page = int(request.args.get('page', 1))
         page_size = int(request.args.get('page_size', 20))
+        user_id = request.args.get('user_id')
         discipline = request.args.get('discipline')
         file_type = request.args.get('file_type')
         dimension = request.args.get('dimension')
@@ -198,6 +204,10 @@ def get_file_list():
         # 构建WHERE条件
         where_conditions = []
         params = []
+        
+        if user_id:
+            where_conditions.append("f.user_id = %s")
+            params.append(user_id)
         
         if discipline:
             where_conditions.append("f.discipline = %s")
