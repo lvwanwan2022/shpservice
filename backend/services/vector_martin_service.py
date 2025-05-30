@@ -62,7 +62,7 @@ class VectorMartinService:
             
             # 构建Martin服务URL
             service_url = f"{MARTIN_CONFIG['base_url']}/{table_name}"
-            mvt_url = f"{service_url}/{{z}}/{{x}}/{{y}}.pbf"
+            mvt_url = f"{service_url}/{{z}}/{{x}}/{{y}}.pbf"  # 移除.pbf后缀
             tilejson_url = service_url  # TileJSON URL就是service_url，不需要.json后缀
             
             # 收集GeoJSON信息
@@ -213,7 +213,7 @@ class VectorMartinService:
             
             # 构建Martin服务URL
             service_url = f"{MARTIN_CONFIG['base_url']}/{table_name}"
-            mvt_url = f"{service_url}/{{z}}/{{x}}/{{y}}.pbf"
+            mvt_url = f"{service_url}/{{z}}/{{x}}/{{y}}"  # 移除.pbf后缀
             tilejson_url = service_url  # TileJSON URL就是service_url，不需要.json后缀
             
             # 收集SHP信息

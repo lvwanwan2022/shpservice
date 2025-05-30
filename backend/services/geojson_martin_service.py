@@ -660,7 +660,7 @@ class GeoJsonMartinService:
             table_name = postgis_result['table_name']
             
             # 构建MVT和TileJSON URL
-            mvt_url = f"http://localhost:3000/{table_name}/{{z}}/{{x}}/{{y}}.pbf"
+            mvt_url = f"http://localhost:3000/{table_name}/{{z}}/{{x}}/{{y}}"
             tilejson_url = f"http://localhost:3000/{table_name}"
             
             # 默认样式配置
