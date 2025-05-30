@@ -85,7 +85,7 @@ GEOSERVER_CONFIG = {
 # 文件存储配置
 FILE_STORAGE = {
     'upload_folder': os.path.join(os.path.dirname(os.path.dirname(__file__)), 'FilesData'),
-    'allowed_extensions': ['zip', 'shp', 'geojson', 'json', 'kml', 'gpkg', 'tif', 'tiff'],
+    'allowed_extensions': ['zip', 'shp', 'geojson', 'json', 'kml', 'gpkg', 'tif', 'tiff', 'dxf'],
     'max_content_length': 200 * 1024 * 1024,  # 200MB
 }
 

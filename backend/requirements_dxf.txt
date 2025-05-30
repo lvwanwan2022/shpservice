@@ -1,0 +1,18 @@
+# DXF文件处理依赖
+
+# 核心GDAL库（推荐方法）
+GDAL>=3.4.0
+
+# GeoPandas方案（备选）
+geopandas>=0.12.0
+fiona>=1.8.22
+
+# 专用DXF解析库（可选）
+ezdxf>=1.0.0
+
+# CAD文件处理增强
+pyproj>=3.4.0
+
+# 其他依赖
+sqlalchemy>=1.4.0
+psycopg2-binary>=2.9.0 

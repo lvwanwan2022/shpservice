@@ -96,6 +96,12 @@ def upload_file():
         current_app.logger.error(f"文件上传错误: {str(e)}")
         return jsonify({'error': '服务器内部错误'}), 500
 
+@file_bp.route('/files/list', methods=['GET'])
+def get_files_list():
+    """获取文件列表 - /files/list 端点
+    """
+    return get_file_list()
+
 @file_bp.route('/list', methods=['GET'])
 def get_file_list():
     """获取文件列表
@@ -356,6 +362,11 @@ def get_file_list():
         current_app.logger.error(f"获取文件列表错误: {str(e)}")
         return jsonify({'error': '服务器内部错误'}), 500
 
+@file_bp.route('/files/<int:file_id>', methods=['GET'])
+def get_files_file(file_id):
+    """获取文件详情 - /files/<file_id> 端点"""
+    return get_file(file_id)
+
 @file_bp.route('/<int:file_id>', methods=['GET'])
 def get_file(file_id):
     """获取文件详情"""
@@ -415,6 +426,11 @@ def delete_file(file_id):
     except Exception as e:
         current_app.logger.error(f"删除文件错误: {str(e)}")
         return jsonify({'error': '服务器内部错误'}), 500
+
+@file_bp.route('/files/users', methods=['GET'])
+def get_files_users():
+    """获取用户列表 - /files/users 端点"""
+    return get_users()
 
 @file_bp.route('/users', methods=['GET'])
 def get_users():
@@ -485,8 +501,8 @@ def publish_martin_service(file_id):
         
         # 检查文件类型是否支持Martin服务
         file_type = file_info.get('file_type', '').lower()
-        if file_type not in ['geojson', 'shp']:
-            return jsonify({'error': 'Martin服务仅支持GeoJSON和SHP文件'}), 400
+        if file_type not in ['geojson', 'shp', 'dxf']:
+            return jsonify({'error': 'Martin服务仅支持GeoJSON、SHP和DXF文件'}), 400
         
         # 检查是否已发布到Martin（统一表查询）
         check_sql = """
@@ -501,22 +517,40 @@ def publish_martin_service(file_id):
                 'vector_type': existing[0]['vector_type']
             }), 400
         
-        # 使用统一的Vector Martin服务
-        from services.vector_martin_service import VectorMartinService
-        martin_service = VectorMartinService()
+        # 根据文件类型选择发布服务
+        if file_type in ['geojson', 'shp']:
+            # 使用统一的Vector Martin服务
+            from services.vector_martin_service import VectorMartinService
+            martin_service = VectorMartinService()
+            
+            if file_type == 'geojson':
+                result = martin_service.publish_geojson_martin(
+                    file_id=str(file_id),
+                    file_path=file_info['file_path'],
+                    original_filename=file_info['file_name'],
+                    user_id=file_info.get('user_id')
+                )
+            elif file_type == 'shp':
+                result = martin_service.publish_shp_martin(
+                    file_id=str(file_id),
+                    zip_file_path=file_info['file_path'],
+                    original_filename=file_info['file_name'],
+                    user_id=file_info.get('user_id')
+                )
         
-        if file_type == 'geojson':
-            result = martin_service.publish_geojson_martin(
+        elif file_type == 'dxf':
+            # 使用DXF服务发布
+            from services.dxf_service import DXFService
+            dxf_service = DXFService()
+            
+            # 从请求中获取坐标系参数
+            coordinate_system = request.json.get('coordinate_system', 'EPSG:4326') if request.is_json else 'EPSG:4326'
+            
+            result = dxf_service.publish_dxf_martin_service(
                 file_id=str(file_id),
                 file_path=file_info['file_path'],
                 original_filename=file_info['file_name'],
-                user_id=file_info.get('user_id')
-            )
-        elif file_type == 'shp':
-            result = martin_service.publish_shp_martin(
-                file_id=str(file_id),
-                zip_file_path=file_info['file_path'],
-                original_filename=file_info['file_name'],
+                coordinate_system=coordinate_system,
                 user_id=file_info.get('user_id')
             )
         
@@ -546,7 +580,7 @@ def publish_geoserver_service(file_id):
         
         # 检查文件类型是否支持GeoServer服务
         file_type = file_info.get('file_type', '').lower()
-        supported_types = ['shp', 'geojson', 'tif', 'dem', 'dom']
+        supported_types = ['shp', 'geojson', 'tif', 'dem', 'dom', 'dxf']
         if file_type not in supported_types:
             return jsonify({'error': f'GeoServer服务不支持{file_type}文件类型'}), 400
         
@@ -560,21 +594,49 @@ def publish_geoserver_service(file_id):
                 'layer_name': existing[0]['name']
             }), 400
         
-        # 发布到GeoServer服务
-        from services.geoserver_service import GeoServerService
-        geoserver_service = GeoServerService()
+        # 根据文件类型选择发布方式
+        if file_type in ['shp', 'geojson', 'tif', 'dem', 'dom']:
+            # 发布到GeoServer服务
+            from services.geoserver_service import GeoServerService
+            geoserver_service = GeoServerService()
+            
+            # 生成数据存储名称
+            store_name = f"file_{file_id}"
+            file_path = file_info['file_path']
+            
+            # 根据文件类型发布服务
+            if file_type == 'shp':
+                result = geoserver_service.publish_shapefile(file_path, store_name, file_id)
+            elif file_type == 'geojson':
+                result = geoserver_service.publish_geojson(file_path, store_name, file_id)
+            elif file_type in ['tif', 'dem', 'dom']:
+                result = geoserver_service.publish_geotiff(file_path, store_name, file_id)
         
-        # 生成数据存储名称
-        store_name = f"file_{file_id}"
-        file_path = file_info['file_path']
-        
-        # 根据文件类型发布服务
-        if file_type == 'shp':
-            result = geoserver_service.publish_shapefile(file_path, store_name, file_id)
-        elif file_type == 'geojson':
-            result = geoserver_service.publish_geojson(file_path, store_name, file_id)
-        elif file_type in ['tif', 'dem', 'dom']:
-            result = geoserver_service.publish_geotiff(file_path, store_name, file_id)
+        elif file_type == 'dxf':
+            # 使用DXF服务发布到GeoServer
+            from services.dxf_service import DXFService
+            dxf_service = DXFService()
+            
+            # 从请求中获取坐标系参数
+            coordinate_system = request.json.get('coordinate_system', 'EPSG:4326') if request.is_json else 'EPSG:4326'
+            
+            # 检查是否可以复用已存在的PostGIS表
+            table_name = None
+            # 查询是否有相同文件的Martin服务（可复用PostGIS表）
+            martin_check_sql = """
+            SELECT table_name FROM vector_martin_services 
+            WHERE original_filename = %s AND vector_type = 'dxf' AND status = 'active'
+            """
+            martin_result = execute_query(martin_check_sql, (file_info['file_name'],))
+            if martin_result:
+                table_name = martin_result[0]['table_name']
+                current_app.logger.info(f"复用Martin服务的PostGIS表: {table_name}")
+            
+            result = dxf_service.publish_dxf_geoserver_service(
+                file_id=str(file_id),
+                table_name=table_name,
+                coordinate_system=coordinate_system
+            )
         
         return jsonify({
             'success': True,
@@ -609,12 +671,19 @@ def unpublish_martin_service(file_id):
         martin_file_id = existing[0]['file_id']
         vector_type = existing[0]['vector_type']
         
-        # 使用统一的Vector Martin服务删除
-        from services.vector_martin_service import VectorMartinService
-        martin_service = VectorMartinService()
-        result = martin_service.delete_martin_service(service_id)
+        # 根据vector_type选择删除方式
+        if vector_type == 'dxf':
+            from services.dxf_service import DXFService
+            dxf_service = DXFService()
+            result = dxf_service.delete_dxf_martin_service(service_id)
+            success = result.get('success', False)
+        else:
+            # 使用统一的Vector Martin服务删除
+            from services.vector_martin_service import VectorMartinService
+            martin_service = VectorMartinService()
+            success = martin_service.delete_martin_service(service_id)
         
-        if result:
+        if success:
             return jsonify({
                 'success': True,
                 'message': 'Martin服务取消发布成功',
@@ -657,4 +726,205 @@ def unpublish_geoserver_service(file_id):
     
     except Exception as e:
         current_app.logger.error(f"取消发布GeoServer服务错误: {str(e)}")
-        return jsonify({'error': f'取消发布GeoServer服务失败: {str(e)}'}), 500 
+        return jsonify({'error': f'取消发布GeoServer服务失败: {str(e)}'}), 500
+
+@file_bp.route('/coordinate-systems/search', methods=['GET'])
+def search_coordinate_systems():
+    """搜索坐标系"""
+    try:
+        # 获取搜索关键词
+        keyword = request.args.get('keyword', '').strip()
+        limit = int(request.args.get('limit', 20))
+        
+        if not keyword:
+            return jsonify({'error': '请提供搜索关键词'}), 400
+        
+        # 按空格分割关键词，支持多关键词搜索
+        keywords = [k.strip() for k in keyword.split() if k.strip()]
+        
+        if not keywords:
+            return jsonify({'error': '请提供有效的搜索关键词'}), 400
+        
+        # 构建多关键词搜索SQL
+        # 每个关键词都要在所有字段中搜索，使用AND连接不同关键词
+        keyword_conditions = []
+        params = []
+        
+        for i, kw in enumerate(keywords):
+            # 为每个关键词构建OR条件（在不同字段中搜索）
+            keyword_condition = f"""
+            (
+                LOWER(srtext) LIKE LOWER(%s) 
+                OR LOWER(proj4text) LIKE LOWER(%s)
+                OR CAST(srid AS TEXT) LIKE %s
+                OR CAST(auth_srid AS TEXT) LIKE %s
+            )
+            """
+            keyword_conditions.append(keyword_condition)
+            
+            # 添加参数（每个关键词需要4个参数）
+            search_pattern = f'%{kw}%'
+            params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
+        
+        # 使用AND连接所有关键词条件
+        where_clause = " AND ".join(keyword_conditions)
+        
+        search_sql = f"""
+        SELECT 
+            srid,
+            auth_name,
+            auth_srid,
+            srtext,
+            proj4text
+        FROM spatial_ref_sys 
+        WHERE {where_clause}
+        ORDER BY 
+            CASE 
+                WHEN CAST(srid AS TEXT) = %s THEN 1
+                WHEN CAST(auth_srid AS TEXT) = %s THEN 2
+                WHEN LOWER(srtext) LIKE LOWER(%s) THEN 3
+                ELSE 4
+            END,
+            srid
+        LIMIT %s
+        """
+        
+        # 添加排序和限制参数
+        # 使用第一个关键词进行排序优先级判断
+        first_keyword = keywords[0]
+        params.extend([first_keyword, first_keyword, f'%{first_keyword}%', limit])
+        
+        # 执行查询
+        results = execute_query(search_sql, params)
+        
+        # 处理结果，提取有用信息
+        coordinate_systems = []
+        for row in results:
+            # 从srtext中提取坐标系名称
+            srtext = row['srtext'] or ''
+            name = extract_coordinate_system_name(srtext)
+            
+            # 构建显示名称
+            display_name = f"EPSG:{row['auth_srid']}"
+            if name:
+                display_name += f" - {name}"
+            
+            coordinate_systems.append({
+                'srid': row['srid'],
+                'auth_name': row['auth_name'],
+                'auth_srid': row['auth_srid'],
+                'epsg_code': f"EPSG:{row['auth_srid']}",
+                'name': name,
+                'display_name': display_name,
+                'srtext': srtext,
+                'proj4text': row['proj4text']
+            })
+        
+        return jsonify({
+            'success': True,
+            'coordinate_systems': coordinate_systems,
+            'total': len(coordinate_systems),
+            'keyword': keyword,
+            'keywords': keywords
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"搜索坐标系失败: {str(e)}")
+        return jsonify({'error': f'搜索坐标系失败: {str(e)}'}), 500
+
+def extract_coordinate_system_name(srtext):
+    """从srtext中提取坐标系名称"""
+    try:
+        if not srtext:
+            return None
+            
+        # 使用正则表达式提取PROJCS或GEOGCS中的名称
+        import re
+        
+        # 匹配PROJCS["name",...] 或 GEOGCS["name",...]
+        pattern = r'(?:PROJCS|GEOGCS)\["([^"]+)"'
+        match = re.search(pattern, srtext)
+        
+        if match:
+            name = match.group(1)
+            # 清理名称，移除一些常见的后缀
+            name = re.sub(r'\s*\(.*?\)\s*$', '', name)  # 移除括号内容
+            return name
+            
+        return None
+        
+    except Exception:
+        return None
+
+@file_bp.route('/coordinate-systems/common', methods=['GET'])
+def get_common_coordinate_systems():
+    """获取常用坐标系列表"""
+    try:
+        # 定义常用坐标系的EPSG代码
+        common_epsgs = [
+            4326,   # WGS 84
+            3857,   # Web Mercator
+            4490,   # CGCS2000
+            4214,   # Beijing 1954
+            4610,   # Xian 1980
+            2383,   # Xian 1980 / 3-degree Gauss-Kruger CM 114E
+            4549,   # CGCS2000 / 3-degree Gauss-Kruger CM 114E
+            4548,   # CGCS2000 / 3-degree Gauss-Kruger CM 111E
+            4547,   # CGCS2000 / 3-degree Gauss-Kruger CM 108E
+            4546,   # CGCS2000 / 3-degree Gauss-Kruger CM 105E
+        ]
+        
+        # 构建查询SQL
+        placeholders = ','.join(['%s'] * len(common_epsgs))
+        sql = f"""
+        SELECT 
+            srid,
+            auth_name,
+            auth_srid,
+            srtext,
+            proj4text
+        FROM spatial_ref_sys 
+        WHERE auth_srid IN ({placeholders})
+        ORDER BY 
+            CASE auth_srid
+                WHEN 4326 THEN 1
+                WHEN 3857 THEN 2  
+                WHEN 4490 THEN 3
+                WHEN 4214 THEN 4
+                WHEN 4610 THEN 5
+                ELSE 6
+            END
+        """
+        
+        results = execute_query(sql, common_epsgs)
+        
+        # 处理结果
+        coordinate_systems = []
+        for row in results:
+            srtext = row['srtext'] or ''
+            name = extract_coordinate_system_name(srtext)
+            
+            display_name = f"EPSG:{row['auth_srid']}"
+            if name:
+                display_name += f" - {name}"
+            
+            coordinate_systems.append({
+                'srid': row['srid'],
+                'auth_name': row['auth_name'],
+                'auth_srid': row['auth_srid'],
+                'epsg_code': f"EPSG:{row['auth_srid']}",
+                'name': name,
+                'display_name': display_name,
+                'srtext': srtext,
+                'proj4text': row['proj4text']
+            })
+        
+        return jsonify({
+            'success': True,
+            'coordinate_systems': coordinate_systems,
+            'total': len(coordinate_systems)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"获取常用坐标系失败: {str(e)}")
+        return jsonify({'error': f'获取常用坐标系失败: {str(e)}'}), 500 

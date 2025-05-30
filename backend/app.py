@@ -20,11 +20,12 @@ Description:
 Copyright (c) 2025 by VGE, All Rights Reserved. 
 """
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from flask_restx import Api
 import logging
 import os
+import requests
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -83,14 +84,14 @@ except Exception as import_error:
 # 注册蓝图
 try:
     from routes.file_routes import file_bp
-    app.register_blueprint(file_bp, url_prefix='/api/files')
+    app.register_blueprint(file_bp, url_prefix='/api')
     logger.info("✅ 文件路由注册成功")
 except Exception as e:
     logger.warning(f"⚠️ 文件路由注册失败: {str(e)}")
 
 try:
     from routes.geoservice_routes import geoservice_bp
-    app.register_blueprint(geoservice_bp, url_prefix='/api/geoservice')
+    app.register_blueprint(geoservice_bp, url_prefix='/api')
     logger.info("✅ GeoService路由注册成功")
 except Exception as e:
     logger.warning(f"⚠️ GeoService路由注册失败: {str(e)}")
@@ -98,7 +99,7 @@ except Exception as e:
 # 可选的蓝图（如果存在的话）
 try:
     from routes.layer_routes import layer_bp
-    app.register_blueprint(layer_bp, url_prefix='/api/layers')
+    app.register_blueprint(layer_bp, url_prefix='/api')
     logger.info("✅ 图层路由注册成功")
 except ImportError:
     logger.info("图层路由不存在，跳过")
@@ -117,7 +118,7 @@ except Exception as e:
 # Martin 瓦片服务路由
 try:
     from routes.martin_routes import martin_bp
-    app.register_blueprint(martin_bp)
+    app.register_blueprint(martin_bp, url_prefix='/api')
     logger.info("✅ Martin 瓦片服务路由注册成功")
 except ImportError:
     logger.info("Martin 路由不存在，跳过")
@@ -127,7 +128,7 @@ except Exception as e:
 # GeoJSON Martin 服务路由
 try:
     from routes.geojson_martin_routes import geojson_martin_bp
-    app.register_blueprint(geojson_martin_bp)
+    app.register_blueprint(geojson_martin_bp, url_prefix='/api')
     logger.info("✅ GeoJSON Martin 服务路由注册成功")
 except ImportError:
     logger.info("GeoJSON Martin 路由不存在，跳过")
@@ -137,7 +138,7 @@ except Exception as e:
 # SHP Martin 服务路由
 try:
     from routes.shp_martin_routes import shp_martin_bp
-    app.register_blueprint(shp_martin_bp)
+    app.register_blueprint(shp_martin_bp, url_prefix='/api')
     logger.info("✅ SHP Martin 服务路由注册成功")
 except ImportError:
     logger.info("SHP Martin 路由不存在，跳过")
@@ -147,7 +148,7 @@ except Exception as e:
 # 统一Martin 服务路由
 try:
     from routes.martin_service_routes import martin_service_bp
-    app.register_blueprint(martin_service_bp)
+    app.register_blueprint(martin_service_bp, url_prefix='/api')
     logger.info("✅ 统一Martin 服务路由注册成功")
 except ImportError:
     logger.info("统一Martin 路由不存在，跳过")
@@ -163,6 +164,67 @@ except ImportError:
     logger.info("GeoJSON 直接服务路由不存在，跳过")
 except Exception as e:
     logger.warning(f"⚠️ GeoJSON 直接服务路由注册失败: {str(e)}")
+
+# DXF 服务路由
+try:
+    from routes.dxf_routes import dxf_bp
+    app.register_blueprint(dxf_bp, url_prefix='/api')
+    logger.info("✅ DXF 服务路由注册成功")
+except ImportError:
+    logger.info("DXF 服务路由不存在，跳过")
+except Exception as e:
+    logger.warning(f"⚠️ DXF 服务路由注册失败: {str(e)}")
+
+# GeoServer代理路由（解决CORS问题）
+@app.route('/geoserver/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+def geoserver_proxy(path):
+    """GeoServer代理，解决CORS跨域问题"""
+    # 处理预检请求
+    if request.method == 'OPTIONS':
+        response = Response()
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        return response
+    
+    geoserver_url = 'http://localhost:8083/geoserver'
+    target_url = f"{geoserver_url}/{path}"
+    
+    # 转发查询参数
+    if request.query_string:
+        target_url += f"?{request.query_string.decode('utf-8')}"
+    
+    logger.info(f"代理请求: {request.method} {target_url}")
+    
+    try:
+        # 转发请求到GeoServer
+        if request.method == 'GET':
+            resp = requests.get(target_url, timeout=30, allow_redirects=False)
+        elif request.method == 'POST':
+            resp = requests.post(target_url, data=request.get_data(), timeout=30, allow_redirects=False)
+        else:
+            resp = requests.request(request.method, target_url, timeout=30, allow_redirects=False)
+        
+        # 创建代理响应
+        response = Response(
+            resp.content,
+            status=resp.status_code,
+            content_type=resp.headers.get('content-type')
+        )
+        
+        # 添加CORS头
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        
+        logger.info(f"代理响应: {resp.status_code}")
+        return response
+        
+    except requests.exceptions.RequestException as e:
+        logger.error(f"GeoServer代理请求失败: {str(e)}")
+        response = jsonify({'error': f'GeoServer服务不可用: {str(e)}'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 503
 
 @app.route('/health')
 def health_check():

@@ -462,6 +462,27 @@ def init_database():
         )
         """
         
+        # 创建GeoJSON文件表（用于GeoJSON直接服务）
+        create_geojson_files_table = """
+        CREATE TABLE IF NOT EXISTS geojson_files (
+            id SERIAL PRIMARY KEY,
+            file_id VARCHAR(36) NOT NULL UNIQUE,
+            original_filename VARCHAR(255) NOT NULL,
+            file_path TEXT NOT NULL,
+            stored_path TEXT,
+            file_size BIGINT NOT NULL,
+            feature_count INTEGER DEFAULT 0,
+            geometry_types JSONB,
+            property_fields JSONB,
+            bbox JSONB,
+            upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            status VARCHAR(20) DEFAULT 'active',
+            user_id INTEGER REFERENCES users(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+        
         # 创建矢量Martin服务表的索引
         create_vector_martin_services_indexes = [
             "CREATE INDEX IF NOT EXISTS idx_vector_martin_services_file_id ON vector_martin_services(file_id)",
@@ -470,6 +491,14 @@ def init_database():
             "CREATE INDEX IF NOT EXISTS idx_vector_martin_services_status ON vector_martin_services(status)",
             "CREATE INDEX IF NOT EXISTS idx_vector_martin_services_user_id ON vector_martin_services(user_id)",
             "CREATE INDEX IF NOT EXISTS idx_vector_martin_services_service_url ON vector_martin_services(service_url)"
+        ]
+        
+        # 创建GeoJSON文件表的索引
+        create_geojson_files_indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_geojson_files_file_id ON geojson_files(file_id)",
+            "CREATE INDEX IF NOT EXISTS idx_geojson_files_status ON geojson_files(status)",
+            "CREATE INDEX IF NOT EXISTS idx_geojson_files_user_id ON geojson_files(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_geojson_files_upload_date ON geojson_files(upload_date)"
         ]
         
         # 创建场景图层表的索引
@@ -505,7 +534,8 @@ def init_database():
             create_geoserver_layergroups_table,
             create_scenes_table,
             create_scene_layers_table,
-            create_vector_martin_services_table
+            create_vector_martin_services_table,
+            create_geojson_files_table
         ]
         
         for table_sql in tables:
@@ -524,7 +554,8 @@ def init_database():
             create_geoserver_layergroups_indexes +
             create_scenes_indexes +
             create_vector_martin_services_indexes +
-            create_scene_layers_indexes
+            create_scene_layers_indexes +
+            create_geojson_files_indexes
         )
         
         for index_sql in all_indexes:
