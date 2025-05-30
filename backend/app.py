@@ -26,10 +26,20 @@ from flask_restx import Api
 import logging
 import os
 import requests
+import atexit
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# 导入Martin服务
+try:
+    from services.martin_service import MartinService
+    martin_service = MartinService()
+    logger.info("✅ Martin服务模块加载成功")
+except Exception as e:
+    martin_service = None
+    logger.warning(f"⚠️ Martin服务模块加载失败: {str(e)}")
 
 app = Flask(__name__)
 
@@ -249,9 +259,34 @@ def not_found(error):
 def internal_error(error):
     return jsonify({'error': '服务器内部错误'}), 500
 
+def cleanup_martin():
+    """清理Martin服务进程"""
+    if martin_service and martin_service.process:
+        try:
+            martin_service.process.terminate()
+            martin_service.process.wait(timeout=5)
+            logger.info("✅ Martin服务已清理")
+        except Exception as e:
+            logger.warning(f"⚠️ 清理Martin服务时出错: {str(e)}")
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5030))
     debug = os.environ.get('DEBUG', 'True').lower() == 'true'
     
-    logger.info(f"启动应用在端口 {port}")
+    # 启动Martin服务
+    if martin_service:
+        try:
+            logger.info("🚀 正在启动Martin服务...")
+            if martin_service.start_service():
+                logger.info("✅ Martin服务启动成功")
+                # 注册清理函数
+                atexit.register(cleanup_martin)
+            else:
+                logger.warning("⚠️ Martin服务启动失败")
+        except Exception as e:
+            logger.error(f"❌ 启动Martin服务时发生错误: {str(e)}")
+    else:
+        logger.info("⚠️ Martin服务未可用，跳过启动")
+    
+    logger.info(f"🌐 启动Flask应用在端口 {port}")
     app.run(host='0.0.0.0', port=port, debug=debug) 

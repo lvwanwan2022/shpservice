@@ -353,6 +353,8 @@ class SceneService:
                         ms.mvt_url,
                         ms.tilejson_url,
                         ms.service_url,
+                        ms.style,
+                        ms.vector_info,
                         ms.status,
                         f.id as file_id,
                         f.file_type,
@@ -373,6 +375,8 @@ class SceneService:
                         ms.mvt_url,
                         ms.tilejson_url,
                         ms.service_url,
+                        ms.style,
+                        ms.vector_info,
                         ms.status,
                         f.id as file_id,
                         f.file_type,
@@ -380,6 +384,28 @@ class SceneService:
                     FROM vector_martin_services ms
                     LEFT JOIN files f ON ms.original_filename = f.file_name
                     WHERE ms.id = %(martin_service_id)s AND ms.status = 'active' AND ms.vector_type = 'shp'
+                    """
+                    martin_result = execute_query(martin_sql, {'martin_service_id': martin_service_id})
+                elif martin_service_type == 'dxf':
+                    martin_sql = """
+                    SELECT 
+                        'dxf' as service_type,
+                        ms.id,
+                        ms.file_id as martin_file_id,
+                        ms.original_filename,
+                        ms.table_name,
+                        ms.mvt_url,
+                        ms.tilejson_url,
+                        ms.service_url,
+                        ms.style,
+                        ms.vector_info,
+                        ms.status,
+                        f.id as file_id,
+                        f.file_type,
+                        f.discipline
+                    FROM vector_martin_services ms
+                    LEFT JOIN files f ON ms.original_filename = f.file_name
+                    WHERE ms.id = %(martin_service_id)s AND ms.status = 'active' AND ms.vector_type = 'dxf'
                     """
                     martin_result = execute_query(martin_sql, {'martin_service_id': martin_service_id})
                 else:
@@ -394,6 +420,7 @@ class SceneService:
                         ms.mvt_url,
                         ms.tilejson_url,
                         ms.service_url,
+                        ms.style,
                         ms.status,
                         f.id as file_id,
                         f.file_type,
@@ -406,6 +433,29 @@ class SceneService:
                 
                 if martin_result:
                     martin_info = martin_result[0]
+                    
+                    # 解析Martin服务的样式配置
+                    martin_style_config = {}
+                    if martin_info.get('style'):
+                        try:
+                            if isinstance(martin_info['style'], str):
+                                martin_style_config = json.loads(martin_info['style'])
+                            else:
+                                martin_style_config = martin_info['style']
+                        except (json.JSONDecodeError, TypeError) as e:
+                            print(f"解析Martin服务样式配置失败: {str(e)}")
+                            martin_style_config = {}
+                    
+                    # 对于DXF类型，尝试从vector_info中读取样式配置
+                    if martin_info.get('service_type') == 'dxf' and martin_info.get('vector_info'):
+                        try:
+                            vector_info = json.loads(martin_info['vector_info']) if isinstance(martin_info['vector_info'], str) else martin_info['vector_info']
+                            dxf_style_config = vector_info.get('style_config', {})
+                            if dxf_style_config:
+                                martin_style_config = dxf_style_config
+                                print(f"从vector_info读取DXF样式配置: {martin_style_config}")
+                        except (json.JSONDecodeError, TypeError) as e:
+                            print(f"解析DXF Martin服务vector_info失败: {str(e)}")
                     
                     # 构建Martin图层信息
                     layer.update({
@@ -431,7 +481,9 @@ class SceneService:
                         'service_url': martin_info['service_url'],
                         'mvt_url': martin_info['mvt_url'],
                         'tilejson_url': martin_info['tilejson_url'],
-                        'file_id': martin_info['file_id']
+                        'file_id': martin_info['file_id'],
+                        # 样式配置
+                        'style_config': martin_style_config
                     })
                 else:
                     # Martin服务不存在

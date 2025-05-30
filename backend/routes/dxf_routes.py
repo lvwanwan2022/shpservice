@@ -454,40 +454,51 @@ def upload_and_publish_dxf():
         current_app.logger.error(f"上传并发布DXF文件错误: {str(e)}")
         return jsonify({'error': f'上传并发布失败: {str(e)}'}), 500
 
-@dxf_bp.route('/style-legend/<int:file_id>', methods=['GET'])
-def get_style_legend(file_id):
-    """获取DXF文件的样式图例"""
+@dxf_bp.route('/style-templates', methods=['GET'])
+def get_dxf_style_templates():
+    """获取DXF样式模板"""
     try:
-        # 查找对应的Martin服务
-        sql = """
-        SELECT table_name FROM vector_martin_services 
-        WHERE file_id = %s AND vector_type = 'dxf' AND status = 'active'
-        """
-        result = execute_query(sql, (str(file_id),))
-        
-        if not result:
-            return jsonify({'error': 'DXF文件未发布Martin服务'}), 404
-        
-        table_name = result[0]['table_name']
-        
-        # 生成样式图例
-        from services.enhanced_dxf_processor import EnhancedDXFProcessor
-        processor = EnhancedDXFProcessor()
-        legend = processor.generate_style_legend(table_name)
-        
-        if 'error' in legend:
-            return jsonify({'error': f'生成图例失败: {legend["error"]}'}), 500
+        templates = {
+            '建筑规划': {
+                'description': '适用于建筑和规划图纸',
+                'point': {'color': '#8B4513', 'size': 8},
+                'line': {'color': '#8B4513', 'width': 2, 'style': 'solid'},
+                'polygon': {'fillColor': '#DEB887', 'outlineColor': '#8B4513', 'outlineWidth': 1, 'opacity': 0.7}
+            },
+            '道路交通': {
+                'description': '适用于道路和交通设施图',
+                'point': {'color': '#696969', 'size': 6},
+                'line': {'color': '#696969', 'width': 3, 'style': 'solid'},
+                'polygon': {'fillColor': '#D3D3D3', 'outlineColor': '#696969', 'outlineWidth': 1, 'opacity': 0.8}
+            },
+            '地形地物': {
+                'description': '适用于地形图和地物标注',
+                'point': {'color': '#228B22', 'size': 6},
+                'line': {'color': '#228B22', 'width': 2, 'style': 'solid'},
+                'polygon': {'fillColor': '#90EE90', 'outlineColor': '#228B22', 'outlineWidth': 1, 'opacity': 0.5}
+            },
+            '水系': {
+                'description': '适用于水系和水利设施',
+                'point': {'color': '#0000FF', 'size': 6},
+                'line': {'color': '#0000FF', 'width': 2, 'style': 'solid'},
+                'polygon': {'fillColor': '#87CEEB', 'outlineColor': '#0000FF', 'outlineWidth': 1, 'opacity': 0.6}
+            },
+            '边界线': {
+                'description': '适用于行政边界和地块边界',
+                'point': {'color': '#FF0000', 'size': 6},
+                'line': {'color': '#FF0000', 'width': 2, 'style': 'dashed'},
+                'polygon': {'fillColor': '#FFE4E1', 'outlineColor': '#FF0000', 'outlineWidth': 2, 'opacity': 0.3}
+            }
+        }
         
         return jsonify({
             'success': True,
-            'file_id': file_id,
-            'table_name': table_name,
-            'style_legend': legend
+            'templates': templates
         }), 200
         
     except Exception as e:
-        current_app.logger.error(f"获取DXF样式图例错误: {str(e)}")
-        return jsonify({'error': f'获取图例失败: {str(e)}'}), 500
+        current_app.logger.error(f"获取DXF样式模板失败: {str(e)}")
+        return jsonify({'error': f'获取样式模板失败: {str(e)}'}), 500
 
 @dxf_bp.route('/validate', methods=['POST'])
 def validate_dxf_file():
@@ -550,117 +561,4 @@ def validate_dxf_file():
                 
     except Exception as e:
         current_app.logger.error(f"DXF文件验证错误: {str(e)}")
-        return jsonify({'error': f'文件验证失败: {str(e)}'}), 500
-
-@dxf_bp.route('/martin-services/<int:service_id>/style', methods=['GET', 'POST'])
-def manage_dxf_style(service_id):
-    """管理DXF Martin服务的样式"""
-    try:
-        from models.db import execute_query
-        
-        if request.method == 'GET':
-            # 获取样式配置
-            sql = """
-            SELECT vector_info, postgis_info FROM vector_martin_services 
-            WHERE id = %s AND vector_type = 'dxf' AND status = 'active'
-            """
-            result = execute_query(sql, (service_id,))
-            
-            if not result:
-                return jsonify({'error': '服务不存在'}), 404
-            
-            vector_info = json.loads(result[0]['vector_info']) if result[0]['vector_info'] else {}
-            postgis_info = json.loads(result[0]['postgis_info']) if result[0]['postgis_info'] else {}
-            
-            return jsonify({
-                'success': True,
-                'vector_info': vector_info,
-                'postgis_info': postgis_info,
-                'style_config': vector_info.get('style_config', {}),
-                'dxf_layers': vector_info.get('layers', [])
-            }), 200
-            
-        elif request.method == 'POST':
-            # 更新样式配置
-            style_config = request.get_json()
-            
-            # 获取当前的vector_info
-            get_sql = """
-            SELECT vector_info FROM vector_martin_services 
-            WHERE id = %s AND vector_type = 'dxf' AND status = 'active'
-            """
-            result = execute_query(get_sql, (service_id,))
-            
-            if not result:
-                return jsonify({'error': '服务不存在'}), 404
-            
-            # 更新vector_info中的样式配置
-            vector_info = json.loads(result[0]['vector_info']) if result[0]['vector_info'] else {}
-            vector_info['style_config'] = style_config
-            vector_info['style_updated_at'] = datetime.utcnow().isoformat()
-            
-            # 保存更新后的配置
-            update_sql = """
-            UPDATE vector_martin_services 
-            SET vector_info = %s, updated_at = NOW()
-            WHERE id = %s
-            """
-            execute_query(update_sql, (json.dumps(vector_info), service_id))
-            
-            current_app.logger.info(f"✅ DXF Martin服务样式更新成功: {service_id}")
-            
-            return jsonify({
-                'success': True,
-                'message': 'DXF样式配置更新成功',
-                'style_config': style_config
-            }), 200
-            
-    except Exception as e:
-        current_app.logger.error(f"管理DXF样式失败: {str(e)}")
-        return jsonify({'error': f'管理样式失败: {str(e)}'}), 500
-
-@dxf_bp.route('/style-templates', methods=['GET'])
-def get_dxf_style_templates():
-    """获取DXF样式模板"""
-    try:
-        templates = {
-            '建筑规划': {
-                'description': '适用于建筑和规划图纸',
-                'point': {'color': '#8B4513', 'size': 8},
-                'line': {'color': '#8B4513', 'width': 2, 'style': 'solid'},
-                'polygon': {'fillColor': '#DEB887', 'outlineColor': '#8B4513', 'outlineWidth': 1, 'opacity': 0.7}
-            },
-            '道路交通': {
-                'description': '适用于道路和交通设施图',
-                'point': {'color': '#696969', 'size': 6},
-                'line': {'color': '#696969', 'width': 3, 'style': 'solid'},
-                'polygon': {'fillColor': '#D3D3D3', 'outlineColor': '#696969', 'outlineWidth': 1, 'opacity': 0.8}
-            },
-            '地形地物': {
-                'description': '适用于地形图和地物标注',
-                'point': {'color': '#228B22', 'size': 6},
-                'line': {'color': '#228B22', 'width': 2, 'style': 'solid'},
-                'polygon': {'fillColor': '#90EE90', 'outlineColor': '#228B22', 'outlineWidth': 1, 'opacity': 0.5}
-            },
-            '水系': {
-                'description': '适用于水系和水利设施',
-                'point': {'color': '#0000FF', 'size': 6},
-                'line': {'color': '#0000FF', 'width': 2, 'style': 'solid'},
-                'polygon': {'fillColor': '#87CEEB', 'outlineColor': '#0000FF', 'outlineWidth': 1, 'opacity': 0.6}
-            },
-            '边界线': {
-                'description': '适用于行政边界和地块边界',
-                'point': {'color': '#FF0000', 'size': 6},
-                'line': {'color': '#FF0000', 'width': 2, 'style': 'dashed'},
-                'polygon': {'fillColor': '#FFE4E1', 'outlineColor': '#FF0000', 'outlineWidth': 2, 'opacity': 0.3}
-            }
-        }
-        
-        return jsonify({
-            'success': True,
-            'templates': templates
-        }), 200
-        
-    except Exception as e:
-        current_app.logger.error(f"获取DXF样式模板失败: {str(e)}")
-        return jsonify({'error': f'获取样式模板失败: {str(e)}'}), 500 
+        return jsonify({'error': f'文件验证失败: {str(e)}'}), 500 
