@@ -94,7 +94,7 @@ except Exception as import_error:
 # 注册蓝图
 try:
     from routes.file_routes import file_bp
-    app.register_blueprint(file_bp, url_prefix='/api')
+    app.register_blueprint(file_bp, url_prefix='/api/files')
     logger.info("✅ 文件路由注册成功")
 except Exception as e:
     logger.warning(f"⚠️ 文件路由注册失败: {str(e)}")
@@ -128,7 +128,7 @@ except Exception as e:
 # Martin 瓦片服务路由
 try:
     from routes.martin_routes import martin_bp
-    app.register_blueprint(martin_bp, url_prefix='/api')
+    app.register_blueprint(martin_bp)
     logger.info("✅ Martin 瓦片服务路由注册成功")
 except ImportError:
     logger.info("Martin 路由不存在，跳过")
@@ -138,7 +138,7 @@ except Exception as e:
 # GeoJSON Martin 服务路由
 try:
     from routes.geojson_martin_routes import geojson_martin_bp
-    app.register_blueprint(geojson_martin_bp, url_prefix='/api')
+    app.register_blueprint(geojson_martin_bp)
     logger.info("✅ GeoJSON Martin 服务路由注册成功")
 except ImportError:
     logger.info("GeoJSON Martin 路由不存在，跳过")
@@ -148,7 +148,7 @@ except Exception as e:
 # SHP Martin 服务路由
 try:
     from routes.shp_martin_routes import shp_martin_bp
-    app.register_blueprint(shp_martin_bp, url_prefix='/api')
+    app.register_blueprint(shp_martin_bp)
     logger.info("✅ SHP Martin 服务路由注册成功")
 except ImportError:
     logger.info("SHP Martin 路由不存在，跳过")
@@ -178,7 +178,7 @@ except Exception as e:
 # DXF 服务路由
 try:
     from routes.dxf_routes import dxf_bp
-    app.register_blueprint(dxf_bp, url_prefix='/api')
+    app.register_blueprint(dxf_bp)
     logger.info("✅ DXF 服务路由注册成功")
 except ImportError:
     logger.info("DXF 服务路由不存在，跳过")
