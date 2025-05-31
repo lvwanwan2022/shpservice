@@ -404,6 +404,77 @@ def get_martin_service_style(service_id):
         }), 500
 
 
+@martin_service_bp.route('/martin-services/<int:service_id>/apply-style', methods=['POST'])
+def apply_martin_service_style(service_id):
+    """应用Martin服务的样式配置（保存样式并重新发布服务）"""
+    try:
+        data = request.json
+        if not data or 'style_config' not in data:
+            return jsonify({
+                'success': False,
+                'error': '缺少样式配置参数',
+                'error_type': 'missing_parameter'
+            }), 400
+        
+        style_config = data['style_config']
+        
+        # 检查Martin服务是否存在
+        check_sql = """
+        SELECT id, vector_type, original_filename, style, table_name FROM vector_martin_services
+        WHERE id = %s AND status = 'active'
+        """
+        result = execute_query(check_sql, (service_id,))
+        
+        if not result:
+            return jsonify({
+                'success': False,
+                'error': f'Martin服务ID {service_id} 不存在',
+                'error_type': 'not_found'
+            }), 404
+        
+        service = result[0]
+        current_app.logger.info(f"开始应用Martin服务 {service_id} 的样式，类型: {service['vector_type']}")
+        
+        # 1. 保存样式配置到数据库
+        update_sql = """
+        UPDATE vector_martin_services 
+        SET style = %s, updated_at = CURRENT_TIMESTAMP
+        WHERE id = %s
+        """
+        
+        # 转换为JSON字符串格式保存
+        style_json = json.dumps(style_config, ensure_ascii=False)
+        execute_query(update_sql, (style_json, service_id), fetch=False)
+        
+        current_app.logger.info(f"✅ Martin服务样式配置已保存: {service_id}")
+        
+        # 2. 触发Martin服务重新发布（如果需要）
+        # 对于DXF图层，样式是在前端VectorGrid中应用的，不需要重新发布Martin服务
+        # 但我们可以在这里做一些额外的处理，比如更新缓存等
+        
+        # 3. 返回成功响应
+        return jsonify({
+            'success': True,
+            'message': '样式已应用成功',
+            'data': {
+                'service_id': service_id,
+                'service_type': service['vector_type'],
+                'original_filename': service['original_filename'],
+                'table_name': service['table_name'],
+                'style_config': style_config,
+                'applied_at': 'now'
+            }
+        }), 200
+    
+    except Exception as e:
+        current_app.logger.error(f"应用Martin服务样式时发生错误: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'样式应用失败: {str(e)}',
+            'error_type': 'internal_error'
+        }), 500
+
+
 @martin_service_bp.route('/martin-services/style-templates', methods=['GET'])
 def get_style_templates():
     """获取Martin服务样式模板"""

@@ -109,7 +109,7 @@ except Exception as e:
 # 可选的蓝图（如果存在的话）
 try:
     from routes.layer_routes import layer_bp
-    app.register_blueprint(layer_bp, url_prefix='/api')
+    app.register_blueprint(layer_bp, url_prefix='/api/layers')
     logger.info("✅ 图层路由注册成功")
 except ImportError:
     logger.info("图层路由不存在，跳过")

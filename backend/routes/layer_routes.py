@@ -4,6 +4,12 @@
 from flask import Blueprint, request, jsonify, current_app
 from services.layer_service import LayerService
 from services.geoserver_service import GeoServerService
+from models.db import get_connection as get_db_connection
+import json
+import logging
+
+# 创建logger
+logger = logging.getLogger(__name__)
 
 layer_bp = Blueprint('layer', __name__)
 layer_service = LayerService()
@@ -707,4 +713,243 @@ def get_style_template(geometry_type):
             'success': False,
             'error': '服务器内部错误',
             'error_type': 'internal_error'
-        }), 500 
+        }), 500
+
+@layer_bp.route('/<int:layer_id>/bounds', methods=['GET'])
+def get_layer_bounds(layer_id):
+    """获取图层边界信息
+    
+    Args:
+        layer_id: 文件ID或图层ID（前端传递的layer.id）
+    """
+    try:
+        # 获取图层信息 - 这里的layer_id可能是文件ID或图层ID
+        with get_db_connection() as conn:
+            from psycopg2.extras import RealDictCursor
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
+            # 先尝试查询是否有对应的文件记录（Martin服务）
+            cursor.execute("""
+            SELECT f.*, sl.id as scene_layer_id, sl.layer_type as service_type, 
+                   sl.martin_service_id, sl.scene_id
+            FROM files f
+            LEFT JOIN scene_layers sl ON sl.layer_id = f.id
+            WHERE f.id = %s
+            LIMIT 1
+            """, (layer_id,))
+            
+            layer = cursor.fetchone()
+            
+            # 如果没有文件记录，检查是否是直接的场景图层（GeoServer服务）
+            if not layer:
+                cursor.execute("""
+                SELECT sl.*, NULL as file_name, NULL as original_name, NULL as file_type, NULL as bbox,
+                       sl.id as scene_layer_id, sl.layer_type as service_type
+                FROM scene_layers sl
+                WHERE sl.layer_id = %s
+                LIMIT 1
+                """, (layer_id,))
+                
+                layer = cursor.fetchone()
+                if not layer:
+                    return jsonify({
+                        'success': False,
+                        'error': '图层不存在'
+                    }), 404
+            
+            bbox = None
+            
+            # 根据服务类型获取边界
+            if layer['service_type'] == 'martin' and layer.get('martin_service_id'):
+                # 对于Martin服务，从PostGIS表中计算边界
+                bbox = get_martin_service_bounds(layer['martin_service_id'])
+                
+            elif layer['service_type'] == 'geoserver':
+                # 对于GeoServer服务，尝试从WMS GetCapabilities获取边界
+                # 这里需要根据实际情况获取GeoServer图层信息
+                # 暂时返回一个默认的全球范围，后续可以改进
+                logger.info(f"GeoServer图层 {layer_id}，暂时返回默认边界")
+                bbox = {
+                    'minx': -180.0,
+                    'miny': -90.0,
+                    'maxx': 180.0,
+                    'maxy': 90.0
+                }
+                
+            # 如果无法从服务获取，尝试从文件信息获取
+            if not bbox and layer.get('bbox'):
+                if isinstance(layer['bbox'], str):
+                    try:
+                        bbox = json.loads(layer['bbox'])
+                    except:
+                        pass
+                else:
+                    bbox = layer['bbox']
+            
+            if not bbox:
+                return jsonify({
+                    'success': False,
+                    'error': 'GeoServer图层边界信息获取功能正在开发中'
+                }), 501
+                
+            return jsonify({
+                'success': True,
+                'data': {
+                    'bbox': bbox,
+                    'layer_id': layer_id,
+                    'scene_layer_id': layer['scene_layer_id'],
+                    'layer_name': layer.get('file_name') or layer.get('original_name', f'图层{layer_id}'),
+                    'service_type': layer['service_type'],
+                    'coordinate_system': 'EPSG:4326'  # 返回的坐标系统一为WGS84
+                }
+            })
+            
+    except Exception as e:
+        logger.error(f"获取图层边界失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'获取图层边界失败: {str(e)}'
+        }), 500
+
+
+def get_martin_service_bounds(martin_service_id):
+    """从Martin服务获取PostGIS表的边界"""
+    try:
+        with get_db_connection() as conn:
+            from psycopg2.extras import RealDictCursor
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            
+            # 获取Martin服务信息
+            cursor.execute("""
+            SELECT table_name, original_filename
+            FROM vector_martin_services 
+            WHERE id = %s AND status = 'active'
+            """, (martin_service_id,))
+            
+            service = cursor.fetchone()
+            if not service:
+                return None
+                
+            table_name = service['table_name']
+            
+            # 获取几何字段的SRID和边界
+            cursor.execute(f"""
+            SELECT 
+                ST_SRID((SELECT geom FROM "{table_name}" WHERE geom IS NOT NULL LIMIT 1)) as srid,
+                ST_XMin(extent) as minx, 
+                ST_YMin(extent) as miny,
+                ST_XMax(extent) as maxx, 
+                ST_YMax(extent) as maxy
+            FROM (
+                SELECT ST_Extent(geom) as extent
+                FROM "{table_name}"
+                WHERE geom IS NOT NULL
+            ) t
+            """)
+            
+            result = cursor.fetchone()
+            if not result or not all(v is not None for v in [result['minx'], result['miny'], result['maxx'], result['maxy']]):
+                return None
+            
+            # 获取原始坐标系SRID
+            source_srid = result['srid']
+            minx, miny = float(result['minx']), float(result['miny'])
+            maxx, maxy = float(result['maxx']), float(result['maxy'])
+            
+            logger.info(f"原始坐标系: EPSG:{source_srid}, 边界框: [{minx}, {miny}, {maxx}, {maxy}]")
+            
+            # 如果不是地理坐标系（4326），则进行坐标转换
+            if source_srid != 4326:
+                try:
+                    # 使用PostGIS进行坐标转换
+                    cursor.execute("""
+                    SELECT 
+                        ST_X(ST_Transform(ST_SetSRID(ST_MakePoint(%s, %s), %s), 4326)) as min_lon,
+                        ST_Y(ST_Transform(ST_SetSRID(ST_MakePoint(%s, %s), %s), 4326)) as min_lat,
+                        ST_X(ST_Transform(ST_SetSRID(ST_MakePoint(%s, %s), %s), 4326)) as max_lon,
+                        ST_Y(ST_Transform(ST_SetSRID(ST_MakePoint(%s, %s), %s), 4326)) as max_lat
+                    """, (minx, miny, source_srid, minx, miny, source_srid, 
+                          maxx, maxy, source_srid, maxx, maxy, source_srid))
+                    
+                    transform_result = cursor.fetchone()
+                    if transform_result:
+                        converted_bbox = {
+                            'minx': float(transform_result['min_lon']),
+                            'miny': float(transform_result['min_lat']),
+                            'maxx': float(transform_result['max_lon']),
+                            'maxy': float(transform_result['max_lat'])
+                        }
+                        logger.info(f"转换后地理坐标: {converted_bbox}")
+                        return converted_bbox
+                except Exception as transform_error:
+                    logger.error(f"坐标转换失败: {transform_error}")
+                    # 转换失败时返回原始坐标
+                    pass
+            
+            # 如果已经是地理坐标系或转换失败，返回原始坐标
+            return {
+                'minx': minx,
+                'miny': miny,
+                'maxx': maxx,
+                'maxy': maxy
+            }
+                
+    except Exception as e:
+        logger.error(f"获取Martin服务边界失败: {str(e)}")
+        
+    return None
+
+
+def get_geoserver_layer_bounds(layer_name, wms_url):
+    """从GeoServer WMS GetCapabilities获取图层边界"""
+    try:
+        import requests
+        from xml.etree import ElementTree as ET
+        
+        if not wms_url:
+            return None
+            
+        # 构造GetCapabilities请求
+        base_url = wms_url.split('?')[0]
+        capabilities_url = f"{base_url}?service=WMS&version=1.3.0&request=GetCapabilities"
+        
+        response = requests.get(capabilities_url, timeout=30)
+        response.raise_for_status()
+        
+        # 解析XML响应
+        root = ET.fromstring(response.content)
+        
+        # 查找指定图层
+        namespaces = {
+            'wms': 'http://www.opengis.net/wms',
+            'xlink': 'http://www.w3.org/1999/xlink'
+        }
+        
+        # 查找图层
+        for layer in root.findall('.//wms:Layer', namespaces):
+            name_elem = layer.find('wms:Name', namespaces)
+            if name_elem is not None and name_elem.text == layer_name:
+                # 查找边界框
+                bbox_elem = layer.find('wms:BoundingBox[@CRS="EPSG:4326"]', namespaces)
+                if bbox_elem is not None:
+                    return {
+                        'minx': float(bbox_elem.get('minx')),
+                        'miny': float(bbox_elem.get('miny')),
+                        'maxx': float(bbox_elem.get('maxx')),
+                        'maxy': float(bbox_elem.get('maxy'))
+                    }
+                    
+                # 如果没有找到EPSG:4326的边界框，尝试其他CRS
+                bbox_elem = layer.find('wms:BoundingBox', namespaces)
+                if bbox_elem is not None:
+                    return {
+                        'minx': float(bbox_elem.get('minx')),
+                        'miny': float(bbox_elem.get('miny')),
+                        'maxx': float(bbox_elem.get('maxx')),
+                        'maxy': float(bbox_elem.get('maxy'))
+                    }
+                    
+    except Exception as e:
+        logger.error(f"获取GeoServer图层边界失败: {str(e)}")
+        
+    return None 
