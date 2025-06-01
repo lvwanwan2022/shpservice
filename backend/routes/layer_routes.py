@@ -720,86 +720,170 @@ def get_layer_bounds(layer_id):
     """获取图层边界信息
     
     Args:
-        layer_id: 文件ID或图层ID（前端传递的layer.id）
+        layer_id: scene_layers表中的layer_id（对应geoserver_layers.id或files.id）
     """
     try:
-        # 获取图层信息 - 这里的layer_id可能是文件ID或图层ID
+        # 获取图层信息 - 根据用户描述的逻辑链条处理
         with get_db_connection() as conn:
             from psycopg2.extras import RealDictCursor
             cursor = conn.cursor(cursor_factory=RealDictCursor)
             
-            # 先尝试查询是否有对应的文件记录（Martin服务）
+            # 首先尝试从scene_layers中查找，确定服务类型
             cursor.execute("""
-            SELECT f.*, sl.id as scene_layer_id, sl.layer_type as service_type, 
-                   sl.martin_service_id, sl.scene_id
-            FROM files f
-            LEFT JOIN scene_layers sl ON sl.layer_id = f.id
-            WHERE f.id = %s
+            SELECT sl.*, sl.layer_type as service_type
+            FROM scene_layers sl
+            WHERE sl.layer_id = %s
             LIMIT 1
             """, (layer_id,))
             
-            layer = cursor.fetchone()
+            scene_layer = cursor.fetchone()
             
-            # 如果没有文件记录，检查是否是直接的场景图层（GeoServer服务）
-            if not layer:
-                cursor.execute("""
-                SELECT sl.*, NULL as file_name, NULL as original_name, NULL as file_type, NULL as bbox,
-                       sl.id as scene_layer_id, sl.layer_type as service_type
-                FROM scene_layers sl
-                WHERE sl.layer_id = %s
-                LIMIT 1
-                """, (layer_id,))
-                
-                layer = cursor.fetchone()
-                if not layer:
+            if scene_layer:
+                # 如果在scene_layers中找到，根据service_type处理
+                if scene_layer['service_type'] == 'martin' and scene_layer.get('martin_service_id'):
+                    # Martin服务：从PostGIS表中计算边界
+                    bbox = get_martin_service_bounds(scene_layer['martin_service_id'])
+                    layer_info = {
+                        'scene_layer_id': scene_layer['id'],
+                        'service_type': 'martin',
+                        'martin_service_id': scene_layer['martin_service_id']
+                    }
+                    
+                    # 获取图层名称
+                    cursor.execute("""
+                    SELECT original_filename 
+                    FROM vector_martin_services 
+                    WHERE id = %s AND status = 'active'
+                    """, (scene_layer['martin_service_id'],))
+                    martin_result = cursor.fetchone()
+                    layer_name = martin_result['original_filename'] if martin_result else f'Martin图层{layer_id}'
+                    
+                elif scene_layer['service_type'] == 'geoserver':
+                    # GeoServer服务：从geoserver_layers表获取信息并调用GetCapabilities
+                    cursor.execute("""
+                    SELECT gl.id, gl.name as layer_name, gl.title, gl.wms_url,
+                           gw.name as workspace_name, f.file_name, f.bbox
+                    FROM geoserver_layers gl
+                    LEFT JOIN geoserver_workspaces gw ON gl.workspace_id = gw.id
+                    LEFT JOIN files f ON gl.file_id = f.id
+                    WHERE gl.id = %s
+                    """, (layer_id,))
+                    
+                    geoserver_layer = cursor.fetchone()
+                    if not geoserver_layer:
+                        return jsonify({
+                            'success': False,
+                            'error': f'GeoServer图层不存在 (ID: {layer_id})'
+                        }), 404
+                    
+                    # 构建完整图层名称用于GetCapabilities查询
+                    full_layer_name = f"{geoserver_layer['workspace_name']}:{geoserver_layer['layer_name']}"
+                    wms_url = geoserver_layer['wms_url']
+                    
+                    # 尝试从GeoServer GetCapabilities获取边界
+                    bbox = get_geoserver_layer_bounds(full_layer_name, wms_url)
+                    
+                    # 如果GetCapabilities失败，尝试从文件bbox获取
+                    if not bbox and geoserver_layer.get('bbox'):
+                        if isinstance(geoserver_layer['bbox'], str):
+                            try:
+                                bbox = json.loads(geoserver_layer['bbox'])
+                            except:
+                                pass
+                        else:
+                            bbox = geoserver_layer['bbox']
+                    
+                    layer_info = {
+                        'scene_layer_id': scene_layer['id'],
+                        'service_type': 'geoserver',
+                        'geoserver_layer_id': geoserver_layer['id'],
+                        'full_layer_name': full_layer_name
+                    }
+                    layer_name = geoserver_layer.get('file_name') or geoserver_layer.get('title') or geoserver_layer['layer_name']
+                    
+                else:
                     return jsonify({
                         'success': False,
-                        'error': '图层不存在'
-                    }), 404
-            
-            bbox = None
-            
-            # 根据服务类型获取边界
-            if layer['service_type'] == 'martin' and layer.get('martin_service_id'):
-                # 对于Martin服务，从PostGIS表中计算边界
-                bbox = get_martin_service_bounds(layer['martin_service_id'])
+                        'error': f'未知的服务类型: {scene_layer["service_type"]}'
+                    }), 400
+                    
+            else:
+                # 如果在scene_layers中没找到，尝试直接作为geoserver_layers.id查询
+                cursor.execute("""
+                SELECT gl.id, gl.name as layer_name, gl.title, gl.wms_url,
+                       gw.name as workspace_name, f.file_name, f.bbox
+                FROM geoserver_layers gl
+                LEFT JOIN geoserver_workspaces gw ON gl.workspace_id = gw.id
+                LEFT JOIN files f ON gl.file_id = f.id
+                WHERE gl.id = %s
+                """, (layer_id,))
                 
-            elif layer['service_type'] == 'geoserver':
-                # 对于GeoServer服务，尝试从WMS GetCapabilities获取边界
-                # 这里需要根据实际情况获取GeoServer图层信息
-                # 暂时返回一个默认的全球范围，后续可以改进
-                logger.info(f"GeoServer图层 {layer_id}，暂时返回默认边界")
-                bbox = {
-                    'minx': -180.0,
-                    'miny': -90.0,
-                    'maxx': 180.0,
-                    'maxy': 90.0
-                }
-                
-            # 如果无法从服务获取，尝试从文件信息获取
-            if not bbox and layer.get('bbox'):
-                if isinstance(layer['bbox'], str):
-                    try:
-                        bbox = json.loads(layer['bbox'])
-                    except:
-                        pass
+                geoserver_layer = cursor.fetchone()
+                if geoserver_layer:
+                    # 直接作为GeoServer图层处理
+                    full_layer_name = f"{geoserver_layer['workspace_name']}:{geoserver_layer['layer_name']}"
+                    wms_url = geoserver_layer['wms_url']
+                    
+                    # 尝试从GeoServer GetCapabilities获取边界
+                    bbox = get_geoserver_layer_bounds(full_layer_name, wms_url)
+                    
+                    # 如果GetCapabilities失败，尝试从文件bbox获取
+                    if not bbox and geoserver_layer.get('bbox'):
+                        if isinstance(geoserver_layer['bbox'], str):
+                            try:
+                                bbox = json.loads(geoserver_layer['bbox'])
+                            except:
+                                pass
+                        else:
+                            bbox = geoserver_layer['bbox']
+                    
+                    layer_info = {
+                        'scene_layer_id': None,
+                        'service_type': 'geoserver',
+                        'geoserver_layer_id': geoserver_layer['id'],
+                        'full_layer_name': full_layer_name
+                    }
+                    layer_name = geoserver_layer.get('file_name') or geoserver_layer.get('title') or geoserver_layer['layer_name']
                 else:
-                    bbox = layer['bbox']
+                    # 最后尝试作为files.id查询（Martin服务）
+                    cursor.execute("""
+                    SELECT f.*, vms.id as martin_service_id
+                    FROM files f
+                    LEFT JOIN vector_martin_services vms ON vms.file_id = f.id::text
+                    WHERE f.id = %s AND vms.status = 'active'
+                    LIMIT 1
+                    """, (layer_id,))
+                    
+                    file_record = cursor.fetchone()
+                    if file_record and file_record['martin_service_id']:
+                        # 作为Martin服务处理
+                        bbox = get_martin_service_bounds(file_record['martin_service_id'])
+                        layer_info = {
+                            'scene_layer_id': None,
+                            'service_type': 'martin',
+                            'martin_service_id': file_record['martin_service_id']
+                        }
+                        layer_name = file_record.get('file_name') or f'Martin图层{layer_id}'
+                    else:
+                        return jsonify({
+                            'success': False,
+                            'error': '图层不存在'
+                        }), 404
             
             if not bbox:
                 return jsonify({
                     'success': False,
-                    'error': 'GeoServer图层边界信息获取功能正在开发中'
-                }), 501
+                    'error': '无法获取图层边界信息'
+                }), 500
                 
             return jsonify({
                 'success': True,
                 'data': {
                     'bbox': bbox,
                     'layer_id': layer_id,
-                    'scene_layer_id': layer['scene_layer_id'],
-                    'layer_name': layer.get('file_name') or layer.get('original_name', f'图层{layer_id}'),
-                    'service_type': layer['service_type'],
+                    'scene_layer_id': layer_info.get('scene_layer_id'),
+                    'layer_name': layer_name,
+                    'service_type': layer_info['service_type'],
                     'coordinate_system': 'EPSG:4326'  # 返回的坐标系统一为WGS84
                 }
             })
@@ -832,23 +916,43 @@ def get_martin_service_bounds(martin_service_id):
                 
             table_name = service['table_name']
             
+            # 动态获取几何字段名称
+            cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = %s 
+            AND data_type = 'USER-DEFINED' 
+            AND udt_name = 'geometry'
+            ORDER BY ordinal_position
+            LIMIT 1
+            """, (table_name,))
+            
+            geom_column_result = cursor.fetchone()
+            if not geom_column_result:
+                logger.error(f"表 {table_name} 中未找到几何字段")
+                return None
+                
+            geom_column = geom_column_result['column_name']
+            logger.info(f"表 {table_name} 中找到几何字段: {geom_column}")
+            
             # 获取几何字段的SRID和边界
             cursor.execute(f"""
             SELECT 
-                ST_SRID((SELECT geom FROM "{table_name}" WHERE geom IS NOT NULL LIMIT 1)) as srid,
+                ST_SRID((SELECT "{geom_column}" FROM "{table_name}" WHERE "{geom_column}" IS NOT NULL LIMIT 1)) as srid,
                 ST_XMin(extent) as minx, 
                 ST_YMin(extent) as miny,
                 ST_XMax(extent) as maxx, 
                 ST_YMax(extent) as maxy
             FROM (
-                SELECT ST_Extent(geom) as extent
+                SELECT ST_Extent("{geom_column}") as extent
                 FROM "{table_name}"
-                WHERE geom IS NOT NULL
+                WHERE "{geom_column}" IS NOT NULL
             ) t
             """)
             
             result = cursor.fetchone()
             if not result or not all(v is not None for v in [result['minx'], result['miny'], result['maxx'], result['maxy']]):
+                logger.error(f"表 {table_name} 中无法计算有效的边界框")
                 return None
             
             # 获取原始坐标系SRID
@@ -856,7 +960,7 @@ def get_martin_service_bounds(martin_service_id):
             minx, miny = float(result['minx']), float(result['miny'])
             maxx, maxy = float(result['maxx']), float(result['maxy'])
             
-            logger.info(f"原始坐标系: EPSG:{source_srid}, 边界框: [{minx}, {miny}, {maxx}, {maxy}]")
+            logger.info(f"表 {table_name}, 原始坐标系: EPSG:{source_srid}, 边界框: [{minx}, {miny}, {maxx}, {maxy}]")
             
             # 如果不是地理坐标系（4326），则进行坐标转换
             if source_srid != 4326:
