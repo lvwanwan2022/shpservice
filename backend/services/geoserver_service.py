@@ -202,7 +202,7 @@ class GeoServerService:
                 except Exception as cleanup_error:
                     print(f"⚠️ 清理临时文件夹失败: {cleanup_error}")
     
-    def publish_geotiff(self, tif_path, store_name, file_id):
+    def publish_geotiff(self, tif_path, store_name, file_id, coordinate_system=None):
         """发布GeoTIFF服务
         
         注意：每次发布都会创建一个新的store，store名称格式为"文件名_store"
@@ -211,12 +211,15 @@ class GeoServerService:
             tif_path: GeoTIFF文件路径
             store_name: 数据存储名称（将被重新生成为"文件名_store"格式）
             file_id: 文件ID
+            coordinate_system: 指定的坐标系，如'EPSG:2379'，如果为None则使用文件自带的坐标系
             
         Returns:
             发布结果信息
         """
         try:
             print(f"开始发布GeoTIFF: {tif_path}")
+            if coordinate_system:
+                print(f"指定坐标系: {coordinate_system}")
             
             # 修复文件路径问题
             corrected_path = self._correct_path(tif_path)
@@ -244,38 +247,30 @@ class GeoServerService:
             
             # 2. 上传GeoTIFF到GeoServer
             upload_success = False
-            try:
-                self._upload_geotiff_to_geoserver(corrected_path, generated_store_name)
-                print(f"✅ GeoTIFF已上传到GeoServer")
-                upload_success = True
-            except Exception as upload_error:
-                upload_error_msg = str(upload_error)
-                print(f"⚠️ GeoTIFF上传失败: {upload_error_msg}")
-                
-                # 检查是否是文件已存在的错误
-                if "Error while storing uploaded file" in upload_error_msg:
-                    print(f"🔄 检测到文件存储错误，可能文件已存在，尝试跳过上传直接发布服务")
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    print(f"尝试上传GeoTIFF到GeoServer (第{attempt + 1}次)")
                     
-                    # 检查coveragestore是否已自动创建
-                    check_store_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{generated_store_name}"
-                    check_response = requests.get(check_store_url, auth=self.auth)
+                    # 先创建空的coveragestore
+                    self._create_empty_coveragestore_for_existing_file(generated_store_name, corrected_path)
+                    print(f"✅ 空coveragestore创建成功")
                     
-                    if check_response.status_code == 200:
-                        print(f"✅ Coveragestore已存在，跳过上传步骤")
-                        upload_success = True
+                    # 再上传文件
+                    self._upload_geotiff_to_geoserver(corrected_path, generated_store_name)
+                    print(f"✅ GeoTIFF文件上传成功")
+                    
+                    upload_success = True
+                    break
+                    
+                except Exception as upload_error:
+                    print(f"❌ 第{attempt + 1}次上传失败: {str(upload_error)}")
+                    if attempt < max_retries - 1:
+                        print(f"等待2秒后重试...")
+                        time.sleep(2)
                     else:
-                        print(f"❌ Coveragestore不存在，尝试创建空的coveragestore")
-                        # 尝试创建空的coveragestore，然后直接发布
-                        try:
-                            self._create_empty_coveragestore_for_existing_file(generated_store_name, corrected_path)
-                            print(f"✅ 空coveragestore创建成功")
-                            upload_success = True
-                        except Exception as create_error:
-                            print(f"❌ 创建空coveragestore失败: {str(create_error)}")
-                            raise upload_error  # 如果都失败了，抛出原始上传错误
-                else:
-                    # 其他类型的上传错误，直接抛出
-                    raise upload_error
+                        print(f"所有上传尝试均失败")
+                        raise upload_error
             
             if not upload_success:
                 raise Exception("GeoTIFF上传失败")
@@ -287,22 +282,56 @@ class GeoServerService:
             coverage_info = self._get_coverage_info(generated_store_name)
             print(f"✅ 获取覆盖信息成功")
             
-            # 5. 在数据库中创建覆盖记录
+            # 5. 如果用户指定了坐标系，更新覆盖信息中的坐标系
+            if coordinate_system:
+                print(f"更新坐标系为: {coordinate_system}")
+                # 更新coverage信息中的坐标系
+                if 'featureType' in coverage_info:
+                    coverage_info['featureType']['srs'] = coordinate_system
+                elif 'coverage' in coverage_info:
+                    coverage_info['coverage']['srs'] = coordinate_system
+                else:
+                    # 如果结构不标准，创建标准结构
+                    coverage_info = {
+                        "featureType": {
+                            "name": generated_store_name,
+                            "nativeName": generated_store_name,
+                            "title": generated_store_name,
+                            "abstract": f"从覆盖存储 {generated_store_name} 发布的覆盖",
+                            "enabled": True,
+                            "srs": coordinate_system,
+                            "store": {
+                                "@class": "coverageStore",
+                                "name": f"{self.workspace}:{generated_store_name}"
+                            }
+                        }
+                    }
+                
+                # 通过REST API更新GeoServer中的坐标系设置
+                try:
+                    self._update_coverage_coordinate_system(generated_store_name, coordinate_system)
+                    print(f"✅ GeoServer中的坐标系已更新为: {coordinate_system}")
+                except Exception as srs_error:
+                    print(f"⚠️ 更新GeoServer坐标系失败: {str(srs_error)}")
+                    # 不中断发布流程，仅记录警告
+            
+            # 6. 在数据库中创建覆盖记录
             coverage_id = self._create_coverage_in_db(coverage_info, store_id)
             print(f"✅ 覆盖记录创建成功，coverage_id={coverage_id}")
             
-            # 6. 在数据库中创建覆盖图层记录
+            # 7. 在数据库中创建覆盖图层记录
             layer_info = self._create_layer_in_db(coverage_info, workspace_id, coverage_id, file_id, 'coveragestore')
             print(f"✅ 覆盖图层记录创建成功，layer_id={layer_info['id']}")
             
-            # 7. 返回服务信息
+            # 8. 返回服务信息
             return {
                 "success": True,
                 "store_name": generated_store_name,  # 返回生成的store名称
                 "layer_name": layer_info['full_name'],
                 "wms_url": layer_info['wms_url'],
                 "layer_info": layer_info,
-                "filename": filename
+                "filename": filename,
+                "coordinate_system": coordinate_system or coverage_info.get('featureType', {}).get('srs', 'EPSG:4326')
             }
             
         except Exception as e:
@@ -311,6 +340,58 @@ class GeoServerService:
             cleanup_store_name = generated_store_name if 'generated_store_name' in locals() else store_name
             self._cleanup_failed_publish(cleanup_store_name, 'coveragestore')
             raise Exception(f"发布GeoTIFF失败: {str(e)}")
+    
+    def _update_coverage_coordinate_system(self, store_name, coordinate_system):
+        """更新覆盖的坐标系设置"""
+        try:
+            # 获取覆盖名称
+            coverages_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}/coverages.json"
+            response = requests.get(coverages_url, auth=self.auth)
+            
+            if response.status_code != 200:
+                raise Exception(f"获取覆盖列表失败: {response.text}")
+                
+            coverages_data = response.json()
+            coverage_name = None
+            
+            if 'coverages' in coverages_data and 'coverage' in coverages_data['coverages']:
+                coverages = coverages_data['coverages']['coverage']
+                if isinstance(coverages, list) and len(coverages) > 0:
+                    coverage_name = coverages[0]['name']
+                elif isinstance(coverages, dict):
+                    coverage_name = coverages['name']
+            
+            if not coverage_name:
+                coverage_name = store_name
+            
+            # 更新覆盖的坐标系
+            coverage_update_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}/coverages/{coverage_name}.json"
+            
+            # 构建更新数据
+            update_data = {
+                "coverage": {
+                    "srs": coordinate_system,
+                    "enabled": True
+                }
+            }
+            
+            headers = {'Content-Type': 'application/json'}
+            update_response = requests.put(
+                coverage_update_url,
+                json=update_data,
+                auth=self.auth,
+                headers=headers
+            )
+            
+            if update_response.status_code not in [200, 201]:
+                print(f"⚠️ 坐标系更新响应: {update_response.status_code} - {update_response.text}")
+                # 不抛出异常，只是记录警告
+            else:
+                print(f"✅ 坐标系更新成功")
+                
+        except Exception as e:
+            print(f"⚠️ 更新坐标系失败: {str(e)}")
+            # 不中断发布流程
     
     def publish_geojson(self, geojson_path, store_name, file_id):
         """发布GeoJSON服务 - 通过PostGIS数据库
