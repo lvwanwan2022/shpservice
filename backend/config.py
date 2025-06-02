@@ -85,8 +85,11 @@ GEOSERVER_CONFIG = {
 # 文件存储配置
 FILE_STORAGE = {
     'upload_folder': os.path.join(os.path.dirname(os.path.dirname(__file__)), 'FilesData'),
+    'temp_folder': os.path.join(os.path.dirname(os.path.dirname(__file__)), 'temp'),  # 临时文件目录
     'allowed_extensions': ['zip', 'shp', 'geojson', 'json', 'kml', 'gpkg', 'tif', 'tiff', 'dxf'],
-    'max_content_length': 200 * 1024 * 1024,  # 200MB
+    'max_content_length': 10 * 1024 * 1024 * 1024,  # 10GB
+    'chunk_size': 10 * 1024 * 1024,  # 分片大小: 10MB
+    'chunk_cleanup_hours': 24,  # 分片文件清理时间: 24小时
 }
 
 # 应用配置

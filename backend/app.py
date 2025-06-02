@@ -45,13 +45,16 @@ app = Flask(__name__)
 
 # 从配置模块加载配置
 try:
-    from config import APP_CONFIG
+    from config import APP_CONFIG, FILE_STORAGE
     app.config.update(APP_CONFIG)
+    # 设置文件上传大小限制
+    app.config['MAX_CONTENT_LENGTH'] = FILE_STORAGE['max_content_length']
 except ImportError:
     # 如果配置文件不存在，使用默认配置
     app.config.update({
         'SECRET_KEY': 'shpservice-secret-key',
-        'DEBUG': True
+        'DEBUG': True,
+        'MAX_CONTENT_LENGTH': 10 * 1024 * 1024 * 1024  # 10GB
     })
 
 # 启用CORS

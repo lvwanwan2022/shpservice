@@ -234,13 +234,51 @@ class GeoServerService:
             # 获取工作空间ID
             workspace_id = self._get_workspace_id()
             
+            # 预清理：删除可能存在的同名coveragestore
+            print(f"预清理：检查并删除可能存在的同名coveragestore")
+            self._cleanup_existing_coveragestore(generated_store_name)
+            
             # 1. 创建覆盖存储记录
             store_id = self._create_coveragestore_in_db(generated_store_name, workspace_id, 'GeoTIFF', file_id)
             print(f"✅ 覆盖存储记录创建成功，store_id={store_id}")
             
             # 2. 上传GeoTIFF到GeoServer
-            self._upload_geotiff_to_geoserver(corrected_path, generated_store_name)
-            print(f"✅ GeoTIFF已上传到GeoServer")
+            upload_success = False
+            try:
+                self._upload_geotiff_to_geoserver(corrected_path, generated_store_name)
+                print(f"✅ GeoTIFF已上传到GeoServer")
+                upload_success = True
+            except Exception as upload_error:
+                upload_error_msg = str(upload_error)
+                print(f"⚠️ GeoTIFF上传失败: {upload_error_msg}")
+                
+                # 检查是否是文件已存在的错误
+                if "Error while storing uploaded file" in upload_error_msg:
+                    print(f"🔄 检测到文件存储错误，可能文件已存在，尝试跳过上传直接发布服务")
+                    
+                    # 检查coveragestore是否已自动创建
+                    check_store_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{generated_store_name}"
+                    check_response = requests.get(check_store_url, auth=self.auth)
+                    
+                    if check_response.status_code == 200:
+                        print(f"✅ Coveragestore已存在，跳过上传步骤")
+                        upload_success = True
+                    else:
+                        print(f"❌ Coveragestore不存在，尝试创建空的coveragestore")
+                        # 尝试创建空的coveragestore，然后直接发布
+                        try:
+                            self._create_empty_coveragestore_for_existing_file(generated_store_name, corrected_path)
+                            print(f"✅ 空coveragestore创建成功")
+                            upload_success = True
+                        except Exception as create_error:
+                            print(f"❌ 创建空coveragestore失败: {str(create_error)}")
+                            raise upload_error  # 如果都失败了，抛出原始上传错误
+                else:
+                    # 其他类型的上传错误，直接抛出
+                    raise upload_error
+            
+            if not upload_success:
+                raise Exception("GeoTIFF上传失败")
             
             # 3. 等待GeoServer处理
             time.sleep(3)
@@ -249,11 +287,15 @@ class GeoServerService:
             coverage_info = self._get_coverage_info(generated_store_name)
             print(f"✅ 获取覆盖信息成功")
             
-            # 5. 在数据库中创建覆盖图层记录
-            layer_info = self._create_layer_in_db(coverage_info, workspace_id, store_id, file_id, 'coveragestore')
+            # 5. 在数据库中创建覆盖记录
+            coverage_id = self._create_coverage_in_db(coverage_info, store_id)
+            print(f"✅ 覆盖记录创建成功，coverage_id={coverage_id}")
+            
+            # 6. 在数据库中创建覆盖图层记录
+            layer_info = self._create_layer_in_db(coverage_info, workspace_id, coverage_id, file_id, 'coveragestore')
             print(f"✅ 覆盖图层记录创建成功，layer_id={layer_info['id']}")
             
-            # 6. 返回服务信息
+            # 7. 返回服务信息
             return {
                 "success": True,
                 "store_name": generated_store_name,  # 返回生成的store名称
@@ -571,6 +613,66 @@ class GeoServerService:
         result = execute_query(sql, (store_name, workspace_id, data_type, file_id))
         return result[0]['id']
     
+    def _create_coverage_in_db(self, coverage_info, store_id):
+        """在数据库中创建覆盖记录
+        
+        Args:
+            coverage_info: 覆盖信息（可能包装在featureType结构中）
+            store_id: 存储ID
+            
+        Returns:
+            覆盖ID
+        """
+        try:
+            # 处理数据结构，支持两种格式：coverage和featureType
+            if 'coverage' in coverage_info:
+                coverage_data = coverage_info['coverage']
+            elif 'featureType' in coverage_info:
+                # 从featureType结构中提取coverage信息
+                coverage_data = coverage_info['featureType']
+            else:
+                raise Exception("无效的覆盖信息结构")
+            
+            coverage_name = coverage_data['name']
+            title = coverage_data.get('title', coverage_name)
+            abstract = coverage_data.get('abstract', '')
+            srs = coverage_data.get('srs', 'EPSG:4326')
+            enabled = coverage_data.get('enabled', True)
+            
+            print(f"创建覆盖记录: name={coverage_name}, store_id={store_id}")
+            
+            # 检查是否已存在同名的覆盖
+            check_sql = """
+            SELECT id FROM geoserver_coverages 
+            WHERE name = %s AND store_id = %s
+            """
+            existing_result = execute_query(check_sql, (coverage_name, store_id))
+            
+            if existing_result:
+                print(f"⚠️ 覆盖 '{coverage_name}' 已存在，coverage_id={existing_result[0]['id']}")
+                
+                # 删除现有的覆盖记录以便重新创建
+                delete_sql = "DELETE FROM geoserver_coverages WHERE id = %s"
+                execute_query(delete_sql, (existing_result[0]['id'],), fetch=False)
+                print(f"🗑️ 删除现有覆盖记录")
+            
+            # 创建新的覆盖记录
+            sql = """
+            INSERT INTO geoserver_coverages (name, store_id, title, abstract, srs, enabled)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """
+            result = execute_query(sql, (coverage_name, store_id, title, abstract, srs, enabled))
+            coverage_id = result[0]['id']
+            
+            print(f"✅ 覆盖记录创建成功，coverage_id={coverage_id}")
+            return coverage_id
+            
+        except Exception as e:
+            print(f"❌ 创建覆盖记录失败: {str(e)}")
+            print(f"store_id={store_id}, coverage_info={coverage_info}")
+            raise Exception(f"创建覆盖记录失败: {str(e)}")
+    
     def publish_dwg_dxf(self, file_path, store_name, coord_system):
         """发布DWG/DXF服务
         
@@ -647,19 +749,19 @@ class GeoServerService:
             if store_name:
                 # 根据存储类型确定删除的URL
                 if store_type in ['GeoTIFF', 'WorldImage']:
-                    # 栅格数据，使用coveragestore
-                    delete_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}?recurse=true"
+                    # 栅格数据，使用coveragestore，调用增强清理方法
+                    print(f"开始删除coveragestore: {store_name}")
+                    self._cleanup_existing_coveragestore(store_name)
                 else:
                     # 矢量数据，使用datastore
                     delete_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}?recurse=true"
-                
-                print(f"删除GeoServer资源: {delete_url}")
-                response = requests.delete(delete_url, auth=self.auth)
-                
-                if response.status_code not in [200, 404]:
-                    print(f"⚠️ 删除GeoServer资源失败: {response.status_code} - {response.text}")
-                else:
-                    print(f"✅ GeoServer资源删除成功")
+                    print(f"删除GeoServer资源: {delete_url}")
+                    response = requests.delete(delete_url, auth=self.auth)
+                    
+                    if response.status_code not in [200, 404]:
+                        print(f"⚠️ 删除GeoServer资源失败: {response.status_code} - {response.text}")
+                    else:
+                        print(f"✅ GeoServer资源删除成功")
             else:
                 print(f"⚠️ 没有找到存储名称，跳过GeoServer删除")
             
@@ -1140,6 +1242,107 @@ class GeoServerService:
         if response.status_code not in [201, 200]:
             raise Exception(f"上传GeoTIFF失败: {response.text}")
     
+    def _create_empty_coveragestore_for_existing_file(self, store_name, file_path):
+        """为已存在的文件创建空的coveragestore
+        
+        当文件已经存在于GeoServer的data目录中时，创建一个指向该文件的coveragestore
+        
+        Args:
+            store_name: 存储名称
+            file_path: 文件路径（用于确定文件名）
+        """
+        import os
+        
+        print(f"为已存在文件创建coveragestore: {store_name}")
+        
+        # 获取文件名
+        filename = os.path.basename(file_path)
+        
+        # 构建coveragestore配置，指向GeoServer data目录中的文件
+        coveragestore_config = {
+            "coverageStore": {
+                "name": store_name,
+                "type": "GeoTIFF",
+                "enabled": True,
+                "workspace": {
+                    "name": self.workspace,
+                    "href": f"{self.rest_url}/workspaces/{self.workspace}.json"
+                },
+                "url": f"file:data/{self.workspace}/{store_name}/{filename}"
+            }
+        }
+        
+        # 发送请求创建coveragestore
+        url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores"
+        headers = {'Content-Type': 'application/json'}
+        
+        response = requests.post(
+            url,
+            json=coveragestore_config,
+            auth=self.auth,
+            headers=headers,
+            timeout=60
+        )
+        
+        print(f"创建coveragestore响应状态码: {response.status_code}")
+        if response.text:
+            print(f"响应内容: {response.text[:500]}...")
+        
+        if response.status_code not in [201, 200]:
+            # 如果创建失败，尝试直接引用可能存在的文件
+            print(f"⚠️ 标准创建失败，尝试直接引用文件")
+            
+            # 尝试不同的URL格式
+            alt_urls = [
+                f"file:data/{self.workspace}/{store_name}/{store_name}.geotiff",
+                f"file:data/{self.workspace}/{store_name}.geotiff",
+                f"file:{filename}",
+                f"file:data/{filename}"
+            ]
+            
+            for alt_url in alt_urls:
+                print(f"  尝试URL: {alt_url}")
+                alt_config = {
+                    "coverageStore": {
+                        "name": store_name,
+                        "type": "GeoTIFF",
+                        "enabled": True,
+                        "workspace": {
+                            "name": self.workspace,
+                            "href": f"{self.rest_url}/workspaces/{self.workspace}.json"
+                        },
+                        "url": alt_url
+                    }
+                }
+                
+                alt_response = requests.post(
+                    url,
+                    json=alt_config,
+                    auth=self.auth,
+                    headers=headers,
+                    timeout=60
+                )
+                
+                print(f"  响应状态码: {alt_response.status_code}")
+                
+                if alt_response.status_code in [201, 200]:
+                    print(f"  ✅ 使用URL {alt_url} 创建成功")
+                    break
+            else:
+                raise Exception(f"创建coveragestore失败: {response.text}")
+        
+        # 等待GeoServer处理
+        time.sleep(2)
+        
+        # 验证创建结果
+        verify_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}.json"
+        verify_response = requests.get(verify_url, auth=self.auth)
+        
+        if verify_response.status_code != 200:
+            raise Exception(f"Coveragestore创建后验证失败: {verify_response.text}")
+        
+        print(f"✅ Coveragestore创建并验证成功: {store_name}")
+    
     def _validate_geojson_file(self, geojson_path):
         """验证GeoJSON文件"""
         print(f"验证GeoJSON文件: {geojson_path}")
@@ -1389,7 +1592,15 @@ class GeoServerService:
     def _create_layer_in_db(self, featuretype_info, workspace_id, featuretype_id, file_id, store_type='datastore'):
         """在数据库中创建图层记录，并保存服务URL信息"""
         try:
-            layer_name = featuretype_info['featureType']['name']
+            # 处理数据结构，支持两种格式：featureType和coverage
+            if 'featureType' in featuretype_info:
+                layer_data = featuretype_info['featureType']
+            elif 'coverage' in featuretype_info:
+                layer_data = featuretype_info['coverage']
+            else:
+                raise Exception("无效的图层信息结构，缺少featureType或coverage")
+            
+            layer_name = layer_data['name']
             full_layer_name = f"{self.workspace}:{layer_name}"
             
             # 生成服务URL
@@ -1439,6 +1650,7 @@ class GeoServerService:
                 """
                 # 根据store类型决定featuretype_id还是coverage_id
                 if store_type == 'coveragestore':
+                    # 对于coveragestore，featuretype_id参数实际传递的是coverage_id
                     result = execute_query(sql, (
                         layer_name, workspace_id, None, featuretype_id, file_id,
                         wms_url, wfs_url, wcs_url, layer_name
@@ -1458,6 +1670,7 @@ class GeoServerService:
                 """
                 # 根据store类型决定featuretype_id还是coverage_id
                 if store_type == 'coveragestore':
+                    # 对于coveragestore，featuretype_id参数实际传递的是coverage_id
                     result = execute_query(sql, (
                         layer_name, workspace_id, None, featuretype_id,
                         wms_url, wfs_url, wcs_url, layer_name
@@ -1763,21 +1976,105 @@ class GeoServerService:
         print(f"✅ {store_type}资源清理完成")
     
     def _cleanup_existing_coveragestore(self, store_name):
-        """清理可能存在的覆盖存储"""
+        """清理可能存在的覆盖存储
+        
+        增强版清理方法，确保删除GeoServer中的coveragestore及其物理文件
+        """
         try:
+            print(f"检查覆盖存储是否存在: {store_name}")
             check_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}"
             check_response = requests.get(check_url, auth=self.auth)
             
             if check_response.status_code == 200:
-                print(f"覆盖存储 {store_name} 已存在，先删除")
-                delete_response = requests.delete(f"{check_url}?recurse=true", auth=self.auth)
-                if delete_response.status_code not in [200, 404]:
-                    print(f"删除现有覆盖存储失败: {delete_response.text}")
-                else:
-                    print(f"删除现有覆盖存储成功")
+                print(f"⚠️ 覆盖存储 {store_name} 已存在，开始删除")
+                
+                # 步骤1: 先获取并删除所有相关的coverage
+                print(f"步骤1: 删除相关的coverage")
+                try:
+                    coverages_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}/coverages.json"
+                    coverages_response = requests.get(coverages_url, auth=self.auth)
+                    
+                    if coverages_response.status_code == 200:
+                        coverages_data = coverages_response.json()
+                        if 'coverages' in coverages_data and 'coverage' in coverages_data['coverages']:
+                            coverages = coverages_data['coverages']['coverage']
+                            if isinstance(coverages, list):
+                                coverage_list = coverages
+                            else:
+                                coverage_list = [coverages]
+                            
+                            for coverage in coverage_list:
+                                coverage_name = coverage['name']
+                                print(f"  删除coverage: {coverage_name}")
+                                coverage_delete_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}/coverages/{coverage_name}?recurse=true"
+                                coverage_delete_response = requests.delete(coverage_delete_url, auth=self.auth)
+                                print(f"  coverage删除响应: {coverage_delete_response.status_code}")
+                except Exception as e:
+                    print(f"  删除coverage时出错: {str(e)}")
+                
+                # 等待处理
                 time.sleep(1)
+                
+                # 步骤2: 删除coveragestore，使用purge=all参数确保删除物理文件
+                print(f"步骤2: 删除coveragestore及物理文件")
+                delete_url = f"{check_url}?recurse=true&purge=all"
+                print(f"删除URL: {delete_url}")
+                
+                delete_response = requests.delete(delete_url, auth=self.auth)
+                print(f"coveragestore删除响应状态码: {delete_response.status_code}")
+                print(f"coveragestore删除响应内容: {delete_response.text}")
+                
+                if delete_response.status_code in [200, 404]:
+                    print(f"✅ coveragestore删除成功")
+                else:
+                    print(f"⚠️ coveragestore删除失败，尝试其他参数")
+                    
+                    # 尝试使用不同的参数组合
+                    for purge_param in ['true', 'metadata', 'all']:
+                        print(f"  尝试purge={purge_param}")
+                        alt_delete_url = f"{check_url}?recurse=true&purge={purge_param}"
+                        alt_delete_response = requests.delete(alt_delete_url, auth=self.auth)
+                        print(f"  响应状态码: {alt_delete_response.status_code}")
+                        
+                        if alt_delete_response.status_code in [200, 404]:
+                            print(f"  ✅ 使用purge={purge_param}删除成功")
+                            break
+                    else:
+                        # 最后尝试不使用purge参数
+                        print(f"  最后尝试不使用purge参数")
+                        final_delete_url = f"{check_url}?recurse=true"
+                        final_delete_response = requests.delete(final_delete_url, auth=self.auth)
+                        print(f"  最终删除响应: {final_delete_response.status_code}")
+                
+                # 等待GeoServer处理完成
+                time.sleep(3)
+                
+                # 步骤3: 验证删除结果
+                print(f"步骤3: 验证删除结果")
+                verify_response = requests.get(check_url, auth=self.auth)
+                if verify_response.status_code == 404:
+                    print(f"✅ 覆盖存储删除验证成功")
+                else:
+                    print(f"⚠️ 覆盖存储可能未完全删除，状态码: {verify_response.status_code}")
+                    print(f"验证响应内容: {verify_response.text}")
+                    
+                    # 额外的清理步骤：直接通过工作空间删除
+                    print(f"尝试通过工作空间级别删除")
+                    workspace_delete_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}?recurse=true&purge=all"
+                    workspace_delete_response = requests.delete(workspace_delete_url, auth=self.auth)
+                    print(f"工作空间级别删除响应: {workspace_delete_response.status_code}")
+                    time.sleep(2)
+                    
+            elif check_response.status_code == 404:
+                print(f"✅ 覆盖存储 {store_name} 不存在，无需清理")
+            else:
+                print(f"⚠️ 检查覆盖存储状态异常: {check_response.status_code} - {check_response.text}")
+                
         except Exception as e:
-            print(f"清理现有覆盖存储失败: {e}")
+            print(f"⚠️ 清理覆盖存储异常: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            # 不抛出异常，允许继续执行发布流程
     
     def _create_empty_shapefile_datastore(self, store_name):
         """在GeoServer中创建空的Shapefile数据存储

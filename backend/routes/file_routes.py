@@ -5,8 +5,10 @@ from flask import Blueprint, request, jsonify, current_app
 from services.file_service import FileService
 from models.db import execute_query
 from werkzeug.utils import secure_filename
+from config import FILE_STORAGE
 import os
 import json
+import time
 
 file_bp = Blueprint('file', __name__)
 file_service = FileService()
@@ -95,6 +97,204 @@ def upload_file():
         print(f"服务器错误: {str(e)}")
         current_app.logger.error(f"文件上传错误: {str(e)}")
         return jsonify({'error': '服务器内部错误'}), 500
+
+# ========== 分片上传相关路由 ==========
+
+# 存储分片上传的临时信息
+chunked_uploads = {}
+
+@file_bp.route('/upload/chunked/init', methods=['POST'])
+def init_chunked_upload():
+    """初始化分片上传"""
+    print("=== 初始化分片上传 ===")
+    
+    data = request.get_json()
+    upload_id = data.get('upload_id')
+    file_name = data.get('file_name')
+    total_chunks = data.get('total_chunks')
+    metadata = data.get('metadata', {})
+    
+    print(f"上传ID: {upload_id}")
+    print(f"文件名: {file_name}")
+    print(f"总分片数: {total_chunks}")
+    print(f"元数据: {metadata}")
+    
+    if not all([upload_id, file_name, total_chunks]):
+        return jsonify({'error': '缺少必要参数'}), 400
+    
+    # 创建临时目录
+    temp_base = FILE_STORAGE.get('temp_folder', 'temp')
+    temp_dir = os.path.join(temp_base, 'chunks', upload_id)
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    # 存储上传信息
+    chunked_uploads[upload_id] = {
+        'file_name': file_name,
+        'total_chunks': total_chunks,
+        'received_chunks': set(),
+        'temp_dir': temp_dir,
+        'metadata': metadata,
+        'created_at': time.time()
+    }
+    
+    print(f"分片上传初始化成功，临时目录: {temp_dir}")
+    return jsonify({'message': '分片上传初始化成功', 'upload_id': upload_id})
+
+@file_bp.route('/upload/chunked/chunk', methods=['POST'])
+def upload_chunk():
+    """上传单个分片"""
+    upload_id = request.form.get('upload_id')
+    chunk_index = int(request.form.get('chunk_index'))
+    
+    if 'chunk' not in request.files:
+        return jsonify({'error': '未找到分片文件'}), 400
+    
+    chunk_file = request.files['chunk']
+    
+    print(f"接收分片: upload_id={upload_id}, chunk_index={chunk_index}, size={len(chunk_file.read())}B")
+    chunk_file.seek(0)  # 重置文件指针
+    
+    if upload_id not in chunked_uploads:
+        return jsonify({'error': '无效的上传ID'}), 400
+    
+    upload_info = chunked_uploads[upload_id]
+    
+    # 保存分片文件
+    chunk_path = os.path.join(upload_info['temp_dir'], f'chunk_{chunk_index}')
+    chunk_file.save(chunk_path)
+    
+    # 记录已接收的分片
+    upload_info['received_chunks'].add(chunk_index)
+    
+    print(f"分片 {chunk_index} 保存成功，已接收: {len(upload_info['received_chunks'])}/{upload_info['total_chunks']}")
+    
+    return jsonify({
+        'message': '分片上传成功',
+        'chunk_index': chunk_index,
+        'received_chunks': len(upload_info['received_chunks']),
+        'total_chunks': upload_info['total_chunks']
+    })
+
+@file_bp.route('/upload/chunked/complete', methods=['POST'])
+def complete_chunked_upload():
+    """完成分片上传，合并文件"""
+    print("=== 完成分片上传 ===")
+    
+    data = request.get_json()
+    upload_id = data.get('upload_id')
+    
+    if upload_id not in chunked_uploads:
+        return jsonify({'error': '无效的上传ID'}), 400
+    
+    upload_info = chunked_uploads[upload_id]
+    
+    # 检查是否所有分片都已接收
+    expected_chunks = set(range(upload_info['total_chunks']))
+    if upload_info['received_chunks'] != expected_chunks:
+        missing_chunks = expected_chunks - upload_info['received_chunks']
+        return jsonify({'error': f'缺少分片: {list(missing_chunks)}'}), 400
+    
+    try:
+        # 合并文件
+        print("开始合并文件...")
+        final_file_path = os.path.join(upload_info['temp_dir'], upload_info['file_name'])
+        
+        with open(final_file_path, 'wb') as final_file:
+            for chunk_index in range(upload_info['total_chunks']):
+                chunk_path = os.path.join(upload_info['temp_dir'], f'chunk_{chunk_index}')
+                with open(chunk_path, 'rb') as chunk_file:
+                    final_file.write(chunk_file.read())
+                # 删除分片文件
+                os.remove(chunk_path)
+        
+        print(f"文件合并完成: {final_file_path}")
+        
+        # 创建文件对象用于保存
+        class FileObject:
+            def __init__(self, file_path, filename):
+                self.file_path = file_path
+                self.filename = filename
+                with open(file_path, 'rb') as f:
+                    f.seek(0, os.SEEK_END)
+                    self.size = f.tell()
+            
+            def save(self, destination):
+                import shutil
+                shutil.move(self.file_path, destination)
+                return destination
+            
+            def read(self):
+                with open(self.file_path, 'rb') as f:
+                    return f.read()
+        
+        file_obj = FileObject(final_file_path, upload_info['file_name'])
+        
+        # 使用现有的文件保存逻辑
+        metadata = upload_info['metadata']
+        metadata['file_name'] = metadata.get('file_name') or secure_filename(upload_info['file_name'])
+        metadata['original_name'] = upload_info['file_name']
+        
+        # 验证必填字段
+        required_fields = ['file_name', 'original_name', 'discipline', 'dimension', 'file_type']
+        for field in required_fields:
+            if not metadata.get(field):
+                return jsonify({'error': f'缺少必填字段: {field}'}), 400
+        
+        # 保存文件并记录元数据
+        file_id, file_data = file_service.save_file(file_obj, metadata)
+        
+        # 清理临时数据
+        import shutil
+        shutil.rmtree(upload_info['temp_dir'], ignore_errors=True)
+        del chunked_uploads[upload_id]
+        
+        print(f"分片上传完成，文件ID: {file_id}")
+        
+        return jsonify({
+            'id': file_id,
+            'message': '分片上传成功，如需发布服务请手动点击发布按钮',
+            'file': {
+                'id': file_id,
+                'file_name': file_data['file_name'],
+                'original_name': file_data.get('original_name', ''),
+                'file_size': file_data['file_size'],
+                'file_type': file_data['file_type'],
+                'discipline': file_data.get('discipline', ''),
+                'dimension': file_data.get('dimension', ''),
+                'coordinate_system': file_data.get('coordinate_system', ''),
+                'status': file_data.get('status', 'uploaded'),
+                'geometry_type': file_data.get('geometry_type', ''),
+                'feature_count': file_data.get('feature_count', 0),
+                'bbox': file_data.get('bbox'),
+                'upload_date': file_data.get('upload_date', '')
+            }
+        }), 200
+    
+    except Exception as e:
+        print(f"合并文件失败: {str(e)}")
+        current_app.logger.error(f"分片上传合并失败: {str(e)}")
+        return jsonify({'error': '文件合并失败'}), 500
+
+@file_bp.route('/upload/chunked/abort', methods=['POST'])
+def abort_chunked_upload():
+    """取消分片上传"""
+    print("=== 取消分片上传 ===")
+    
+    data = request.get_json()
+    upload_id = data.get('upload_id')
+    
+    if upload_id not in chunked_uploads:
+        return jsonify({'error': '无效的上传ID'}), 400
+    
+    upload_info = chunked_uploads[upload_id]
+    
+    # 清理临时文件
+    import shutil
+    shutil.rmtree(upload_info['temp_dir'], ignore_errors=True)
+    del chunked_uploads[upload_id]
+    
+    print(f"分片上传已取消: {upload_id}")
+    return jsonify({'message': '分片上传已取消'})
 
 @file_bp.route('/files/list', methods=['GET'])
 def get_files_list():
@@ -580,7 +780,7 @@ def publish_geoserver_service(file_id):
         
         # 检查文件类型是否支持GeoServer服务
         file_type = file_info.get('file_type', '').lower()
-        supported_types = ['shp', 'geojson', 'tif', 'dem', 'dom', 'dxf']
+        supported_types = ['shp', 'geojson', 'tif', 'tiff', 'dem', 'dom', 'dem.tif', 'dom.tif', 'dxf']
         if file_type not in supported_types:
             return jsonify({'error': f'GeoServer服务不支持{file_type}文件类型'}), 400
         
@@ -595,7 +795,7 @@ def publish_geoserver_service(file_id):
             }), 400
         
         # 根据文件类型选择发布方式
-        if file_type in ['shp', 'geojson', 'tif', 'dem', 'dom']:
+        if file_type in ['shp', 'geojson', 'tif', 'tiff', 'dem', 'dom', 'dem.tif', 'dom.tif']:
             # 发布到GeoServer服务
             from services.geoserver_service import GeoServerService
             geoserver_service = GeoServerService()
@@ -609,7 +809,7 @@ def publish_geoserver_service(file_id):
                 result = geoserver_service.publish_shapefile(file_path, store_name, file_id)
             elif file_type == 'geojson':
                 result = geoserver_service.publish_geojson(file_path, store_name, file_id)
-            elif file_type in ['tif', 'dem', 'dom']:
+            elif file_type in ['tif', 'tiff', 'dem', 'dom', 'dem.tif', 'dom.tif']:
                 result = geoserver_service.publish_geotiff(file_path, store_name, file_id)
         
         elif file_type == 'dxf':
