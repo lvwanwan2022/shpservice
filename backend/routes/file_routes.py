@@ -773,26 +773,30 @@ def publish_martin_service(file_id):
 def publish_geoserver_service(file_id):
     """发布文件到GeoServer服务"""
     try:
-        # 检查文件是否存在
+        # 获取文件信息
         file_info = file_service.get_file_by_id(file_id)
         if not file_info:
-            return jsonify({'error': '文件不存在'}), 404
+            return jsonify({'success': False, 'error': '文件不存在'}), 404
         
-        # 检查文件类型是否支持GeoServer服务
+        # 检查文件类型
         file_type = file_info.get('file_type', '').lower()
-        supported_types = ['shp', 'geojson', 'tif', 'tiff', 'dem', 'dom', 'dem.tif', 'dom.tif', 'dxf']
-        if file_type not in supported_types:
-            return jsonify({'error': f'GeoServer服务不支持{file_type}文件类型'}), 400
         
-        # 检查是否已发布到GeoServer
-        check_sql = "SELECT id, name FROM geoserver_layers WHERE file_id = %s"
-        existing = execute_query(check_sql, (file_id,))
-        if existing:
-            return jsonify({
-                'error': '文件已发布到GeoServer服务',
-                'layer_id': existing[0]['id'],
-                'layer_name': existing[0]['name']
-            }), 400
+        # 优先从数据库获取坐标系，如果数据库中没有则从请求中获取
+        coordinate_system = file_info.get('coordinate_system')  # 从数据库获取
+        
+        # 如果数据库中没有坐标系，则从请求参数中获取
+        if not coordinate_system:
+            if request.is_json:
+                data = request.get_json()
+                coordinate_system = data.get('coordinate_system')
+            elif request.form:
+                coordinate_system = request.form.get('coordinate_system')
+        
+        print(f"发布GeoServer服务: file_id={file_id}, file_type={file_type}")
+        if coordinate_system:
+            print(f"使用坐标系: {coordinate_system} (来源: {'数据库' if file_info.get('coordinate_system') else '请求参数'})")
+        else:
+            print(f"未指定坐标系，将使用文件自带坐标系")
         
         # 根据文件类型选择发布方式
         if file_type in ['shp', 'geojson', 'tif', 'tiff', 'dem', 'dom', 'dem.tif', 'dom.tif']:
@@ -810,43 +814,34 @@ def publish_geoserver_service(file_id):
             elif file_type == 'geojson':
                 result = geoserver_service.publish_geojson(file_path, store_name, file_id)
             elif file_type in ['tif', 'tiff', 'dem', 'dom', 'dem.tif', 'dom.tif']:
-                result = geoserver_service.publish_geotiff(file_path, store_name, file_id)
-        
-        elif file_type == 'dxf':
-            # 使用DXF服务发布到GeoServer
-            from services.dxf_service import DXFService
-            dxf_service = DXFService()
+                # 对于TIF文件，优先使用数据库中的坐标系
+                if coordinate_system:
+                    # 验证坐标系格式
+                    if not coordinate_system.upper().startswith('EPSG:'):
+                        return jsonify({
+                            'success': False, 
+                            'error': f'坐标系格式错误，应为EPSG:xxxx格式，当前为: {coordinate_system}'
+                        }), 400
+                    
+                    print(f"使用指定坐标系发布TIF文件: {coordinate_system}")
+                    result = geoserver_service.publish_geotiff(file_path, store_name, file_id, coordinate_system)
+                else:
+                    # 使用文件自带的坐标系
+                    print(f"使用文件自带坐标系发布TIF文件")
+                    result = geoserver_service.publish_geotiff(file_path, store_name, file_id)
+            else:
+                return jsonify({'success': False, 'error': f'不支持的文件类型: {file_type}'}), 400
             
-            # 从请求中获取坐标系参数
-            coordinate_system = request.json.get('coordinate_system', 'EPSG:4326') if request.is_json else 'EPSG:4326'
+            print(f"GeoServer服务发布成功: {result}")
+            return jsonify(result)
+        else:
+            return jsonify({'success': False, 'error': f'文件类型 {file_type} 不支持发布到GeoServer'}), 400
             
-            # 检查是否可以复用已存在的PostGIS表
-            table_name = None
-            # 查询是否有相同文件的Martin服务（可复用PostGIS表）
-            martin_check_sql = """
-            SELECT table_name FROM vector_martin_services 
-            WHERE original_filename = %s AND vector_type = 'dxf' AND status = 'active'
-            """
-            martin_result = execute_query(martin_check_sql, (file_info['file_name'],))
-            if martin_result:
-                table_name = martin_result[0]['table_name']
-                current_app.logger.info(f"复用Martin服务的PostGIS表: {table_name}")
-            
-            result = dxf_service.publish_dxf_geoserver_service(
-                file_id=str(file_id),
-                table_name=table_name,
-                coordinate_system=coordinate_system
-            )
-        
-        return jsonify({
-            'success': True,
-            'message': 'GeoServer服务发布成功',
-            'geoserver_info': result
-        }), 200
-    
     except Exception as e:
-        current_app.logger.error(f"发布GeoServer服务错误: {str(e)}")
-        return jsonify({'error': f'发布GeoServer服务失败: {str(e)}'}), 500
+        print(f"发布GeoServer服务失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @file_bp.route('/<int:file_id>/unpublish/martin', methods=['DELETE'])
 def unpublish_martin_service(file_id):
