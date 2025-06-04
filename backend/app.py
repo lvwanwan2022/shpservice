@@ -188,6 +188,16 @@ except ImportError:
 except Exception as e:
     logger.warning(f"⚠️ DXF 服务路由注册失败: {str(e)}")
 
+# GIS 通用路由
+try:
+    from routes.gis import gis_bp
+    app.register_blueprint(gis_bp, url_prefix='/api/gis')
+    logger.info("✅ GIS 通用路由注册成功")
+except ImportError:
+    logger.info("GIS 通用路由不存在，跳过")
+except Exception as e:
+    logger.warning(f"⚠️ GIS 通用路由注册失败: {str(e)}")
+
 # GeoServer代理路由（解决CORS问题）
 @app.route('/geoserver/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
 def geoserver_proxy(path):
