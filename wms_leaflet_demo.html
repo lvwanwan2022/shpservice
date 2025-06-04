@@ -284,7 +284,7 @@
 
         // WMS 图层配置
         const wmsUrl = 'http://localhost:8083/geoserver/shpservice/wms';
-        const layerName = 'shpservice:4f72bfc3469b49d6975f54ce5a5de310_store';
+        const layerName = 'shpservice:1ffacf547ad3412294922d8758a89c2c_store';
         
         addDebugLog(`🌐 WMS URL: ${wmsUrl}`);
         addDebugLog(`📌 图层名称: ${layerName}`);
@@ -295,8 +295,8 @@
             format: 'image/png',
             transparent: true,
             version: '1.1.1', // 使用更常见的版本
-             crs: L.CRS.EPSG4326,
-            // srs: 'EPSG:3857', // 为了兼容性同时设置srs
+             crs: L.CRS.EPSG2379,
+             srs: 'EPSG:2379', // 为了兼容性同时设置srs
             opacity: 1.0,
             attribution: 'GeoServer WMS',
             // 添加错误处理参数

@@ -459,41 +459,101 @@ export default {
     
     // 添加图层到场景
     const addLayerToScene = async (file, serviceType) => {
-      const serviceInfo = serviceType === 'martin' ? file.martin_service : file.geoserver_service
-      if (!serviceInfo?.is_published) return
-      
-      let layerData = {
-        layer_name: file.file_name,
-        visible: true,
-        service_type: serviceType,
-        file_id: file.id,
-        file_type: file.file_type,
-        discipline: file.discipline
-      }
-      
-      if (serviceType === 'martin') {
-        const martinServices = await gisApi.searchMartinServices({ file_id: serviceInfo.file_id })
-        const martinService = martinServices.services.find(service => service.file_id === serviceInfo.file_id)
+      try {
+        console.log('🔍 添加图层到场景 - 开始:', { file, serviceType, sceneId: props.sceneId })
         
-        layerData = {
-          ...layerData,
-          martin_service_id: martinService.database_record_id || martinService.id,
-          mvt_url: serviceInfo.mvt_url,
-          tilejson_url: serviceInfo.tilejson_url
+        if (!props.sceneId) {
+          console.error('❌ 缺少场景ID')
+          ElMessage.error('缺少场景ID，无法添加图层')
+          return
         }
-      } else {
-        layerData = {
-          ...layerData,
-          geoserver_layer_name: serviceInfo.layer_name,
-          wms_url: serviceInfo.wms_url,
-          wfs_url: serviceInfo.wfs_url
+        
+        const serviceInfo = serviceType === 'martin' ? file.martin_service : file.geoserver_service
+        console.log('🔍 服务信息:', serviceInfo)
+        
+        if (!serviceInfo?.is_published) {
+          console.error('❌ 服务未发布或不存在:', serviceInfo)
+          ElMessage.error('服务未发布或不存在')
+          return
         }
+        
+        // 基础图层数据，注意添加layer_id字段
+        let layerData = {
+          layer_name: file.file_name,
+          visible: true,
+          service_type: serviceType,
+          file_id: file.id,
+          file_type: file.file_type,
+          discipline: file.discipline
+        }
+        
+        console.log('🔍 基础图层数据:', layerData)
+        
+        if (serviceType === 'martin') {
+          console.log('🔍 处理Martin服务...')
+          const martinServices = await gisApi.searchMartinServices({ file_id: serviceInfo.file_id })
+          console.log('🔍 Martin服务搜索结果:', martinServices)
+          
+          const martinService = martinServices.services.find(service => service.file_id === serviceInfo.file_id)
+          console.log('🔍 找到的Martin服务:', martinService)
+          
+          if (!martinService) {
+            console.error('❌ 未找到对应的Martin服务')
+            ElMessage.error('未找到对应的Martin服务')
+            return
+          }
+          
+          layerData = {
+            ...layerData,
+            // 对于Martin服务，使用负数虚拟ID（基于martin_service_id）
+            layer_id: -(martinService.database_record_id || martinService.id),
+            martin_service_id: martinService.database_record_id || martinService.id,
+            mvt_url: serviceInfo.mvt_url,
+            tilejson_url: serviceInfo.tilejson_url
+          }
+        } else {
+          console.log('🔍 处理GeoServer服务...')
+          // 对于GeoServer服务，layer_id应该是geoserver_layers表中的实际ID
+          // 这里需要从serviceInfo中获取实际的layer_id
+          const geoserverLayerId = serviceInfo.layer_id
+          if (!geoserverLayerId) {
+            console.error('❌ GeoServer服务缺少图层ID:', serviceInfo)
+            ElMessage.error('GeoServer服务缺少图层ID')
+            return
+          }
+          
+          layerData = {
+            ...layerData,
+            layer_id: geoserverLayerId,
+            geoserver_layer_name: serviceInfo.layer_name,
+            wms_url: serviceInfo.wms_url,
+            wfs_url: serviceInfo.wfs_url
+          }
+        }
+        
+        console.log('🔍 最终图层数据:', layerData)
+        console.log('🔍 调用API添加图层到场景...')
+        
+        await gisApi.addLayerToScene(props.sceneId, layerData)
+        
+        console.log('✅ 图层添加成功')
+        ElMessage.success(`图层 "${file.file_name}" 添加成功`)
+        
+        addLayerDialogVisible.value = false
+        await loadScene(props.sceneId)
+        emit('layerAdded', { sceneId: props.sceneId, layerData })
+        
+      } catch (error) {
+        console.error('❌ 添加图层到场景失败:', error)
+        console.error('错误详情:', {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status
+        })
+        
+        const errorMessage = error.response?.data?.error || error.message || '添加图层失败'
+        ElMessage.error(`添加图层失败: ${errorMessage}`)
       }
-      
-      await gisApi.addLayerToScene(props.sceneId, layerData)
-      addLayerDialogVisible.value = false
-      await loadScene(props.sceneId)
-      emit('layerAdded', { sceneId: props.sceneId, layerData })
     }
     
     // 移除图层
