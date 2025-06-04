@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>瓦片URL测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .button {
+            background: #007cba;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        .button:hover {
+            background: #005a87;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .test-image {
+            max-width: 100%;
+            border: 1px solid #ddd;
+            margin-top: 10px;
+        }
+        .url-display {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 12px;
+            margin: 10px 0;
+        }
+        .xml-content {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>瓦片URL测试工具</h1>
+        <p>测试具体的瓦片URL是否可以正常访问</p>
+        
+        <div class="test-section">
+            <h3>1. 测试失败的瓦片URL</h3>
+            <div class="url-display" id="failedUrl">
+                http://localhost:8080/geoserver/wms?service=WMS&request=GetMap&layers=shpservice%3Afile_9&styles=&format=image%2Fpng&transparent=true&version=1.1.1&width=256&height=256&srs=EPSG%3A4326&bbox=106.87500000000001,24.5271348225978,109.68750000000001,27.059125784374068
+            </div>
+            <button class="button" onclick="testFailedUrl()">测试失败的URL</button>
+            <button class="button" onclick="showFailedImage()">显示图片</button>
+            <button class="button" onclick="showXmlContent('failed')">显示XML错误内容</button>
+            <div id="failed-result"></div>
+            <div id="failed-image"></div>
+            <div id="failed-xml"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>2. 测试简化的瓦片URL</h3>
+            <div class="url-display" id="simpleUrl">
+                http://localhost:8080/geoserver/wms?service=WMS&request=GetMap&layers=shpservice:file_9&styles=&format=image/png&transparent=true&version=1.1.1&width=256&height=256&srs=EPSG:4326&bbox=-180,-90,180,90
+            </div>
+            <button class="button" onclick="testSimpleUrl()">测试简化URL</button>
+            <button class="button" onclick="showSimpleImage()">显示图片</button>
+            <button class="button" onclick="showXmlContent('simple')">显示XML错误内容</button>
+            <div id="simple-result"></div>
+            <div id="simple-image"></div>
+            <div id="simple-xml"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>3. 测试现有图层</h3>
+            <p>根据Capabilities发现的现有图层：</p>
+            <div class="url-display" id="existingUrl">
+                http://localhost:8080/geoserver/wms?service=WMS&request=GetMap&layers=shpservice:700f4b56b4954f2d87f11f1ab634a03c&styles=&format=image/png&transparent=true&version=1.1.1&width=256&height=256&srs=EPSG:4326&bbox=-180,-90,180,90
+            </div>
+            <button class="button" onclick="testExistingUrl()">测试现有图层</button>
+            <button class="button" onclick="showExistingImage()">显示图片</button>
+            <div id="existing-result"></div>
+            <div id="existing-image"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>4. 测试GetCapabilities</h3>
+            <button class="button" onclick="testCapabilities()">获取图层能力信息</button>
+            <div id="capabilities-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>5. 测试图层信息</h3>
+            <button class="button" onclick="testLayerInfo()">获取图层详细信息</button>
+            <div id="layer-info-result"></div>
+        </div>
+    </div>
+
+    <script>
+        // 存储响应内容
+        let responseCache = {};
+
+        function addResult(containerId, message, type = 'info', details = '') {
+            const container = document.getElementById(containerId);
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `result ${type}`;
+            resultDiv.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            if (details) {
+                resultDiv.textContent += '\n详情: ' + details;
+            }
+            container.appendChild(resultDiv);
+        }
+
+        async function testFailedUrl() {
+            const url = document.getElementById('failedUrl').textContent.trim();
+            addResult('failed-result', '开始测试失败的瓦片URL...', 'info');
+            
+            try {
+                const response = await fetch(url);
+                const contentType = response.headers.get('content-type');
+                const responseText = await response.text();
+                
+                // 缓存响应内容
+                responseCache['failed'] = responseText;
+                
+                addResult('failed-result', `响应状态: ${response.status}`, 
+                    response.ok ? 'success' : 'error', 
+                    `内容类型: ${contentType}`);
+                
+                if (!response.ok || contentType.includes('xml')) {
+                    addResult('failed-result', '返回XML错误响应', 'error', 
+                        `响应长度: ${responseText.length} 字符`);
+                }
+            } catch (error) {
+                addResult('failed-result', '请求失败', 'error', error.message);
+            }
+        }
+
+        async function testSimpleUrl() {
+            const url = document.getElementById('simpleUrl').textContent.trim();
+            addResult('simple-result', '开始测试简化的瓦片URL...', 'info');
+            
+            try {
+                const response = await fetch(url);
+                const contentType = response.headers.get('content-type');
+                const responseText = await response.text();
+                
+                // 缓存响应内容
+                responseCache['simple'] = responseText;
+                
+                addResult('simple-result', `响应状态: ${response.status}`, 
+                    response.ok ? 'success' : 'error', 
+                    `内容类型: ${contentType}`);
+                
+                if (!response.ok || contentType.includes('xml')) {
+                    addResult('simple-result', '返回XML错误响应', 'error', 
+                        `响应长度: ${responseText.length} 字符`);
+                }
+            } catch (error) {
+                addResult('simple-result', '请求失败', 'error', error.message);
+            }
+        }
+
+        async function testExistingUrl() {
+            const url = document.getElementById('existingUrl').textContent.trim();
+            addResult('existing-result', '开始测试现有图层URL...', 'info');
+            
+            try {
+                const response = await fetch(url);
+                const contentType = response.headers.get('content-type');
+                
+                addResult('existing-result', `响应状态: ${response.status}`, 
+                    response.ok ? 'success' : 'error', 
+                    `内容类型: ${contentType}`);
+                
+                if (contentType.includes('image')) {
+                    addResult('existing-result', '✅ 现有图层返回图片数据', 'success');
+                } else {
+                    const responseText = await response.text();
+                    addResult('existing-result', '❌ 现有图层也返回错误', 'error', 
+                        `响应长度: ${responseText.length} 字符`);
+                }
+            } catch (error) {
+                addResult('existing-result', '请求失败', 'error', error.message);
+            }
+        }
+
+        function showFailedImage() {
+            const url = document.getElementById('failedUrl').textContent.trim();
+            const container = document.getElementById('failed-image');
+            container.innerHTML = `
+                <p>测试图片显示:</p>
+                <img src="${url}" class="test-image" onload="handleImageLoad('failed')" onerror="handleImageError('failed')" />
+            `;
+        }
+
+        function showSimpleImage() {
+            const url = document.getElementById('simpleUrl').textContent.trim();
+            const container = document.getElementById('simple-image');
+            container.innerHTML = `
+                <p>测试图片显示:</p>
+                <img src="${url}" class="test-image" onload="handleImageLoad('simple')" onerror="handleImageError('simple')" />
+            `;
+        }
+
+        function showExistingImage() {
+            const url = document.getElementById('existingUrl').textContent.trim();
+            const container = document.getElementById('existing-image');
+            container.innerHTML = `
+                <p>测试现有图层图片显示:</p>
+                <img src="${url}" class="test-image" onload="handleImageLoad('existing')" onerror="handleImageError('existing')" />
+            `;
+        }
+
+        function showXmlContent(type) {
+            const content = responseCache[type];
+            if (!content) {
+                addResult(`${type}-result`, '请先运行测试获取响应内容', 'error');
+                return;
+            }
+
+            const container = document.getElementById(`${type}-xml`);
+            container.innerHTML = `
+                <h4>XML错误响应内容:</h4>
+                <div class="xml-content">${escapeHtml(content)}</div>
+            `;
+
+            // 尝试解析XML并提取错误信息
+            try {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(content, "text/xml");
+                
+                // 查找错误信息
+                const exceptions = xmlDoc.getElementsByTagName('ServiceException');
+                if (exceptions.length > 0) {
+                    let errorMessages = [];
+                    for (let i = 0; i < exceptions.length; i++) {
+                        errorMessages.push(exceptions[i].textContent.trim());
+                    }
+                    addResult(`${type}-result`, '解析到的错误信息:', 'error', 
+                        errorMessages.join('\n'));
+                }
+            } catch (e) {
+                addResult(`${type}-result`, 'XML解析失败', 'error', e.message);
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function handleImageLoad(type) {
+            addResult(`${type}-result`, '✅ 图片加载成功', 'success');
+        }
+
+        function handleImageError(type) {
+            addResult(`${type}-result`, '❌ 图片加载失败', 'error');
+        }
+
+        async function testCapabilities() {
+            addResult('capabilities-result', '开始获取WMS Capabilities...', 'info');
+            
+            try {
+                const response = await fetch('/geoserver/wms?service=WMS&version=1.1.1&request=GetCapabilities');
+                
+                if (response.ok) {
+                    const text = await response.text();
+                    const hasShpservice = text.includes('shpservice');
+                    const hasFile9 = text.includes('file_9');
+                    
+                    addResult('capabilities-result', '✅ Capabilities获取成功', 'success', 
+                        `响应长度: ${text.length} 字符`);
+                    
+                    if (hasShpservice) {
+                        addResult('capabilities-result', '✅ 发现shpservice工作空间', 'success');
+                    } else {
+                        addResult('capabilities-result', '❌ 未发现shpservice工作空间', 'error');
+                    }
+                    
+                    if (hasFile9) {
+                        addResult('capabilities-result', '✅ 发现file_9图层', 'success');
+                    } else {
+                        addResult('capabilities-result', '❌ 未发现file_9图层', 'error');
+                    }
+                    
+                    // 提取图层列表
+                    const layerMatches = text.match(/<Name>shpservice:[^<]+<\/Name>/g);
+                    if (layerMatches) {
+                        const layers = layerMatches.map(match => match.replace(/<\/?Name>/g, ''));
+                        addResult('capabilities-result', `发现的shpservice图层: ${layers.join(', ')}`, 'info');
+                    }
+                } else {
+                    addResult('capabilities-result', '❌ Capabilities获取失败', 'error', 
+                        `状态码: ${response.status}`);
+                }
+            } catch (error) {
+                addResult('capabilities-result', '❌ Capabilities请求异常', 'error', error.message);
+            }
+        }
+
+        async function testLayerInfo() {
+            addResult('layer-info-result', '开始获取图层信息...', 'info');
+            
+            // 测试图层的DescribeLayer请求
+            try {
+                const describeUrl = '/geoserver/wms?service=WMS&version=1.1.1&request=DescribeLayer&layers=shpservice:file_9';
+                const response = await fetch(describeUrl);
+                
+                if (response.ok) {
+                    const text = await response.text();
+                    addResult('layer-info-result', '✅ DescribeLayer成功', 'success', 
+                        `响应: ${text.substring(0, 200)}...`);
+                } else {
+                    addResult('layer-info-result', '❌ DescribeLayer失败', 'error', 
+                        `状态码: ${response.status}`);
+                }
+            } catch (error) {
+                addResult('layer-info-result', '❌ DescribeLayer异常', 'error', error.message);
+            }
+            
+            // 测试GetFeatureInfo请求
+            try {
+                const featureInfoUrl = '/geoserver/wms?service=WMS&version=1.1.1&request=GetFeatureInfo&layers=shpservice:file_9&query_layers=shpservice:file_9&styles=&bbox=-180,-90,180,90&width=256&height=256&srs=EPSG:4326&format=image/png&info_format=application/json&x=128&y=128';
+                const response = await fetch(featureInfoUrl);
+                
+                if (response.ok) {
+                    const text = await response.text();
+                    addResult('layer-info-result', '✅ GetFeatureInfo成功', 'success', 
+                        `响应: ${text.substring(0, 200)}...`);
+                } else {
+                    addResult('layer-info-result', '❌ GetFeatureInfo失败', 'error', 
+                        `状态码: ${response.status}`);
+                }
+            } catch (error) {
+                addResult('layer-info-result', '❌ GetFeatureInfo异常', 'error', error.message);
+            }
+        }
+    </script>
+</body>
+</html> 

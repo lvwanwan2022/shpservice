@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoServer图层名称调试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .error { color: red; }
+        .success { color: green; }
+        .warning { color: orange; }
+        .info { color: blue; }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        .test-url { background: #e7f3ff; padding: 10px; margin: 5px 0; word-break: break-all; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>GeoServer图层名称调试工具</h1>
+        
+        <div class="section">
+            <h2>1. 获取Capabilities中的图层列表</h2>
+            <button onclick="getCapabilitiesLayers()">获取图层列表</button>
+            <div id="capabilitiesResult"></div>
+        </div>
+        
+        <div class="section">
+            <h2>2. 测试具体图层</h2>
+            <input type="text" id="layerNameInput" value="shpservice:61f8dae0a46744238ec43d96861024cf_store" style="width: 400px;" placeholder="输入图层名称">
+            <button onclick="testSpecificLayer()">测试图层</button>
+            <div id="specificLayerResult"></div>
+        </div>
+        
+        <div class="section">
+            <h2>3. 批量测试常见图层名称模式</h2>
+            <button onclick="testLayerNamePatterns()">批量测试</button>
+            <div id="batchTestResult"></div>
+        </div>
+        
+        <div class="section">
+            <h2>4. 获取场景数据进行比较</h2>
+            <button onclick="getSceneData()">获取场景数据</button>
+            <div id="sceneDataResult"></div>
+        </div>
+    </div>
+
+    <script>
+        let capabilitiesData = null;
+        
+        async function getCapabilitiesLayers() {
+            const resultDiv = document.getElementById('capabilitiesResult');
+            resultDiv.innerHTML = '<p class="info">正在获取Capabilities...</p>';
+            
+            try {
+                const response = await fetch('/geoserver/wms?service=WMS&version=1.1.1&request=GetCapabilities');
+                const capabilities = await response.text();
+                capabilitiesData = capabilities;
+                
+                // 提取shpservice工作空间的图层
+                const layerMatches = capabilities.match(/shpservice:[a-f0-9_]+/g);
+                const uniqueLayers = [...new Set(layerMatches || [])];
+                
+                let html = `<p class="success">✅ Capabilities获取成功 (长度: ${capabilities.length})</p>`;
+                html += `<h3>发现的shpservice图层 (${uniqueLayers.length}个):</h3>`;
+                html += '<table><tr><th>图层名称</th><th>测试WMS请求</th></tr>';
+                
+                uniqueLayers.forEach(layer => {
+                    html += `<tr>
+                        <td>${layer}</td>
+                        <td><button onclick="testWMSRequest('${layer}')">测试</button></td>
+                    </tr>`;
+                });
+                
+                html += '</table>';
+                resultDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ 获取Capabilities失败: ${error.message}</p>`;
+            }
+        }
+        
+        async function testSpecificLayer() {
+            const layerName = document.getElementById('layerNameInput').value.trim();
+            const resultDiv = document.getElementById('specificLayerResult');
+            
+            if (!layerName) {
+                resultDiv.innerHTML = '<p class="warning">请输入图层名称</p>';
+                return;
+            }
+            
+            resultDiv.innerHTML = '<p class="info">正在测试图层...</p>';
+            
+            const results = await testWMSRequest(layerName);
+            resultDiv.innerHTML = results;
+        }
+        
+        async function testWMSRequest(layerName) {
+            const testUrls = [
+                `/geoserver/wms?service=WMS&version=1.1.1&request=GetMap&layers=${encodeURIComponent(layerName)}&styles=&format=image/png&transparent=true&width=256&height=256&srs=EPSG:3857&bbox=11810915.364,3503549.843,12691488.843,4384123.322`,
+                `http://localhost:8083/geoserver/wms?service=WMS&version=1.1.1&request=GetMap&layers=${encodeURIComponent(layerName)}&styles=&format=image/png&transparent=true&width=256&height=256&srs=EPSG:3857&bbox=11810915.364,3503549.843,12691488.843,4384123.322`
+            ];
+            
+            let html = `<h3>测试图层: ${layerName}</h3>`;
+            
+            // 检查是否在Capabilities中存在
+            if (capabilitiesData) {
+                const inCapabilities = capabilitiesData.includes(layerName);
+                html += `<p class="${inCapabilities ? 'success' : 'warning'}">
+                    ${inCapabilities ? '✅' : '⚠️'} 在Capabilities中${inCapabilities ? '存在' : '不存在'}
+                </p>`;
+            }
+            
+            // 测试各种URL
+            for (let i = 0; i < testUrls.length; i++) {
+                const url = testUrls[i];
+                const urlType = i === 0 ? '代理路径' : '直连路径';
+                
+                try {
+                    const response = await fetch(url);
+                    const success = response.ok;
+                    const statusText = success ? 'success' : 'error';
+                    
+                    html += `<p class="${statusText}">
+                        ${success ? '✅' : '❌'} ${urlType}: ${response.status}
+                    </p>`;
+                    
+                    if (!success) {
+                        try {
+                            const errorText = await response.text();
+                            html += `<pre>${errorText.substring(0, 300)}...</pre>`;
+                        } catch (e) {
+                            html += `<p class="error">无法读取错误信息</p>`;
+                        }
+                    }
+                    
+                } catch (error) {
+                    html += `<p class="error">❌ ${urlType}: ${error.message}</p>`;
+                }
+            }
+            
+            return html;
+        }
+        
+        async function testLayerNamePatterns() {
+            const resultDiv = document.getElementById('batchTestResult');
+            resultDiv.innerHTML = '<p class="info">正在批量测试...</p>';
+            
+            // 基于发现的图层名称生成测试模式
+            const baseId = '61f8dae0a46744238ec43d96861024cf';
+            const patterns = [
+                `shpservice:${baseId}`,           // 无后缀
+                `shpservice:${baseId}_`,          // 下划线后缀
+                `shpservice:${baseId}_store`,     // store后缀
+                `shpservice:${baseId}_layer`,     // layer后缀
+            ];
+            
+            let html = '<h3>批量测试结果:</h3>';
+            html += '<table><tr><th>图层名称模式</th><th>Capabilities存在</th><th>代理路径</th><th>直连路径</th></tr>';
+            
+            for (const pattern of patterns) {
+                const inCapabilities = capabilitiesData ? capabilitiesData.includes(pattern) : false;
+                
+                // 测试代理路径
+                let proxyResult = '❌';
+                try {
+                    const proxyUrl = `/geoserver/wms?service=WMS&version=1.1.1&request=GetMap&layers=${encodeURIComponent(pattern)}&styles=&format=image/png&transparent=true&width=256&height=256&srs=EPSG:3857&bbox=11810915.364,3503549.843,12691488.843,4384123.322`;
+                    const proxyResponse = await fetch(proxyUrl);
+                    proxyResult = proxyResponse.ok ? '✅' : `❌(${proxyResponse.status})`;
+                } catch (e) {
+                    proxyResult = '❌(异常)';
+                }
+                
+                // 测试直连路径  
+                let directResult = '❌';
+                try {
+                    const directUrl = `http://localhost:8083/geoserver/wms?service=WMS&version=1.1.1&request=GetMap&layers=${encodeURIComponent(pattern)}&styles=&format=image/png&transparent=true&width=256&height=256&srs=EPSG:3857&bbox=11810915.364,3503549.843,12691488.843,4384123.322`;
+                    const directResponse = await fetch(directUrl);
+                    directResult = directResponse.ok ? '✅' : `❌(${directResponse.status})`;
+                } catch (e) {
+                    directResult = '❌(异常)';
+                }
+                
+                html += `<tr>
+                    <td>${pattern}</td>
+                    <td class="${inCapabilities ? 'success' : 'error'}">${inCapabilities ? '✅' : '❌'}</td>
+                    <td class="${proxyResult.includes('✅') ? 'success' : 'error'}">${proxyResult}</td>
+                    <td class="${directResult.includes('✅') ? 'success' : 'error'}">${directResult}</td>
+                </tr>`;
+            }
+            
+            html += '</table>';
+            resultDiv.innerHTML = html;
+        }
+        
+        async function getSceneData() {
+            const resultDiv = document.getElementById('sceneDataResult');
+            resultDiv.innerHTML = '<p class="info">正在获取场景数据...</p>';
+            
+            try {
+                // 假设场景ID为1，你可以根据实际情况修改
+                const response = await fetch('/api/scenes/1');
+                const sceneData = await response.json();
+                
+                let html = '<h3>场景数据:</h3>';
+                html += '<table><tr><th>图层名称</th><th>服务类型</th><th>geoserver_layer</th><th>WMS URL</th><th>状态</th></tr>';
+                
+                if (sceneData.layers) {
+                    sceneData.layers.forEach(layer => {
+                        html += `<tr>
+                            <td>${layer.layer_name || '未知'}</td>
+                            <td>${layer.service_type || '未知'}</td>
+                            <td>${layer.geoserver_layer || '无'}</td>
+                            <td>${layer.wms_url || '无'}</td>
+                            <td class="${layer.visibility ? 'success' : 'warning'}">${layer.visibility ? '显示' : '隐藏'}</td>
+                        </tr>`;
+                    });
+                } else {
+                    html += '<tr><td colspan="5">无图层数据</td></tr>';
+                }
+                
+                html += '</table>';
+                
+                // 显示原始JSON数据
+                html += '<h4>原始数据:</h4>';
+                html += `<pre>${JSON.stringify(sceneData, null, 2)}</pre>`;
+                
+                resultDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ 获取场景数据失败: ${error.message}</p>`;
+            }
+        }
+        
+        // 页面加载时自动获取Capabilities
+        window.addEventListener('load', function() {
+            console.log('页面加载完成，开始获取Capabilities...');
+            getCapabilitiesLayers();
+        });
+    </script>
+</body>
+</html> 

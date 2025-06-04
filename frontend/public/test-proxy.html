@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>代理测试页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>前端代理测试页面</h1>
+        <p>这个页面用于测试前端开发服务器的代理配置是否正常工作。</p>
+        
+        <div class="test-section">
+            <h3>基本信息</h3>
+            <p><strong>当前页面URL:</strong> <span id="currentUrl"></span></p>
+            <p><strong>测试时间:</strong> <span id="testTime"></span></p>
+        </div>
+        
+        <div class="test-section">
+            <h3>代理测试</h3>
+            <button onclick="testDirectConnection()">测试直接连接 (应该失败)</button>
+            <button onclick="testProxyConnection()">测试代理连接</button>
+            <button onclick="testWmsProxy()">测试WMS代理</button>
+            <button onclick="clearResults()">清除结果</button>
+            <div id="results"></div>
+        </div>
+    </div>
+
+    <script>
+        // 更新页面信息
+        document.getElementById('currentUrl').textContent = window.location.href;
+        document.getElementById('testTime').textContent = new Date().toLocaleString();
+        
+        function addResult(message, type = 'info', details = '') {
+            const resultsDiv = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `result ${type}`;
+            
+            let content = `<strong>${new Date().toLocaleTimeString()}</strong> - ${message}`;
+            if (details) {
+                content += `<br><small>${details}</small>`;
+            }
+            
+            resultDiv.innerHTML = content;
+            resultsDiv.appendChild(resultDiv);
+            
+            // 滚动到最新结果
+            resultDiv.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        async function testDirectConnection() {
+            addResult('开始测试直接连接到GeoServer (预期失败)...', 'info');
+            
+            try {
+                const response = await fetch('http://localhost:8083/geoserver/web/', {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                
+                addResult('❌ 意外成功 - 直接连接不应该成功', 'error', 
+                    `状态码: ${response.status}`);
+                    
+            } catch (error) {
+                if (error.message.includes('CORS') || error.message.includes('Network')) {
+                    addResult('✅ 预期失败 - 直接连接被阻止 (正常)', 'success', 
+                        '这是正常的，因为存在跨域限制');
+                } else {
+                    addResult('❌ 意外错误', 'error', `错误: ${error.message}`);
+                }
+            }
+        }
+        
+        async function testProxyConnection() {
+            addResult('开始测试代理连接到GeoServer...', 'info');
+            
+            try {
+                const response = await fetch('/geoserver/web/', {
+                    method: 'GET'
+                });
+                
+                if (response.ok) {
+                    addResult('✅ 代理连接成功', 'success', 
+                        `状态码: ${response.status}, 内容类型: ${response.headers.get('content-type')}`);
+                } else {
+                    addResult('❌ 代理连接失败', 'error', 
+                        `状态码: ${response.status}`);
+                }
+                
+            } catch (error) {
+                addResult('❌ 代理连接失败', 'error', 
+                    `错误: ${error.message}`);
+            }
+        }
+        
+        async function testWmsProxy() {
+            addResult('开始测试WMS代理...', 'info');
+            
+            try {
+                const wmsUrl = '/geoserver/wms?service=WMS&version=1.1.1&request=GetCapabilities';
+                const response = await fetch(wmsUrl);
+                
+                if (response.ok) {
+                    const text = await response.text();
+                    addResult('✅ WMS代理连接成功', 'success', 
+                        `状态码: ${response.status}, 响应长度: ${text.length} 字符`);
+                    
+                    // 检查是否包含shpservice工作空间
+                    if (text.includes('shpservice')) {
+                        addResult('✅ 发现shpservice工作空间', 'success');
+                        
+                        // 提取图层列表
+                        const layerMatches = text.match(/<Name>shpservice:[^<]+<\/Name>/g);
+                        if (layerMatches) {
+                            const layers = layerMatches.map(match => match.replace(/<\/?Name>/g, ''));
+                            addResult(`✅ 发现图层: ${layers.length}个`, 'success', 
+                                `图层: ${layers.join(', ')}`);
+                        }
+                    } else {
+                        addResult('⚠️ 未发现shpservice工作空间', 'error', 
+                            '可能需要检查GeoServer中的工作空间配置');
+                    }
+                    
+                } else {
+                    addResult('❌ WMS请求失败', 'error', 
+                        `状态码: ${response.status}`);
+                }
+                
+            } catch (error) {
+                addResult('❌ WMS代理测试失败', 'error', 
+                    `错误: ${error.message}`);
+            }
+        }
+        
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+            addResult('结果已清除', 'info');
+        }
+        
+        // 页面加载完成后自动运行一些基本测试
+        window.addEventListener('load', function() {
+            addResult('页面加载完成，可以开始测试', 'info');
+        });
+    </script>
+</body>
+</html> 

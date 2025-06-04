@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WMS详细调试工具</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; }
+        .container { display: flex; height: 100vh; }
+        .sidebar { width: 400px; padding: 20px; overflow-y: auto; background: #f5f5f5; }
+        .map-area { flex: 1; position: relative; }
+        #map { width: 100%; height: 100%; }
+        .section { margin: 15px 0; padding: 10px; border: 1px solid #ddd; border-radius: 5px; background: white; }
+        .error { color: red; }
+        .success { color: green; }
+        .warning { color: orange; }
+        .info { color: blue; }
+        button { margin: 5px 0; padding: 5px 10px; cursor: pointer; }
+        .log-entry { font-size: 12px; margin: 2px 0; padding: 2px 5px; border-radius: 2px; }
+        pre { font-size: 11px; background: #eee; padding: 5px; margin: 5px 0; max-height: 100px; overflow-y: auto; }
+        input[type="text"] { width: 100%; padding: 5px; margin: 5px 0; }
+        .tile-url { word-break: break-all; font-size: 10px; background: #fff3cd; padding: 5px; margin: 2px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h2>WMS详细调试</h2>
+            
+            <div class="section">
+                <h3>测试配置</h3>
+                <label>图层名称:</label>
+                <input type="text" id="layerInput" value="shpservice:61f8dae0a46744238ec43d96861024cf_store">
+                <label>WMS URL:</label>
+                <select id="wmsUrlSelect">
+                    <option value="/geoserver/wms">代理路径</option>
+                    <option value="http://localhost:8083/geoserver/wms">直连路径</option>
+                </select>
+                <button onclick="testLayerWithLeaflet()">使用Leaflet测试图层</button>
+                <button onclick="testDirectWMSRequest()">直接测试WMS请求</button>
+                <button onclick="clearMap()">清除地图</button>
+            </div>
+            
+            <div class="section">
+                <h3>快速测试</h3>
+                <button onclick="testWithOriginalName()">测试原始名称(带store)</button>
+                <button onclick="testWithoutStore()">测试去掉store后缀</button>
+                <button onclick="testBothVersions()">同时测试两个版本</button>
+            </div>
+            
+            <div class="section">
+                <h3>日志</h3>
+                <div id="logArea" style="max-height: 300px; overflow-y: auto; font-size: 12px;"></div>
+                <button onclick="clearLog()">清除日志</button>
+            </div>
+        </div>
+        
+        <div class="map-area">
+            <div id="map"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let map;
+        let currentLayers = [];
+        
+        // 初始化地图
+        function initMap() {
+            map = L.map('map', {
+                center: [35.0, 105.0],
+                zoom: 6,
+                maxZoom: 22,
+                minZoom: 1
+            });
+            
+            // 添加基础底图
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap',
+                opacity: 0.7
+            }).addTo(map);
+            
+            log('地图初始化完成', 'success');
+        }
+        
+        // 日志函数
+        function log(message, type = 'info') {
+            const logArea = document.getElementById('logArea');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logArea.appendChild(entry);
+            logArea.scrollTop = logArea.scrollHeight;
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+        
+        function clearLog() {
+            document.getElementById('logArea').innerHTML = '';
+        }
+        
+        function clearMap() {
+            currentLayers.forEach(layer => {
+                map.removeLayer(layer);
+            });
+            currentLayers = [];
+            log('地图已清除', 'info');
+        }
+        
+        // 使用Leaflet测试图层
+        async function testLayerWithLeaflet() {
+            const layerName = document.getElementById('layerInput').value.trim();
+            const wmsUrl = document.getElementById('wmsUrlSelect').value;
+            
+            if (!layerName) {
+                log('请输入图层名称', 'warning');
+                return;
+            }
+            
+            log(`开始使用Leaflet测试图层: ${layerName}`, 'info');
+            log(`WMS URL: ${wmsUrl}`, 'info');
+            
+            try {
+                // 创建WMS图层
+                const wmsLayer = L.tileLayer.wms(wmsUrl, {
+                    layers: layerName,
+                    format: 'image/png',
+                    transparent: true,
+                    version: '1.1.1',
+                    attribution: `测试图层: ${layerName}`,
+                    // 添加调试选项
+                    maxZoom: 18,
+                    detectRetina: false
+                });
+                
+                // 监听事件
+                wmsLayer.on('loading', () => {
+                    log(`🔄 图层开始加载: ${layerName}`, 'info');
+                });
+                
+                wmsLayer.on('load', () => {
+                    log(`✅ 图层加载成功: ${layerName}`, 'success');
+                });
+                
+                wmsLayer.on('tileerror', (e) => {
+                    log(`❌ 瓦片加载失败: ${layerName}`, 'error');
+                    if (e.tile && e.tile.src) {
+                        log(`失败的瓦片URL:`, 'error');
+                        const urlDiv = document.createElement('div');
+                        urlDiv.className = 'tile-url';
+                        urlDiv.textContent = e.tile.src;
+                        document.getElementById('logArea').appendChild(urlDiv);
+                        
+                        // 分析URL
+                        analyzeFailedURL(e.tile.src);
+                    }
+                });
+                
+                wmsLayer.addTo(map);
+                currentLayers.push(wmsLayer);
+                
+                log(`图层已添加到地图`, 'info');
+                
+            } catch (error) {
+                log(`创建图层失败: ${error.message}`, 'error');
+            }
+        }
+        
+        // 分析失败的URL
+        function analyzeFailedURL(url) {
+            try {
+                const urlObj = new URL(url);
+                const params = Object.fromEntries(urlObj.searchParams);
+                
+                log('URL参数分析:', 'info');
+                log(`- service: ${params.service || '无'}`, 'info');
+                log(`- version: ${params.version || '无'}`, 'info');
+                log(`- request: ${params.request || '无'}`, 'info');
+                log(`- layers: ${params.layers || '无'}`, 'info');
+                log(`- format: ${params.format || '无'}`, 'info');
+                log(`- bbox: ${params.bbox || '无'}`, 'info');
+                
+                // 检查常见问题
+                if (!params.layers) {
+                    log('⚠️ 缺少layers参数', 'warning');
+                }
+                if (!params.bbox) {
+                    log('⚠️ 缺少bbox参数', 'warning');
+                }
+                if (params.layers && !params.layers.includes(':')) {
+                    log('⚠️ 图层名称可能缺少工作空间前缀', 'warning');
+                }
+                
+            } catch (e) {
+                log(`URL分析失败: ${e.message}`, 'error');
+            }
+        }
+        
+        // 直接测试WMS请求
+        async function testDirectWMSRequest() {
+            const layerName = document.getElementById('layerInput').value.trim();
+            const wmsUrl = document.getElementById('wmsUrlSelect').value;
+            
+            if (!layerName) {
+                log('请输入图层名称', 'warning');
+                return;
+            }
+            
+            // 构建测试URL
+            const testUrl = `${wmsUrl}?service=WMS&version=1.1.1&request=GetMap&layers=${encodeURIComponent(layerName)}&styles=&format=image/png&transparent=true&width=256&height=256&srs=EPSG:3857&bbox=11810915.364,3503549.843,12691488.843,4384123.322`;
+            
+            log(`直接测试WMS请求...`, 'info');
+            log(`测试URL: ${testUrl}`, 'info');
+            
+            try {
+                const response = await fetch(testUrl);
+                
+                if (response.ok) {
+                    log(`✅ WMS请求成功: ${response.status}`, 'success');
+                    log(`Content-Type: ${response.headers.get('content-type')}`, 'info');
+                    
+                    // 检查是否是图片
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('image')) {
+                        log(`✅ 返回了图片内容`, 'success');
+                        
+                        // 尝试显示图片信息
+                        const blob = await response.blob();
+                        log(`图片大小: ${blob.size} bytes`, 'info');
+                    } else {
+                        log(`⚠️ 返回的不是图片内容`, 'warning');
+                        const text = await response.text();
+                        log(`响应内容预览:`, 'warning');
+                        const preDiv = document.createElement('pre');
+                        preDiv.textContent = text.substring(0, 500) + (text.length > 500 ? '...' : '');
+                        document.getElementById('logArea').appendChild(preDiv);
+                    }
+                } else {
+                    log(`❌ WMS请求失败: ${response.status}`, 'error');
+                    const errorText = await response.text();
+                    log(`错误内容:`, 'error');
+                    const preDiv = document.createElement('pre');
+                    preDiv.textContent = errorText.substring(0, 500) + (errorText.length > 500 ? '...' : '');
+                    document.getElementById('logArea').appendChild(preDiv);
+                }
+                
+            } catch (error) {
+                log(`请求异常: ${error.message}`, 'error');
+            }
+        }
+        
+        // 测试原始名称
+        function testWithOriginalName() {
+            document.getElementById('layerInput').value = 'shpservice:61f8dae0a46744238ec43d96861024cf_store';
+            testLayerWithLeaflet();
+        }
+        
+        // 测试去掉store后缀
+        function testWithoutStore() {
+            document.getElementById('layerInput').value = 'shpservice:61f8dae0a46744238ec43d96861024cf_';
+            testLayerWithLeaflet();
+        }
+        
+        // 同时测试两个版本
+        async function testBothVersions() {
+            log('=== 开始同时测试两个版本的图层名称 ===', 'info');
+            
+            // 清除现有图层
+            clearMap();
+            
+            // 测试带store后缀的版本
+            log('--- 测试1: 带store后缀 ---', 'info');
+            document.getElementById('layerInput').value = 'shpservice:61f8dae0a46744238ec43d96861024cf_store';
+            await testDirectWMSRequest();
+            
+            // 等待一下
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // 测试不带store后缀的版本  
+            log('--- 测试2: 不带store后缀 ---', 'info');
+            document.getElementById('layerInput').value = 'shpservice:61f8dae0a46744238ec43d96861024cf_';
+            await testDirectWMSRequest();
+            
+            log('=== 测试完成 ===', 'info');
+        }
+        
+        // 页面初始化
+        window.addEventListener('load', function() {
+            initMap();
+        });
+    </script>
+</body>
+</html> 

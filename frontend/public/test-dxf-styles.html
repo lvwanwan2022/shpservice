@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DXF样式测试 - Vue组件</title>
+    
+    <!-- Leaflet CSS -->
+    <link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet" />
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+        }
+        
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .test-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .test-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .test-info h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        
+        .test-info p {
+            margin: 5px 0;
+            color: #666;
+        }
+        
+        .style-comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .style-demo {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        
+        .style-demo h4 {
+            margin-top: 0;
+            color: #333;
+        }
+        
+        .style-item {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        
+        .style-preview {
+            width: 40px;
+            height: 20px;
+            margin-right: 10px;
+            border-radius: 2px;
+        }
+        
+        .style-info {
+            flex: 1;
+        }
+        
+        .style-name {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .style-desc {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .layer-code {
+            font-family: monospace;
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            margin-left: 8px;
+        }
+        
+        .status {
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            text-align: center;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .instructions {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        
+        .instructions h4 {
+            margin-top: 0;
+            color: #0056b3;
+        }
+        
+        .instructions ol {
+            color: #333;
+        }
+        
+        .instructions li {
+            margin: 8px 0;
+        }
+        
+        .code-example {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <div class="test-header">
+            <h1>DXF样式测试页面</h1>
+            <p>验证MapViewer.vue中DXF图层样式的应用效果</p>
+        </div>
+        
+        <div class="test-info">
+            <h3>测试说明</h3>
+            <p><strong>目的:</strong> 验证Martin服务的DXF图层是否能正确应用默认样式配置</p>
+            <p><strong>数据源:</strong> defaultDxfStyles.json 中的18种DXF图层样式</p>
+            <p><strong>应用方式:</strong> 通过dxfStyleManager在MapViewer.vue中动态加载</p>
+        </div>
+        
+        <div class="style-comparison">
+            <div class="style-demo">
+                <h4>地形相关图层</h4>
+                <div class="style-item">
+                    <div class="style-preview" style="background-color: #8B4513; border: 1.5px solid #8B4513;"></div>
+                    <div class="style-info">
+                        <div class="style-name">地貌图层 <span class="layer-code">DMTZ</span></div>
+                        <div class="style-desc">棕色填充，表示地形特征</div>
+                    </div>
+                </div>
+                
+                <div class="style-item">
+                    <div class="style-preview" style="background: none; border: 1px dashed #808080;"></div>
+                    <div class="style-info">
+                        <div class="style-name">等高线 <span class="layer-code">DGX</span></div>
+                        <div class="style-desc">灰色虚线，表示地形高程</div>
+                    </div>
+                </div>
+                
+                <div class="style-item">
+                    <div class="style-preview" style="background-color: #A9A9A9; border: 1px dashed #A9A9A9;"></div>
+                    <div class="style-info">
+                        <div class="style-name">5米等高线 <span class="layer-code">jqx</span></div>
+                        <div class="style-desc">较粗等高线，5米间隔</div>
+                    </div>
+                </div>
+                
+                <div class="style-item">
+                    <div class="style-preview" style="background-color: #C0C0C0; border: 0.8px dotted #C0C0C0;"></div>
+                    <div class="style-info">
+                        <div class="style-name">1米等高线 <span class="layer-code">sqx</span></div>
+                        <div class="style-desc">细虚线，1米间隔，高缩放显示</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="style-demo">
+                <h4>设施相关图层</h4>
+                <div class="style-item">
+                    <div class="style-preview" style="background-color: #1E90FF; border: 2px solid #1E90FF;"></div>
+                    <div class="style-info">
+                        <div class="style-name">水系设施 <span class="layer-code">SXSS</span></div>
+                        <div class="style-desc">蓝色填充，表示水系元素</div>
+                    </div>
+                </div>
+                
+                <div class="style-item">
+                    <div class="style-preview" style="background: none; border: 3px solid #2F4F4F;"></div>
+                    <div class="style-info">
+                        <div class="style-name">道路设施 <span class="layer-code">DLSS</span></div>
+                        <div class="style-desc">深灰色粗线，表示道路</div>
+                    </div>
+                </div>
+                
+                <div class="style-item">
+                    <div class="style-preview" style="background-color: #228B22; border: 1.5px solid #228B22;"></div>
+                    <div class="style-info">
+                        <div class="style-name">植被图层 <span class="layer-code">ZBTZ</span></div>
+                        <div class="style-desc">绿色填充，表示植被分布</div>
+                    </div>
+                </div>
+                
+                <div class="style-item">
+                    <div class="style-preview" style="background: none; border: 2.5px dashed #9932CC;"></div>
+                    <div class="style-info">
+                        <div class="style-name">管线设施 <span class="layer-code">GXYZ</span></div>
+                        <div class="style-desc">紫色虚线，表示管线</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="style-comparison">
+            <div class="style-demo">
+                <h4>控制点图层</h4>
+                <div class="style-item">
+                    <div class="style-preview" style="background-color: #DC143C; border: 2px solid #DC143C; border-radius: 8px;"></div>
+                    <div class="style-info">
+                        <div class="style-name">控制点 <span class="layer-code">KZD</span></div>
+                        <div class="style-desc">红色圆点，半径8px</div>
+                    </div>
+                </div>
+                
+                <div class="style-item">
+                    <div class="style-preview" style="background-color: #696969; border: 1px solid #696969; border-radius: 3px;"></div>
+                    <div class="style-info">
+                        <div class="style-name">高程点 <span class="layer-code">GCD</span></div>
+                        <div class="style-desc">灰色小点，半径3px</div>
+                    </div>
+                </div>
+                
+                <div class="style-item">
+                    <div class="style-preview" style="background-color: #B22222; border: 2px solid #B22222; border-radius: 4px;"></div>
+                    <div class="style-info">
+                        <div class="style-name">界址点 <span class="layer-code">JZD</span></div>
+                        <div class="style-desc">深红色点，半径4px</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="style-demo">
+                <h4>边界线图层</h4>
+                <div class="style-item">
+                    <div class="style-preview" style="background: none; border: 3px solid #000000;"></div>
+                    <div class="style-info">
+                        <div class="style-name">境界线 <span class="layer-code">JJ</span></div>
+                        <div class="style-desc">黑色粗实线，行政边界</div>
+                    </div>
+                </div>
+                
+                <div class="style-item">
+                    <div class="style-preview" style="background: none; border: 4px solid #000000;"></div>
+                    <div class="style-info">
+                        <div class="style-name">图廓线 <span class="layer-code">TK</span></div>
+                        <div class="style-desc">黑色最粗线，地图轮廓</div>
+                    </div>
+                </div>
+                
+                <div class="style-item">
+                    <div class="style-preview" style="background: none; border: 1px dashed #708090;"></div>
+                    <div class="style-info">
+                        <div class="style-name">骨架线 <span class="layer-code">ASSIST</span></div>
+                        <div class="style-desc">灰色虚线，辅助显示</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="instructions">
+            <h4>测试步骤</h4>
+            <ol>
+                <li>确保已经启动了Martin服务 (端口3000) 和后端API服务 (端口5030)</li>
+                <li>在MapViewer.vue中添加一个Martin(DXF)图层到场景中</li>
+                <li>检查浏览器控制台，确认看到 "✅ 加载DXF默认样式配置" 的日志</li>
+                <li>验证图层在地图上是否按照上面的样式配色方案显示</li>
+                <li>测试图层可见性切换和缩放级别样式调整</li>
+                <li>打开样式设置对话框，确认Martin(DXF)选项卡能正确显示</li>
+                <li>修改任一图层样式，确认实时预览和保存功能正常</li>
+            </ol>
+        </div>
+        
+        <div class="status success" id="status-success" style="display: none;">
+            ✅ DXF样式配置已正确应用！图层显示符合预期样式。
+        </div>
+        
+        <div class="status warning">
+            ⚠️ 如果图层样式不正确，请检查：
+            <ul style="text-align: left; margin-top: 10px;">
+                <li>dxfStyleManager是否正确导入</li>
+                <li>defaultDxfStyles.json是否能正确读取</li>
+                <li>Martin服务的PostGIS表中layer字段值是否与样式配置的键名匹配</li>
+                <li>样式函数是否正确应用到VectorGrid图层</li>
+            </ul>
+        </div>
+        
+        <div class="code-example">
+            <strong>关键代码检查点:</strong><br>
+            1. 在addMartinLayer函数中：<br>
+            const { dxfStyleManager } = await import('@/utils/dxfStyleManager')<br>
+            dxfLayerStyles = dxfStyleManager.getDefaultStyles()<br><br>
+            
+            2. 样式函数创建：<br>
+            const createDxfStyleFunction = (layerStyles, layerField = 'layer') => { ... }<br><br>
+            
+            3. 样式应用：<br>
+            vectorTileOptions.vectorTileLayerStyles[layerName] = styleFunction
+        </div>
+    </div>
+</body>
+</html> 

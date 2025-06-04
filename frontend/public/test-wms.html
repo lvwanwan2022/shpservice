@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WMS代理测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .button {
+            background: #007cba;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        .button:hover {
+            background: #005a87;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .image-test {
+            margin-top: 15px;
+        }
+        .test-image {
+            max-width: 100%;
+            border: 1px solid #ddd;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WMS代理测试工具</h1>
+        <p>这个工具用于测试前端到GeoServer的代理连接是否正常工作。</p>
+        
+        <div class="test-section">
+            <h3>1. 基础连接测试</h3>
+            <button class="button" onclick="testGeoServerConnection()">测试GeoServer连接</button>
+            <button class="button" onclick="testWmsCapabilities()">测试WMS Capabilities</button>
+            <div id="connection-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>2. 图层测试</h3>
+            <button class="button" onclick="testSpecificLayer()">测试具体图层 (shpservice:file_9)</button>
+            <button class="button" onclick="testLayerImage()">测试图层图片</button>
+            <div id="layer-result"></div>
+            <div id="image-test" class="image-test"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>3. 代理路径测试</h3>
+            <button class="button" onclick="testProxyPaths()">测试所有代理路径</button>
+            <div id="proxy-result"></div>
+        </div>
+    </div>
+
+    <script>
+        function addResult(containerId, message, type = 'info', details = '') {
+            const container = document.getElementById(containerId);
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `result ${type}`;
+            resultDiv.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            if (details) {
+                resultDiv.textContent += '\n详情: ' + details;
+            }
+            container.appendChild(resultDiv);
+        }
+
+        async function testGeoServerConnection() {
+            addResult('connection-result', '开始测试GeoServer连接...', 'info');
+            
+            try {
+                const response = await fetch('/geoserver/web/', {
+                    method: 'GET',
+                    timeout: 5000
+                });
+                
+                if (response.ok) {
+                    addResult('connection-result', '✅ GeoServer连接成功', 'success', 
+                        `状态码: ${response.status}, 内容类型: ${response.headers.get('content-type')}`);
+                } else {
+                    addResult('connection-result', '❌ GeoServer连接失败', 'error', 
+                        `状态码: ${response.status}`);
+                }
+            } catch (error) {
+                addResult('connection-result', '❌ GeoServer连接异常', 'error', error.message);
+            }
+        }
+
+        async function testWmsCapabilities() {
+            addResult('connection-result', '开始测试WMS Capabilities...', 'info');
+            
+            try {
+                const response = await fetch('/geoserver/wms?service=WMS&version=1.1.1&request=GetCapabilities');
+                
+                if (response.ok) {
+                    const text = await response.text();
+                    addResult('connection-result', '✅ WMS Capabilities获取成功', 'success', 
+                        `响应长度: ${text.length} 字符`);
+                    
+                    // 检查是否包含shpservice工作空间
+                    if (text.includes('shpservice')) {
+                        addResult('connection-result', '✅ 发现shpservice工作空间', 'success');
+                        
+                        // 提取图层列表
+                        const layerMatches = text.match(/<Name>shpservice:[^<]+<\/Name>/g);
+                        if (layerMatches) {
+                            const layers = layerMatches.map(match => match.replace(/<\/?Name>/g, ''));
+                            addResult('connection-result', `✅ 发现图层: ${layers.length}个`, 'success', 
+                                `图层: ${layers.join(', ')}`);
+                        }
+                    } else {
+                        addResult('connection-result', '⚠️ 未发现shpservice工作空间', 'warning');
+                    }
+                } else {
+                    addResult('connection-result', '❌ WMS Capabilities获取失败', 'error', 
+                        `状态码: ${response.status}`);
+                }
+            } catch (error) {
+                addResult('connection-result', '❌ WMS Capabilities测试异常', 'error', error.message);
+            }
+        }
+
+        async function testSpecificLayer() {
+            addResult('layer-result', '开始测试具体图层...', 'info');
+            
+            const layerName = 'shpservice:file_9';
+            const wmsUrl = `/geoserver/wms?service=WMS&version=1.1.1&request=GetMap&layers=${layerName}&styles=&bbox=-180,-90,180,90&width=256&height=256&srs=EPSG:4326&format=image/png&transparent=true`;
+            
+            try {
+                const response = await fetch(wmsUrl);
+                
+                if (response.ok) {
+                    const contentType = response.headers.get('content-type');
+                    addResult('layer-result', '✅ 图层请求成功', 'success', 
+                        `状态码: ${response.status}, 内容类型: ${contentType}`);
+                    
+                    if (contentType && contentType.includes('image')) {
+                        addResult('layer-result', '✅ 返回了图片数据', 'success');
+                    } else {
+                        const text = await response.text();
+                        addResult('layer-result', '⚠️ 返回了非图片数据', 'warning', 
+                            `内容: ${text.substring(0, 200)}...`);
+                    }
+                } else {
+                    const text = await response.text();
+                    addResult('layer-result', '❌ 图层请求失败', 'error', 
+                        `状态码: ${response.status}, 响应: ${text.substring(0, 200)}...`);
+                }
+            } catch (error) {
+                addResult('layer-result', '❌ 图层请求异常', 'error', error.message);
+            }
+        }
+
+        async function testLayerImage() {
+            addResult('layer-result', '开始测试图层图片显示...', 'info');
+            
+            const layerName = 'shpservice:file_9';
+            const imageUrl = `/geoserver/wms?service=WMS&version=1.1.1&request=GetMap&layers=${layerName}&styles=&bbox=-180,-90,180,90&width=512&height=512&srs=EPSG:4326&format=image/png&transparent=true`;
+            
+            const imageContainer = document.getElementById('image-test');
+            imageContainer.innerHTML = `
+                <p>测试图片URL: <a href="${imageUrl}" target="_blank">${imageUrl}</a></p>
+                <img src="${imageUrl}" class="test-image" onload="handleImageLoad()" onerror="handleImageError()" />
+            `;
+        }
+
+        function handleImageLoad() {
+            addResult('layer-result', '✅ 图层图片加载成功', 'success');
+        }
+
+        function handleImageError() {
+            addResult('layer-result', '❌ 图层图片加载失败', 'error');
+        }
+
+        async function testProxyPaths() {
+            addResult('proxy-result', '开始测试代理路径...', 'info');
+            
+            const paths = [
+                '/geoserver/',
+                '/geoserver/web/',
+                '/geoserver/wms',
+                '/geoserver/wfs',
+                '/api/files/list'
+            ];
+            
+            for (const path of paths) {
+                try {
+                    const response = await fetch(path, { method: 'HEAD' });
+                    addResult('proxy-result', `✅ ${path}`, 'success', `状态码: ${response.status}`);
+                } catch (error) {
+                    addResult('proxy-result', `❌ ${path}`, 'error', error.message);
+                }
+            }
+        }
+    </script>
+</body>
+</html> 
