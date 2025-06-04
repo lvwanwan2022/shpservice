@@ -329,8 +329,8 @@ export default {
         layers: layer.geoserver_layer,
         format: 'image/png',
         transparent: true,
-        version: '1.1.1',
-        srs: 'EPSG:3857'
+        version: '1.1.1', // 使用更常见的版本
+        crs: L.CRS.EPSG4326
       })
       
       wmsLayer.on('click', () => {

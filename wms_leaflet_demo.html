@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WMS 图层演示 - Leaflet</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: #409EFF;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+        }
+        
+        .controls {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .control-group label {
+            font-weight: bold;
+            min-width: 80px;
+        }
+        
+        button {
+            background: #409EFF;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #337ab7;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        input[type="range"] {
+            flex: 1;
+            max-width: 200px;
+        }
+        
+        #map {
+            height: 600px;
+            width: 100%;
+        }
+        
+        .info-panel {
+            padding: 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+        }
+        
+        .info-panel h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        
+        .info-item {
+            margin-bottom: 8px;
+            padding: 5px 0;
+        }
+        
+        .info-label {
+            font-weight: bold;
+            color: #666;
+            display: inline-block;
+            width: 120px;
+        }
+        
+        .wms-url {
+            word-break: break-all;
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+
+        .debug-info {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🗺️ WMS 图层演示</h1>
+            <p>使用 Leaflet 加载 GeoServer WMS 服务</p>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>透明度:</label>
+                <input type="range" id="opacitySlider" min="0" max="100" value="100">
+                <span id="opacityValue">100%</span>
+            </div>
+            <div class="control-group">
+                <button id="toggleLayer">隐藏图层</button>
+                <button id="fitBounds">缩放到图层</button>
+                <button id="refreshLayer">刷新图层</button>
+                <button id="getFeatureInfo">启用要素查询</button>
+                <button id="debugMode">调试模式</button>
+            </div>
+        </div>
+        
+        <div id="statusMessage"></div>
+        
+        <div id="map"></div>
+        
+        <div class="info-panel">
+            <h3>📋 服务信息</h3>
+            <div class="info-item">
+                <span class="info-label">服务类型:</span>
+                <span>WMS (Web Map Service)</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">服务版本:</span>
+                <span id="serviceVersion">1.1.1</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">图层名称:</span>
+                <span id="layerName">shpservice:4f72bfc3469b49d6975f54ce5a5de310_store</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">服务地址:</span>
+                <span id="serviceUrl">http://localhost:8083/geoserver/shpservice/wms</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">坐标系统:</span>
+                <span id="crsInfo">EPSG:3857 (Web Mercator)</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">当前缩放:</span>
+                <span id="zoomLevel">-</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">地图中心:</span>
+                <span id="mapCenter">-</span>
+            </div>
+            
+            <div class="wms-url">
+                <strong>GetCapabilities URL:</strong><br>
+                <span id="capabilitiesUrl">http://localhost:8083/geoserver/shpservice/wms?service=WMS&version=1.1.1&request=GetCapabilities</span>
+            </div>
+
+            <div id="debugInfo" class="debug-info" style="display: none;">
+                <strong>调试信息:</strong><br>
+                <div id="debugLog"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+
+    <script>
+        // 调试模式标志
+        let debugMode = false;
+        let debugLog = [];
+
+        // 添加调试日志函数
+        function addDebugLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logMessage = `[${timestamp}] ${message}`;
+            debugLog.push(logMessage);
+            console.log(logMessage);
+            
+            if (debugMode) {
+                const debugElement = document.getElementById('debugLog');
+                if (debugElement) {
+                    debugElement.innerHTML = debugLog.slice(-10).join('<br>'); // 只显示最新10条
+                }
+            }
+        }
+
+        // 显示状态消息
+        function showStatus(message, type = 'info') {
+            const statusElement = document.getElementById('statusMessage');
+            statusElement.innerHTML = `<div class="${type}">${message}</div>`;
+            
+            // 3秒后清除消息
+            setTimeout(() => {
+                statusElement.innerHTML = '';
+            }, 3000);
+        }
+
+        addDebugLog('🚀 开始初始化 Leaflet 地图');
+        
+        // 初始化地图 - 使用北京坐标作为默认中心点
+        const map = L.map('map', {
+            crs: L.CRS.EPSG3857, // 明确指定坐标系
+            zoomControl: true
+        }).setView([39.9042, 116.4074], 6); // 降低初始缩放级别
+        
+        addDebugLog('✅ 地图容器初始化完成');
+
+        // 添加高德地图底图
+        const baseLayer = L.tileLayer('https://webrd{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+            attribution: '© 高德地图',
+            subdomains: ['01', '02', '03', '04'],
+            maxZoom: 18
+        }).addTo(map);
+        
+        addDebugLog('✅ 底图加载完成');
+
+        // WMS 图层配置
+        const wmsUrl = 'http://localhost:8083/geoserver/shpservice/wms';
+        const layerName = 'shpservice:4f72bfc3469b49d6975f54ce5a5de310_store';
+        
+        addDebugLog(`🌐 WMS URL: ${wmsUrl}`);
+        addDebugLog(`📌 图层名称: ${layerName}`);
+        
+        // 创建 WMS 图层 - 使用更兼容的配置
+        let wmsLayer = L.tileLayer.wms(wmsUrl, {
+            layers: layerName,
+            format: 'image/png',
+            transparent: true,
+            version: '1.1.1', // 使用更常见的版本
+             crs: L.CRS.EPSG4326,
+            // srs: 'EPSG:3857', // 为了兼容性同时设置srs
+            opacity: 1.0,
+            attribution: 'GeoServer WMS',
+            // 添加错误处理参数
+            tileSize: 256,
+            // // 禁用瓦片缓存以便调试
+            // noCache: false
+        });
+        
+        addDebugLog('🔧 WMS 图层配置完成');
+        
+        // 添加图层到地图前先测试连接
+        function testWMSConnection() {
+            const testUrl = `${wmsUrl}?service=WMS&version=1.1.1&request=GetCapabilities`;
+            addDebugLog(`🔍 测试 WMS 连接: ${testUrl}`);
+            
+            fetch(testUrl)
+                .then(response => {
+                    if (response.ok) {
+                        addDebugLog('✅ WMS 服务连接成功');
+                        showStatus('WMS 服务连接成功！', 'success');
+                        // 连接成功后添加图层
+                        wmsLayer.addTo(map);
+                        addDebugLog('✅ WMS 图层已添加到地图');
+                    } else {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                })
+                .catch(error => {
+                    addDebugLog(`❌ WMS 连接失败: ${error.message}`);
+                    showStatus(`WMS 连接失败: ${error.message}`, 'error');
+                    
+                    // 连接失败时仍然尝试添加图层（可能是CORS问题）
+                    addDebugLog('🔄 尝试直接添加 WMS 图层...');
+                    wmsLayer.addTo(map);
+                });
+        }
+
+        // 测试连接
+        testWMSConnection();
+        
+        // 图层控制
+        const baseMaps = {
+            "高德地图": baseLayer
+        };
+        
+        const overlayMaps = {
+            "WMS 图层": wmsLayer
+        };
+        
+        L.control.layers(baseMaps, overlayMaps).addTo(map);
+        
+        // 控制元素
+        const opacitySlider = document.getElementById('opacitySlider');
+        const opacityValue = document.getElementById('opacityValue');
+        const toggleButton = document.getElementById('toggleLayer');
+        const fitBoundsButton = document.getElementById('fitBounds');
+        const refreshButton = document.getElementById('refreshLayer');
+        const featureInfoButton = document.getElementById('getFeatureInfo');
+        const debugButton = document.getElementById('debugMode');
+        
+        // 状态变量
+        let layerVisible = true;
+        let featureInfoEnabled = false;
+        
+        // 透明度控制
+        opacitySlider.addEventListener('input', function() {
+            const opacity = this.value / 100;
+            wmsLayer.setOpacity(opacity);
+            opacityValue.textContent = this.value + '%';
+            addDebugLog(`🎚️ 透明度设置为: ${this.value}%`);
+        });
+        
+        // 图层显示/隐藏
+        toggleButton.addEventListener('click', function() {
+            if (layerVisible) {
+                map.removeLayer(wmsLayer);
+                this.textContent = '显示图层';
+                layerVisible = false;
+                addDebugLog('👁️ 图层已隐藏');
+            } else {
+                wmsLayer.addTo(map);
+                this.textContent = '隐藏图层';
+                layerVisible = true;
+                addDebugLog('👁️ 图层已显示');
+            }
+        });
+        
+        // 缩放到图层范围
+        fitBoundsButton.addEventListener('click', function() {
+            // 设置一个中国的大致范围
+            const chinaBounds = [
+                [18.16, 73.50],  // 西南角
+                [53.55, 134.77]  // 东北角
+            ];
+            map.fitBounds(chinaBounds);
+            addDebugLog('🔍 缩放到中国范围');
+        });
+        
+        // 刷新图层
+        refreshButton.addEventListener('click', function() {
+            addDebugLog('🔄 开始刷新图层...');
+            if (layerVisible) {
+                map.removeLayer(wmsLayer);
+                
+                // 重新创建图层
+                wmsLayer = L.tileLayer.wms(wmsUrl, {
+                    layers: layerName,
+                    format: 'image/png',
+                    transparent: true,
+                    version: '1.1.1',
+                    crs: L.CRS.EPSG3857,
+                    srs: 'EPSG:3857',
+                    opacity: opacitySlider.value / 100,
+                    attribution: 'GeoServer WMS',
+                    tileSize: 256
+                });
+                
+                wmsLayer.addTo(map);
+                addDebugLog('✅ 图层刷新完成');
+                showStatus('图层已刷新', 'success');
+            }
+        });
+        
+        // 调试模式切换
+        debugButton.addEventListener('click', function() {
+            debugMode = !debugMode;
+            const debugInfo = document.getElementById('debugInfo');
+            
+            if (debugMode) {
+                this.textContent = '关闭调试';
+                this.style.background = '#28a745';
+                debugInfo.style.display = 'block';
+                document.getElementById('debugLog').innerHTML = debugLog.slice(-20).join('<br>');
+                addDebugLog('🐛 调试模式已开启');
+            } else {
+                this.textContent = '调试模式';
+                this.style.background = '#409EFF';
+                debugInfo.style.display = 'none';
+                addDebugLog('🐛 调试模式已关闭');
+            }
+        });
+        
+        // 要素信息查询
+        featureInfoButton.addEventListener('click', function() {
+            featureInfoEnabled = !featureInfoEnabled;
+            if (featureInfoEnabled) {
+                this.textContent = '禁用要素查询';
+                this.style.background = '#28a745';
+                map.getContainer().style.cursor = 'crosshair';
+                addDebugLog('🔍 要素查询已启用');
+            } else {
+                this.textContent = '启用要素查询';
+                this.style.background = '#409EFF';
+                map.getContainer().style.cursor = '';
+                addDebugLog('🔍 要素查询已禁用');
+            }
+        });
+        
+        // 地图点击事件 - GetFeatureInfo
+        map.on('click', function(e) {
+            if (!featureInfoEnabled || !layerVisible) return;
+            
+            const latlng = e.latlng;
+            const point = map.latLngToContainerPoint(latlng);
+            const size = map.getSize();
+            const bounds = map.getBounds();
+            
+            addDebugLog(`🖱️ 点击位置: ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`);
+            
+            // 构建 GetFeatureInfo 请求 - 使用1.1.1版本的参数
+            const featureInfoUrl = wmsUrl + 
+                '?SERVICE=WMS' +
+                '&VERSION=1.1.1' +
+                '&REQUEST=GetFeatureInfo' +
+                '&LAYERS=' + encodeURIComponent(layerName) +
+                '&QUERY_LAYERS=' + encodeURIComponent(layerName) +
+                '&STYLES=' +
+                '&BBOX=' + bounds.toBBoxString() +
+                '&FEATURE_COUNT=5' +
+                '&HEIGHT=' + size.y +
+                '&WIDTH=' + size.x +
+                '&FORMAT=image/png' +
+                '&INFO_FORMAT=application/json' +
+                '&SRS=EPSG:4326' +
+                '&X=' + Math.round(point.x) +
+                '&Y=' + Math.round(point.y);
+            
+            addDebugLog(`🌐 GetFeatureInfo URL: ${featureInfoUrl}`);
+            
+            // 发起请求
+            fetch(featureInfoUrl)
+                .then(response => {
+                    addDebugLog(`📡 响应状态: ${response.status}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    addDebugLog(`📄 要素信息响应: ${JSON.stringify(data)}`);
+                    if (data.features && data.features.length > 0) {
+                        let popupContent = '<div><strong>要素信息:</strong><br>';
+                        data.features.forEach((feature, index) => {
+                            popupContent += `<br><strong>要素 ${index + 1}:</strong><br>`;
+                            Object.entries(feature.properties).forEach(([key, value]) => {
+                                popupContent += `${key}: ${value}<br>`;
+                            });
+                        });
+                        popupContent += '</div>';
+                        
+                        L.popup()
+                            .setLatLng(latlng)
+                            .setContent(popupContent)
+                            .openOn(map);
+                        
+                        addDebugLog(`✅ 找到 ${data.features.length} 个要素`);
+                    } else {
+                        L.popup()
+                            .setLatLng(latlng)
+                            .setContent('此位置没有要素信息')
+                            .openOn(map);
+                        addDebugLog('⚠️ 没有找到要素信息');
+                    }
+                })
+                .catch(error => {
+                    addDebugLog(`❌ GetFeatureInfo 失败: ${error.message}`);
+                    L.popup()
+                        .setLatLng(latlng)
+                        .setContent(`获取要素信息失败: ${error.message}`)
+                        .openOn(map);
+                });
+        });
+        
+        // 更新地图信息
+        function updateMapInfo() {
+            document.getElementById('zoomLevel').textContent = map.getZoom();
+            const center = map.getCenter();
+            document.getElementById('mapCenter').textContent = 
+                `${center.lat.toFixed(4)}, ${center.lng.toFixed(4)}`;
+        }
+        
+        // 监听地图事件
+        map.on('zoomend moveend', updateMapInfo);
+        map.on('zoomend', function() {
+            addDebugLog(`🔍 缩放级别: ${map.getZoom()}`);
+        });
+        
+        // 监听 WMS 图层事件
+        wmsLayer.on('tileerror', function(error) {
+            addDebugLog(`❌ WMS 瓦片加载错误: ${JSON.stringify(error)}`);
+            showStatus('⚠️ WMS 图层加载失败，请检查服务是否正常运行', 'error');
+        });
+
+        wmsLayer.on('tileload', function(e) {
+            addDebugLog(`✅ WMS 瓦片加载成功: ${e.url || '未知URL'}`);
+        });
+
+        wmsLayer.on('loading', function() {
+            addDebugLog('⏳ WMS 图层开始加载');
+        });
+
+        wmsLayer.on('load', function() {
+            addDebugLog('✅ WMS 图层加载完成');
+            showStatus('WMS 图层加载成功！', 'success');
+        });
+        
+        // 初始化信息显示
+        updateMapInfo();
+        
+        addDebugLog('🎉 页面初始化完成');
+        
+        // 在页面加载完成后检查服务状态
+        setTimeout(() => {
+            const capabilitiesUrl = `${wmsUrl}?service=WMS&version=1.1.1&request=GetCapabilities`;
+            addDebugLog(`🔍 检查服务能力文档: ${capabilitiesUrl}`);
+            document.getElementById('capabilitiesUrl').textContent = capabilitiesUrl;
+        }, 1000);
+    </script>
+</body>
+</html> 
