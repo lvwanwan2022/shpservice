@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WMS 图层演示 - OpenLayers</title>
+    
+    <!-- OpenLayers CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.2.0/ol.css">
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: #409EFF;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+        }
+        
+        .controls {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .control-group label {
+            font-weight: bold;
+            min-width: 80px;
+        }
+        
+        button {
+            background: #409EFF;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #337ab7;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .basemap-btn {
+            background: #6c757d;
+            margin-right: 5px;
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        
+        .basemap-btn:hover {
+            background: #5a6268;
+        }
+        
+        .basemap-btn.active {
+            background: #28a745;
+        }
+        
+        .basemap-btn.active:hover {
+            background: #218838;
+        }
+        
+        input[type="range"] {
+            flex: 1;
+            max-width: 200px;
+        }
+        
+        #map {
+            height: 600px;
+            width: 100%;
+        }
+        
+        .info-panel {
+            padding: 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+        }
+        
+        .info-panel h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        
+        .info-item {
+            margin-bottom: 8px;
+            padding: 5px 0;
+        }
+        
+        .info-label {
+            font-weight: bold;
+            color: #666;
+            display: inline-block;
+            width: 120px;
+        }
+        
+        .wms-url {
+            word-break: break-all;
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+
+        .debug-info {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        /* OpenLayers popup 样式 */
+        .ol-popup {
+            position: absolute;
+            background-color: white;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #cccccc;
+            bottom: 12px;
+            left: -50px;
+            min-width: 280px;
+        }
+
+        .ol-popup:after, .ol-popup:before {
+            top: 100%;
+            border: solid transparent;
+            content: " ";
+            height: 0;
+            width: 0;
+            position: absolute;
+            pointer-events: none;
+        }
+
+        .ol-popup:after {
+            border-top-color: white;
+            border-width: 10px;
+            left: 48px;
+            margin-left: -10px;
+        }
+
+        .ol-popup:before {
+            border-top-color: #cccccc;
+            border-width: 11px;
+            left: 48px;
+            margin-left: -11px;
+        }
+
+        .ol-popup-closer {
+            text-decoration: none;
+            position: absolute;
+            top: 2px;
+            right: 8px;
+        }
+
+        .ol-popup-closer:after {
+            content: "✖";
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🗺️ WMS 图层演示</h1>
+            <p>使用 OpenLayers 加载 GeoServer WMS 服务</p>
+            <div style="background: rgba(255,255,255,0.1); padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px;">
+                <strong>⚠️ 重要提示：</strong> 为避免CORS跨域问题，请通过HTTP服务器访问此页面，而不是直接双击打开文件。<br>
+                <strong>解决方案：</strong> 使用 <code>python -m http.server 8000</code> 或其他本地服务器在项目根目录启动HTTP服务
+            </div>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>透明度:</label>
+                <input type="range" id="opacitySlider" min="0" max="100" value="100">
+                <span id="opacityValue">100%</span>
+            </div>
+            <div class="control-group">
+                <label>底图:</label>
+                <button id="osmButton" class="basemap-btn active">OpenStreetMap</button>
+                <button id="gaodeButton" class="basemap-btn">高德地图</button>
+                <button id="tiandituButton" class="basemap-btn">天地图</button>
+            </div>
+            <div class="control-group">
+                <button id="toggleLayer">隐藏图层</button>
+                <button id="fitBounds">缩放到图层</button>
+                <button id="refreshLayer">刷新图层</button>
+                <button id="getFeatureInfo">启用要素查询</button>
+                <button id="debugMode">调试模式</button>
+            </div>
+        </div>
+        
+        <div id="statusMessage"></div>
+        
+        <div id="map"></div>
+
+        <!-- OpenLayers 弹窗 -->
+        <div id="popup" class="ol-popup">
+            <a href="#" id="popup-closer" class="ol-popup-closer"></a>
+            <div id="popup-content"></div>
+        </div>
+        
+        <div class="info-panel">
+            <h3>📋 服务信息</h3>
+            <div class="info-item">
+                <span class="info-label">服务类型:</span>
+                <span>WMS (Web Map Service)</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">服务版本:</span>
+                <span id="serviceVersion">1.1.0</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">服务地址:</span>
+                <span id="serviceUrl">http://localhost:8083/geoserver/shpservice/wms</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">坐标系:</span>
+                <span id="coordinateSystem">EPSG:2379</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">图层边界:</span>
+                <span id="layerBounds">547391.66, 3104446.54, 553301.37, 3118005.75</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">当前缩放:</span>
+                <span id="zoomLevel">-</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">地图中心:</span>
+                <span id="mapCenter">-</span>
+            </div>
+            
+            <div class="wms-url">
+                <strong>GetCapabilities URL:</strong><br>
+                <span id="capabilitiesUrl">http://localhost:8083/geoserver/shpservice/wms?service=WMS&version=1.1.0&request=GetCapabilities</span>
+            </div>
+
+            <div id="debugInfo" class="debug-info" style="display: none;">
+                <strong>调试信息:</strong><br>
+                <div id="debugLog"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- OpenLayers JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/ol@v8.2.0/dist/ol.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/proj4@2.15.0/dist/proj4.js"></script>
+
+    <script>
+        // 定义 EPSG:2379 投影 - Xian 1980 / 3-degree Gauss-Kruger CM 102E
+        proj4.defs('EPSG:2379', '+proj=tmerc +lat_0=0 +lon_0=102 +k=1 +x_0=500000 +y_0=0 +ellps=IAU76 +towgs84=24,-123,-94,0,0,0,0 +units=m +no_defs +type=crs');
+        ol.proj.proj4.register(proj4);
+        
+        // 获取投影定义并设置范围
+        const proj2379 = ol.proj.get('EPSG:2379');
+        if (proj2379) {
+            // 设置EPSG:2379的有效范围（基于中国100°30'E到103°30'E区域）
+            proj2379.setExtent([100000, 2800000, 900000, 5400000]);
+        }
+
+        // 调试模式标志
+        let debugMode = false;
+        let debugLog = [];
+
+        // 添加调试日志函数
+        function addDebugLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logMessage = `[${timestamp}] ${message}`;
+            debugLog.push(logMessage);
+            console.log(logMessage);
+            
+            if (debugMode) {
+                const debugElement = document.getElementById('debugLog');
+                if (debugElement) {
+                    debugElement.innerHTML = debugLog.slice(-10).join('<br>'); // 只显示最新10条
+                }
+            }
+        }
+
+        // 显示状态消息
+        function showStatus(message, type = 'info') {
+            const statusElement = document.getElementById('statusMessage');
+            statusElement.innerHTML = `<div class="${type}">${message}</div>`;
+            
+            // 3秒后清除消息
+            setTimeout(() => {
+                statusElement.innerHTML = '';
+            }, 3000);
+        }
+
+        addDebugLog('🚀 开始初始化 OpenLayers 地图');
+
+        // WMS 图层配置
+        const wmsUrl = 'http://localhost:8083/geoserver/shpservice/wms';
+        const layerName = 'shpservice:1ffacf547ad3412294922d8758a89c2c_store';
+        
+        // 从GeoServer预览链接获取的图层边界框 (EPSG:2379坐标系)
+        const layerBounds = [547391.6557926689, 3104446.539692845, 553301.3710274147, 3118005.745208093];
+        
+        addDebugLog(`🌐 WMS URL: ${wmsUrl}`);
+        addDebugLog(`📌 图层名称: ${layerName}`);
+        addDebugLog(`📍 图层边界: ${layerBounds.join(', ')}`);
+
+        // 创建底图图层
+        const osmLayer = new ol.layer.Tile({
+            source: new ol.source.OSM(),
+            visible: true
+        });
+
+        // 高德地图 - 使用普通地图
+        const gaodeLayer = new ol.layer.Tile({
+            source: new ol.source.XYZ({
+                url: 'https://webrd0{1-4}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+                attributions: '© 高德地图'
+            }),
+            visible: false
+        });
+
+        // 天地图 - 使用矢量底图（不需要key）
+        const tiandituLayer = new ol.layer.Tile({
+            source: new ol.source.XYZ({
+                url: 'http://t{0-7}.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
+                attributions: '© 天地图'
+            }),
+            visible: false
+        });
+
+        addDebugLog('✅ 底图配置完成 - 使用 OpenStreetMap 作为默认底图');
+
+        // 创建 WMS 图层 - 使用GeoServer预览链接的正确参数
+        const wmsLayer = new ol.layer.Tile({
+            source: new ol.source.TileWMS({
+                url: wmsUrl,
+                params: {
+                    'LAYERS': layerName,
+                    'FORMAT': 'image/png',  // 改为image/png而不是application/openlayers
+                    'TRANSPARENT': true,
+                    'VERSION': '1.1.0',    // 改为1.1.0
+                    'SRS': 'EPSG:2379',    // 改回EPSG:2379
+                    'STYLES': '',
+                    'TILED': true
+                },
+                projection: 'EPSG:2379',   // 明确指定WMS源数据的投影
+                serverType: 'geoserver'
+            }),
+            opacity: 1.0
+        });
+        
+        addDebugLog('🔧 WMS 图层配置完成 - 使用 EPSG:2379 坐标系和 WMS 1.1.0');
+
+        // 创建弹窗 overlay
+        const container = document.getElementById('popup');
+        const content = document.getElementById('popup-content');
+        const closer = document.getElementById('popup-closer');
+
+        const popup = new ol.Overlay({
+            element: container,
+            autoPan: {
+                animation: {
+                    duration: 250,
+                },
+            },
+        });
+
+        // 关闭弹窗事件
+        closer.onclick = function () {
+            popup.setPosition(undefined);
+            closer.blur();
+            return false;
+        };
+
+        // 初始化地图 - 设置合适的初始视图
+        // 将图层边界从EPSG:2379转换到Web墨卡托投影进行显示
+        const layerCenter = [
+            (layerBounds[0] + layerBounds[2]) / 2,  // 中心X
+            (layerBounds[1] + layerBounds[3]) / 2   // 中心Y
+        ];
+        
+        // 将EPSG:2379的中心点转换为经纬度，再转为Web墨卡托
+        let centerInWebMercator;
+        try {
+            // 先转换为经纬度
+            const centerInLonLat = ol.proj.transform(layerCenter, 'EPSG:2379', 'EPSG:4326');
+            // 再转换为Web墨卡托
+            centerInWebMercator = ol.proj.transform(centerInLonLat, 'EPSG:4326', 'EPSG:3857');
+            addDebugLog(`📍 图层中心点转换: EPSG:2379 ${layerCenter} -> EPSG:4326 ${centerInLonLat} -> EPSG:3857 ${centerInWebMercator}`);
+        } catch (error) {
+            addDebugLog(`⚠️ 坐标转换失败，使用默认中心点: ${error.message}`);
+            centerInWebMercator = ol.proj.transform([102, 32], 'EPSG:4326', 'EPSG:3857'); // 102°E, 32°N 大致中心
+        }
+        
+        const map = new ol.Map({
+            target: 'map',
+            layers: [osmLayer, gaodeLayer, tiandituLayer, wmsLayer],
+            overlays: [popup],
+            view: new ol.View({
+                center: centerInWebMercator,
+                zoom: 10,  // 提高缩放级别以便看到图层细节
+                projection: 'EPSG:3857'
+            })
+        });
+
+        addDebugLog('✅ 地图初始化完成');
+
+        // 增强的 WMS 连接测试
+        function testWMSConnection() {
+            const testUrl = `${wmsUrl}?service=WMS&version=1.1.0&request=GetCapabilities`;
+            addDebugLog(`🔍 测试 WMS 连接: ${testUrl}`);
+            
+            // 添加超时控制
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+            
+            fetch(testUrl, { 
+                signal: controller.signal,
+                mode: 'cors'
+            })
+                .then(response => {
+                    clearTimeout(timeoutId);
+                    addDebugLog(`📡 WMS 响应状态: ${response.status}`);
+                    if (response.ok) {
+                        addDebugLog('✅ WMS 服务连接成功');
+                        showStatus('WMS 服务连接成功！', 'success');
+                        return response.text();
+                    } else {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                })
+                .then(data => {
+                    addDebugLog(`📄 GetCapabilities 响应长度: ${data.length} 字符`);
+                    // 检查是否是有效的 XML 响应
+                    if (data.includes('WMS_Capabilities') || data.includes('ServiceException')) {
+                        addDebugLog('✅ 收到有效的 WMS Capabilities 文档');
+                    } else {
+                        addDebugLog('⚠️ 响应格式可能不正确');
+                    }
+                })
+                .catch(error => {
+                    clearTimeout(timeoutId);
+                    if (error.name === 'AbortError') {
+                        addDebugLog('❌ WMS 连接超时（10秒）');
+                        showStatus('WMS 连接超时，请检查服务是否正常运行', 'error');
+                    } else {
+                        addDebugLog(`❌ WMS 连接失败: ${error.message}`);
+                        showStatus(`WMS 连接失败: ${error.message}`, 'error');
+                    }
+                });
+        }
+
+        // 测试连接
+        testWMSConnection();
+
+        // 添加底图切换功能
+        function switchBaseLayer(layerName) {
+            // 隐藏所有底图
+            osmLayer.setVisible(false);
+            gaodeLayer.setVisible(false);
+            tiandituLayer.setVisible(false);
+            
+            // 显示选择的底图
+            switch(layerName) {
+                case 'osm':
+                    osmLayer.setVisible(true);
+                    addDebugLog('🗺️ 切换到 OpenStreetMap');
+                    break;
+                case 'gaode':
+                    gaodeLayer.setVisible(true);
+                    addDebugLog('🗺️ 切换到高德地图');
+                    break;
+                case 'tianditu':
+                    tiandituLayer.setVisible(true);
+                    addDebugLog('🗺️ 切换到天地图');
+                    break;
+                default:
+                    osmLayer.setVisible(true);
+                    addDebugLog('🗺️ 默认使用 OpenStreetMap');
+            }
+        }
+
+        // 控制元素
+        const opacitySlider = document.getElementById('opacitySlider');
+        const opacityValue = document.getElementById('opacityValue');
+        const toggleButton = document.getElementById('toggleLayer');
+        const fitBoundsButton = document.getElementById('fitBounds');
+        const refreshButton = document.getElementById('refreshLayer');
+        const featureInfoButton = document.getElementById('getFeatureInfo');
+        const debugButton = document.getElementById('debugMode');
+        
+        // 底图切换按钮
+        const osmButton = document.getElementById('osmButton');
+        const gaodeButton = document.getElementById('gaodeButton');
+        const tiandituButton = document.getElementById('tiandituButton');
+        
+        // 状态变量
+        let layerVisible = true;
+        let featureInfoEnabled = false;
+        
+        // 底图切换事件
+        osmButton.addEventListener('click', function() {
+            switchBaseLayer('osm');
+            updateActiveButton('osm');
+        });
+        
+        gaodeButton.addEventListener('click', function() {
+            switchBaseLayer('gaode');
+            updateActiveButton('gaode');
+        });
+        
+        tiandituButton.addEventListener('click', function() {
+            switchBaseLayer('tianditu');
+            updateActiveButton('tianditu');
+        });
+        
+        // 更新活跃按钮状态
+        function updateActiveButton(activeLayer) {
+            // 移除所有活跃状态
+            osmButton.classList.remove('active');
+            gaodeButton.classList.remove('active');
+            tiandituButton.classList.remove('active');
+            
+            // 设置当前活跃状态
+            switch(activeLayer) {
+                case 'osm':
+                    osmButton.classList.add('active');
+                    break;
+                case 'gaode':
+                    gaodeButton.classList.add('active');
+                    break;
+                case 'tianditu':
+                    tiandituButton.classList.add('active');
+                    break;
+            }
+        }
+        
+        // 透明度控制
+        opacitySlider.addEventListener('input', function() {
+            const opacity = this.value / 100;
+            wmsLayer.setOpacity(opacity);
+            opacityValue.textContent = this.value + '%';
+            addDebugLog(`🎚️ 透明度设置为: ${this.value}%`);
+        });
+        
+        // 图层显示/隐藏
+        toggleButton.addEventListener('click', function() {
+            if (layerVisible) {
+                wmsLayer.setVisible(false);
+                this.textContent = '显示图层';
+                layerVisible = false;
+                addDebugLog('👁️ 图层已隐藏');
+            } else {
+                wmsLayer.setVisible(true);
+                this.textContent = '隐藏图层';
+                layerVisible = true;
+                addDebugLog('👁️ 图层已显示');
+            }
+        });
+        
+        // 缩放到图层范围
+        fitBoundsButton.addEventListener('click', function() {
+            // 将EPSG:2379的图层边界转换为Web墨卡托投影
+            try {
+                // 使用OpenLayers的transformExtent函数进行边界框转换
+                const transformedExtent = ol.proj.transformExtent(
+                    layerBounds,        // 原始边界 [minX, minY, maxX, maxY]
+                    'EPSG:2379',        // 源坐标系
+                    'EPSG:3857'         // 目标坐标系
+                );
+                
+                map.getView().fit(transformedExtent, { 
+                    padding: [50, 50, 50, 50],
+                    maxZoom: 16,
+                    duration: 1000  // 添加动画效果
+                });
+                
+                addDebugLog(`🔍 缩放到图层范围: EPSG:2379 ${layerBounds} -> EPSG:3857 ${transformedExtent}`);
+            } catch (error) {
+                addDebugLog(`❌ 边界框转换失败: ${error.message}`);
+                // 使用备用的中国区域范围
+                const fallbackExtent = ol.proj.transformExtent(
+                    [100, 30, 105, 35], // 大致的经纬度范围
+                    'EPSG:4326',
+                    'EPSG:3857'
+                );
+                map.getView().fit(fallbackExtent, { 
+                    padding: [20, 20, 20, 20] 
+                });
+                addDebugLog('🔍 使用备用范围进行缩放');
+            }
+        });
+        
+        // 刷新图层
+        refreshButton.addEventListener('click', function() {
+            addDebugLog('🔄 开始刷新图层...');
+            
+            // 获取当前透明度
+            const currentOpacity = wmsLayer.getOpacity();
+            
+            // 创建新的 WMS 源 - 使用正确的参数
+            const newSource = new ol.source.TileWMS({
+                url: wmsUrl,
+                params: {
+                    'LAYERS': layerName,
+                    'FORMAT': 'image/png',
+                    'TRANSPARENT': true,
+                    'VERSION': '1.1.0',    // 使用正确的版本
+                    'SRS': 'EPSG:2379',    // 使用正确的坐标系
+                    'STYLES': '',
+                    'TILED': true,
+                    // 添加时间戳避免缓存
+                    '_': Date.now()
+                },
+                projection: 'EPSG:2379',   // 明确指定WMS源数据的投影
+                serverType: 'geoserver'
+            });
+            
+            wmsLayer.setSource(newSource);
+            wmsLayer.setOpacity(currentOpacity);
+            
+            addDebugLog('✅ 图层刷新完成');
+            showStatus('图层已刷新', 'success');
+        });
+        
+        // 调试模式切换
+        debugButton.addEventListener('click', function() {
+            debugMode = !debugMode;
+            const debugInfo = document.getElementById('debugInfo');
+            
+            if (debugMode) {
+                this.textContent = '关闭调试';
+                this.style.background = '#28a745';
+                debugInfo.style.display = 'block';
+                document.getElementById('debugLog').innerHTML = debugLog.slice(-20).join('<br>');
+                addDebugLog('🐛 调试模式已开启');
+            } else {
+                this.textContent = '调试模式';
+                this.style.background = '#409EFF';
+                debugInfo.style.display = 'none';
+                addDebugLog('🐛 调试模式已关闭');
+            }
+        });
+        
+        // 要素信息查询
+        featureInfoButton.addEventListener('click', function() {
+            featureInfoEnabled = !featureInfoEnabled;
+            if (featureInfoEnabled) {
+                this.textContent = '禁用要素查询';
+                this.style.background = '#28a745';
+                map.getViewport().style.cursor = 'crosshair';
+                addDebugLog('🔍 要素查询已启用');
+            } else {
+                this.textContent = '启用要素查询';
+                this.style.background = '#409EFF';
+                map.getViewport().style.cursor = '';
+                popup.setPosition(undefined);
+                addDebugLog('🔍 要素查询已禁用');
+            }
+        });
+        
+        // 地图点击事件 - GetFeatureInfo
+        map.on('singleclick', function(evt) {
+            if (!featureInfoEnabled || !layerVisible) return;
+            
+            const coordinate = evt.coordinate; // Web墨卡托坐标
+            const lonlat = ol.proj.transform(coordinate, 'EPSG:3857', 'EPSG:4326');
+            
+            addDebugLog(`🖱️ 点击位置: 经纬度 ${lonlat[1].toFixed(4)}, ${lonlat[0].toFixed(4)}`);
+            
+            const viewResolution = map.getView().getResolution();
+            const source = wmsLayer.getSource();
+            
+            // 为GetFeatureInfo构建正确的参数
+            const featureInfoUrl = source.getFeatureInfoUrl(
+                coordinate,
+                viewResolution,
+                'EPSG:3857',  // 地图视图的投影
+                {
+                    'INFO_FORMAT': 'application/json',
+                    'FEATURE_COUNT': 5,
+                    'QUERY_LAYERS': layerName  // 确保查询图层参数正确
+                }
+            );
+            
+            if (featureInfoUrl) {
+                addDebugLog(`🌐 GetFeatureInfo URL: ${featureInfoUrl}`);
+                
+                fetch(featureInfoUrl)
+                    .then(response => {
+                        addDebugLog(`📡 响应状态: ${response.status}`);
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        addDebugLog(`📄 要素信息响应: ${JSON.stringify(data)}`);
+                        
+                        let popupContent = '';
+                        if (data.features && data.features.length > 0) {
+                            popupContent = '<div><strong>要素信息:</strong><br>';
+                            data.features.forEach((feature, index) => {
+                                popupContent += `<br><strong>要素 ${index + 1}:</strong><br>`;
+                                Object.entries(feature.properties).forEach(([key, value]) => {
+                                    popupContent += `${key}: ${value}<br>`;
+                                });
+                            });
+                            popupContent += '</div>';
+                            
+                            addDebugLog(`✅ 找到 ${data.features.length} 个要素`);
+                        } else {
+                            popupContent = '此位置没有要素信息';
+                            addDebugLog('⚠️ 没有找到要素信息');
+                        }
+                        
+                        content.innerHTML = popupContent;
+                        popup.setPosition(coordinate);
+                    })
+                    .catch(error => {
+                        addDebugLog(`❌ GetFeatureInfo 失败: ${error.message}`);
+                        content.innerHTML = `获取要素信息失败: ${error.message}`;
+                        popup.setPosition(coordinate);
+                    });
+            }
+        });
+        
+        // 更新地图信息
+        function updateMapInfo() {
+            const view = map.getView();
+            const zoom = view.getZoom();
+            const center = ol.proj.transform(view.getCenter(), 'EPSG:3857', 'EPSG:4326');
+            
+            document.getElementById('zoomLevel').textContent = zoom.toFixed(2);
+            document.getElementById('mapCenter').textContent = 
+                `${center[1].toFixed(4)}, ${center[0].toFixed(4)}`;
+        }
+        
+        // 监听地图事件
+        map.on('moveend', function() {
+            updateMapInfo();
+        });
+        
+        map.getView().on('change:resolution', function() {
+            const zoom = map.getView().getZoom();
+            addDebugLog(`🔍 缩放级别: ${zoom.toFixed(2)}`);
+            updateMapInfo();
+        });
+        
+        // 监听 WMS 图层事件 - 简化版本
+        const wmsSource = wmsLayer.getSource();
+        
+        wmsSource.on('tileloaderror', function(event) {
+            addDebugLog('❌ WMS 瓦片加载错误');
+            showStatus('⚠️ WMS 图层加载失败。提示：请确保通过HTTP服务器访问页面而不是直接打开文件', 'error');
+        });
+
+        wmsSource.on('tileloadend', function(event) {
+            addDebugLog('✅ WMS 瓦片加载成功');
+            if (!window.wmsFirstLoad) {
+                showStatus('WMS 图层加载成功！', 'success');
+                window.wmsFirstLoad = true;
+            }
+        });
+
+        // 监听底图加载事件
+        osmLayer.getSource().on('tileloaderror', function(event) {
+            addDebugLog('❌ OpenStreetMap 底图加载错误');
+        });
+
+        osmLayer.getSource().on('tileloadend', function() {
+            if (!window.osmFirstLoad) {
+                addDebugLog('✅ OpenStreetMap 底图加载成功');
+                window.osmFirstLoad = true;
+            }
+        });
+        
+        // 初始化信息显示
+        updateMapInfo();
+        
+        addDebugLog('🎉 页面初始化完成');
+        
+        // 在页面加载完成后检查服务状态
+        setTimeout(() => {
+            const capabilitiesUrl = `${wmsUrl}?service=WMS&version=1.1.0&request=GetCapabilities`;
+            addDebugLog(`🔍 检查服务能力文档: ${capabilitiesUrl}`);
+            document.getElementById('capabilitiesUrl').textContent = capabilitiesUrl;
+        }, 1000);
+    </script>
+</body>
+</html>
