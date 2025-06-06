@@ -29,21 +29,19 @@ export default {
   },
   emits: ['base-map-changed'],
   setup(props, { emit }) {
-    const currentBaseMap = ref('osm')
+    const currentBaseMap = ref('gaode')
     
     const switchBaseMap = (command) => {
       if (!props.map || !props.map.baseLayers) return
       
-      const { osm, gaode, tianditu } = props.map.baseLayers
+      const { gaode, tianditu } = props.map.baseLayers
       
       // 隐藏所有底图
-
-      gaode.setVisible(true)
+      gaode.setVisible(false)
       tianditu.setVisible(false)
       
       // 显示选择的底图
       switch(command) {
-
         case 'gaode':
           gaode.setVisible(true)
           currentBaseMap.value = 'gaode'
@@ -53,8 +51,8 @@ export default {
           currentBaseMap.value = 'tianditu'
           break
         default:
-          osm.setVisible(true)
-          currentBaseMap.value = 'osm'
+          gaode.setVisible(true)
+          currentBaseMap.value = 'gaode'
       }
       
       emit('base-map-changed', command)

@@ -19,6 +19,7 @@ from services.style_service import StyleService
 import requests
 from requests.auth import HTTPBasicAuth
 from datetime import datetime
+from backend.config import GEOSERVER_CONFIG
 
 class LayerService:
     def __init__(self):
@@ -755,7 +756,6 @@ class LayerService:
             # 获取GeoServer中的样式信息
             geoserver_styles = None
             try:
-                from config import GEOSERVER_CONFIG
                 geoserver_styles = self.style_service.get_layer_styles(
                     layer['workspace_name'], 
                     layer['name'], 
@@ -821,7 +821,6 @@ class LayerService:
             # 3. 更新GeoServer中的样式
             geoserver_updated = False
             try:
-                from config import GEOSERVER_CONFIG
                 geoserver_updated = self.style_service.create_or_update_geoserver_style(
                     layer['workspace_name'], 
                     style_name, 

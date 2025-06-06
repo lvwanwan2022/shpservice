@@ -2,7 +2,7 @@
 Author: WangNing
 Date: 2025-05-16 21:36:41
 LastEditors: WangNing
-LastEditTime: 2025-05-28 17:09:22
+LastEditTime: 2025-06-06 17:01:17
 FilePath: \shpservice\backend\config.py
 Description: 
 Copyright (c) 2025 by VGE, All Rights Reserved. 
@@ -67,6 +67,18 @@ GEOSERVER_CONFIG = {
     'datastore': 'test_geojson',
     'user': 'admin',
     'password': 'geoserver',
+    # GeoServer数据目录 - 请根据您的实际安装路径修改
+    'data_dir': {
+        'windows': 'D:\\ProgramData\\GeoServer\\data\\',
+        'linux': '/opt/geoserver/data_dir/',
+        'default': './geoserver_data/'
+    },
+    # 重试和超时配置
+    'timeout': 60,
+    'max_retries': 3,
+    'retry_delay': 2,
+    # 缓存重置延迟（秒）
+    'cache_reset_delay': 5,
     # PostGIS数据源配置
     'postgis_datastore': {
         'host': DB_CONFIG['host'],

@@ -8,6 +8,7 @@ import os
 import tempfile
 import requests
 from services.file_service import FileService
+from backend.config import GEOSERVER_CONFIG
 
 geoservice_bp = Blueprint('geoservice', __name__)
 geoserver_service = GeoServerService()
@@ -387,7 +388,6 @@ def publish_service(file_id):
         # 测试GeoServer连接
         print("\n--- 测试GeoServer连接 ---")
         try:
-            from config import GEOSERVER_CONFIG
             import requests
             
             geoserver_url = GEOSERVER_CONFIG['url']

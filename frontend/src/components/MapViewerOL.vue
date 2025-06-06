@@ -149,6 +149,7 @@
 </template>
 
 <script>
+/* eslint-disable */
 import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -158,8 +159,8 @@ import 'ol/ol.css'
 import { Map, View } from 'ol'
 import TileLayer from 'ol/layer/Tile'
 import VectorTileLayer from 'ol/layer/VectorTile'
-import { OSM, TileWMS, VectorTile } from 'ol/source'
-import { fromLonLat } from 'ol/proj'
+import { TileWMS, VectorTile, XYZ } from 'ol/source'
+import { fromLonLat, transformExtent, transform } from 'ol/proj'
 //import { defaults as defaultControls, ScaleLine } from 'ol/control'
 //import Overlay from 'ol/Overlay'
 import { Style, Fill, Stroke, Circle } from 'ol/style'
@@ -167,6 +168,9 @@ import { MVT } from 'ol/format'
 import BaseMapSwitcherOL from './BaseMapSwitcherOL.vue'
 import DxfStyleEditor from './DxfStyleEditor.vue'
 import defaultDxfStylesConfig from '@/config/defaultDxfStyles.json'
+// 引入proj4库用于坐标系转换
+import proj4 from 'proj4'
+import { register } from 'ol/proj/proj4'
 
 export default {
   name: 'MapViewerOL',
@@ -186,6 +190,97 @@ export default {
     const layersList = ref([])
     const currentActiveLayer = ref(null)
     const popup = ref(null)
+    
+    // 坐标系初始化状态
+    const projectionsInitialized = ref(false)
+    
+    // 异步初始化坐标系
+    const initializeProjections = async () => {
+      if (!projectionsInitialized.value) {
+        await initProjections()
+        projectionsInitialized.value = true
+      }
+    }
+    
+    // 初始化坐标系
+    const initProjections = async () => {
+      try {
+        console.log('🔄 开始从后端获取坐标系定义...')
+        
+        // 从后端获取常用坐标系的proj4定义
+        const response = await gisApi.getProj4Definitions()
+        
+        if (response.success && response.proj4_definitions) {
+          // 注册投影定义
+          Object.entries(response.proj4_definitions).forEach(([epsgCode, info]) => {
+            if (info.proj4) {
+              proj4.defs(epsgCode, info.proj4)
+              console.log(`✅ 注册坐标系: ${epsgCode} - ${info.name || '未知'}`)
+            }
+          })
+          
+          // 注册到OpenLayers
+          register(proj4)
+          
+          console.log(`✅ 坐标系初始化完成，共注册${Object.keys(response.proj4_definitions).length}个坐标系`)
+          return true
+        } else {
+          throw new Error(response.message || '获取坐标系定义失败')
+        }
+        
+      } catch (error) {
+        console.warn('⚠️ 从后端获取坐标系定义失败，使用备用定义:', error.message)
+        
+        // 备用方案：使用硬编码的常用坐标系定义
+        const fallbackProjections = {
+          'EPSG:2379': '+proj=tmerc +lat_0=0 +lon_0=102 +k=1 +x_0=500000 +y_0=0 +ellps=IAU76 +towgs84=24,-123,-94,0,0,0,0 +units=m +no_defs +type=crs',
+          'EPSG:2343': '+proj=tmerc +lat_0=0 +lon_0=105 +k=1 +x_0=500000 +y_0=0 +ellps=krass +towgs84=15.8,-154.4,-82.3,0,0,0,0 +units=m +no_defs',
+          'EPSG:2431': '+proj=tmerc +lat_0=0 +lon_0=105 +k=1 +x_0=500000 +y_0=0 +datum=WGS84 +units=m +no_defs',
+          'EPSG:4545': '+proj=tmerc +lat_0=0 +lon_0=105 +k=1 +x_0=500000 +y_0=0 +ellps=krass +towgs84=15.8,-154.4,-82.3,0,0,0,0 +units=m +no_defs',
+          'EPSG:4547': '+proj=tmerc +lat_0=0 +lon_0=102 +k=1 +x_0=500000 +y_0=0 +ellps=krass +towgs84=15.8,-154.4,-82.3,0,0,0,0 +units=m +no_defs'
+        }
+        
+        // 注册备用投影定义
+        Object.entries(fallbackProjections).forEach(([code, def]) => {
+          proj4.defs(code, def)
+          console.log(`⚠️ 备用注册坐标系: ${code}`)
+        })
+        
+        // 注册到OpenLayers
+        register(proj4)
+        
+        console.log('⚠️ 坐标系初始化完成（使用备用定义）')
+        return false
+      }
+    }
+    
+    // 动态注册单个坐标系
+    const registerProjection = async (epsgCode) => {
+      try {
+        // 检查是否已经注册
+        if (proj4.defs(epsgCode)) {
+          console.log(`✅ 坐标系 ${epsgCode} 已注册`)
+          return true
+        }
+        
+        console.log(`🔄 动态获取坐标系定义: ${epsgCode}`)
+        const response = await gisApi.getSingleProj4Definition(epsgCode)
+        
+        if (response.success && response.crs_info && response.crs_info.proj4_definition) {
+          proj4.defs(epsgCode, response.crs_info.proj4_definition)
+          register(proj4)
+          console.log(`✅ 动态注册坐标系: ${epsgCode} - ${response.crs_info.name || '未知'}`)
+          return true
+        } else {
+          console.warn(`⚠️ 无法获取 ${epsgCode} 的proj4定义`)
+          return false
+        }
+        
+      } catch (error) {
+        console.error(`❌ 动态注册坐标系 ${epsgCode} 失败:`, error.message)
+        return false
+      }
+    }
     
     // 添加图层对话框
     const addLayerDialogVisible = ref(false)
@@ -237,39 +332,62 @@ export default {
       console.log('✅ 地图容器已找到:', mapContainer.value)
       
       // 3. 检查OpenLayers导入
-      if (!Map || !View || !TileLayer || !OSM) {
+      if (!Map || !View || !TileLayer || !XYZ) {
         console.error('❌ OpenLayers模块导入失败')
-        console.log('Map:', Map, 'View:', View, 'TileLayer:', TileLayer, 'OSM:', OSM)
+        console.log('Map:', Map, 'View:', View, 'TileLayer:', TileLayer, 'XYZ:', XYZ)
         return
       }
       console.log('✅ OpenLayers模块导入正常')
       
       try {
-        // 4. 创建最简单的OSM底图
-        console.log('创建OSM图层...')
-        const osmLayer = new TileLayer({
-          source: new OSM()
-        })
-        console.log('✅ OSM图层创建成功')
+        // 4. 创建底图图层
+        console.log('创建底图图层...')
         
-        // 5. 创建地图实例 - 最基本配置
+        // 高德地图
+        const gaodeLayer = new TileLayer({
+          source: new XYZ({
+            url: 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+            crossOrigin: 'anonymous'
+          }),
+          visible: true
+        })
+        
+        // 天地图
+        const tiandituLayer = new TileLayer({
+          source: new XYZ({
+            url: 'https://t{0-7}.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=您的天地图key',
+            crossOrigin: 'anonymous'
+          }),
+          visible: false
+        })
+        
+        console.log('✅ 底图图层创建成功')
+        
+        // 5. 创建地图实例
         console.log('创建地图实例...')
         map.value = new Map({
           target: mapContainer.value,
-          layers: [osmLayer],
+          layers: [gaodeLayer, tiandituLayer],
           view: new View({
-            center: fromLonLat([116.4, 39.9]), // 北京坐标
+            center: fromLonLat([104.0667, 30.6667]), // 成都坐标
             zoom: 10
           })
         })
+        
+        // 6. 设置底图引用供切换器使用
+        map.value.baseLayers = {
+          gaode: gaodeLayer,
+          tianditu: tiandituLayer
+        }
+        
         console.log('✅ 地图实例创建成功')
         
-        // 6. 监听地图渲染
+        // 7. 监听地图渲染
         map.value.once('rendercomplete', () => {
           console.log('🎉 地图首次渲染完成！')
         })
         
-        // 7. 延迟强制更新尺寸
+        // 8. 延迟强制更新尺寸
         setTimeout(() => {
           if (map.value) {
             console.log('强制更新地图尺寸...')
@@ -343,32 +461,52 @@ export default {
       
       let mvtUrl = layer.mvt_url
       
-      // 处理localhost URL格式
-      if (mvtUrl.includes('localhost:3000')) {
-        const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
-        mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
+      // 规范化 URL 格式处理
+      try {
+        // 处理 Martin 服务的标准 URL 格式
+        if (mvtUrl.includes('localhost:3000')) {
+          // 提取表名，支持多种 URL 格式
+          const tableNameMatch = mvtUrl.match(/\/([^/]+)\/?\{z\}/) || mvtUrl.match(/\/([^/]+)$/)
+          const tableName = tableNameMatch?.[1] || 'default'
+          mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
+        }
+        
+        // 确保 URL 以正确的模板格式结尾
+        if (!mvtUrl.includes('{z}') || !mvtUrl.includes('{x}') || !mvtUrl.includes('{y}')) {
+          // 如果不包含模板变量，添加标准模板
+          mvtUrl = mvtUrl.replace(/\/$/, '') + '/{z}/{x}/{y}'
+        }
+        
+        
+        
+        console.log('创建MVT图层:', layer.layer_name, 'URL:', mvtUrl)
+        
+      } catch (error) {
+        console.error('URL格式处理失败:', error)
+        ElMessage.error(`MVT URL格式无效: ${layer.layer_name}`)
+        return
       }
       
-      // 移除.pbf后缀（如果存在）- 与Leaflet版本保持一致
-      if (mvtUrl.includes('.pbf')) {
-        mvtUrl = mvtUrl.replace('.pbf', '')
-        console.log('移除.pbf后缀，新URL:', mvtUrl)
-      }
-      
-      console.log('创建MVT图层:', layer.layer_name, 'URL:', mvtUrl)
-      
-      // 创建样式函数 - 改进版本
+      // 创建样式函数 - 优化版本
       const createStyleFunction = () => {
         const isDxf = layer.file_type === 'dxf'
         const defaultStyles = isDxf ? defaultDxfStylesConfig.defaultDxfStyles : {}
         
+        // 样式缓存，提高性能
+        const styleCache = {}
+        
         return (feature) => {
           const properties = feature.getProperties()
           const layerName = properties.layer || properties.Layer || 'default'
-          const layerStyle = defaultStyles[layerName] || {}
-          
-          // 根据几何类型创建不同样式
           const geometryType = feature.getGeometry().getType()
+          
+          // 创建缓存键
+          const cacheKey = `${layerName}_${geometryType}`
+          if (styleCache[cacheKey]) {
+            return styleCache[cacheKey]
+          }
+          
+          const layerStyle = defaultStyles[layerName] || {}
           
           let style
           if (geometryType === 'Point' || geometryType === 'MultiPoint') {
@@ -430,9 +568,11 @@ export default {
           
           // 处理图层可见性
           if (layerStyle.visible === false) {
-            return new Style({}) // 返回空样式以隐藏
+            style = new Style({}) // 返回空样式以隐藏
           }
           
+          // 缓存样式
+          styleCache[cacheKey] = style
           return style
         }
       }
@@ -440,20 +580,30 @@ export default {
       try {
         // 创建矢量切片图层 - 完整配置
         const mvtLayer = new VectorTileLayer({
+          declutter: true, // 启用标注防冲突
           source: new VectorTile({
             format: new MVT(),
             url: mvtUrl,
-            maxZoom: 22,
-            wrapX: false // 防止世界重复
+            maxZoom: 22, // 最大缩放级别
+            minZoom: 0,  // 最小缩放级别
+            wrapX: false, // 防止世界重复
+            transition: 0, // 禁用过渡动画，提高性能
+            // 添加属性信息
+            attributions: layer.attribution || [],
+            // 设置瓦片缓存大小
+            cacheSize: 128
           }),
           style: createStyleFunction(),
           opacity: typeof layer.opacity === 'number' ? layer.opacity : 1.0,
           visible: layer.visibility !== false,
+          // 设置渲染顺序
+          zIndex: layer.zIndex || 1,
           // 添加图层标识
           properties: {
             layerId: layer.id,
             layerName: layer.layer_name,
-            serviceType: 'martin'
+            serviceType: 'martin',
+            fileType: layer.file_type
           }
         })
         
@@ -470,18 +620,50 @@ export default {
           console.log('✅ MVT图层添加成功:', layer.layer_name)
         }
         
-        // 添加图层事件监听
-        mvtLayer.getSource().on('tileloaderror', (evt) => {
+        // 添加图层事件监听 - 改进版本
+        const source = mvtLayer.getSource()
+        
+        // 瓦片加载错误处理
+        source.on('tileloaderror', (evt) => {
           console.warn('MVT瓦片加载失败:', evt.tile.src_)
+          console.warn('错误详情:', evt)
+          
+          // 可以在这里添加重试逻辑
+          if (evt.tile.getState() === 3) { // ERROR state
+            setTimeout(() => {
+              console.log('重试加载MVT瓦片:', evt.tile.src_)
+              evt.tile.load()
+            }, 1000)
+          }
         })
         
-        mvtLayer.getSource().on('tileloadend', (evt) => {
+        // 瓦片加载成功
+        source.on('tileloadend', (evt) => {
           console.log('MVT瓦片加载完成:', evt.tile.src_)
         })
         
+        // 瓦片开始加载
+        source.on('tileloadstart', (evt) => {
+          console.debug('MVT瓦片开始加载:', evt.tile.src_)
+        })
+        
+        // 监听源变化
+        source.on('change', () => {
+          console.debug('MVT源状态变化:', source.getState())
+        })
+        
+        return mvtLayer
+        
       } catch (error) {
         console.error('创建MVT图层失败:', error)
-        ElMessage.error(`MVT图层创建失败: ${layer.layer_name}`)
+        console.error('错误详情:', {
+          layerName: layer.layer_name,
+          mvtUrl: mvtUrl,
+          error: error.message,
+          stack: error.stack
+        })
+        ElMessage.error(`MVT图层创建失败: ${layer.layer_name} - ${error.message}`)
+        throw error
       }
     }
     
@@ -505,17 +687,70 @@ export default {
       
       console.log('创建WMS图层:', layer.layer_name, 'URL:', wmsUrl)
       
+      // 获取图层坐标系信息
+      let layerCRS = 'EPSG:4326' // 默认坐标系
+      let wmsVersion = '1.1.1' // 默认版本
+      let crsParam = 'SRS' // 默认使用SRS参数
+      
       try {
+        // 确保坐标系已初始化
+        //await initializeProjections()
+        // 尝试获取图层的坐标系信息
+        if (layer.layer_id) {
+          const response = await gisApi.getLayerCRSInfo(layer.layer_id)
+          if (response.success && response.crs_info) {
+            layerCRS = response.crs_info.epsg_code || layerCRS
+            console.log(`✅ 获取到图层坐标系: ${layerCRS}`)
+            
+            // 动态注册坐标系（如果需要）
+            if (response.crs_info.proj4_definition) {
+              console.log(`🔄 动态注册坐标系: ${layerCRS}`)
+              proj4.defs(layerCRS, response.crs_info.proj4_definition)
+              register(proj4)
+              console.log(`✅ 坐标系注册完成: ${layerCRS}`)
+            }
+            
+            // 使用推荐的WMS版本
+            wmsVersion = response.crs_info.recommended_wms_version || wmsVersion
+          }
+        }
+        
+        // 根据坐标系调整WMS参数
+        if (layerCRS.startsWith('EPSG:')) {
+          // 对于投影坐标系，使用WMS 1.1.0和SRS参数
+          if (!layerCRS.includes('4326') && !layerCRS.includes('3857')) {
+            wmsVersion = '1.1.0'
+            crsParam = 'SRS'
+          } else {
+            // 对于地理坐标系，使用WMS 1.1.1和SRS参数
+            wmsVersion = '1.1.1'
+            crsParam = 'SRS'
+          }
+        }
+        
+      } catch (error) {
+        console.warn('获取图层坐标系失败，使用默认值:', error.message)
+      }
+      
+      try {
+        // 构建WMS参数
+        const wmsParams = {
+          'LAYERS': layer.geoserver_layer,
+          'FORMAT': 'image/png',
+          'TRANSPARENT': true,
+          'VERSION': wmsVersion,
+          'STYLES': '',
+          'TILED': true
+        }
+        
+        // 设置坐标系参数
+        wmsParams[crsParam] = layerCRS
+        console.log('lv-projection:', wmsParams)
         const wmsLayer = new TileLayer({
           source: new TileWMS({
             url: wmsUrl,
-            params: {
-              'LAYERS': layer.geoserver_layer,
-              'FORMAT': 'image/png',
-              'TRANSPARENT': true,
-              'VERSION': '1.1.1',
-              'SRS': 'EPSG:4326'
-            },
+            params: wmsParams,
+            projection: layerCRS, // 明确指定WMS源数据的投影
             serverType: 'geoserver'
           }),
           opacity: typeof layer.opacity === 'number' ? layer.opacity : 1.0,
@@ -534,7 +769,7 @@ export default {
         // 添加到地图（如果图层可见）
         if (layer.visibility !== false) {
           map.value.addLayer(wmsLayer)
-          console.log('✅ WMS图层添加成功:', layer.layer_name)
+          console.log(`✅ WMS图层添加成功: ${layer.layer_name} (坐标系: ${layerCRS})`)
         }
         
       } catch (error) {
@@ -775,8 +1010,10 @@ export default {
       layersList.value = layersList.value.filter(item => item.id !== layer.id)
     }
     
-    // 底图切换事件处理
-    const onBaseMapChanged = () => {}
+    // 底图切换处理
+    const onBaseMapChanged = (baseMapType) => {
+      console.log('切换底图到:', baseMapType)
+    }
     
     // 设置当前活动图层
     const setActiveLayer = (layer) => {
@@ -874,12 +1111,82 @@ export default {
       }
     })
     
+    // 获取图层坐标系信息
+    const getLayerCRSInfo = async (layer) => {
+      try {
+        if (layer.file_id) {
+          const response = await gisApi.getLayerCRSInfo(layer.file_id)
+          if (response.success && response.crs_info) {
+            return {
+              epsgCode: response.crs_info.epsg_code || 'EPSG:4326',
+              proj4Def: response.crs_info.proj4_definition || null,
+              name: response.crs_info.name || '未知坐标系'
+            }
+          }
+        }
+        
+        // 从图层属性中获取
+        const targetLayer = layer.service_type === 'martin' ? mvtLayers.value[layer.id] : mapLayers.value[layer.id]
+        if (targetLayer && targetLayer.get('properties')) {
+          const props = targetLayer.get('properties')
+          return {
+            epsgCode: props.originalCRS || 'EPSG:4326',
+            proj4Def: null,
+            name: props.originalCRS || 'EPSG:4326'
+          }
+        }
+        
+        return {
+          epsgCode: 'EPSG:4326',
+          proj4Def: null,
+          name: 'WGS84'
+        }
+      } catch (error) {
+        console.warn('获取图层坐标系信息失败:', error.message)
+        return {
+          epsgCode: 'EPSG:4326',
+          proj4Def: null,
+          name: 'WGS84 (默认)'
+        }
+      }
+    }
+    
+    // 坐标转换辅助函数
+    const transformCoordinates = (coordinates, fromCRS, toCRS) => {
+      try {
+        if (fromCRS === toCRS) {
+          return coordinates
+        }
+        
+        // 如果是范围（4个数值），使用transformExtent
+        if (Array.isArray(coordinates) && coordinates.length === 4) {
+          return transformExtent(coordinates, fromCRS, toCRS)
+        }
+        
+        // 如果是点坐标（2个数值），使用transform
+        if (Array.isArray(coordinates) && coordinates.length === 2) {
+          return transform(coordinates, fromCRS, toCRS)
+        }
+        
+        return coordinates
+      } catch (error) {
+        console.error(`坐标转换失败: ${fromCRS} -> ${toCRS}`, error)
+        return coordinates
+      }
+    }
+    
     onMounted(() => {
-      nextTick(() => {
+      nextTick(async () => {
         // 增加一个小延迟确保DOM完全渲染
-        setTimeout(() => {
-          console.log('DOM准备就绪，开始初始化地图...')
+        setTimeout(async () => {
+          console.log('DOM准备就绪，开始初始化...')
+          
+          // 首先初始化坐标系
+          await initializeProjections()
+          
+          // 然后初始化地图
           initMap()
+          
           const sceneId = props.sceneId || route.query.scene_id
           if (sceneId) {
             setTimeout(() => loadScene(sceneId), 200)
@@ -932,10 +1239,15 @@ export default {
       applyAndSaveDxfStyles,
       onPopupControlChanged,
       setActiveLayer,
-      bringLayerToTop
+      bringLayerToTop,
+      getLayerCRSInfo,
+      transformCoordinates,
+      initializeProjections,
+      registerProjection,
+      projectionsInitialized
     }
   },
-  expose: ['showStyleDialog', 'showAddLayerDialog', 'toggleLayerVisibility', 'map', 'bringLayerToTop', 'setActiveLayer', 'currentActiveLayer']
+  expose: ['showStyleDialog', 'showAddLayerDialog', 'toggleLayerVisibility', 'map', 'bringLayerToTop', 'setActiveLayer', 'currentActiveLayer', 'getLayerCRSInfo', 'transformCoordinates', 'initializeProjections', 'registerProjection', 'projectionsInitialized']
 }
 </script>
 

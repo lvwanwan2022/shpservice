@@ -771,77 +771,107 @@ def publish_martin_service(file_id):
 
 @file_bp.route('/<int:file_id>/publish/geoserver', methods=['POST'])
 def publish_geoserver_service(file_id):
-    """发布文件到GeoServer服务"""
+    """发布文件到GeoServer服务 - 统一处理矢量和栅格数据"""
     try:
-        # 获取文件信息
+        # 1. 获取文件信息
         file_info = file_service.get_file_by_id(file_id)
         if not file_info:
             return jsonify({'success': False, 'error': '文件不存在'}), 404
         
-        # 检查文件类型
         file_type = file_info.get('file_type', '').lower()
+        file_path = file_info['file_path']
         
-        # 优先从数据库获取坐标系，如果数据库中没有则从请求中获取
-        coordinate_system = file_info.get('coordinate_system')  # 从数据库获取
+        print(f"=== 开始发布GeoServer服务 ===")
+        print(f"文件ID: {file_id}, 文件类型: {file_type}")
+        print(f"文件路径: {file_path}")
         
-        # 如果数据库中没有坐标系，则从请求参数中获取
-        if not coordinate_system:
-            if request.is_json:
-                data = request.get_json()
-                coordinate_system = data.get('coordinate_system')
-            elif request.form:
-                coordinate_system = request.form.get('coordinate_system')
+        # 2. 检查是否已经发布
+        existing_layer_sql = """
+        SELECT gl.id, gl.name, gw.name as workspace_name,
+               gl.featuretype_id, gl.coverage_id,
+               gs.name as store_name, gs.store_type
+        FROM geoserver_layers gl
+        LEFT JOIN geoserver_workspaces gw ON gl.workspace_id = gw.id
+        LEFT JOIN geoserver_featuretypes gft ON gl.featuretype_id = gft.id
+        LEFT JOIN geoserver_coverages gcov ON gl.coverage_id = gcov.id
+        LEFT JOIN geoserver_stores gs ON (gft.store_id = gs.id OR gcov.store_id = gs.id)
+        WHERE gl.file_id = %s
+        """
+        existing_layers = execute_query(existing_layer_sql, (file_id,))
         
-        print(f"发布GeoServer服务: file_id={file_id}, file_type={file_type}")
+        if existing_layers:
+            layer_info = existing_layers[0]
+            return jsonify({
+                'success': False, 
+                'error': f'文件已发布为图层: {layer_info["workspace_name"]}:{layer_info["name"]}',
+                'existing_layer': {
+                    'id': layer_info['id'],
+                    'name': f"{layer_info['workspace_name']}:{layer_info['name']}",
+                    'store_name': layer_info['store_name'],
+                    'store_type': layer_info['store_type']
+                }
+            }), 400
+        
+        # 3. 获取坐标系信息
+        coordinate_system = file_info.get('coordinate_system')
+        if not coordinate_system and request.is_json:
+            data = request.get_json()
+            coordinate_system = data.get('coordinate_system')
+        elif not coordinate_system and request.form:
+            coordinate_system = request.form.get('coordinate_system')
+        
         if coordinate_system:
-            print(f"使用坐标系: {coordinate_system} (来源: {'数据库' if file_info.get('coordinate_system') else '请求参数'})")
-        else:
-            print(f"未指定坐标系，将使用文件自带坐标系")
+            print(f"使用坐标系: {coordinate_system}")
         
-        # 根据文件类型选择发布方式
-        if file_type in ['shp', 'geojson', 'tif', 'tiff', 'dem', 'dom', 'dem.tif', 'dom.tif']:
-            # 发布到GeoServer服务
-            from services.geoserver_service import GeoServerService
-            geoserver_service = GeoServerService()
-            
-            # 生成数据存储名称
-            store_name = f"file_{file_id}"
-            file_path = file_info['file_path']
-            
-            # 根据文件类型发布服务
+        # 4. 检查文件类型支持
+        vector_types = ['shp', 'geojson']
+        raster_types = ['tif', 'tiff', 'dem', 'dom', 'dem.tif', 'dom.tif']
+        
+        if file_type not in vector_types + raster_types:
+            return jsonify({
+                'success': False, 
+                'error': f'不支持的文件类型: {file_type}。支持的类型: {", ".join(vector_types + raster_types)}'
+            }), 400
+        
+        # 5. 生成存储名称
+        store_name = f"file_{file_id}"
+        
+        # 6. 根据文件类型执行发布
+        from services.geoserver_service import GeoServerService
+        geoserver_service = GeoServerService()
+        
+        print(f"开始发布到GeoServer，存储名称: {store_name}")
+        
+        if file_type in vector_types:
+            print(f"发布矢量数据: {file_type}")
+            # 矢量数据发布
             if file_type == 'shp':
                 result = geoserver_service.publish_shapefile(file_path, store_name, file_id)
             elif file_type == 'geojson':
                 result = geoserver_service.publish_geojson(file_path, store_name, file_id)
-            elif file_type in ['tif', 'tiff', 'dem', 'dom', 'dem.tif', 'dom.tif']:
-                # 对于TIF文件，优先使用数据库中的坐标系
-                if coordinate_system:
-                    # 验证坐标系格式
-                    if not coordinate_system.upper().startswith('EPSG:'):
-                        return jsonify({
-                            'success': False, 
-                            'error': f'坐标系格式错误，应为EPSG:xxxx格式，当前为: {coordinate_system}'
-                        }), 400
-                    
-                    print(f"使用指定坐标系发布TIF文件: {coordinate_system}")
-                    result = geoserver_service.publish_geotiff(file_path, store_name, file_id, coordinate_system)
-                else:
-                    # 使用文件自带的坐标系
-                    print(f"使用文件自带坐标系发布TIF文件")
-                    result = geoserver_service.publish_geotiff(file_path, store_name, file_id)
-            else:
-                return jsonify({'success': False, 'error': f'不支持的文件类型: {file_type}'}), 400
-            
-            print(f"GeoServer服务发布成功: {result}")
-            return jsonify(result)
         else:
-            return jsonify({'success': False, 'error': f'文件类型 {file_type} 不支持发布到GeoServer'}), 400
+            print(f"发布栅格数据: {file_type}")
+            # 栅格数据发布
+            if coordinate_system:
+                # 验证坐标系格式
+                if not coordinate_system.upper().startswith('EPSG:'):
+                    return jsonify({
+                        'success': False, 
+                        'error': f'坐标系格式错误，应为EPSG:xxxx格式，当前为: {coordinate_system}'
+                    }), 400
+                
+                result = geoserver_service.publish_geotiff(file_path, store_name, file_id, coordinate_system)
+            else:
+                result = geoserver_service.publish_geotiff(file_path, store_name, file_id)
+        
+        print(f"GeoServer发布结果: {result}")
+        return jsonify(result)
             
     except Exception as e:
         print(f"发布GeoServer服务失败: {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'success': False, 'error': f'发布失败: {str(e)}'}), 500
 
 @file_bp.route('/<int:file_id>/unpublish/martin', methods=['DELETE'])
 def unpublish_martin_service(file_id):
@@ -893,35 +923,157 @@ def unpublish_martin_service(file_id):
 
 @file_bp.route('/<int:file_id>/unpublish/geoserver', methods=['DELETE'])
 def unpublish_geoserver_service(file_id):
-    """取消发布GeoServer服务"""
+    """取消发布GeoServer服务 - 统一处理矢量和栅格数据"""
     try:
-        # 检查文件是否存在
+        print(f"=== 开始取消发布GeoServer服务 ===")
+        print(f"文件ID: {file_id}")
+        
+        # 1. 检查文件是否存在
         file_info = file_service.get_file_by_id(file_id)
         if not file_info:
-            return jsonify({'error': '文件不存在'}), 404
+            return jsonify({'success': False, 'error': '文件不存在'}), 404
         
-        # 查找GeoServer图层记录
-        check_sql = "SELECT id, name FROM geoserver_layers WHERE file_id = %s"
-        existing = execute_query(check_sql, (file_id,))
-        if not existing:
-            return jsonify({'error': '文件未发布到GeoServer服务'}), 404
+        file_type = file_info.get('file_type', '').lower()
+        print(f"文件类型: {file_type}")
         
-        layer_id = existing[0]['id']
+        # 2. 查找发布的图层信息
+        layer_query_sql = """
+        SELECT gl.id as layer_id, gl.name as layer_name, 
+               gw.name as workspace_name,
+               gl.featuretype_id, gl.coverage_id,
+               gs.id as store_id, gs.name as store_name, gs.store_type,
+               gft.id as featuretype_id_detail,
+               gcov.id as coverage_id_detail
+        FROM geoserver_layers gl
+        LEFT JOIN geoserver_workspaces gw ON gl.workspace_id = gw.id
+        LEFT JOIN geoserver_featuretypes gft ON gl.featuretype_id = gft.id
+        LEFT JOIN geoserver_coverages gcov ON gl.coverage_id = gcov.id
+        LEFT JOIN geoserver_stores gs ON (gft.store_id = gs.id OR gcov.store_id = gs.id)
+        WHERE gl.file_id = %s
+        """
         
-        # 删除GeoServer服务
+        layer_results = execute_query(layer_query_sql, (file_id,))
+        if not layer_results:
+            return jsonify({'success': False, 'error': '文件未发布到GeoServer服务'}), 404
+        
+        layer_info = layer_results[0]
+        layer_id = layer_info['layer_id']
+        layer_name = layer_info['layer_name']
+        workspace_name = layer_info['workspace_name']
+        store_name = layer_info['store_name']
+        store_type = layer_info['store_type']
+        
+        print(f"找到已发布图层: {workspace_name}:{layer_name}")
+        print(f"存储信息: {store_name} (类型: {store_type})")
+        
+        # 3. 判断是矢量还是栅格数据
+        is_raster = layer_info['coverage_id'] is not None
+        is_vector = layer_info['featuretype_id'] is not None
+        
+        print(f"数据类型: {'栅格' if is_raster else '矢量' if is_vector else '未知'}")
+        
+        # 4. 从GeoServer删除服务
         from services.geoserver_service import GeoServerService
         geoserver_service = GeoServerService()
         
-        result = geoserver_service.unpublish_layer(layer_id)
+        print(f"--- 开始从GeoServer删除服务 ---")
+        
+        try:
+            if is_raster:
+                print(f"删除栅格数据存储: {store_name}")
+                # 使用增强的coveragestore清理方法
+                geoserver_service._cleanup_existing_coveragestore(store_name)
+            else:
+                print(f"删除矢量数据存储: {store_name}")
+                # 删除datastore
+                geoserver_service._cleanup_existing_datastore(store_name)
+                
+            print(f"✅ GeoServer服务删除完成")
+        except Exception as geoserver_error:
+            print(f"⚠️ GeoServer删除失败: {str(geoserver_error)}")
+            # 继续执行数据库清理，不阻断流程
+        
+        # 5. 清理数据库记录
+        print(f"--- 开始清理数据库记录 ---")
+        
+        try:
+            # 5.1 删除图层记录
+            delete_layer_sql = "DELETE FROM geoserver_layers WHERE id = %s"
+            affected_rows = execute_query(delete_layer_sql, (layer_id,), fetch=False)
+            print(f"✅ 删除图层记录: layer_id={layer_id} (影响行数: {affected_rows})")
+            
+            # 5.2 删除关联的featuretype或coverage记录
+            if layer_info['featuretype_id']:
+                delete_featuretype_sql = "DELETE FROM geoserver_featuretypes WHERE id = %s"
+                affected_rows = execute_query(delete_featuretype_sql, (layer_info['featuretype_id'],), fetch=False)
+                print(f"✅ 删除featuretype记录: featuretype_id={layer_info['featuretype_id']} (影响行数: {affected_rows})")
+            
+            if layer_info['coverage_id']:
+                delete_coverage_sql = "DELETE FROM geoserver_coverages WHERE id = %s"
+                affected_rows = execute_query(delete_coverage_sql, (layer_info['coverage_id'],), fetch=False)
+                print(f"✅ 删除coverage记录: coverage_id={layer_info['coverage_id']} (影响行数: {affected_rows})")
+            
+            # 5.3 检查存储是否还被其他图层使用
+            if layer_info['store_id']:
+                check_store_usage_sql = """
+                SELECT COUNT(*) as count FROM (
+                    SELECT 1 FROM geoserver_featuretypes WHERE store_id = %s
+                    UNION ALL
+                    SELECT 1 FROM geoserver_coverages WHERE store_id = %s
+                ) as usage_count
+                """
+                usage_result = execute_query(check_store_usage_sql, (layer_info['store_id'], layer_info['store_id']))
+                usage_count = usage_result[0]['count']
+                
+                if usage_count == 0:
+                    # 没有其他图层使用此存储，删除存储记录
+                    delete_store_sql = "DELETE FROM geoserver_stores WHERE id = %s"
+                    affected_rows = execute_query(delete_store_sql, (layer_info['store_id'],), fetch=False)
+                    print(f"✅ 删除存储记录: store_id={layer_info['store_id']} (影响行数: {affected_rows})")
+                else:
+                    print(f"⚠️ 存储 {store_name} 仍被其他 {usage_count} 个图层/覆盖使用，保留存储记录")
+            
+            print(f"✅ 数据库记录清理完成")
+            
+        except Exception as db_error:
+            print(f"❌ 数据库记录清理失败: {str(db_error)}")
+            return jsonify({'success': False, 'error': f'数据库清理失败: {str(db_error)}'}), 500
+        
+        print(f"=== 取消发布GeoServer服务完成 ===")
+        
+        # 6. 自动重置GeoServer缓存以释放文件锁定
+        try:
+            print(f"--- 自动重置GeoServer缓存 ---")
+            reset_result = geoserver_service.reset_geoserver_caches()
+            print(f"缓存重置结果: {reset_result}")
+        except Exception as cache_error:
+            print(f"⚠️ 缓存重置失败: {str(cache_error)}")
+            # 不影响主流程继续
         
         return jsonify({
             'success': True,
-            'message': 'GeoServer服务取消发布成功'
+            'message': 'GeoServer服务取消发布成功，已自动重置缓存',
+            'deleted_layer': f"{workspace_name}:{layer_name}",
+            'store_info': {
+                'name': store_name,
+                'type': store_type,
+                'data_type': '栅格' if is_raster else '矢量'
+            },
+            'cleanup_info': {
+                'cache_reset': True,
+                'recommendations': [
+                    '如果GeoServer数据目录中仍有相关文件，可调用 /files/{file_id}/force-cleanup 进行强制清理',
+                    '如遇文件被占用问题，建议重启GeoServer服务',
+                    '可以检查GeoServer日志了解详细信息'
+                ]
+            }
         }), 200
     
     except Exception as e:
-        current_app.logger.error(f"取消发布GeoServer服务错误: {str(e)}")
-        return jsonify({'error': f'取消发布GeoServer服务失败: {str(e)}'}), 500
+        print(f"❌ 取消发布GeoServer服务失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'取消发布失败: {str(e)}'}), 500
 
 @file_bp.route('/coordinate-systems/search', methods=['GET'])
 def search_coordinate_systems():
@@ -1122,4 +1274,55 @@ def get_common_coordinate_systems():
         
     except Exception as e:
         current_app.logger.error(f"获取常用坐标系失败: {str(e)}")
-        return jsonify({'error': f'获取常用坐标系失败: {str(e)}'}), 500 
+        return jsonify({'error': f'获取常用坐标系失败: {str(e)}'}), 500
+
+@file_bp.route('/<int:file_id>/force-cleanup', methods=['POST'])
+def force_cleanup_geoserver_files(file_id):
+    """强制清理GeoServer文件和缓存"""
+    try:
+        print(f"=== 开始强制清理GeoServer文件 ===")
+        print(f"文件ID: {file_id}")
+        
+        # 1. 检查文件是否存在
+        file_info = file_service.get_file_by_id(file_id)
+        if not file_info:
+            return jsonify({'success': False, 'error': '文件不存在'}), 404
+        
+        # 2. 强制重置GeoServer缓存和连接
+        from services.geoserver_service import GeoServerService
+        geoserver_service = GeoServerService()
+        
+        # 3. 调用GeoServer REST API重置所有缓存
+        reset_result = geoserver_service.reset_geoserver_caches()
+        print(f"GeoServer缓存重置结果: {reset_result}")
+        
+        # 4. 获取GeoServer数据目录中的相关文件
+        cleanup_paths = geoserver_service.get_file_cleanup_paths(file_id)
+        
+        # 5. 尝试删除文件
+        cleanup_results = []
+        for file_path in cleanup_paths:
+            result = geoserver_service.force_delete_file(file_path)
+            cleanup_results.append({
+                'path': file_path,
+                'success': result['success'],
+                'message': result['message']
+            })
+        
+        return jsonify({
+            'success': True,
+            'message': '强制清理操作完成',
+            'reset_result': reset_result,
+            'cleanup_results': cleanup_results,
+            'recommendations': [
+                '如果文件仍被占用，请重启GeoServer服务',
+                '可以使用Process Explorer或Resource Monitor查看文件句柄',
+                '必要时可以重启整个应用服务器'
+            ]
+        }), 200
+        
+    except Exception as e:
+        print(f"强制清理失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'强制清理失败: {str(e)}'}), 500 

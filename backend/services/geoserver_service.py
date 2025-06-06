@@ -1,16 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import json
+import requests
+import time
 import os
 import re
-import requests
-import json
 import zipfile
-import shutil
 import tempfile
-import time
-from config import GEOSERVER_CONFIG
+import shutil
 from models.db import execute_query
+from config import GEOSERVER_CONFIG
 
 class GeoServerService:
     """GeoServer服务类，用于管理GeoServer资源"""
@@ -130,7 +130,39 @@ class GeoServerService:
             generated_store_name = f"{clean_filename}_store"
             print(f"自动生成的存储名称: {generated_store_name}")
             
-            # 4. 获取SHP文件名并处理文件重命名
+            # 4. 获取工作空间ID
+            workspace_id = self._get_workspace_id()
+            
+            # 5. 检查是否已经发布 - 检查数据库中的记录
+            print(f"检查是否已有相关发布记录...")
+            existing_check_sql = """
+            SELECT gl.id as layer_id, gl.name as layer_name, 
+                   gs.id as store_id, gs.name as store_name,
+                   gft.id as featuretype_id
+            FROM geoserver_layers gl
+            LEFT JOIN geoserver_featuretypes gft ON gl.featuretype_id = gft.id
+            LEFT JOIN geoserver_stores gs ON gft.store_id = gs.id
+            WHERE gl.file_id = %s OR gs.name = %s
+            """
+            existing_records = execute_query(existing_check_sql, (file_id, generated_store_name))
+            
+            if existing_records:
+                existing_record = existing_records[0]
+                print(f"⚠️ 发现已存在的发布记录:")
+                print(f"  图层ID: {existing_record['layer_id']}, 图层名: {existing_record['layer_name']}")
+                print(f"  存储ID: {existing_record['store_id']}, 存储名: {existing_record['store_name']}")
+                
+                # 返回已存在的发布信息，而不是报错
+                return {
+                    "success": True,
+                    "message": "文件已发布，返回现有发布信息",
+                    "existing": True,
+                    "store_name": existing_record['store_name'],
+                    "layer_name": existing_record['layer_name'],
+                    "layer_id": existing_record['layer_id']
+                }
+            
+            # 6. 获取SHP文件名并处理文件重命名
             original_shp_name = self._get_shp_name_from_folder(extracted_folder)
             print(f"解压文件夹中的原始SHP文件名: {original_shp_name}")
             
@@ -138,37 +170,38 @@ class GeoServerService:
             safe_shp_name = self._ensure_safe_shapefile_names(extracted_folder, original_shp_name, clean_filename)
             print(f"处理后的SHP文件名: {safe_shp_name}")
             
-            # 5. 获取工作空间ID
-            workspace_id = self._get_workspace_id()
+            # 7. 预清理：删除可能存在的同名datastore（GeoServer中的残留）
+            print(f"预清理：检查并删除可能存在的同名datastore")
+            self._cleanup_existing_datastore(generated_store_name)
             
-            # 6. 在数据库中创建数据存储记录
+            # 8. 在数据库中创建数据存储记录
             store_id = self._create_datastore_in_db(generated_store_name, workspace_id, 'Shapefile', file_id)
             print(f"✅ 数据存储记录创建成功，store_id={store_id}")
             
-            # 7. 在GeoServer中创建空的数据存储
+            # 9. 在GeoServer中创建空的数据存储
             self._create_empty_shapefile_datastore(generated_store_name)
             print(f"✅ GeoServer中空数据存储创建成功")
             
-            # 8. 上传解压后的Shapefile到GeoServer
+            # 10. 上传解压后的Shapefile到GeoServer
             self._upload_extracted_shapefile_to_geoserver(extracted_folder, generated_store_name)
             print(f"✅ Shapefile文件已上传到GeoServer")
             
-            # 9. 等待GeoServer处理
+            # 11. 等待GeoServer处理
             time.sleep(3)
             
-            # 10. 获取要素类型信息（让GeoServer自动确定要素类型名称）
+            # 12. 获取要素类型信息（让GeoServer自动确定要素类型名称）
             featuretype_info = self._get_featuretype_info(generated_store_name)
             print(f"✅ 获取要素类型信息成功")
             
-            # 11. 在数据库中创建要素类型记录
+            # 13. 在数据库中创建要素类型记录
             featuretype_id = self._create_featuretype_in_db(featuretype_info, store_id)
             print(f"✅ 要素类型记录创建成功，featuretype_id={featuretype_id}")
             
-            # 12. 在数据库中创建图层记录
+            # 14. 在数据库中创建图层记录
             layer_info = self._create_layer_in_db(featuretype_info, workspace_id, featuretype_id, file_id, 'datastore')
             print(f"✅ 图层记录创建成功，layer_id={layer_info['id']}")
             
-            # 13. 返回服务信息
+            # 15. 返回服务信息
             result = {
                 "success": True,
                 "store_name": generated_store_name,
@@ -237,7 +270,37 @@ class GeoServerService:
             # 获取工作空间ID
             workspace_id = self._get_workspace_id()
             
-            # 预清理：删除可能存在的同名coveragestore
+            # 检查是否已经发布 - 检查数据库中的记录
+            print(f"检查是否已有相关发布记录...")
+            existing_check_sql = """
+            SELECT gl.id as layer_id, gl.name as layer_name, 
+                   gs.id as store_id, gs.name as store_name,
+                   gcov.id as coverage_id
+            FROM geoserver_layers gl
+            LEFT JOIN geoserver_coverages gcov ON gl.coverage_id = gcov.id
+            LEFT JOIN geoserver_stores gs ON gcov.store_id = gs.id
+            WHERE gl.file_id = %s OR gs.name = %s
+            """
+            existing_records = execute_query(existing_check_sql, (file_id, generated_store_name))
+            
+            if existing_records:
+                existing_record = existing_records[0]
+                print(f"⚠️ 发现已存在的发布记录:")
+                print(f"  图层ID: {existing_record['layer_id']}, 图层名: {existing_record['layer_name']}")
+                print(f"  存储ID: {existing_record['store_id']}, 存储名: {existing_record['store_name']}")
+                
+                # 返回已存在的发布信息，而不是报错
+                return {
+                    "success": True,
+                    "message": "文件已发布，返回现有发布信息",
+                    "existing": True,
+                    "store_name": existing_record['store_name'],
+                    "layer_name": existing_record['layer_name'],
+                    "layer_id": existing_record['layer_id'],
+                    "coordinate_system": coordinate_system
+                }
+            
+            # 预清理：删除可能存在的同名coveragestore（GeoServer中的残留）
             print(f"预清理：检查并删除可能存在的同名coveragestore")
             self._cleanup_existing_coveragestore(generated_store_name)
             
@@ -248,15 +311,32 @@ class GeoServerService:
             # 2. 上传GeoTIFF到GeoServer
             upload_success = False
             max_retries = 3
+            
+            # 先检查GeoServer中是否已存在coveragestore
+            check_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{generated_store_name}"
+            check_response = requests.get(check_url, auth=self.auth)
+            
+            if check_response.status_code == 200:
+                print(f"✅ GeoServer中的coveragestore已存在，直接上传文件")
+                coveragestore_exists = True
+            else:
+                print(f"GeoServer中的coveragestore不存在，需要创建")
+                coveragestore_exists = False
+            
             for attempt in range(max_retries):
                 try:
                     print(f"尝试上传GeoTIFF到GeoServer (第{attempt + 1}次)")
                     
-                    # 先创建空的coveragestore
-                    self._create_empty_coveragestore_for_existing_file(generated_store_name, corrected_path)
-                    print(f"✅ 空coveragestore创建成功")
+                    # 只有当coveragestore不存在时才创建
+                    if not coveragestore_exists:
+                        print(f"创建空的coveragestore")
+                        self._create_empty_coveragestore_for_existing_file(generated_store_name, corrected_path)
+                        print(f"✅ 空coveragestore创建成功")
+                        coveragestore_exists = True  # 标记为已存在，避免重复创建
+                    else:
+                        print(f"跳过coveragestore创建步骤（已存在）")
                     
-                    # 再上传文件
+                    # 上传文件
                     self._upload_geotiff_to_geoserver(corrected_path, generated_store_name)
                     print(f"✅ GeoTIFF文件上传成功")
                     
@@ -268,6 +348,7 @@ class GeoServerService:
                     if attempt < max_retries - 1:
                         print(f"等待2秒后重试...")
                         time.sleep(2)
+                        # 重试时不需要重新创建coveragestore
                     else:
                         print(f"所有上传尝试均失败")
                         raise upload_error
@@ -442,7 +523,40 @@ class GeoServerService:
             workspace_id = self._get_workspace_id()
             print(f"工作空间ID: {workspace_id}")
             
-            # 5. 将GeoJSON导入PostGIS数据库
+            # 5. 检查是否已经发布 - 检查数据库中的记录
+            print(f"检查是否已有相关发布记录...")
+            existing_check_sql = """
+            SELECT gl.id as layer_id, gl.name as layer_name, 
+                   gs.id as store_id, gs.name as store_name,
+                   gft.id as featuretype_id
+            FROM geoserver_layers gl
+            LEFT JOIN geoserver_featuretypes gft ON gl.featuretype_id = gft.id
+            LEFT JOIN geoserver_stores gs ON gft.store_id = gs.id
+            WHERE gl.file_id = %s OR gs.name = %s
+            """
+            existing_records = execute_query(existing_check_sql, (file_id, generated_store_name))
+            
+            if existing_records:
+                existing_record = existing_records[0]
+                print(f"⚠️ 发现已存在的发布记录:")
+                print(f"  图层ID: {existing_record['layer_id']}, 图层名: {existing_record['layer_name']}")
+                print(f"  存储ID: {existing_record['store_id']}, 存储名: {existing_record['store_name']}")
+                
+                # 返回已存在的发布信息，而不是报错
+                return {
+                    "success": True,
+                    "message": "文件已发布，返回现有发布信息",
+                    "existing": True,
+                    "store_name": existing_record['store_name'],
+                    "layer_name": existing_record['layer_name'],
+                    "layer_id": existing_record['layer_id']
+                }
+            
+            # 6. 预清理：删除可能存在的同名datastore（GeoServer中的残留）
+            print(f"预清理：检查并删除可能存在的同名datastore")
+            self._cleanup_existing_datastore(generated_store_name)
+            
+            # 7. 将GeoJSON导入PostGIS数据库
             print("\n--- 将GeoJSON导入PostGIS数据库 ---")
             from services.postgis_service import PostGISService
             postgis_service = PostGISService()
@@ -450,7 +564,7 @@ class GeoServerService:
             postgis_result = postgis_service.store_geojson(corrected_path, file_id)
             print(f"✅ GeoJSON已导入到PostGIS")
             
-            # 6. 检查是否为混合几何类型
+            # 8. 检查是否为混合几何类型
             if postgis_result.get('is_mixed', False):
                 print(f"🔄 处理混合几何类型，发现 {len(postgis_result['geometry_types'])} 种几何类型: {postgis_result['geometry_types']}")
                 # 新方案：混合几何类型也使用单一表，不需要特殊处理
@@ -686,13 +800,55 @@ class GeoServerService:
     
     def _create_coveragestore_in_db(self, store_name, workspace_id, data_type, file_id):
         """在数据库中创建覆盖存储记录"""
-        sql = """
-        INSERT INTO geoserver_stores (name, workspace_id, store_type, data_type, file_id, enabled)
-        VALUES (%s, %s, 'coveragestore', %s, %s, TRUE)
-        RETURNING id
-        """
-        result = execute_query(sql, (store_name, workspace_id, data_type, file_id))
-        return result[0]['id']
+        try:
+            # 检查是否已存在同名的store
+            check_sql = """
+            SELECT id FROM geoserver_stores 
+            WHERE name = %s AND workspace_id = %s AND store_type = 'coveragestore'
+            """
+            existing_result = execute_query(check_sql, (store_name, workspace_id))
+            
+            if existing_result:
+                existing_store_id = existing_result[0]['id']
+                print(f"⚠️ 数据库中已存在同名的coveragestore记录: {store_name}, store_id={existing_store_id}")
+                print(f"🗑️ 删除现有的store记录及其相关数据")
+                
+                # 删除相关的coverage记录
+                delete_coverages_sql = """
+                DELETE FROM geoserver_coverages WHERE store_id = %s
+                """
+                execute_query(delete_coverages_sql, (existing_store_id,), fetch=False)
+                
+                # 删除相关的layer记录
+                delete_layers_sql = """
+                DELETE FROM geoserver_layers 
+                WHERE coverage_id IN (
+                    SELECT id FROM geoserver_coverages WHERE store_id = %s
+                )
+                """
+                execute_query(delete_layers_sql, (existing_store_id,), fetch=False)
+                
+                # 删除store记录
+                delete_store_sql = """
+                DELETE FROM geoserver_stores WHERE id = %s
+                """
+                execute_query(delete_store_sql, (existing_store_id,), fetch=False)
+                print(f"✅ 清理完成，现有store记录已删除")
+            
+            # 创建新的store记录
+            sql = """
+            INSERT INTO geoserver_stores (name, workspace_id, store_type, data_type, file_id, enabled)
+            VALUES (%s, %s, 'coveragestore', %s, %s, TRUE)
+            RETURNING id
+            """
+            result = execute_query(sql, (store_name, workspace_id, data_type, file_id))
+            store_id = result[0]['id']
+            print(f"✅ 数据库coveragestore记录创建成功，store_id={store_id}")
+            return store_id
+            
+        except Exception as e:
+            print(f"❌ 创建coveragestore记录失败: {str(e)}")
+            raise Exception(f"创建coveragestore记录失败: {str(e)}")
     
     def _create_coverage_in_db(self, coverage_info, store_id):
         """在数据库中创建覆盖记录
@@ -1305,7 +1461,101 @@ class GeoServerService:
             raise e
     
     def _upload_geotiff_to_geoserver(self, tif_path, store_name):
-        """上传GeoTIFF到GeoServer"""
+        """上传GeoTIFF到GeoServer，如果文件已存在则跳过上传"""
+        import os
+        
+        print(f"检查coveragestore中是否已有文件: {store_name}")
+        
+        # 先检查coveragestore是否已经包含有效的覆盖数据
+        try:
+            coverages_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}/coverages.json"
+            check_response = requests.get(coverages_url, auth=self.auth)
+            
+            if check_response.status_code == 200:
+                coverages_data = check_response.json()
+                if ('coverages' in coverages_data and 
+                    'coverage' in coverages_data['coverages'] and 
+                    coverages_data['coverages']['coverage']):
+                    print(f"✅ coveragestore中已存在有效的覆盖数据，跳过文件上传")
+                    print(f"已存在的覆盖: {coverages_data['coverages']['coverage']}")
+                    return
+                else:
+                    print(f"coveragestore存在但没有覆盖数据，检查文件是否已存在")
+            else:
+                print(f"无法获取覆盖信息，检查文件是否已存在")
+        except Exception as e:
+            print(f"⚠️ 检查覆盖数据时出错: {str(e)}，检查文件是否已存在")
+        
+        # 尝试配置coveragestore指向可能已存在的文件，而不是上传新文件
+        filename = os.path.basename(tif_path)
+        base_filename = os.path.splitext(filename)[0]
+        
+        # 可能的文件路径
+        possible_file_paths = [
+            
+            f"file:data/{self.workspace}/{store_name}/{store_name}.geotiff",
+            f"file:data/{filename}"
+        ]
+        
+        print(f"尝试配置coveragestore指向已存在的文件...")
+        
+        # 尝试更新coveragestore配置，指向已存在的文件
+        for file_path in possible_file_paths:
+            print(f"  尝试文件路径: {file_path}")
+            
+            try:
+                # 更新coveragestore配置
+                update_config = {
+                    "coverageStore": {
+                        "name": store_name,
+                        "type": "GeoTIFF",
+                        "enabled": True,
+                        "url": file_path,
+                        "workspace": {
+                            "name": self.workspace
+                        }
+                    }
+                }
+                
+                update_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}"
+                headers = {'Content-Type': 'application/json'}
+                
+                update_response = requests.put(
+                    update_url,
+                    json=update_config,
+                    auth=self.auth,
+                    headers=headers,
+                    timeout=60
+                )
+                
+                print(f"    配置更新响应状态码: {update_response.status_code}")
+                
+                if update_response.status_code in [200, 201]:
+                    print(f"    ✅ 成功配置coveragestore指向文件: {file_path}")
+                    
+                    # 等待处理并验证
+                    time.sleep(3)
+                    
+                    # 验证是否有覆盖数据
+                    verify_response = requests.get(coverages_url, auth=self.auth)
+                    if verify_response.status_code == 200:
+                        verify_data = verify_response.json()
+                        if ('coverages' in verify_data and 
+                            'coverage' in verify_data['coverages'] and 
+                            verify_data['coverages']['coverage']):
+                            print(f"    ✅ 验证成功：覆盖数据已可用，跳过文件上传")
+                            return
+                    
+                    print(f"    ⚠️ 配置成功但未生成覆盖数据，继续尝试其他路径")
+                else:
+                    print(f"    配置失败: {update_response.text[:200]}...")
+                    
+            except Exception as config_error:
+                print(f"    配置失败: {str(config_error)}")
+                continue
+        
+        # 如果所有文件路径都尝试失败，说明文件确实不存在，需要上传
+        print(f"未找到已存在的文件，开始上传GeoTIFF文件到coveragestore: {store_name}")
         coveragestore_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}/file.geotiff"
         
         headers = {'Content-type': 'image/tiff'}
@@ -1314,14 +1564,31 @@ class GeoServerService:
                 coveragestore_url,
                 data=f,
                 headers=headers,
-                auth=self.auth
+                auth=self.auth,
+                timeout=300  # 增加超时时间，适合大文件
             )
         
         print(f"GeoTIFF上传响应状态码: {response.status_code}")
         print(f"GeoTIFF上传响应内容: {response.text}")
         
         if response.status_code not in [201, 200]:
+            # 如果上传失败，最后再次检查是否是因为文件已存在导致的
+            if "already exists" in response.text.lower() or "error while storing" in response.text.lower():
+                print(f"⚠️ 上传失败可能是文件已存在，最后验证coveragestore状态")
+                
+                # 重新检查是否有覆盖数据
+                verify_response = requests.get(coverages_url, auth=self.auth)
+                if verify_response.status_code == 200:
+                    verify_data = verify_response.json()
+                    if ('coverages' in verify_data and 
+                        'coverage' in verify_data['coverages'] and 
+                        verify_data['coverages']['coverage']):
+                        print(f"✅ 最终验证确认：coveragestore中已有有效数据，上传可以跳过")
+                        return
+                        
             raise Exception(f"上传GeoTIFF失败: {response.text}")
+        
+        print(f"✅ GeoTIFF文件上传成功")
     
     def _create_empty_coveragestore_for_existing_file(self, store_name, file_path):
         """为已存在的文件创建空的coveragestore
@@ -1376,8 +1643,6 @@ class GeoServerService:
             # 尝试不同的URL格式
             alt_urls = [
                 f"file:data/{self.workspace}/{store_name}/{store_name}.geotiff",
-                f"file:data/{self.workspace}/{store_name}.geotiff",
-                f"file:{filename}",
                 f"file:data/{filename}"
             ]
             
@@ -1816,7 +2081,6 @@ class GeoServerService:
         Args:
             store_name: 数据存储名称
         """
-        from config import DB_CONFIG
         
         print(f"创建PostGIS数据源: {store_name}")
         
@@ -2145,9 +2409,28 @@ class GeoServerService:
                     workspace_delete_response = requests.delete(workspace_delete_url, auth=self.auth)
                     print(f"工作空间级别删除响应: {workspace_delete_response.status_code}")
                     time.sleep(2)
+                
+                # 步骤4: 清理数据库记录
+                print(f"步骤4: 清理数据库中的相关记录")
+                try:
+                    # 删除geoserver_stores表中的记录
+                    self._delete_related_records_from_db(store_name)
+                    print(f"✅ 清理数据库记录完成")
+                except Exception as db_error:
+                    print(f"⚠️ 清理数据库记录失败: {str(db_error)}")
+                
+                print(f"✅ 清理GeoServer coveragestore完成")
                     
             elif check_response.status_code == 404:
                 print(f"✅ 覆盖存储 {store_name} 不存在，无需清理")
+                
+                # 即使GeoServer中不存在，也检查并清理数据库记录
+                print(f"检查并清理数据库中可能残留的记录")
+                try:
+                    self._delete_related_records_from_db(store_name)
+                    print(f"✅ 清理数据库记录完成")
+                except Exception as db_error:
+                    print(f"⚠️ 清理数据库记录失败: {str(db_error)}")
             else:
                 print(f"⚠️ 检查覆盖存储状态异常: {check_response.status_code} - {check_response.text}")
                 
@@ -2333,3 +2616,256 @@ class GeoServerService:
         except Exception as e:
             print(f"❌ 获取自动创建的要素类型失败: {str(e)}")
             raise Exception(f"获取自动创建的要素类型失败: {str(e)}")
+
+    def reset_geoserver_caches(self):
+        """重置GeoServer所有缓存和连接"""
+        try:
+            print("=== 重置GeoServer缓存 ===")
+            
+            # 1. 重置所有缓存的REST API端点
+            reset_endpoints = [
+                '/rest/reset',  # 重置所有缓存
+                '/rest/reload',  # 重新加载配置
+            ]
+            
+            results = []
+            for endpoint in reset_endpoints:
+                try:
+                    url = f"{self.url}{endpoint}"
+                    print(f"调用重置API: {url}")
+                    
+                    response = requests.post(
+                        url,
+                        auth=self.auth,
+                        headers={'Content-Type': 'application/json'},
+                        timeout=30
+                    )
+                    
+                    if response.status_code in [200, 201, 202]:
+                        results.append({
+                            'endpoint': endpoint,
+                            'success': True,
+                            'status_code': response.status_code,
+                            'message': 'OK'
+                        })
+                        print(f"✅ {endpoint} 重置成功")
+                    else:
+                        results.append({
+                            'endpoint': endpoint,
+                            'success': False,
+                            'status_code': response.status_code,
+                            'message': response.text
+                        })
+                        print(f"⚠️ {endpoint} 重置失败: {response.status_code}")
+                        
+                except requests.exceptions.RequestException as e:
+                    results.append({
+                        'endpoint': endpoint,
+                        'success': False,
+                        'error': str(e)
+                    })
+                    print(f"❌ {endpoint} 请求失败: {str(e)}")
+            
+            return {
+                'success': True,
+                'message': 'GeoServer缓存重置完成',
+                'results': results
+            }
+            
+        except Exception as e:
+            print(f"重置GeoServer缓存失败: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def get_file_cleanup_paths(self, file_id, geoserver_data_dir=None):
+        """获取需要清理的GeoServer文件路径"""
+        try:
+            # 如果没有指定数据目录，从配置文件获取
+            if not geoserver_data_dir:
+                from config import GEOSERVER_CONFIG
+                import os
+                
+                # 根据操作系统自动选择数据目录
+                if os.name == 'nt':  # Windows
+                    geoserver_data_dir = GEOSERVER_CONFIG['data_dir']['windows']
+                else:  # Linux/Unix
+                    geoserver_data_dir = GEOSERVER_CONFIG['data_dir']['linux']
+                
+                # 如果配置的目录不存在，使用默认路径
+                if not os.path.exists(geoserver_data_dir):
+                    geoserver_data_dir = GEOSERVER_CONFIG['data_dir']['default']
+                    print(f"⚠️ 配置的GeoServer数据目录不存在，使用默认路径: {geoserver_data_dir}")
+                
+                print(f"使用GeoServer数据目录: {geoserver_data_dir}")
+            
+            cleanup_paths = []
+            
+            # 1. 基于file_id生成可能的存储名称
+            store_name = f"file_{file_id}"
+            
+            # 2. 规范化路径分隔符
+            import os
+            sep = os.sep
+            geoserver_data_dir = geoserver_data_dir.rstrip(sep) + sep
+            
+            # 3. 可能的文件路径模式
+            possible_paths = [
+                # Shapefile相关
+                f"{geoserver_data_dir}data{sep}{store_name}{sep}*.shp",
+                f"{geoserver_data_dir}data{sep}{store_name}{sep}*.shx",
+                f"{geoserver_data_dir}data{sep}{store_name}{sep}*.dbf",
+                f"{geoserver_data_dir}data{sep}{store_name}{sep}*.prj",
+                f"{geoserver_data_dir}data{sep}{store_name}{sep}*.cpg",
+                f"{geoserver_data_dir}data{sep}{store_name}{sep}",  # 整个目录
+                
+                # GeoTIFF相关
+                f"{geoserver_data_dir}coverages{sep}{store_name}{sep}*.tif",
+                f"{geoserver_data_dir}coverages{sep}{store_name}{sep}*.tiff",
+                f"{geoserver_data_dir}coverages{sep}{store_name}{sep}",  # 整个目录
+                
+                # 其他可能的位置
+                f"{geoserver_data_dir}workspaces{sep}shpservice{sep}{store_name}{sep}",
+                f"{geoserver_data_dir}tmp{sep}{store_name}{sep}",
+                
+                # 新的可能位置（基于GeoServer标准布局）
+                f"{geoserver_data_dir}workspaces{sep}shpservice{sep}*{store_name}*",
+                f"{geoserver_data_dir}styles{sep}*{store_name}*",
+            ]
+            
+            # 4. 检查实际存在的文件
+            import glob
+            import os
+            
+            for pattern in possible_paths:
+                try:
+                    if pattern.endswith(sep) and os.path.isdir(pattern.rstrip(sep)):
+                        # 目录存在
+                        cleanup_paths.append(pattern.rstrip(sep))
+                    elif '*' in pattern:
+                        # 通配符模式
+                        matches = glob.glob(pattern)
+                        cleanup_paths.extend(matches)
+                    elif os.path.exists(pattern):
+                        # 具体文件存在
+                        cleanup_paths.append(pattern)
+                except Exception as e:
+                    print(f"检查路径 {pattern} 时出错: {str(e)}")
+                    continue
+            
+            # 5. 去重
+            cleanup_paths = list(set(cleanup_paths))
+            
+            print(f"找到 {len(cleanup_paths)} 个需要清理的路径")
+            for path in cleanup_paths:
+                print(f"  - {path}")
+            
+            return cleanup_paths
+            
+        except Exception as e:
+            print(f"获取清理路径失败: {str(e)}")
+            return []
+
+    def force_delete_file(self, file_path):
+        """强制删除文件或目录"""
+        try:
+            import os
+            import shutil
+            import time
+            import subprocess
+            import psutil
+            
+            print(f"尝试删除: {file_path}")
+            
+            if not os.path.exists(file_path):
+                return {
+                    'success': True,
+                    'message': '文件不存在，无需删除'
+                }
+            
+            # 1. 首先尝试正常删除
+            try:
+                if os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+                else:
+                    os.remove(file_path)
+                return {
+                    'success': True,
+                    'message': '文件删除成功'
+                }
+            except PermissionError:
+                print(f"文件被占用，尝试强制删除: {file_path}")
+            
+            # 2. 找到占用文件的进程
+            try:
+                processes_using_file = []
+                for proc in psutil.process_iter(['pid', 'name']):
+                    try:
+                        for open_file in proc.open_files():
+                            if file_path.lower() in open_file.path.lower():
+                                processes_using_file.append({
+                                    'pid': proc.info['pid'],
+                                    'name': proc.info['name']
+                                })
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        continue
+                
+                if processes_using_file:
+                    print(f"文件被以下进程占用: {processes_using_file}")
+                    
+                    # 3. 如果是Java进程（可能是GeoServer），尝试温和地处理
+                    for proc_info in processes_using_file:
+                        if 'java' in proc_info['name'].lower():
+                            print(f"检测到Java进程占用文件: {proc_info}")
+                            return {
+                                'success': False,
+                                'message': f'文件被Java进程占用 (PID: {proc_info["pid"]}), 建议重启GeoServer服务',
+                                'occupied_by': processes_using_file
+                            }
+                
+            except Exception as e:
+                print(f"检查进程占用失败: {str(e)}")
+            
+            # 4. 在Windows上尝试使用handle工具（如果可用）
+            try:
+                if os.name == 'nt':  # Windows
+                    # 尝试使用Windows的句柄工具
+                    result = subprocess.run([
+                        'powershell', '-Command',
+                        f'Get-Process | Where-Object {{$_.Modules.FileName -like "*{os.path.basename(file_path)}*"}}'
+                    ], capture_output=True, text=True, timeout=10)
+                    
+                    if result.stdout.strip():
+                        print(f"PowerShell检测到进程占用: {result.stdout}")
+            except Exception as e:
+                print(f"PowerShell检查失败: {str(e)}")
+            
+            # 5. 最后尝试：延迟删除
+            try:
+                time.sleep(2)  # 等待2秒
+                if os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+                else:
+                    os.remove(file_path)
+                return {
+                    'success': True,
+                    'message': '延迟删除成功'
+                }
+            except Exception as e:
+                return {
+                    'success': False,
+                    'message': f'文件删除失败: {str(e)}',
+                    'suggestions': [
+                        '文件可能被GeoServer进程锁定',
+                        '建议重启GeoServer服务后再试',
+                        '可以使用Process Explorer查看具体占用进程',
+                        '临时解决方案：重命名文件而不是删除'
+                    ]
+                }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }

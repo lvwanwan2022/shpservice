@@ -228,6 +228,7 @@
 </template>
 
 <script>
+/* eslint-disable */
 import { ref, reactive, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -487,7 +488,7 @@ export default {
       }
     }
     
-    // 缩放到图层 - 针对OpenLayers优化
+    // 缩放到图层 - 针对OpenLayers优化，支持动态坐标系
     const zoomToLayer = async (layer) => {
       try {
         // 更安全的地图可用性检查
@@ -509,19 +510,22 @@ export default {
         }
         
         let bbox = null
+        let originalCRS = 'EPSG:4326' // 用于显示的原始坐标系
         
-        // 优先使用新的图层边界API
+        // 1. 优先使用新的图层边界API（bbox已经是转换后的EPSG:4326坐标）
         try {
           const response = await gisApi.getLayerBounds(layer.id)
           if (response?.success && response.data?.bbox) {
             bbox = response.data.bbox
-            console.log('从图层边界API获取到边界:', bbox)
+            // coordinate_system字段仅用于显示原始坐标系，bbox已经是EPSG:4326坐标
+            originalCRS = response.data.coordinate_system || 'EPSG:4326'
+            console.log('从图层边界API获取到边界:', bbox, '(已转换为EPSG:4326), 原始坐标系:', originalCRS)
           }
         } catch (apiError) {
           console.warn('图层边界API调用失败，尝试其他方式:', apiError)
         }
         
-        // 如果API调用失败，尝试从图层属性获取
+        // 2. 如果边界API调用失败，尝试从图层属性获取
         if (!bbox && layer.bbox) {
           if (typeof layer.bbox === 'string') {
             try {
@@ -534,7 +538,7 @@ export default {
           }
         }
         
-        // 如果仍然没有边界，尝试从文件信息获取
+        // 3. 如果仍然没有边界，尝试从文件信息获取
         if (!bbox && layer.file_id) {
           try {
             const response = await gisApi.getFileBounds(layer.file_id)
@@ -554,46 +558,67 @@ export default {
           return
         }
         
-        // 验证边界框数据
-        if (!bbox.minx || !bbox.miny || !bbox.maxx || !bbox.maxy) {
-          ElMessage.warning('边界框数据不完整')
+        // 4. 验证边界框数据并转换格式
+        let minx, miny, maxx, maxy
+        
+        if (bbox.minx !== undefined) {
+          // 对象格式 {minx, miny, maxx, maxy}
+          minx = parseFloat(bbox.minx)
+          miny = parseFloat(bbox.miny)
+          maxx = parseFloat(bbox.maxx)
+          maxy = parseFloat(bbox.maxy)
+        } else if (Array.isArray(bbox) && bbox.length === 4) {
+          // 数组格式 [minx, miny, maxx, maxy]
+          minx = parseFloat(bbox[0])
+          miny = parseFloat(bbox[1])
+          maxx = parseFloat(bbox[2])
+          maxy = parseFloat(bbox[3])
+        } else {
+          ElMessage.warning('边界框数据格式不正确')
           return
         }
-        
-        // 确保数值是有效的
-        const minx = parseFloat(bbox.minx)
-        const miny = parseFloat(bbox.miny)
-        const maxx = parseFloat(bbox.maxx)
-        const maxy = parseFloat(bbox.maxy)
         
         if (isNaN(minx) || isNaN(miny) || isNaN(maxx) || isNaN(maxy)) {
           ElMessage.warning('边界框数据格式错误')
           return
         }
         
-        // 针对OpenLayers创建extent - 修复坐标格式
-        // bbox格式: [minx, miny, maxx, maxy]
-        //const extent = [minx, miny, maxx, maxy]
-        const extent = [minx, miny, maxx, maxy]
-        // 将边界框从WGS84转换到Web墨卡托投影（如果需要）
-        const transformedExtent = transformExtent(extent, 'EPSG:4326', 'EPSG:3857')
-        console.log('lvwan从图层边界API获取到边界:', extent)
-        // 使用正确的OpenLayers API进行缩放
+        // 5. 构建范围并进行坐标转换
+        const originalExtent = [minx, miny, maxx, maxy]
+        console.log(`边界框坐标 (后端已转换为EPSG:4326):`, originalExtent, `原始坐标系: ${originalCRS}`)
+        
+        let transformedExtent
+        try {
+          // 由于后端返回的bbox已经是EPSG:4326坐标，直接从EPSG:4326转换到EPSG:3857
+          if (mapViewerRef.value.transformCoordinates) {
+            transformedExtent = mapViewerRef.value.transformCoordinates(originalExtent, 'EPSG:4326', 'EPSG:3857')
+          } else {
+            // 备用方案：直接使用OpenLayers的transformExtent
+            transformedExtent = ol.proj.transformExtent(originalExtent, 'EPSG:4326', 'EPSG:3857')
+          }
+          console.log(`转换后边界 (EPSG:3857):`, transformedExtent)
+        } catch (transformError) {
+          console.error('坐标转换失败:', transformError)
+          ElMessage.error(`坐标转换失败: ${transformError.message}`)
+          return
+        }
+        
+        // 6. 缩放到转换后的范围
         const view = map.getView()
         view.fit(transformedExtent, {
           padding: [20, 20, 20, 20], // 边距
-          maxZoom: 10, // 最大缩放级别限制
+          maxZoom: 16, // 最大缩放级别限制
           duration: 1000 // 动画持续时间
         })
         
-        // 缩放完成后，只设置当前活动图层，不执行置顶操作
+        // 7. 缩放完成后，设置当前活动图层
         currentActiveLayer.value = layer
         
-        ElMessage.success(`已缩放到图层"${layer.layer_name}"范围`)
+        ElMessage.success(`已缩放到图层"${layer.layer_name}"范围 (${originalCRS})`)
         
       } catch (error) {
         console.error('缩放到图层失败:', error)
-        ElMessage.error('缩放到图层失败')
+        ElMessage.error(`缩放到图层失败: ${error.message}`)
       }
     }
     

@@ -1066,6 +1066,22 @@ export default {
       url: `/gis/layer/${layerId}/crs-info`,
       method: 'get'
     })
+  },
+  
+  // 获取常用坐标系的proj4定义
+  getProj4Definitions() {
+    return service({
+      url: '/gis/coordinate-systems/proj4-definitions',
+      method: 'get'
+    })
+  },
+  
+  // 获取单个坐标系的proj4定义
+  getSingleProj4Definition(epsgCode) {
+    return service({
+      url: `/gis/coordinate-systems/${epsgCode}/proj4`,
+      method: 'get'
+    })
   }
 }
 
