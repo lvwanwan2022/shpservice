@@ -314,6 +314,9 @@ export default {
     const hasPolygonGeometry = computed(() => isVectorLayer.value)
     const isDxfMartinLayer = computed(() => currentStyleLayer.value?.service_type === 'martin' && currentStyleLayer.value?.file_type === 'dxf' && currentStyleLayer.value?.martin_service_id)
     
+    // 图层样式缓存
+    const layerStyleCache = reactive({})
+    
     // 初始化地图
     const initMap = () => {
       console.log('=== 开始地图初始化 ===')
@@ -452,42 +455,31 @@ export default {
       }
     }
     
-    // 添加Martin图层 - 改进版本
+    // 添加Martin图层
     const addMartinLayer = async (layer) => {
       if (!layer.mvt_url) {
         console.warn('MVT URL不存在，跳过图层:', layer.layer_name)
         return
       }
       
-      let mvtUrl = layer.mvt_url
-      
-      // 规范化 URL 格式处理
-      try {
-        // 处理 Martin 服务的标准 URL 格式
-        if (mvtUrl.includes('localhost:3000')) {
-          // 提取表名，支持多种 URL 格式
-          const tableNameMatch = mvtUrl.match(/\/([^/]+)\/?\{z\}/) || mvtUrl.match(/\/([^/]+)$/)
-          const tableName = tableNameMatch?.[1] || 'default'
-          mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
-        }
-        
-        // 确保 URL 以正确的模板格式结尾
-        if (!mvtUrl.includes('{z}') || !mvtUrl.includes('{x}') || !mvtUrl.includes('{y}')) {
-          // 如果不包含模板变量，添加标准模板
-          mvtUrl = mvtUrl.replace(/\/$/, '') + '/{z}/{x}/{y}'
-        }
-        
-        
-        
-        console.log('创建MVT图层:', layer.layer_name, 'URL:', mvtUrl)
-        
-      } catch (error) {
-        console.error('URL格式处理失败:', error)
-        ElMessage.error(`MVT URL格式无效: ${layer.layer_name}`)
+      // 检查地图实例是否存在
+      if (!map.value) {
+        console.error('地图实例不存在，无法添加Martin图层:', layer.layer_name)
         return
       }
-      
-      // 创建样式函数 - 优化版本
+
+      let mvtUrl = layer.mvt_url
+      if (mvtUrl.includes('localhost:3000')) {
+        const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
+        mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
+      }
+
+      console.log('创建MVT图层:', layer.layer_name, 'URL:', mvtUrl)
+
+      // 获取图层的样式配置 - 使用缓存的样式配置
+      const layerStyleConfig = layerStyleCache[layer.id] || {}
+
+      // 创建样式函数 - 优化版本，支持用户自定义样式
       const createStyleFunction = () => {
         const isDxf = layer.file_type === 'dxf'
         const defaultStyles = isDxf ? defaultDxfStylesConfig.defaultDxfStyles : {}
@@ -506,41 +498,60 @@ export default {
             return styleCache[cacheKey]
           }
           
-          const layerStyle = defaultStyles[layerName] || {}
+          // 合并默认样式和用户自定义样式
+          const layerStyle = { 
+            ...defaultStyles[layerName], 
+            ...layerStyleConfig 
+          }
           
           let style
           if (geometryType === 'Point' || geometryType === 'MultiPoint') {
-            // 点样式
+            // 点样式 - 应用用户设置的point样式
+            const pointStyle = layerStyleConfig.point || {}
             style = new Style({
               image: new Circle({
-                radius: layerStyle.radius || 4,
+                radius: pointStyle.size || layerStyle.radius || 4,
                 fill: new Fill({
-                  color: layerStyle.fillColor || layerStyle.color || '#66ccff'
+                  color: pointStyle.color || layerStyle.fillColor || layerStyle.color || '#66ccff'
                 }),
                 stroke: new Stroke({
-                  color: layerStyle.color || '#0066cc',
+                  color: pointStyle.color || layerStyle.color || '#0066cc',
                   width: 1
                 })
               })
             })
           } else if (geometryType === 'LineString' || geometryType === 'MultiLineString') {
-            // 线样式
+            // 线样式 - 应用用户设置的line样式
+            const lineStyle = layerStyleConfig.line || {}
             style = new Style({
               stroke: new Stroke({
-                color: layerStyle.color || '#0066cc',
-                width: layerStyle.weight || 2,
+                color: lineStyle.color || layerStyle.color || '#0066cc',
+                width: lineStyle.width || layerStyle.weight || 2,
                 lineDash: layerStyle.dashArray || undefined
               })
             })
           } else if (geometryType === 'Polygon' || geometryType === 'MultiPolygon') {
-            // 面样式
+            // 面样式 - 应用用户设置的polygon样式
+            const polygonStyle = layerStyleConfig.polygon || {}
+            const fillColor = polygonStyle.fillColor || layerStyle.fillColor || layerStyle.color || '#66ccff'
+            const fillOpacity = polygonStyle.fillOpacity || layerStyle.fillOpacity || 0.3
+            
+            // 转换颜色和透明度
+            let finalFillColor = fillColor
+            if (fillOpacity !== 1 && fillColor.startsWith('#')) {
+              const r = parseInt(fillColor.slice(1, 3), 16)
+              const g = parseInt(fillColor.slice(3, 5), 16)
+              const b = parseInt(fillColor.slice(5, 7), 16)
+              finalFillColor = `rgba(${r}, ${g}, ${b}, ${fillOpacity})`
+            }
+            
             style = new Style({
               stroke: new Stroke({
-                color: layerStyle.color || '#0066cc',
+                color: polygonStyle.outlineColor || layerStyle.color || '#0066cc',
                 width: layerStyle.weight || 1
               }),
               fill: new Fill({
-                color: layerStyle.fillColor || (layerStyle.color + '4D') || '#66ccff4D' // 添加透明度
+                color: finalFillColor
               })
             })
           } else {
@@ -855,6 +866,9 @@ export default {
       const styleConfig = isVectorLayer.value 
         ? { point: { ...styleForm.point }, line: { ...styleForm.line }, polygon: { ...styleForm.polygon } }
         : { raster: { ...styleForm.raster } }
+      
+      // 将样式配置保存到缓存中，供重新加载图层时使用
+      layerStyleCache[currentStyleLayer.value.id] = styleConfig
       
       if (currentStyleLayer.value.service_type === 'martin' && currentStyleLayer.value.martin_service_id) {
         await gisApi.updateMartinServiceStyle(currentStyleLayer.value.martin_service_id, styleConfig)
@@ -1244,7 +1258,8 @@ export default {
       transformCoordinates,
       initializeProjections,
       registerProjection,
-      projectionsInitialized
+      projectionsInitialized,
+      layerStyleCache
     }
   },
   expose: ['showStyleDialog', 'showAddLayerDialog', 'toggleLayerVisibility', 'map', 'bringLayerToTop', 'setActiveLayer', 'currentActiveLayer', 'getLayerCRSInfo', 'transformCoordinates', 'initializeProjections', 'registerProjection', 'projectionsInitialized']

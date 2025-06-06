@@ -8,7 +8,7 @@ import os
 import tempfile
 import requests
 from services.file_service import FileService
-from backend.config import GEOSERVER_CONFIG
+from config import GEOSERVER_CONFIG
 
 geoservice_bp = Blueprint('geoservice', __name__)
 geoserver_service = GeoServerService()

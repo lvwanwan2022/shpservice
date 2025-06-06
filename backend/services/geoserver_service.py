@@ -10,7 +10,7 @@ import zipfile
 import tempfile
 import shutil
 from models.db import execute_query
-from config import GEOSERVER_CONFIG
+from config import GEOSERVER_CONFIG, DB_CONFIG
 
 class GeoServerService:
     """GeoServer服务类，用于管理GeoServer资源"""

@@ -2,7 +2,7 @@
 Author: WangNing
 Date: 2025-05-27 11:25:53
 LastEditors: WangNing
-LastEditTime: 2025-05-28 17:45:49
+LastEditTime: 2025-06-06 18:00:36
 FilePath: \shpservice\backend\services\layer_service.py
 Description: 
 Copyright (c) 2025 by VGE, All Rights Reserved. 
@@ -19,7 +19,7 @@ from services.style_service import StyleService
 import requests
 from requests.auth import HTTPBasicAuth
 from datetime import datetime
-from backend.config import GEOSERVER_CONFIG
+from config import GEOSERVER_CONFIG
 
 class LayerService:
     def __init__(self):
