@@ -155,7 +155,12 @@ class DXFProcessor:
                 '-t_srs', coordinate_system,  # 目标坐标系
                 '-dim', 'XY',  # 强制2D
                 '--config', 'DXF_ENCODING', 'UTF-8',  # 设置编码
-                '-select', 'layer,paperspace,subclasses,linetype,entityhandle,text,rawcodevalues',  # 明确选择字段，包括rawcodevalues
+                '--config', 'SHAPE_ENCODING', 'UTF-8',  # 额外的编码设置
+                '--config', 'GDAL_DATA_ENCODING', 'UTF-8',  # GDAL数据编码
+                # 🔧 解决MVT layer属性冲突：将DXF的layer字段重命名为cad_layer
+                # 原因：MVT规范会自动添加layer属性（值为表名），与DXF的layer字段冲突
+                # 解决方案：使用字段选择和映射，将layer字段重命名为cad_layer
+                '-select', 'layer as cad_layer,paperspace,subclasses,linetype,entityhandle,text,rawcodevalues',
                 '--config', 'DXF_FEATURE_LIMIT_PER_BLOCK', '-1'  # 不限制block中的要素数量
             ]
             
@@ -319,8 +324,10 @@ class DXFProcessor:
                 '--config', 'DXF_INCLUDE_RAW_CODE_VALUES', 'TRUE',  # 包含原始代码值（包括颜色）
                 '--config', 'SHAPE_ENCODING', 'UTF-8',  # 额外的编码设置
                 '--config', 'GDAL_DATA_ENCODING', 'UTF-8',  # GDAL数据编码
-                # 添加颜色字段支持
-                '-select', 'layer,paperspace,subclasses,linetype,entityhandle,text,rawcodevalues',  # 明确选择字段，包括rawcodevalues
+                # 🔧 解决MVT layer属性冲突：将DXF的layer字段重命名为cad_layer
+                # 原因：MVT规范会自动添加layer属性（值为表名），与DXF的layer字段冲突
+                # 解决方案：使用字段选择和映射，将layer字段重命名为cad_layer
+                '-select', 'layer as cad_layer,paperspace,subclasses,linetype,entityhandle,text,rawcodevalues',
                 '--config', 'DXF_FEATURE_LIMIT_PER_BLOCK', '-1'  # 不限制block中的要素数量
             ]
             

@@ -349,6 +349,16 @@ export default {
           const defaultStyles = dxfStyleManager.getDefaultStyles()
           layerStyles.value = dxfStyleManager.mergeStyles(availableLayers.value, defaultStyles)
         }
+        
+        // 初始化完成后，触发一次样式更新事件，让地图应用当前样式
+        if (Object.keys(layerStyles.value).length > 0) {
+          emit('styles-updated', {
+            layerName: null, // 表示所有图层
+            style: null,
+            allStyles: layerStyles.value
+          })
+          console.log('DXF样式编辑器初始化完成，已触发样式更新')
+        }
       } catch (error) {
         console.error('初始化DXF样式编辑器失败:', error)
         ElMessage.error('加载图层样式失败')

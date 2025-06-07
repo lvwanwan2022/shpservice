@@ -414,3 +414,87 @@ cd backend
 python test_martin_integration.py
 
 
+我的martin发布的dxf的样式应该每次加载图层时都从数据库表中获取，后端也写好了相应的接口，如果后端样式为空，才会使用dxf的默认样式：G:\code\shpservice\frontend\src\config\defaultDxfStyles.json
+每次调出martin(dxf)选项卡，都会从数据库读取一次样式，每次更改一个样式就会应用到图层样式上，但是不会保存到数据库，帮我检查现在是否是这个逻辑
+
+## DXF图层样式功能
+
+### 功能说明
+
+本系统支持根据PostGIS表中的`layer`字段为DXF图层设置不同的样式，实现与AutoCAD中DXF图层样式的一致性。
+
+### PostGIS表结构支持
+
+对于如下的PostGIS表结构：
+```sql
+CREATE TABLE IF NOT EXISTS public.vector_05492e03
+(
+    gid integer NOT NULL DEFAULT nextval('vector_05492e03_gid_seq'::regclass),
+    layer character varying COLLATE pg_catalog."default",  -- 关键字段：图层名称
+    paperspace boolean,
+    subclasses character varying COLLATE pg_catalog."default",
+    linetype character varying COLLATE pg_catalog."default",
+    entityhandle character varying COLLATE pg_catalog."default",
+    text character varying COLLATE pg_catalog."default",
+    rawcodevalues character varying[] COLLATE pg_catalog."default",
+    geom geometry(Geometry,3857),  -- 几何字段
+    CONSTRAINT vector_05492e03_pkey PRIMARY KEY (gid)
+)
+```
+
+### 样式应用逻辑
+
+1. **MVT要素样式映射**：
+   - 系统从MVT要素的`properties.layer`字段读取图层名称
+   - 根据图层名称在默认DXF样式配置中查找对应样式
+   - 如果找不到匹配样式，使用通用默认样式
+
+2. **样式优先级**：
+   - 用户自定义样式（最高优先级）
+   - DXF默认样式配置
+   - 系统通用默认样式（最低优先级）
+
+### 使用方法
+
+1. **加载DXF图层**：
+   - 上传DXF文件到系统
+   - 系统自动转换为PostGIS表
+   - 发布为Martin PBF服务
+   - 在地图中添加图层
+
+2. **样式设置**：
+   - 点击图层的"样式设置"按钮
+   - 切换到"Martin(DXF)"选项卡
+   - 系统自动应用当前样式配置
+   - 修改任何样式属性都会实时更新地图显示
+
+3. **支持的样式属性**：
+   - 颜色（color）
+   - 线宽（weight）
+   - 透明度（opacity）
+   - 线型（dashArray）：实线、虚线、点线、点划线
+   - 填充（fill）：是否填充
+   - 填充颜色（fillColor）
+   - 可见性（visible）
+
+### 调试功能
+
+开发者可以在浏览器控制台查看详细的样式应用日志：
+- DXF图层信息
+- 样式配置内容
+- 要素样式处理过程
+- 样式应用结果
+
+### 已配置的默认DXF图层样式
+
+系统预配置了常见的DXF图层样式，包括：
+- 地形相关：DMTZ、DGX、GCD、jqx、sqx
+- 水系设施：SXSS
+- 道路交通：DLSS  
+- 建筑居住：JMD、DLDW
+- 植被绿化：ZBTZ
+- 管线设施：GXYZ
+- 边界控制：JJ、KZD、JZD、TK
+- 辅助图层：ASSIST
+
+更多图层样式可以通过样式编辑器动态添加和配置。

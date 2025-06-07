@@ -161,8 +161,7 @@ import TileLayer from 'ol/layer/Tile'
 import VectorTileLayer from 'ol/layer/VectorTile'
 import { TileWMS, VectorTile, XYZ } from 'ol/source'
 import { fromLonLat, transformExtent, transform } from 'ol/proj'
-//import { defaults as defaultControls, ScaleLine } from 'ol/control'
-//import Overlay from 'ol/Overlay'
+import Overlay from 'ol/Overlay'
 import { Style, Fill, Stroke, Circle } from 'ol/style'
 import { MVT } from 'ol/format'
 import BaseMapSwitcherOL from './BaseMapSwitcherOL.vue'
@@ -398,12 +397,168 @@ export default {
           }
         }, 200)
         
+        // 9. 初始化弹窗
+        initializePopup()
+        
         console.log('=== 地图初始化完成 ===')
         
       } catch (error) {
         console.error('❌ 地图初始化失败:', error)
         console.error('错误堆栈:', error.stack)
       }
+    }
+    
+    // 初始化弹窗 - 简化版本
+    const initializePopup = () => {
+      if (!map.value) return
+      
+      // 获取弹窗元素
+      const container = document.getElementById('popup')
+      const content = document.getElementById('popup-content')
+      const closer = document.getElementById('popup-closer')
+      
+      if (!container || !content || !closer) {
+        console.error('❌ 弹窗元素未找到')
+        return
+      }
+      
+      // 创建弹窗覆盖物
+      popup.value = new Overlay({
+        element: container,
+        autoPan: {
+          animation: {
+            duration: 250,
+          },
+        },
+      })
+      
+      // 添加到地图
+      map.value.addOverlay(popup.value)
+      
+      // 关闭按钮事件
+      closer.onclick = function () {
+        popup.value.setPosition(undefined)
+        closer.blur()
+        return false
+      }
+      
+      // 地图点击事件
+      map.value.on('click', function (evt) {
+        const coordinate = evt.coordinate
+        const pixel = evt.pixel
+        
+        // 检查点击位置是否有要素
+        const features = map.value.getFeaturesAtPixel(pixel)
+        console.log('features',features)
+        if (features && features.length > 0) {
+          // 找到第一个要素
+          const feature = features[0]
+          
+          // 找到要素所属的图层
+          const targetLayer = map.value.forEachFeatureAtPixel(pixel, (feat, layer) => {
+            if (feat === feature && layer && mvtLayers.value && Object.values(mvtLayers.value).includes(layer)) {
+              return layer
+            }
+            return null
+          })
+          
+          if (targetLayer) {
+            // 显示弹窗
+            showPopup(feature, targetLayer, coordinate, content)
+          }
+        } else {
+          // 点击空白处，隐藏弹窗
+          popup.value.setPosition(undefined)
+        }
+      })
+      
+      // 鼠标移动事件 - 改变鼠标样式
+      map.value.on('pointermove', function (evt) {
+        if (evt.dragging) return
+        
+        const pixel = evt.pixel
+        const hasFeature = map.value.hasFeatureAtPixel(pixel, {
+          layerFilter: (layer) => {
+            // 只对MVT图层启用手型cursor
+            return mvtLayers.value && Object.values(mvtLayers.value).includes(layer)
+          }
+        })
+        
+        // 改变鼠标样式
+        map.value.getTargetElement().style.cursor = hasFeature ? 'pointer' : ''
+      })
+      
+      console.log('✅ 弹窗初始化完成')
+    }
+    
+    // 显示弹窗 - 简化版本
+    const showPopup = (feature, layer, coordinate, contentElement) => {
+      if (!popup.value || !feature) return
+      
+      // 获取要素属性
+      const properties = feature.getProperties()
+      
+      // 找到对应的图层信息
+      const layerInfo = Object.values(layersList.value).find(l => 
+        mvtLayers.value[l.id] === layer
+      )
+      
+      if (!layerInfo) return
+      
+      // 构建弹窗内容
+      let content = `<div style="padding: 10px;">
+        <h4 style="margin: 0 0 10px 0; color: #333; border-bottom: 1px solid #eee; padding-bottom: 5px;">
+          ${layerInfo.layer_name}
+          <small style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 5px;">
+            ${layerInfo.file_type?.toUpperCase() || 'MVT'}
+          </small>
+        </h4>`
+      
+      // 处理属性
+      const filteredProperties = Object.entries(properties)
+        .filter(([key, value]) => {
+          // 排除几何相关和内部属性
+          if (key === 'geometry' || key === 'geom') return false
+          if (value == null || value === 'NULL' || value === '') return false
+          if (typeof value === 'object') return false
+          return true
+        })
+        .slice(0, 6) // 限制为6个属性
+      
+      if (filteredProperties.length === 0) {
+        content += '<div style="color: #999; font-style: italic;">暂无属性信息</div>'
+      } else {
+        filteredProperties.forEach(([key, value]) => {
+          // 格式化属性名和值
+          let displayKey = key.length > 15 ? key.substring(0, 15) + '...' : key
+          let displayValue = String(value).length > 30 ? String(value).substring(0, 30) + '...' : value
+          
+          // 特殊格式化数字
+          if (typeof value === 'number' && value % 1 !== 0) {
+            displayValue = Number(value).toFixed(3)
+          }
+          
+          content += `
+            <div style="margin-bottom: 8px; display: flex;">
+              <span style="color: #666; margin-right: 10px; min-width: 80px; font-weight: 500;">${displayKey}：</span>
+              <span style="color: #333; flex: 1;">${displayValue}</span>
+            </div>
+          `
+        })
+        
+        const totalProperties = Object.keys(properties).length - 2 // 排除geometry等
+        if (totalProperties > 6) {
+          content += `<div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee; color: #999; font-style: italic; font-size: 12px; text-align: center;">还有 ${totalProperties - 6} 个属性</div>`
+        }
+      }
+      
+      content += '</div>'
+      
+      // 设置内容和位置
+      contentElement.innerHTML = content
+      popup.value.setPosition(coordinate)
+      
+      console.log('🎯 显示弹窗:', layerInfo.layer_name)
     }
     
     // 加载场景
@@ -476,10 +631,17 @@ export default {
 
       console.log('创建MVT图层:', layer.layer_name, 'URL:', mvtUrl)
 
-      // 获取图层的样式配置 - 使用缓存的样式配置
-      const layerStyleConfig = layerStyleCache[layer.id] || {}
+      // 获取图层的样式配置
+      let layerStyleConfig = layerStyleCache[layer.id] || {}
+      
+      // 如果是DXF文件且没有缓存样式，使用默认DXF样式
+      if (layer.file_type === 'dxf' && Object.keys(layerStyleConfig).length === 0) {
+        console.log('使用默认DXF样式配置')
+        layerStyleConfig = defaultDxfStylesConfig.defaultDxfStyles
+      }
+            
 
-      // 创建样式函数 - 优化版本，支持用户自定义样式
+      // 创建样式函数 - 重新设计的版本
       const createStyleFunction = () => {
         const isDxf = layer.file_type === 'dxf'
         const defaultStyles = isDxf ? defaultDxfStylesConfig.defaultDxfStyles : {}
@@ -489,102 +651,319 @@ export default {
         
         return (feature) => {
           const properties = feature.getProperties()
-          const layerName = properties.layer || properties.Layer || 'default'
+          console.log('properties',properties)
           const geometryType = feature.getGeometry().getType()
           
-          // 创建缓存键
-          const cacheKey = `${layerName}_${geometryType}`
-          if (styleCache[cacheKey]) {
-            return styleCache[cacheKey]
-          }
+          // 🔧 解决MVT layer属性冲突问题 - 后端方案
+          // 现在在后端ogr2ogr导入时已将DXF的layer字段重命名为cad_layer字段
+          // 这样避免了与MVT规范的layer属性（表名）冲突
           
-          // 合并默认样式和用户自定义样式
-          const layerStyle = { 
-            ...defaultStyles[layerName], 
-            ...layerStyleConfig 
-          }
+          let dxfLayerName = null
+          let useLayerBasedStyle = false
           
-          let style
-          if (geometryType === 'Point' || geometryType === 'MultiPoint') {
-            // 点样式 - 应用用户设置的point样式
-            const pointStyle = layerStyleConfig.point || {}
-            style = new Style({
-              image: new Circle({
-                radius: pointStyle.size || layerStyle.radius || 4,
-                fill: new Fill({
-                  color: pointStyle.color || layerStyle.fillColor || layerStyle.color || '#66ccff'
-                }),
-                stroke: new Stroke({
-                  color: pointStyle.color || layerStyle.color || '#0066cc',
-                  width: 1
-                })
-              })
-            })
-          } else if (geometryType === 'LineString' || geometryType === 'MultiLineString') {
-            // 线样式 - 应用用户设置的line样式
-            const lineStyle = layerStyleConfig.line || {}
-            style = new Style({
-              stroke: new Stroke({
-                color: lineStyle.color || layerStyle.color || '#0066cc',
-                width: lineStyle.width || layerStyle.weight || 2,
-                lineDash: layerStyle.dashArray || undefined
-              })
-            })
-          } else if (geometryType === 'Polygon' || geometryType === 'MultiPolygon') {
-            // 面样式 - 应用用户设置的polygon样式
-            const polygonStyle = layerStyleConfig.polygon || {}
-            const fillColor = polygonStyle.fillColor || layerStyle.fillColor || layerStyle.color || '#66ccff'
-            const fillOpacity = polygonStyle.fillOpacity || layerStyle.fillOpacity || 0.3
+          // 查找DXF图层名称 - 现在使用专门的cad_layer字段
+          const isDxf = layer.file_type === 'dxf'
+          
+          // 优先查找cad_layer字段（后端已重命名）
+          if (properties.cad_layer && 
+              typeof properties.cad_layer === 'string' && 
+              properties.cad_layer.trim() !== '') {
+            dxfLayerName = properties.cad_layer.trim()
+            useLayerBasedStyle = true
+            console.log(`✅ 找到CAD图层名称: "${dxfLayerName}" (来源: cad_layer字段)`)
+          }
+          // 备用：检查其他可能的字段名（兼容旧数据）
+          else if (isDxf) {
+            const fallbackFields = ['layer_name', 'dxf_layer', 'subclasses', 'layername', 'entity_layer']
             
-            // 转换颜色和透明度
-            let finalFillColor = fillColor
-            if (fillOpacity !== 1 && fillColor.startsWith('#')) {
-              const r = parseInt(fillColor.slice(1, 3), 16)
-              const g = parseInt(fillColor.slice(3, 5), 16)
-              const b = parseInt(fillColor.slice(5, 7), 16)
-              finalFillColor = `rgba(${r}, ${g}, ${b}, ${fillOpacity})`
+            for (const fieldName of fallbackFields) {
+              const fieldValue = properties[fieldName]
+              
+              if (fieldValue && 
+                  typeof fieldValue === 'string' && 
+                  fieldValue.trim() !== '' &&
+                  !fieldValue.includes('vector_') && 
+                  !fieldValue.includes('table_') &&
+                  !fieldValue.match(/^[a-f0-9]{8,}$/)) {
+                    
+                dxfLayerName = fieldValue.trim()
+                useLayerBasedStyle = true
+                console.log(`⚠️ 使用备用字段获取图层名称: "${dxfLayerName}" (来源: ${fieldName}字段)`)
+                break
+              }
+            }
+          }
+          
+          // 调试输出：显示图层名称获取结果
+          if (isDxf) {
+            console.log(`🎯 DXF图层名称解析结果:`, {
+              图层名: layer.layer_name,
+              找到的DXF图层名: dxfLayerName,
+              使用图层样式: useLayerBasedStyle,
+              所有属性: Object.keys(properties).join(', ')
+            })
+          }
+          
+          // 样式策略1：DXF图层 - 根据是否找到图层名称决定样式方式
+          if (isDxf) {
+            if (dxfLayerName) {
+              // 找到了DXF图层名称，使用图层匹配样式
+              const cacheKey = `dxf_layer_${dxfLayerName}_${geometryType}`
+              if (styleCache[cacheKey]) {
+                return styleCache[cacheKey]
+              }
+              
+              // 获取图层特定样式：优先使用用户自定义样式，其次使用默认样式
+              const layerSpecificStyle = layerStyleConfig[dxfLayerName] || defaultStyles[dxfLayerName] || {}
+              
+              // 如果没有找到匹配的样式配置，使用通用默认样式
+              const finalStyle = Object.keys(layerSpecificStyle).length > 0 ? layerSpecificStyle : {
+                weight: 1,
+                color: '#666666',
+                opacity: 0.8,
+                fillColor: '#CCCCCC',
+                fill: false,
+                fillOpacity: 0.3,
+                radius: 3,
+                visible: true
+              }
+              
+              console.log(`🎨 使用DXF图层样式: ${dxfLayerName} (${geometryType})`, finalStyle)
+              
+              let style = createStyleFromConfig(finalStyle, geometryType)
+              
+              // 处理图层可见性
+              if (finalStyle.visible === false) {
+                style = new Style({}) // 返回空样式以隐藏
+              }
+              
+              // 缓存样式
+              styleCache[cacheKey] = style
+              return style
+            } else {
+              // 没有找到DXF图层名称，使用DXF通用默认样式
+              const cacheKey = `dxf_default_${geometryType}`
+              if (styleCache[cacheKey]) {
+                return styleCache[cacheKey]
+              }
+              
+              // 使用DXF通用默认样式
+              const defaultStyle = {
+                weight: 1,
+                color: '#888888',
+                opacity: 0.8,
+                fillColor: '#DDDDDD',
+                fill: false,
+                fillOpacity: 0.3,
+                radius: 3,
+                visible: true
+              }
+              
+              console.log(`🎨 使用DXF通用默认样式 (${geometryType})`, defaultStyle)
+              
+              let style = createStyleFromConfig(defaultStyle, geometryType)
+              styleCache[cacheKey] = style
+              return style
+            }
+          }
+          
+          // 样式策略2：非DXF图层但有图层字段的矢量切片图层 - 使用layer字段匹配样式
+          else if (useLayerBasedStyle && dxfLayerName) {
+            // 创建缓存键
+            const cacheKey = `layer_${dxfLayerName}_${geometryType}`
+            if (styleCache[cacheKey]) {
+              return styleCache[cacheKey]
             }
             
-            style = new Style({
-              stroke: new Stroke({
-                color: polygonStyle.outlineColor || layerStyle.color || '#0066cc',
-                width: layerStyle.weight || 1
-              }),
-              fill: new Fill({
-                color: finalFillColor
-              })
-            })
-          } else {
-            // 默认样式
-            style = new Style({
-              stroke: new Stroke({
-                color: layerStyle.color || '#0066cc',
-                width: layerStyle.weight || 2
-              }),
-              fill: new Fill({
-                color: layerStyle.fillColor || layerStyle.color || '#66ccff'
-              }),
-              image: new Circle({
-                radius: layerStyle.radius || 4,
-                fill: new Fill({
-                  color: layerStyle.fillColor || layerStyle.color || '#66ccff'
-                }),
-                stroke: new Stroke({
-                  color: layerStyle.color || '#0066cc',
-                  width: 1
+            // 获取图层特定样式：优先使用用户自定义样式，其次使用默认样式
+            const layerSpecificStyle = layerStyleConfig[dxfLayerName] || defaultStyles[dxfLayerName] || {}
+            
+            // 如果没有找到匹配的样式配置，使用通用默认样式
+            const finalStyle = Object.keys(layerSpecificStyle).length > 0 ? layerSpecificStyle : {
+              weight: 1,
+              color: '#666666',
+              opacity: 0.8,
+              fillColor: '#CCCCCC',
+              fill: false,
+              fillOpacity: 0.3,
+              radius: 3,
+              visible: true
+            }
+            
+            console.log(`🎨 使用layer字段样式: ${dxfLayerName} (${geometryType})`, finalStyle)
+            
+            let style = createStyleFromConfig(finalStyle, geometryType)
+            
+            // 处理图层可见性
+            if (finalStyle.visible === false) {
+              style = new Style({}) // 返回空样式以隐藏
+            }
+            
+            // 缓存样式
+            styleCache[cacheKey] = style
+            return style
+          }
+          
+          // 样式策略3：没有layer字段的图层 - 使用基础点线面样式
+          else {
+            // 创建缓存键
+            const cacheKey = `basic_${geometryType}`
+            if (styleCache[cacheKey]) {
+              return styleCache[cacheKey]
+            }
+            
+            // 获取基础样式配置（从样式面板的表单配置）
+            const basicStyles = {
+              point: styleForm.point || { color: '#FF0000', size: 6 },
+              line: styleForm.line || { color: '#0000FF', width: 2 },
+              polygon: styleForm.polygon || { fillColor: '#00FF00', fillOpacity: 0.3, outlineColor: '#000000' }
+            }
+            
+            console.log(`🎨 使用基础几何样式: ${geometryType}`, basicStyles)
+            
+            let style
+            if (geometryType === 'Point' || geometryType === 'MultiPoint') {
+              style = new Style({
+                image: new Circle({
+                  radius: basicStyles.point.size || 6,
+                  fill: new Fill({
+                    color: basicStyles.point.color || '#FF0000'
+                  }),
+                  stroke: new Stroke({
+                    color: '#FFFFFF',
+                    width: 1
+                  })
                 })
               })
+            } else if (geometryType === 'LineString' || geometryType === 'MultiLineString') {
+              style = new Style({
+                stroke: new Stroke({
+                  color: basicStyles.line.color || '#0000FF',
+                  width: basicStyles.line.width || 2
+                })
+              })
+            } else if (geometryType === 'Polygon' || geometryType === 'MultiPolygon') {
+              const fillColor = basicStyles.polygon.fillColor || '#00FF00'
+              const fillOpacity = basicStyles.polygon.fillOpacity !== undefined ? basicStyles.polygon.fillOpacity : 0.3
+              
+              // 转换颜色和透明度
+              let finalFillColor = fillColor
+              if (fillOpacity !== 1 && fillColor.startsWith('#')) {
+                const r = parseInt(fillColor.slice(1, 3), 16)
+                const g = parseInt(fillColor.slice(3, 5), 16)
+                const b = parseInt(fillColor.slice(5, 7), 16)
+                finalFillColor = `rgba(${r}, ${g}, ${b}, ${fillOpacity})`
+              }
+              
+              style = new Style({
+                stroke: new Stroke({
+                  color: basicStyles.polygon.outlineColor || '#000000',
+                  width: 1
+                }),
+                fill: new Fill({
+                  color: finalFillColor
+                })
+              })
+            } else {
+              // 默认样式
+              style = new Style({
+                stroke: new Stroke({
+                  color: '#0066cc',
+                  width: 2
+                }),
+                fill: new Fill({
+                  color: 'rgba(102, 204, 255, 0.3)'
+                }),
+                image: new Circle({
+                  radius: 4,
+                  fill: new Fill({
+                    color: '#66ccff'
+                  }),
+                  stroke: new Stroke({
+                    color: '#0066cc',
+                    width: 1
+                  })
+                })
+              })
+            }
+            
+            // 缓存样式
+            styleCache[cacheKey] = style
+            return style
+          }
+        }
+      }
+      
+      // 样式配置转换为OpenLayers样式的辅助函数
+      const createStyleFromConfig = (styleConfig, geometryType) => {
+        if (geometryType === 'Point' || geometryType === 'MultiPoint') {
+          // 点样式
+          return new Style({
+            image: new Circle({
+              radius: styleConfig.radius || 4,
+              fill: new Fill({
+                color: styleConfig.fillColor || styleConfig.color || '#66ccff'
+              }),
+              stroke: new Stroke({
+                color: styleConfig.color || '#0066cc',
+                width: 1
+              })
             })
+          })
+        } else if (geometryType === 'LineString' || geometryType === 'MultiLineString') {
+          // 线样式
+          const dashArray = styleConfig.dashArray
+          return new Style({
+            stroke: new Stroke({
+              color: styleConfig.color || '#0066cc',
+              width: styleConfig.weight || 2,
+              lineDash: dashArray ? dashArray.split(',').map(Number) : undefined
+            })
+          })
+        } else if (geometryType === 'Polygon' || geometryType === 'MultiPolygon') {
+          // 面样式
+          const fillColor = styleConfig.fillColor || styleConfig.color || '#66ccff'
+          const fillOpacity = styleConfig.fillOpacity !== undefined ? styleConfig.fillOpacity : 0.3
+          
+          // 转换颜色和透明度
+          let finalFillColor = fillColor
+          if (fillOpacity !== 1 && fillColor.startsWith('#')) {
+            const r = parseInt(fillColor.slice(1, 3), 16)
+            const g = parseInt(fillColor.slice(3, 5), 16)
+            const b = parseInt(fillColor.slice(5, 7), 16)
+            finalFillColor = `rgba(${r}, ${g}, ${b}, ${fillOpacity})`
           }
           
-          // 处理图层可见性
-          if (layerStyle.visible === false) {
-            style = new Style({}) // 返回空样式以隐藏
-          }
-          
-          // 缓存样式
-          styleCache[cacheKey] = style
-          return style
+          return new Style({
+            stroke: new Stroke({
+              color: styleConfig.color || '#0066cc',
+              width: styleConfig.weight || 1
+            }),
+            fill: styleConfig.fill !== false ? new Fill({
+              color: finalFillColor
+            }) : undefined
+          })
+        } else {
+          // 默认样式
+          return new Style({
+            stroke: new Stroke({
+              color: styleConfig.color || '#0066cc',
+              width: styleConfig.weight || 2
+            }),
+            fill: new Fill({
+              color: styleConfig.fillColor || styleConfig.color || '#66ccff'
+            }),
+            image: new Circle({
+              radius: styleConfig.radius || 4,
+              fill: new Fill({
+                color: styleConfig.fillColor || styleConfig.color || '#66ccff'
+              }),
+              stroke: new Stroke({
+                color: styleConfig.color || '#0066cc',
+                width: 1
+              })
+            })
+          })
         }
       }
       
@@ -857,6 +1236,16 @@ export default {
       styleForm.raster = { opacity: 1 }
       
       styleDialogVisible.value = true
+      
+      // 如果是DXF Martin图层，在对话框打开后应用一次面板样式
+      if (isDxfMartinLayer.value && layer.martin_service_id) {
+        await nextTick() // 等待DOM更新
+        
+        // 等待DxfStyleEditor组件加载完成
+        // 由于DxfStyleEditor在初始化时会自动触发styles-updated事件
+        // 这里不需要手动获取和应用样式，让组件自己处理
+        console.log('DXF样式对话框已打开，等待DxfStyleEditor组件初始化...')
+      }
     }
     
     // 应用样式
@@ -1057,7 +1446,51 @@ export default {
     }
     
     // DXF样式更新处理
-    const onDxfStylesUpdated = () => {}
+    const onDxfStylesUpdated = async (styleData) => {
+      console.log('接收到DXF样式更新:', styleData)
+      
+      if (!currentStyleLayer.value || currentStyleLayer.value.service_type !== 'martin') {
+        console.warn('当前图层不是Martin图层，无法应用DXF样式')
+        return
+      }
+      
+      // 动态应用样式到图层
+      await applyDxfStylesToLayer(currentStyleLayer.value, styleData.allStyles || { [styleData.layerName]: styleData.style })
+    }
+    
+    // 应用DXF样式到图层
+    const applyDxfStylesToLayer = async (layer, styleConfig) => {
+      if (!layer || !layer.martin_service_id || !styleConfig) {
+        console.warn('参数不完整，无法应用DXF样式')
+        return
+      }
+      
+      try {
+        console.log('应用DXF样式到图层:', layer.layer_name, styleConfig)
+        
+        // 获取现有的MVT图层
+        const existingMvtLayer = mvtLayers.value[layer.id]
+        
+        if (existingMvtLayer) {
+          // 移除现有图层
+          map.value.removeLayer(existingMvtLayer)
+          delete mvtLayers.value[layer.id]
+          
+          // 缓存样式配置
+          layerStyleCache[layer.id] = styleConfig
+          
+          // 重新创建并添加图层
+          await addMartinLayer(layer)
+          
+          console.log('DXF样式已应用到图层:', layer.layer_name)
+        } else {
+          console.warn('未找到要更新样式的MVT图层:', layer.layer_name)
+        }
+      } catch (error) {
+        console.error('应用DXF样式失败:', error)
+        ElMessage.error('应用DXF样式失败: ' + error.message)
+      }
+    }
     
     // 应用并保存DXF样式
     const applyAndSaveDxfStyles = async () => {
@@ -1227,6 +1660,11 @@ export default {
     })
     
     onUnmounted(() => {
+      // 清理弹窗
+      if (popup.value) {
+        map.value?.removeOverlay(popup.value)
+      }
+      
       clearAllLayers()
       if (map.value) {
         map.value.setTarget(null)
@@ -1276,10 +1714,12 @@ export default {
       initializeProjections,
       registerProjection,
       projectionsInitialized,
-      layerStyleCache
+      layerStyleCache,
+      applyDxfStylesToLayer,
+      popup
     }
   },
-  expose: ['showStyleDialog', 'showAddLayerDialog', 'toggleLayerVisibility', 'map', 'bringLayerToTop', 'setActiveLayer', 'currentActiveLayer', 'getLayerCRSInfo', 'transformCoordinates', 'initializeProjections', 'registerProjection', 'projectionsInitialized']
+  expose: ['showStyleDialog', 'showAddLayerDialog', 'toggleLayerVisibility', 'map', 'bringLayerToTop', 'setActiveLayer', 'currentActiveLayer', 'getLayerCRSInfo', 'transformCoordinates', 'initializeProjections', 'registerProjection', 'projectionsInitialized', 'applyDxfStylesToLayer']
 }
 </script>
 
@@ -1350,8 +1790,11 @@ export default {
   bottom: 12px;
   left: -50px;
   min-width: 280px;
+  max-width: 400px;
 }
-.ol-popup:after, .ol-popup:before {
+
+.ol-popup:after, 
+.ol-popup:before {
   top: 100%;
   border: solid transparent;
   content: " ";
@@ -1360,25 +1803,41 @@ export default {
   position: absolute;
   pointer-events: none;
 }
+
 .ol-popup:after {
   border-top-color: white;
   border-width: 10px;
   left: 48px;
   margin-left: -10px;
 }
+
 .ol-popup:before {
   border-top-color: #cccccc;
   border-width: 11px;
   left: 48px;
   margin-left: -11px;
 }
+
 .ol-popup-closer {
   text-decoration: none;
   position: absolute;
   top: 2px;
   right: 8px;
+  color: #333;
+  font-size: 16px;
+  font-weight: bold;
 }
+
 .ol-popup-closer:after {
   content: "✖";
+}
+
+.ol-popup-closer:hover {
+  color: #666;
+}
+
+#popup-content {
+  max-height: 300px;
+  overflow-y: auto;
 }
 </style> 
