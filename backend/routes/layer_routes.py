@@ -745,8 +745,8 @@ def get_layer_bounds(layer_id):
                     SELECT vms.id, vms.table_name, vms.original_filename, vms.file_id,
                            f.file_name, f.bbox, f.coordinate_system
                     FROM vector_martin_services vms
-                    LEFT JOIN files f ON vms.file_id = f.id
-                    WHERE vms.id = %s AND vms.status = 'active'
+                    LEFT JOIN files f ON vms.file_id::integer = f.id
+                    WHERE vms.id = ABS(%s) AND vms.status = 'active'
                 """, (layer_id,))
                 
                 martin_record = cursor.fetchone()

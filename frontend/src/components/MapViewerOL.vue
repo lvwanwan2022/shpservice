@@ -972,7 +972,7 @@ export default {
           
           layerData = {
             ...layerData,
-            layer_id: -(martinService.database_record_id || martinService.id),
+            layer_id: martinService.database_record_id || martinService.id,
             martin_service_id: martinService.database_record_id || martinService.id,
             mvt_url: serviceInfo.mvt_url,
             tilejson_url: serviceInfo.tilejson_url
@@ -1195,17 +1195,34 @@ export default {
         setTimeout(async () => {
           console.log('DOM准备就绪，开始初始化...')
           
-          // 首先初始化坐标系
-          await initializeProjections()
-          
-          // 然后初始化地图
-          initMap()
-          
-          const sceneId = props.sceneId || route.query.scene_id
-          if (sceneId) {
-            setTimeout(() => loadScene(sceneId), 200)
+          try {
+            // 首先初始化坐标系
+            await initializeProjections()
+            
+            // 然后初始化地图
+            initMap()
+            
+            // 强制更新地图尺寸
+            if (map.value) {
+              // 使用requestAnimationFrame确保DOM完全渲染后再更新尺寸
+              requestAnimationFrame(() => {
+                setTimeout(() => {
+                  if (map.value) {
+                    map.value.updateSize()
+                    console.log('地图尺寸已更新')
+                  }
+                }, 100)
+              })
+            }
+            
+            const sceneId = props.sceneId || route.query.scene_id
+            if (sceneId) {
+              setTimeout(() => loadScene(sceneId), 300)
+            }
+          } catch (error) {
+            console.error('地图初始化过程中出错:', error)
           }
-        }, 50)
+        }, 100) // 增加延迟时间
       })
     })
     
@@ -1273,6 +1290,7 @@ export default {
   height: 100%;
   background-color: #e0e0e0; /* 调试背景色 */
   overflow: hidden;
+  contain: layout style; /* CSS containment 优化 */
 }
 
 .map-container {
@@ -1281,6 +1299,8 @@ export default {
   position: relative;
   background-color: #f5f5f5; /* 添加背景色以便调试 */
   border: 2px solid #409eff; /* 临时添加边框以便调试 */
+  min-height: 0; /* 防止flex容器高度计算问题 */
+  contain: layout style; /* CSS containment 优化 */
 }
 
 .dialog-content {

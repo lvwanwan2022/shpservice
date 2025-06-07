@@ -505,8 +505,8 @@ export default {
           
           layerData = {
             ...layerData,
-            // 对于Martin服务，使用负数虚拟ID（基于martin_service_id）
-            layer_id: -(martinService.database_record_id || martinService.id),
+            // 对于Martin服务，使用martin_service_id作为layer_id
+            layer_id: martinService.database_record_id || martinService.id,
             martin_service_id: martinService.database_record_id || martinService.id,
             mvt_url: serviceInfo.mvt_url,
             tilejson_url: serviceInfo.tilejson_url

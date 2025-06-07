@@ -9,7 +9,7 @@
         <el-button size="small" type="primary" @click="addNewLayer">
           添加图层
         </el-button>
-        <div class="popup-control">
+        <!-- <div class="popup-control">
           <el-switch
             v-model="enableAttributePopup"
             @change="onPopupControlChange"
@@ -20,7 +20,7 @@
           <el-tooltip content="开启/关闭鼠标悬停显示要素属性信息" placement="top">
             <el-icon class="popup-help-icon"><QuestionFilled /></el-icon>
           </el-tooltip>
-        </div>
+        </div> -->
         <!-- <el-button size="small" type="success" @click="saveStylesToDatabase" :loading="saving">
           保存样式
         </el-button> -->
@@ -215,15 +215,15 @@
 <script>
 import { ref, reactive, computed, watch } from 'vue'
 import { ElMessage /*, ElMessageBox */ } from 'element-plus'
-import { Loading, Search, QuestionFilled } from '@element-plus/icons-vue'
+import { Loading, Search/*, QuestionFilled  */} from '@element-plus/icons-vue'
 import { dxfStyleManager } from '@/utils/dxfStyleManager'
 
 export default {
   name: 'DxfStyleEditor',
   components: {
     Loading,
-    Search,
-    QuestionFilled
+    Search//,
+    //QuestionFilled
   },
   props: {
     layerData: {

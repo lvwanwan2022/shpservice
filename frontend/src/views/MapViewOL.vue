@@ -936,6 +936,8 @@ export default {
   position: relative;
   overflow: hidden;
   background-color: #f0f0f0; /* 临时背景色便于调试 */
+  min-height: 0; /* 防止flex容器高度计算问题 */
+  contain: layout style; /* CSS containment 优化 */
 }
 
 .map-container-wrapper.with-panel {

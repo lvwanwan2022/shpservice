@@ -17,6 +17,9 @@ import 'leaflet/dist/leaflet.css'
 import 'leaflet-draw/dist/leaflet.draw.css'
 import { fixVectorGridCompatibility } from './utils/leafletCompatibilityFix'
 
+// 导入全局错误处理器
+import { installGlobalErrorHandlers } from './utils/errorHandler'
+
 // 解决Leaflet图标问题
 import { Icon } from 'leaflet'
 delete Icon.Default.prototype._getIconUrl
@@ -28,6 +31,9 @@ Icon.Default.mergeOptions({
 
 // 导入坐标修复工具
 import { applyMartinCoordinateFixes } from './utils/martinCoordinateFix'
+
+// 安装全局错误处理器（在应用创建前安装）
+installGlobalErrorHandlers()
 
 const app = createApp(App)
 
@@ -115,3 +121,5 @@ if (!window.L) {
     }
   }, 100)
 }
+
+console.log('�� 应用已启动，错误处理器已安装')
