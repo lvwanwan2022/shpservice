@@ -1,12 +1,4 @@
-r'''
-Author: WangNing
-Date: 2025-05-16 21:36:54
-LastEditors: WangNing
-LastEditTime: 2025-05-27 17:27:14
-FilePath: \shpservice\backend\app.py
-Description: 
-Copyright (c) 2025 by VGE, All Rights Reserved. 
-'''
+
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
@@ -284,22 +276,6 @@ def cleanup_martin():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5030))
-    debug = os.environ.get('DEBUG', 'True').lower() == 'true'
-    
-    # 启动Martin服务
-    if martin_service:
-        try:
-            logger.info("🚀 正在启动Martin服务...")
-            if martin_service.start_service():
-                logger.info("✅ Martin服务启动成功")
-                # 注册清理函数
-                atexit.register(cleanup_martin)
-            else:
-                logger.warning("⚠️ Martin服务启动失败")
-        except Exception as e:
-            logger.error(f"❌ 启动Martin服务时发生错误: {str(e)}")
-    else:
-        logger.info("⚠️ Martin服务未可用，跳过启动")
-    
+    debug = os.environ.get('DEBUG', 'True').lower() == 'true'    
     logger.info(f"🌐 启动Flask应用在端口 {port}")
     app.run(host='0.0.0.0', port=port, debug=debug) 
