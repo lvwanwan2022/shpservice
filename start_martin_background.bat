@@ -8,9 +8,9 @@ REM 切换到项目目录
 cd /d "%SCRIPT_DIR%"
 
 REM 检查配置文件
-if not exist "backend\services\martin_config.yaml" (
+if not exist "martin_config.yaml" (
     exit /b 1
 )
 
 REM 后台启动Martin
-start /B martin --config backend\services\martin_config.yaml 
+start /B martin --config martin_config.yaml 
