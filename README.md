@@ -421,7 +421,7 @@ python test_martin_integration.py
 
 ### 功能说明
 
-本系统支持根据PostGIS表中的`layer`字段为DXF图层设置不同的样式，实现与AutoCAD中DXF图层样式的一致性。
+本系统支持根据PostGIS表中的`cad_layer`字段为DXF图层设置不同的样式，实现与AutoCAD中DXF图层样式的一致性。
 
 ### PostGIS表结构支持
 
@@ -430,7 +430,7 @@ python test_martin_integration.py
 CREATE TABLE IF NOT EXISTS public.vector_05492e03
 (
     gid integer NOT NULL DEFAULT nextval('vector_05492e03_gid_seq'::regclass),
-    layer character varying COLLATE pg_catalog."default",  -- 关键字段：图层名称
+    cad_layer character varying COLLATE pg_catalog."default",  -- 关键字段：图层名称
     paperspace boolean,
     subclasses character varying COLLATE pg_catalog."default",
     linetype character varying COLLATE pg_catalog."default",
@@ -445,7 +445,7 @@ CREATE TABLE IF NOT EXISTS public.vector_05492e03
 ### 样式应用逻辑
 
 1. **MVT要素样式映射**：
-   - 系统从MVT要素的`properties.layer`字段读取图层名称
+   - 系统从MVT要素的`properties.cad_layer`字段读取图层名称
    - 根据图层名称在默认DXF样式配置中查找对应样式
    - 如果找不到匹配样式，使用通用默认样式
 
@@ -455,6 +455,11 @@ CREATE TABLE IF NOT EXISTS public.vector_05492e03
    - 系统通用默认样式（最低优先级）
 
 ### 使用方法
+需要修改MapViewer组件中的addMartinLayer方法，实现README中描述的DXF样式逻辑。根据README的描述，需要：
+从MVT要素的properties.cad_layer字段读取图层名称
+根据图层名称在默认DXF样式配置中查找对应样式
+如果找不到匹配样式，使用通用默认样式
+支持样式优先级：用户自定义样式 > DXF默认样式配置 > 系统通用默认样式
 
 1. **加载DXF图层**：
    - 上传DXF文件到系统
@@ -467,6 +472,10 @@ CREATE TABLE IF NOT EXISTS public.vector_05492e03
    - 切换到"Martin(DXF)"选项卡
    - 系统自动应用当前样式配置
    - 修改任何样式属性都会实时更新地图显示
+   - **新功能**：支持从MVT要素的`properties.cad_layer`字段自动识别CAD图层
+   - **新功能**：实现三级样式优先级：用户自定义 > DXF默认配置 > 系统默认
+   - **新功能**：样式修改后自动重新加载图层，无需手动刷新
+   - **新功能**：属性弹窗显示CAD图层信息，方便用户识别图层来源
 
 3. **支持的样式属性**：
    - 颜色（color）

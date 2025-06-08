@@ -73,11 +73,11 @@ try:
         logger.info("✅ 数据库连接成功")
         
         # 初始化数据库表
-        try:
-            init_database()
-            logger.info("✅ 数据库初始化成功")
-        except Exception as init_error:
-            logger.warning(f"⚠️ 数据库初始化失败: {str(init_error)}")
+        #try:
+            #init_database()
+            #logger.info("✅ 数据库初始化成功")
+        #except Exception as init_error:
+            #logger.warning(f"⚠️ 数据库初始化失败: {str(init_error)}")
             
     except Exception as conn_error:
         logger.warning(f"⚠️ 数据库连接失败: {str(conn_error)}")

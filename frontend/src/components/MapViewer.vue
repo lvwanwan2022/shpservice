@@ -143,6 +143,7 @@
 </template>
 
 <script>
+/* eslint-disable */
 import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -254,43 +255,65 @@ export default {
     const addMartinLayer = async (layer) => {
       if (!layer.mvt_url || !checkMVTSupport()) return
       
+      console.log(`🎨 开始加载Martin图层: ${layer.layer_name}, 文件类型: ${layer.file_type}, Martin服务ID: ${layer.martin_service_id}`)
+      
       let mvtUrl = layer.mvt_url
       if (mvtUrl.includes('localhost:3000')) {
         const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
         mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
       }
       
-      // 默认样式函数
-      const createStyleFunction = () => {
-        const isDxf = layer.file_type === 'dxf'
-        const defaultStyles = isDxf ? defaultDxfStylesConfig.defaultDxfStyles : {}
+      // 调试：获取Martin服务的TileJSON信息
+      try {
+        const tileJsonUrl = layer.tilejson_url || mvtUrl.replace('/{z}/{x}/{y}', '.json')
+        console.log('🎨 TileJSON URL:', tileJsonUrl)
         
-        return (properties) => {
-          const layerName = properties.layer || properties.Layer || 'default'
-          const layerStyle = defaultStyles[layerName]
-          
-          const style = {
-            weight: layerStyle?.weight || 2,
-            color: layerStyle?.color || '#0066cc',
-            opacity: layerStyle?.opacity || 0.8,
-            fillColor: layerStyle?.fillColor || layerStyle?.color || '#66ccff',
-            fillOpacity: layerStyle?.fillOpacity || 0.3,
-            radius: layerStyle?.radius || 4
-          }
-          
-          if (layerStyle?.visible === false) {
-            style.opacity = 0
-            style.fillOpacity = 0
-          }
-          
-          return style
+        const response = await fetch(tileJsonUrl)
+        if (response.ok) {
+          const tileJson = await response.json()
+          console.log('🎨 TileJSON内容:', tileJson)
+          console.log('🎨 可用图层:', tileJson.vector_layers)
+        } else {
+          console.warn('🎨 无法获取TileJSON:', response.status)
         }
+      } catch (error) {
+        console.warn('🎨 获取TileJSON失败:', error)
       }
       
+      // DXF样式函数 - 实现README中的样式映射逻辑
+      const createLocalStyleFunction = async () => {
+        // 使用新的独立样式函数创建方法
+        return await createDxfStyleFunction(layer)
+      }
+
+      // 创建样式函数
+      const styleFunction = await createLocalStyleFunction()
+      
+      console.log('🎨 创建MVT图层，URL:', mvtUrl)
+      
+      // 尝试从URL提取表名作为图层名
+      const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
+      console.log('🎨 提取的表名/图层名:', tableName)
+      
       const mvtLayer = L.vectorGrid.protobuf(mvtUrl, {
-        vectorTileLayerStyles: { default: createStyleFunction() },
+        vectorTileLayerStyles: { 
+          // 使用多种可能的图层名称
+          [tableName]: styleFunction,
+          'default': styleFunction,
+          // 有时Martin使用完整的表名
+          [`public.${tableName}`]: styleFunction
+        },
         interactive: true,
-        maxZoom: 22
+        maxZoom: 22,
+        // 移除调试代码，避免性能问题
+        getFeatureId: function(feature) {
+          return feature.properties?.gid || feature.id;
+        }
+      })
+      
+      // 简化事件监听，只保留必要的
+      mvtLayer.on('tileerror', (e) => {
+        console.error('🎨 MVT瓦片加载错误:', e)
       })
       
       mvtLayer.on('click', (e) => {
@@ -300,20 +323,49 @@ export default {
         emit('layer-selected', layer)
         
         const properties = e.layer.properties
+        
+        // 构建属性信息显示内容
         const content = Object.entries(properties)
           .filter(([, value]) => value != null && value !== 'NULL' && value !== '')
-          .map(([key, value]) => `<strong>${key}:</strong> ${value}`)
+          .map(([key, value]) => {
+            // 特殊处理CAD图层信息
+            if (key === 'cad_layer') {
+              return `<strong>CAD图层:</strong> ${value}`
+            }
+            return `<strong>${key}:</strong> ${value}`
+          })
           .join('<br/>')
         
         if (e.latlng) {
-          L.popup().setContent(`<h4>${layer.layer_name}</h4>${content || '无属性信息'}`).setLatLng(e.latlng).openOn(map.value)
+          // 显示图层名称和CAD图层信息
+          const title = layer.layer_name
+          const cadLayer = properties.cad_layer ? ` (${properties.cad_layer})` : ''
+          L.popup()
+            .setContent(`<h4>${title}${cadLayer}</h4>${content || '无属性信息'}`)
+            .setLatLng(e.latlng)
+            .openOn(map.value)
         }
       })
       
       mvtLayer._popupEnabled = true
       mvtLayers.value[layer.id] = mvtLayer
       
-      if (layer.visibility) mvtLayer.addTo(map.value)
+      if (layer.visibility) {
+        // 确保地图状态稳定后再添加图层
+        if (map.value && !map.value._animating && !map.value._zooming) {
+          mvtLayer.addTo(map.value)
+        } else {
+          // 如果地图正在动画，等待动画完成
+          const addWhenReady = () => {
+            if (map.value && !map.value._animating && !map.value._zooming) {
+              mvtLayer.addTo(map.value)
+            } else {
+              setTimeout(addWhenReady, 50)
+            }
+          }
+          addWhenReady()
+        }
+      }
     }
     
     // 添加GeoServer图层
@@ -345,8 +397,36 @@ export default {
     
     // 清除所有图层
     const clearAllLayers = () => {
-      Object.values(mapLayers.value).forEach(layer => map.value.hasLayer(layer) && map.value.removeLayer(layer))
-      Object.values(mvtLayers.value).forEach(layer => map.value.hasLayer(layer) && map.value.removeLayer(layer))
+      // 清理MVT图层
+      Object.entries(mvtLayers.value).forEach(([layerId, layer]) => {
+        try {
+          if (map.value && map.value.hasLayer(layer)) {
+            map.value.removeLayer(layer)
+          }
+          // 清理事件监听器
+          if (layer.off) {
+            layer.off()
+          }
+        } catch (error) {
+          console.warn(`清理MVT图层 ${layerId} 时出错:`, error)
+        }
+      })
+      
+      // 清理WMS图层
+      Object.entries(mapLayers.value).forEach(([layerId, layer]) => {
+        try {
+          if (map.value && map.value.hasLayer(layer)) {
+            map.value.removeLayer(layer)
+          }
+          // 清理事件监听器
+          if (layer.off) {
+            layer.off()
+          }
+        } catch (error) {
+          console.warn(`清理WMS图层 ${layerId} 时出错:`, error)
+        }
+      })
+      
       mapLayers.value = {}
       mvtLayers.value = {}
     }
@@ -608,20 +688,109 @@ export default {
     }
     
     // DXF样式更新处理
-    const onDxfStylesUpdated = () => {}
+    const onDxfStylesUpdated = async (eventData = {}) => {
+      // 实时更新DXF样式 - 直接重新加载图层（更安全可靠）
+      if (currentStyleLayer.value && currentStyleLayer.value.service_type === 'martin') {
+        try {
+          const { layerName, style, allStyles } = eventData
+          
+          console.log('🎨 收到DXF样式更新事件:', eventData)
+          
+          // 检查地图是否正在动画中
+          if (map.value && (map.value._animating || map.value._zooming)) {
+            console.log('🎨 地图正在动画中，延迟样式更新...')
+            setTimeout(() => onDxfStylesUpdated(eventData), 100)
+            return
+          }
+          
+          // 安全地移除图层
+          const mvtLayer = mvtLayers.value[currentStyleLayer.value.id]
+          if (mvtLayer) {
+            try {
+              if (map.value && map.value.hasLayer(mvtLayer)) {
+                map.value.removeLayer(mvtLayer)
+              }
+              // 清理事件监听器
+              if (mvtLayer.off) {
+                mvtLayer.off()
+              }
+            } catch (removeError) {
+              console.warn('移除图层时出错:', removeError)
+            }
+            delete mvtLayers.value[currentStyleLayer.value.id]
+          }
+          
+          // 重新添加图层
+          await addMartinLayer(currentStyleLayer.value)
+          
+          if (layerName) {
+            console.log(`🎨 DXF图层 "${layerName}" 样式已更新`)
+          } else {
+            console.log('🎨 DXF样式已更新')
+          }
+          
+        } catch (error) {
+          console.error('更新DXF样式失败:', error)
+          ElMessage.error('更新DXF样式失败')
+        }
+      }
+    }
     
+    // 强制刷新Martin图层样式
+    const refreshMartinLayerStyle = async (layer) => {
+      if (!layer || layer.service_type !== 'martin') return
+      
+      try {
+        // 安全地移除当前图层
+        const mvtLayer = mvtLayers.value[layer.id]
+        if (mvtLayer) {
+          try {
+            if (map.value && map.value.hasLayer(mvtLayer)) {
+              map.value.removeLayer(mvtLayer)
+            }
+            // 清理事件监听器
+            if (mvtLayer.off) {
+              mvtLayer.off()
+            }
+          } catch (removeError) {
+            console.warn('移除图层时出错:', removeError)
+          }
+          delete mvtLayers.value[layer.id]
+        }
+        
+        // 重新添加图层（会自动应用最新样式）
+        await addMartinLayer(layer)
+        
+        console.log(`图层 "${layer.layer_name}" 样式已刷新`)
+      } catch (error) {
+        console.error('刷新图层样式失败:', error)
+        throw error
+      }
+    }
+
     // 应用并保存DXF样式
     const applyAndSaveDxfStyles = async () => {
       if (!dxfStyleEditorRef.value) return
       
       savingDxfStyles.value = true
-      const success = await dxfStyleEditorRef.value.saveStylesToDatabase()
-      
-      if (success) {
-        styleDialogVisible.value = false
-        ElMessage.success('DXF样式已保存')
+      try {
+        const success = await dxfStyleEditorRef.value.saveStylesToDatabase()
+        
+        if (success) {
+          // 保存成功后，刷新图层样式
+          if (currentStyleLayer.value) {
+            await refreshMartinLayerStyle(currentStyleLayer.value)
+          }
+          
+          styleDialogVisible.value = false
+          ElMessage.success('DXF样式已保存并应用到地图')
+        }
+      } catch (error) {
+        console.error('保存DXF样式失败:', error)
+        ElMessage.error('保存DXF样式失败')
+      } finally {
+        savingDxfStyles.value = false
       }
-      savingDxfStyles.value = false
     }
     
     // 处理属性弹窗控制
@@ -631,6 +800,192 @@ export default {
       if (mvtLayer) {
         mvtLayer._popupEnabled = enabled
         if (!enabled && map.value) map.value.closePopup()
+      }
+    }
+    
+    // 强制更新MVT图层样式（不重新加载图层）
+    const updateMvtLayerStyles = async (layer) => {
+      if (!layer || layer.service_type !== 'martin') return
+      
+      const mvtLayer = mvtLayers.value[layer.id]
+      if (!mvtLayer || !map.value) return
+      
+      try {
+        console.log('🎨 开始更新MVT图层样式...')
+        
+        // 检查地图是否正在动画中，如果是则等待动画完成
+        if (map.value._animating || map.value._zooming) {
+          console.log('🎨 地图正在动画中，等待动画完成...')
+          await new Promise(resolve => {
+            const checkAnimation = () => {
+              if (!map.value._animating && !map.value._zooming) {
+                resolve()
+              } else {
+                setTimeout(checkAnimation, 50)
+              }
+            }
+            checkAnimation()
+          })
+        }
+        
+        // 获取最新的样式函数
+        const styleFunction = await createDxfStyleFunction(layer)
+        if (!styleFunction) {
+          throw new Error('无法创建样式函数')
+        }
+        
+        // 强制重新设置样式
+        const tableName = layer.mvt_url?.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
+        
+        // 更新vectorTileLayerStyles
+        mvtLayer.options.vectorTileLayerStyles = {
+          [tableName]: styleFunction,
+          'default': styleFunction,
+          [`public.${tableName}`]: styleFunction
+        }
+        
+        // 安全地强制重新渲染图层
+        if (mvtLayer._map && map.value.hasLayer(mvtLayer)) {
+          // 确保地图状态稳定后再操作
+          setTimeout(() => {
+            try {
+              if (map.value && mvtLayer._map && map.value.hasLayer(mvtLayer)) {
+                // 临时移除并重新添加图层
+                map.value.removeLayer(mvtLayer)
+                // 使用 nextTick 确保 DOM 更新完成
+                setTimeout(() => {
+                  if (map.value && !map.value._animating && !map.value._zooming) {
+                    map.value.addLayer(mvtLayer)
+                  }
+                }, 10)
+              }
+            } catch (reRenderError) {
+              console.warn('🎨 重新渲染图层时出错:', reRenderError)
+            }
+          }, 10)
+        }
+        
+        console.log('🎨 MVT图层样式更新完成')
+      } catch (error) {
+        console.error('更新MVT图层样式失败:', error)
+        throw error
+      }
+    }
+    
+    // 创建样式函数（提取为独立方法以便重用）
+    const createDxfStyleFunction = async (layerData = null) => {
+      const targetLayer = layerData || currentStyleLayer.value
+      if (!targetLayer) return null
+      
+      const isDxf = targetLayer.file_type === 'dxf'
+      console.log('🎨 创建样式函数，isDxf:', isDxf)
+      
+      if (!isDxf) {
+        // 非DXF文件使用默认样式
+        return (properties, zoom, geometryDimension) => ({
+          weight: 2,
+          color: '#0066cc',
+          opacity: 0.8,
+          fillColor: '#66ccff',
+          fillOpacity: 0.3,
+          radius: 4
+        })
+      }
+
+      // DXF默认样式配置（中等优先级）
+      const defaultDxfStyles = defaultDxfStylesConfig.defaultDxfStyles || {}
+      
+      // 系统通用默认样式（最低优先级）
+      const systemDefaultStyle = {
+        weight: 1.5,
+        color: '#666666',
+        opacity: 0.8,
+        fillColor: '#CCCCCC',
+        fill: false,
+        fillOpacity: 0.3,
+        radius: 4,
+        visible: true
+      }
+
+      return (properties, zoom, geometryDimension) => {
+        // 1. 从MVT要素的properties.cad_layer字段读取图层名称
+        const cadLayerName = properties?.cad_layer || properties?.layer || properties?.Layer
+        
+        if (!cadLayerName) {
+          // 如果没有图层名称，使用系统默认样式
+          return {
+            weight: systemDefaultStyle.weight,
+            color: systemDefaultStyle.color,
+            opacity: systemDefaultStyle.opacity,
+            fillColor: systemDefaultStyle.fillColor,
+            fillOpacity: systemDefaultStyle.fillOpacity,
+            radius: systemDefaultStyle.radius
+          }
+        }
+
+        // 2. 实时获取用户自定义样式（最高优先级）
+        let userCustomStyles = {}
+        if (dxfStyleEditorRef.value && typeof dxfStyleEditorRef.value.getStyles === 'function') {
+          try {
+            userCustomStyles = dxfStyleEditorRef.value.getStyles() || {}
+          } catch (error) {
+            console.warn('获取实时样式失败:', error)
+          }
+        }
+
+        // 3. 样式优先级查找
+        let layerStyle = null
+
+        // 最高优先级：用户自定义样式（实时获取）
+        if (userCustomStyles[cadLayerName]) {
+          layerStyle = userCustomStyles[cadLayerName]
+        }
+        // 中等优先级：DXF默认样式配置
+        else if (defaultDxfStyles[cadLayerName]) {
+          layerStyle = defaultDxfStyles[cadLayerName]
+        }
+        // 最低优先级：系统通用默认样式
+        else {
+          layerStyle = systemDefaultStyle
+        }
+
+        // 4. 构建Leaflet样式对象
+        const style = {
+          weight: layerStyle.weight || systemDefaultStyle.weight,
+          color: layerStyle.color || systemDefaultStyle.color,
+          opacity: layerStyle.opacity || systemDefaultStyle.opacity,
+          fillColor: layerStyle.fillColor || layerStyle.color || systemDefaultStyle.fillColor,
+          fillOpacity: layerStyle.fillOpacity || systemDefaultStyle.fillOpacity,
+          radius: layerStyle.radius || systemDefaultStyle.radius
+        }
+
+        // 处理线型样式
+        if (layerStyle.dashArray) {
+          style.dashArray = layerStyle.dashArray
+        }
+
+        // 处理线端点和连接样式
+        if (layerStyle.lineCap) {
+          style.lineCap = layerStyle.lineCap
+        }
+        if (layerStyle.lineJoin) {
+          style.lineJoin = layerStyle.lineJoin
+        }
+
+        // 处理填充
+        if (layerStyle.fill !== undefined) {
+          if (!layerStyle.fill) {
+            style.fillOpacity = 0
+          }
+        }
+
+        // 处理图层可见性
+        if (layerStyle.visible === false) {
+          style.opacity = 0
+          style.fillOpacity = 0
+        }
+
+        return style
       }
     }
     
@@ -697,10 +1052,12 @@ export default {
       applyAndSaveDxfStyles,
       onPopupControlChanged,
       setActiveLayer,
-      bringLayerToTop
+      bringLayerToTop,
+      refreshMartinLayerStyle,
+      updateMvtLayerStyles
     }
   },
-  expose: ['showStyleDialog', 'showAddLayerDialog', 'toggleLayerVisibility', 'map', 'bringLayerToTop', 'setActiveLayer', 'currentActiveLayer']
+  expose: ['showStyleDialog', 'showAddLayerDialog', 'toggleLayerVisibility', 'map', 'bringLayerToTop', 'setActiveLayer', 'currentActiveLayer', 'refreshMartinLayerStyle', 'updateMvtLayerStyles']
 }
 </script>
 

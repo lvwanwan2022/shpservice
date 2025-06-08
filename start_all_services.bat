@@ -46,7 +46,7 @@ if not exist "%GEOSERVER_DIR%" (
 
 REM 1. 启动前端服务
 echo [1/4] 启动前端服务...
-start "前端服务-Vue.js" cmd /k "cd /d "%FRONTEND_DIR%" && echo 正在启动前端服务... && npm run dev"
+start "前端服务-Vue.js" cmd /k "cd /d "%FRONTEND_DIR%" && echo 正在启动前端服务... && npm run serve"
 
 REM 等待2秒
 timeout /t 2 /nobreak >nul
