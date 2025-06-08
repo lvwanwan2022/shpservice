@@ -23,7 +23,7 @@ module.exports = defineConfig({
           console.error('API代理错误:', err.message)
         },
         onProxyReq: (proxyReq, req, res) => {
-          //console.log('API代理请求:', req.method, req.url)
+          ////console.log('API代理请求:', req.method, req.url)
         }
       },
       '/martin': {
@@ -40,10 +40,10 @@ module.exports = defineConfig({
           console.error('目标:', 'http://localhost:3000' + req.url.replace('/martin', ''))
         },
         onProxyReq: (proxyReq, req, res) => {
-          console.log('Martin代理请求:', req.method, req.url, '-> http://localhost:3000' + req.url.replace('/martin', ''))
+          //console.log('Martin代理请求:', req.method, req.url, '-> http://localhost:3000' + req.url.replace('/martin', ''))
         },
         onProxyRes: (proxyRes, req, res) => {
-          console.log('Martin代理响应:', proxyRes.statusCode, req.url)
+          //console.log('Martin代理响应:', proxyRes.statusCode, req.url)
         }
       },
       '/geoserver': {
@@ -60,10 +60,10 @@ module.exports = defineConfig({
           console.error('目标:', 'http://localhost:8083' + req.url)
         },
         onProxyReq: (proxyReq, req, res) => {
-          //console.log('GeoServer代理请求:', req.method, req.url, '-> http://localhost:8083' + req.url)
+          ////console.log('GeoServer代理请求:', req.method, req.url, '-> http://localhost:8083' + req.url)
         },
         onProxyRes: (proxyRes, req, res) => {
-          //console.log('GeoServer代理响应:', proxyRes.statusCode, req.url)
+          ////console.log('GeoServer代理响应:', proxyRes.statusCode, req.url)
         }
       }
     }

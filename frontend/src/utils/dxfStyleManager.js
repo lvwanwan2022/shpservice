@@ -52,7 +52,7 @@ export class DxfStyleManager {
   async getMartinServiceStyle(martinServiceId) {
     try {
       const response = await gisApi.getMartinServiceStyle(martinServiceId)
-      console.log('API响应:', response)
+      //console.log('API响应:', response)
       
       if (response?.success && response.data?.style_config) {
         // 返回style_config字段（从后端API）
@@ -67,7 +67,7 @@ export class DxfStyleManager {
         return response.data.style
       }
       
-      console.log('未找到样式配置，返回null')
+      //console.log('未找到样式配置，返回null')
       return null
     } catch (error) {
       console.error('获取Martin服务样式失败:', error)

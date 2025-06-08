@@ -24,7 +24,7 @@ export const quickTestTifLayer = async (layerInfo, map) => {
 
   try {
     // 首先进行诊断
-    console.log('🔍 开始诊断TIF图层:', layerInfo.layer_name)
+    //console.log('🔍 开始诊断TIF图层:', layerInfo.layer_name)
     testResult.diagnostics = await diagnoseTifLayer(layerInfo, map)
     
     if (!testResult.diagnostics.success) {
@@ -33,7 +33,7 @@ export const quickTestTifLayer = async (layerInfo, map) => {
     }
 
     // 创建测试图层
-    console.log('🧪 创建测试图层:', layerInfo.layer_name)
+    //console.log('🧪 创建测试图层:', layerInfo.layer_name)
     const testLayer = createImprovedWmsLayer(layerInfo, {
       opacity: 0.8,
       format: 'image/png'
@@ -66,7 +66,7 @@ export const quickTestTifLayer = async (layerInfo, map) => {
     testResult.layer = testLayer
     testResult.loadTime = performance.now() - startTime
 
-    console.log('✅ TIF图层测试成功:', layerInfo.layer_name, `(${testResult.loadTime.toFixed(2)}ms)`)
+    //console.log('✅ TIF图层测试成功:', layerInfo.layer_name, `(${testResult.loadTime.toFixed(2)}ms)`)
 
   } catch (error) {
     testResult.error = error.message
@@ -176,11 +176,11 @@ export const debugTifLayer = async (layerInfo, map) => {
   }
 
   console.group('🐛 TIF图层调试信息:')
-  console.log('图层信息:', debugInfo.layerInfo)
-  console.log('地图状态:', debugInfo.mapState)
-  console.log('WMS请求测试:', debugInfo.wmsRequests)
-  console.log('Capabilities:', debugInfo.capabilities)
-  console.log('性能信息:', debugInfo.performance)
+  //console.log('图层信息:', debugInfo.layerInfo)
+  //console.log('地图状态:', debugInfo.mapState)
+  //console.log('WMS请求测试:', debugInfo.wmsRequests)
+  //console.log('Capabilities:', debugInfo.capabilities)
+  //console.log('性能信息:', debugInfo.performance)
   if (debugInfo.errors.length > 0) {
     console.error('错误信息:', debugInfo.errors)
   }
@@ -227,11 +227,11 @@ const buildWmsGetMapUrl = (layerInfo, map, params = {}) => {
 export const batchTestTifLayers = async (layerInfos, map) => {
   const results = []
   
-  console.log('🧪 开始批量测试TIF图层，总数:', layerInfos.length)
+  //console.log('🧪 开始批量测试TIF图层，总数:', layerInfos.length)
   
   for (let i = 0; i < layerInfos.length; i++) {
     const layerInfo = layerInfos[i]
-    console.log(`正在测试 ${i + 1}/${layerInfos.length}: ${layerInfo.layer_name}`)
+    //console.log(`正在测试 ${i + 1}/${layerInfos.length}: ${layerInfo.layer_name}`)
     
     try {
       const result = await quickTestTifLayer(layerInfo, map)
@@ -265,10 +265,10 @@ export const batchTestTifLayers = async (layerInfos, map) => {
   const successCount = results.filter(r => r.success).length
   const failureCount = results.length - successCount
   
-  console.log('📊 批量测试完成:')
-  console.log(`  ✅ 成功: ${successCount}`)
-  console.log(`  ❌ 失败: ${failureCount}`)
-  console.log(`  🎯 成功率: ${((successCount / results.length) * 100).toFixed(1)}%`)
+  //console.log('📊 批量测试完成:')
+  //console.log(`  ✅ 成功: ${successCount}`)
+  //console.log(`  ❌ 失败: ${failureCount}`)
+  //console.log(`  🎯 成功率: ${((successCount / results.length) * 100).toFixed(1)}%`)
   
   return results
 }
@@ -292,7 +292,7 @@ export const testLayerPerformanceAtZooms = async (layerInfo, map, zoomLevels = [
 
   try {
     for (const zoom of zoomLevels) {
-      console.log(`测试缩放级别 ${zoom}`)
+      //console.log(`测试缩放级别 ${zoom}`)
       
       // 设置缩放级别
       map.setView(originalCenter, zoom)

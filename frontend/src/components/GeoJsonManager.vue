@@ -239,7 +239,7 @@ export default {
       formData.append('file', file)
       
       try {
-        console.log('开始上传文件:', file.name)
+        //console.log('开始上传文件:', file.name)
         
         const response = await api.post('/geojson/upload', formData, {
           headers: {
@@ -247,7 +247,7 @@ export default {
           }
         })
         
-        console.log('上传成功:', response.data)
+        //console.log('上传成功:', response.data)
         this.uploadResult = response.data
         
         // 刷新文件列表
@@ -288,7 +288,7 @@ export default {
       try {
         const response = await api.get('/geojson/files')
         this.files = response.data.files || []
-        console.log('文件列表加载成功:', this.files.length, '个文件')
+        //console.log('文件列表加载成功:', this.files.length, '个文件')
       } catch (error) {
         console.error('加载文件列表失败:', error)
         this.errorMessage = '加载文件列表失败'
@@ -304,7 +304,7 @@ export default {
       
       try {
         await api.delete(`/geojson/files/${fileId}`)
-        console.log('文件删除成功:', fileId)
+        //console.log('文件删除成功:', fileId)
         
         // 移除本地列表中的文件
         this.files = this.files.filter(f => f.file_id !== fileId)
@@ -351,12 +351,12 @@ export default {
         
         // 获取并加载GeoJSON数据
         const accessUrl = file.access_url || `/api/geojson/files/${file.file_id}`
-        console.log('加载GeoJSON数据:', accessUrl)
+        //console.log('加载GeoJSON数据:', accessUrl)
         
         const response = await api.get(accessUrl)
         const geojsonData = response.data
         
-        console.log('GeoJSON数据加载成功:', geojsonData)
+        //console.log('GeoJSON数据加载成功:', geojsonData)
         
         // 添加GeoJSON图层
         const geojsonLayer = L.geoJSON(geojsonData, {
@@ -449,7 +449,7 @@ export default {
       try {
         const fullUrl = window.location.origin + url
         await navigator.clipboard.writeText(fullUrl)
-        console.log('URL已复制到剪贴板:', fullUrl)
+        //console.log('URL已复制到剪贴板:', fullUrl)
         
         // 可以添加一个临时提示
         this.showToast('URL已复制到剪贴板')

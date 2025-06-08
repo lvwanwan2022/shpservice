@@ -271,7 +271,7 @@ export default {
       try {
         const response = await gisApi.getScenes()
         scenes.value = response.scenes || []
-        console.log('场景列表加载成功:', scenes.value)
+        //console.log('场景列表加载成功:', scenes.value)
       } catch (error) {
         console.error('加载场景列表失败:', error)
         ElMessage.error('加载场景列表失败')

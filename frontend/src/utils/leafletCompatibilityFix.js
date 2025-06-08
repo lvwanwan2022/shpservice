@@ -11,11 +11,11 @@ import L from 'leaflet'
  * 方案3：添加 fakeStop polyfill
  */
 export function fixVectorGridCompatibility() {
-  //console.log('应用 VectorGrid 兼容性修复...')
+  ////console.log('应用 VectorGrid 兼容性修复...')
   
   // 方案3：添加 fakeStop polyfill（最直接的修复）
   if (!L.DomEvent.fakeStop) {
-    //console.log('添加 L.DomEvent.fakeStop polyfill')
+    ////console.log('添加 L.DomEvent.fakeStop polyfill')
     L.DomEvent.fakeStop = function(e) {
       // 改进的 polyfill，只阻止默认行为，不阻止事件传播
       if (e && e.preventDefault) {
@@ -30,7 +30,7 @@ export function fixVectorGridCompatibility() {
   
   // 检查是否需要修复
   if (L.Canvas && L.Canvas.Tile) {
-    //console.log('检测到 Leaflet 1.8+，应用 VectorGrid 兼容性修复')
+    ////console.log('检测到 Leaflet 1.8+，应用 VectorGrid 兼容性修复')
     
     // 方案1：重写 Canvas.Tile 的 _onClick 方法（改进版）
     L.Canvas.Tile.include({
@@ -69,7 +69,7 @@ export function fixVectorGridCompatibility() {
       }
     })
     
-    //console.log('VectorGrid 兼容性修复已应用')
+    ////console.log('VectorGrid 兼容性修复已应用')
   } else {
     console.warn('无法识别的 Leaflet 版本或 VectorGrid 未加载')
   }

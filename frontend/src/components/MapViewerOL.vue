@@ -204,7 +204,7 @@ export default {
     // 初始化坐标系
     const initProjections = async () => {
       try {
-        console.log('🔄 开始从后端获取坐标系定义...')
+        //console.log('🔄 开始从后端获取坐标系定义...')
         
         // 从后端获取常用坐标系的proj4定义
         const response = await gisApi.getProj4Definitions()
@@ -214,14 +214,14 @@ export default {
           Object.entries(response.proj4_definitions).forEach(([epsgCode, info]) => {
             if (info.proj4) {
               proj4.defs(epsgCode, info.proj4)
-              console.log(`✅ 注册坐标系: ${epsgCode} - ${info.name || '未知'}`)
+              //console.log(`✅ 注册坐标系: ${epsgCode} - ${info.name || '未知'}`)
             }
           })
           
           // 注册到OpenLayers
           register(proj4)
           
-          console.log(`✅ 坐标系初始化完成，共注册${Object.keys(response.proj4_definitions).length}个坐标系`)
+          //console.log(`✅ 坐标系初始化完成，共注册${Object.keys(response.proj4_definitions).length}个坐标系`)
           return true
         } else {
           throw new Error(response.message || '获取坐标系定义失败')
@@ -242,13 +242,13 @@ export default {
         // 注册备用投影定义
         Object.entries(fallbackProjections).forEach(([code, def]) => {
           proj4.defs(code, def)
-          console.log(`⚠️ 备用注册坐标系: ${code}`)
+          //console.log(`⚠️ 备用注册坐标系: ${code}`)
         })
         
         // 注册到OpenLayers
         register(proj4)
         
-        console.log('⚠️ 坐标系初始化完成（使用备用定义）')
+        //console.log('⚠️ 坐标系初始化完成（使用备用定义）')
         return false
       }
     }
@@ -258,17 +258,17 @@ export default {
       try {
         // 检查是否已经注册
         if (proj4.defs(epsgCode)) {
-          console.log(`✅ 坐标系 ${epsgCode} 已注册`)
+          //console.log(`✅ 坐标系 ${epsgCode} 已注册`)
           return true
         }
         
-        console.log(`🔄 动态获取坐标系定义: ${epsgCode}`)
+        //console.log(`🔄 动态获取坐标系定义: ${epsgCode}`)
         const response = await gisApi.getSingleProj4Definition(epsgCode)
         
         if (response.success && response.crs_info && response.crs_info.proj4_definition) {
           proj4.defs(epsgCode, response.crs_info.proj4_definition)
           register(proj4)
-          console.log(`✅ 动态注册坐标系: ${epsgCode} - ${response.crs_info.name || '未知'}`)
+          //console.log(`✅ 动态注册坐标系: ${epsgCode} - ${response.crs_info.name || '未知'}`)
           return true
         } else {
           console.warn(`⚠️ 无法获取 ${epsgCode} 的proj4定义`)
@@ -318,7 +318,7 @@ export default {
     
     // 初始化地图
     const initMap = () => {
-      console.log('=== 开始地图初始化 ===')
+      //console.log('=== 开始地图初始化 ===')
       
       // 1. 清理现有地图
       if (map.value) {
@@ -331,19 +331,19 @@ export default {
         console.error('❌ 地图容器未找到')
         return
       }
-      console.log('✅ 地图容器已找到:', mapContainer.value)
+      //console.log('✅ 地图容器已找到:', mapContainer.value)
       
       // 3. 检查OpenLayers导入
       if (!Map || !View || !TileLayer || !XYZ) {
         console.error('❌ OpenLayers模块导入失败')
-        console.log('Map:', Map, 'View:', View, 'TileLayer:', TileLayer, 'XYZ:', XYZ)
+        //console.log('Map:', Map, 'View:', View, 'TileLayer:', TileLayer, 'XYZ:', XYZ)
         return
       }
-      console.log('✅ OpenLayers模块导入正常')
+      //console.log('✅ OpenLayers模块导入正常')
       
       try {
         // 4. 创建底图图层
-        console.log('创建底图图层...')
+        //console.log('创建底图图层...')
         
         // 高德地图
         const gaodeLayer = new TileLayer({
@@ -381,10 +381,10 @@ export default {
           visible: false
         })
         
-        console.log('✅ 底图图层创建成功')
+        //console.log('✅ 底图图层创建成功')
         
         // 5. 创建地图实例
-        console.log('创建地图实例...')
+        //console.log('创建地图实例...')
         map.value = new Map({
           target: mapContainer.value,
           layers: [gaodeLayer, gaodeSatelliteLayer, osmLayer, esriSatelliteLayer],
@@ -402,17 +402,17 @@ export default {
           esriSatellite: esriSatelliteLayer
         }
         
-        console.log('✅ 地图实例创建成功')
+        //console.log('✅ 地图实例创建成功')
         
         // 7. 监听地图渲染
         map.value.once('rendercomplete', () => {
-          console.log('🎉 地图首次渲染完成！')
+          //console.log('🎉 地图首次渲染完成！')
         })
         
         // 8. 延迟强制更新尺寸
         setTimeout(() => {
           if (map.value) {
-            console.log('强制更新地图尺寸...')
+            //console.log('强制更新地图尺寸...')
             map.value.updateSize()
           }
         }, 200)
@@ -420,7 +420,7 @@ export default {
         // 9. 初始化弹窗
         initializePopup()
         
-        console.log('=== 地图初始化完成 ===')
+        //console.log('=== 地图初始化完成 ===')
         
       } catch (error) {
         console.error('❌ 地图初始化失败:', error)
@@ -469,7 +469,7 @@ export default {
         
         // 检查点击位置是否有要素
         const features = map.value.getFeaturesAtPixel(pixel)
-        //console.log('features',features)
+        ////console.log('features',features)
         if (features && features.length > 0) {
           // 找到第一个要素
           const feature = features[0]
@@ -508,7 +508,7 @@ export default {
         map.value.getTargetElement().style.cursor = hasFeature ? 'pointer' : ''
       })
       
-      console.log('✅ 弹窗初始化完成')
+      //console.log('✅ 弹窗初始化完成')
     }
     
     // 显示弹窗 - 简化版本
@@ -578,7 +578,7 @@ export default {
       contentElement.innerHTML = content
       popup.value.setPosition(coordinate)
       
-      console.log('🎯 显示弹窗:', layerInfo.layer_name)
+      //console.log('🎯 显示弹窗:', layerInfo.layer_name)
     }
     
     // 加载场景
@@ -603,12 +603,12 @@ export default {
       }
       
       try {
-        console.log('开始加载场景:', sceneId)
+        //console.log('开始加载场景:', sceneId)
         const response = await gisApi.getScene(sceneId)
         currentScene.value = response.scene
         layersList.value = response.layers
         
-        console.log('场景数据加载完成，图层数量:', layersList.value.length)
+        //console.log('场景数据加载完成，图层数量:', layersList.value.length)
         
         // 清除现有图层
         clearAllLayers()
@@ -622,7 +622,7 @@ export default {
           }
         }
         
-        console.log('✅ 场景加载完成:', response.scene?.name)
+        //console.log('✅ 场景加载完成:', response.scene?.name)
         
       } catch (error) {
         console.error('加载场景失败:', error)
@@ -649,14 +649,14 @@ export default {
         mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
       }
 
-      console.log('创建MVT图层:', layer.layer_name, 'URL:', mvtUrl)
+      //console.log('创建MVT图层:', layer.layer_name, 'URL:', mvtUrl)
 
       // 获取图层的样式配置
       let layerStyleConfig = layerStyleCache[layer.id] || {}
       
       // 如果是DXF文件且没有缓存样式，使用默认DXF样式
       if (layer.file_type === 'dxf' && Object.keys(layerStyleConfig).length === 0) {
-        console.log('使用默认DXF样式配置')
+        //console.log('使用默认DXF样式配置')
         layerStyleConfig = defaultDxfStylesConfig.defaultDxfStyles
       }
             
@@ -671,7 +671,7 @@ export default {
         
         return (feature) => {
           const properties = feature.getProperties()
-          //console.log('properties',properties)
+          ////console.log('properties',properties)
           const geometryType = feature.getGeometry().getType()
           
           // 🔧 解决MVT layer属性冲突问题 - 后端方案
@@ -690,7 +690,7 @@ export default {
               properties.cad_layer.trim() !== '') {
             dxfLayerName = properties.cad_layer.trim()
             useLayerBasedStyle = true
-            console.log(`✅ 找到CAD图层名称: "${dxfLayerName}" (来源: cad_layer字段)`)
+            //console.log(`✅ 找到CAD图层名称: "${dxfLayerName}" (来源: cad_layer字段)`)
           }
           // 备用：检查其他可能的字段名（兼容旧数据）
           else if (isDxf) {
@@ -708,21 +708,13 @@ export default {
                     
                 dxfLayerName = fieldValue.trim()
                 useLayerBasedStyle = true
-                console.log(`⚠️ 使用备用字段获取图层名称: "${dxfLayerName}" (来源: ${fieldName}字段)`)
+                //console.log(`⚠️ 使用备用字段获取图层名称: "${dxfLayerName}" (来源: ${fieldName}字段)`)
                 break
               }
             }
           }
           
-          // 调试输出：显示图层名称获取结果
-          if (isDxf) {
-            console.log(`🎯 DXF图层名称解析结果:`, {
-              图层名: layer.layer_name,
-              找到的DXF图层名: dxfLayerName,
-              使用图层样式: useLayerBasedStyle,
-              所有属性: Object.keys(properties).join(', ')
-            })
-          }
+         
           
           // 样式策略1：DXF图层 - 根据是否找到图层名称决定样式方式
           if (isDxf) {
@@ -748,7 +740,7 @@ export default {
                 visible: true
               }
               
-              console.log(`🎨 使用DXF图层样式: ${dxfLayerName} (${geometryType})`, finalStyle)
+              //console.log(`🎨 使用DXF图层样式: ${dxfLayerName} (${geometryType})`, finalStyle)
               
               let style = createStyleFromConfig(finalStyle, geometryType)
               
@@ -779,7 +771,7 @@ export default {
                 visible: true
               }
               
-              console.log(`🎨 使用DXF通用默认样式 (${geometryType})`, defaultStyle)
+              //console.log(`🎨 使用DXF通用默认样式 (${geometryType})`, defaultStyle)
               
               let style = createStyleFromConfig(defaultStyle, geometryType)
               styleCache[cacheKey] = style
@@ -810,7 +802,7 @@ export default {
               visible: true
             }
             
-            console.log(`🎨 使用layer字段样式: ${dxfLayerName} (${geometryType})`, finalStyle)
+            //console.log(`🎨 使用layer字段样式: ${dxfLayerName} (${geometryType})`, finalStyle)
             
             let style = createStyleFromConfig(finalStyle, geometryType)
             
@@ -839,7 +831,7 @@ export default {
               polygon: styleForm.polygon || { fillColor: '#00FF00', fillOpacity: 0.3, outlineColor: '#000000' }
             }
             
-            console.log(`🎨 使用基础几何样式: ${geometryType}`, basicStyles)
+            //console.log(`🎨 使用基础几何样式: ${geometryType}`, basicStyles)
             
             let style
             if (geometryType === 'Point' || geometryType === 'MultiPoint') {
@@ -1027,7 +1019,7 @@ export default {
         // 添加到地图（如果图层可见）
         if (layer.visibility !== false && map.value) {
           map.value.addLayer(mvtLayer)
-          console.log('✅ MVT图层添加成功:', layer.layer_name)
+          //console.log('✅ MVT图层添加成功:', layer.layer_name)
         }
         
         // 添加图层事件监听 - 改进版本
@@ -1041,7 +1033,7 @@ export default {
           // 可以在这里添加重试逻辑
           if (evt.tile.getState() === 3) { // ERROR state
             setTimeout(() => {
-              console.log('重试加载MVT瓦片:', evt.tile.src_)
+              //console.log('重试加载MVT瓦片:', evt.tile.src_)
               evt.tile.load()
             }, 1000)
           }
@@ -1049,7 +1041,7 @@ export default {
         
         // 瓦片加载成功
         source.on('tileloadend', (evt) => {
-          console.log('MVT瓦片加载完成:', evt.tile.src_)
+          //console.log('MVT瓦片加载完成:', evt.tile.src_)
         })
         
         // 瓦片开始加载
@@ -1095,7 +1087,7 @@ export default {
         wmsUrl = '/geoserver/wms'
       }
       
-      console.log('创建WMS图层:', layer.layer_name, 'URL:', wmsUrl)
+      //console.log('创建WMS图层:', layer.layer_name, 'URL:', wmsUrl)
       
       // 获取图层坐标系信息
       let layerCRS = 'EPSG:4326' // 默认坐标系
@@ -1110,14 +1102,14 @@ export default {
           const response = await gisApi.getLayerCRSInfo(layer.layer_id)
           if (response.success && response.crs_info) {
             layerCRS = response.crs_info.epsg_code || layerCRS
-            console.log(`✅ 获取到图层坐标系: ${layerCRS}`)
+            //console.log(`✅ 获取到图层坐标系: ${layerCRS}`)
             
             // 动态注册坐标系（如果需要）
             if (response.crs_info.proj4_definition) {
-              console.log(`🔄 动态注册坐标系: ${layerCRS}`)
+              //console.log(`🔄 动态注册坐标系: ${layerCRS}`)
               proj4.defs(layerCRS, response.crs_info.proj4_definition)
               register(proj4)
-              console.log(`✅ 坐标系注册完成: ${layerCRS}`)
+              //console.log(`✅ 坐标系注册完成: ${layerCRS}`)
             }
             
             // 使用推荐的WMS版本
@@ -1155,7 +1147,7 @@ export default {
         
         // 设置坐标系参数
         wmsParams[crsParam] = layerCRS
-        console.log('lv-projection:', wmsParams)
+        //console.log('lv-projection:', wmsParams)
         const wmsLayer = new TileLayer({
           source: new TileWMS({
             url: wmsUrl,
@@ -1179,7 +1171,7 @@ export default {
         // 添加到地图（如果图层可见）
         if (layer.visibility !== false) {
           map.value.addLayer(wmsLayer)
-          console.log(`✅ WMS图层添加成功: ${layer.layer_name} (坐标系: ${layerCRS})`)
+          //console.log(`✅ WMS图层添加成功: ${layer.layer_name} (坐标系: ${layerCRS})`)
         }
         
       } catch (error) {
@@ -1214,7 +1206,7 @@ export default {
         mapLayers.value = {}
         mvtLayers.value = {}
         
-        console.log('✅ 所有图层已清除')
+        //console.log('✅ 所有图层已清除')
       } catch (error) {
         console.error('清除图层时出错:', error)
         // 强制清空引用
@@ -1264,7 +1256,7 @@ export default {
         // 等待DxfStyleEditor组件加载完成
         // 由于DxfStyleEditor在初始化时会自动触发styles-updated事件
         // 这里不需要手动获取和应用样式，让组件自己处理
-        console.log('DXF样式对话框已打开，等待DxfStyleEditor组件初始化...')
+        //console.log('DXF样式对话框已打开，等待DxfStyleEditor组件初始化...')
       }
     }
     
@@ -1435,7 +1427,7 @@ export default {
     
     // 底图切换处理
     const onBaseMapChanged = (baseMapType) => {
-      console.log('切换底图到:', baseMapType)
+      //console.log('切换底图到:', baseMapType)
     }
     
     // 设置当前活动图层
@@ -1467,7 +1459,7 @@ export default {
     
     // DXF样式更新处理
     const onDxfStylesUpdated = async (styleData) => {
-      console.log('接收到DXF样式更新:', styleData)
+      //console.log('接收到DXF样式更新:', styleData)
       
       if (!currentStyleLayer.value || currentStyleLayer.value.service_type !== 'martin') {
         console.warn('当前图层不是Martin图层，无法应用DXF样式')
@@ -1486,7 +1478,7 @@ export default {
       }
       
       try {
-        console.log('应用DXF样式到图层:', layer.layer_name, styleConfig)
+        //console.log('应用DXF样式到图层:', layer.layer_name, styleConfig)
         
         // 获取现有的MVT图层
         const existingMvtLayer = mvtLayers.value[layer.id]
@@ -1502,7 +1494,7 @@ export default {
           // 重新创建并添加图层
           await addMartinLayer(layer)
           
-          console.log('DXF样式已应用到图层:', layer.layer_name)
+          //console.log('DXF样式已应用到图层:', layer.layer_name)
         } else {
           console.warn('未找到要更新样式的MVT图层:', layer.layer_name)
         }
@@ -1646,7 +1638,7 @@ export default {
       nextTick(async () => {
         // 增加一个小延迟确保DOM完全渲染
         setTimeout(async () => {
-          console.log('DOM准备就绪，开始初始化...')
+          //console.log('DOM准备就绪，开始初始化...')
           
           try {
             // 首先初始化坐标系
@@ -1662,7 +1654,7 @@ export default {
                 setTimeout(() => {
                   if (map.value) {
                     map.value.updateSize()
-                    console.log('地图尺寸已更新')
+                    //console.log('地图尺寸已更新')
                   }
                 }, 100)
               })

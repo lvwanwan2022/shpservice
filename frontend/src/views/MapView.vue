@@ -326,7 +326,7 @@ export default {
         
         // 提供用户反馈
         // const statusText = layer.visibility ? '显示' : '隐藏' // 注释掉未使用的变量
-        //console.log(`图层"${layer.layer_name}"已${statusText}`)
+        ////console.log(`图层"${layer.layer_name}"已${statusText}`)
         
       } catch (error) {
         console.error('更新图层可见性失败', error)
@@ -429,7 +429,7 @@ export default {
           const response = await gisApi.getLayerBounds(layer.id)
           if (response?.success && response.data?.bbox) {
             bbox = response.data.bbox
-            console.log('从图层边界API获取到边界:', bbox)
+            //console.log('从图层边界API获取到边界:', bbox)
           }
         } catch (apiError) {
           console.warn('图层边界API调用失败，尝试其他方式:', apiError)
@@ -536,8 +536,8 @@ export default {
 
     // 显示添加图层对话框
     const showAddLayerDialog = () => {
-      //console.log('showAddLayerDialog called')
-      //console.log('mapViewerRef.value:', mapViewerRef.value)
+      ////console.log('showAddLayerDialog called')
+      ////console.log('mapViewerRef.value:', mapViewerRef.value)
       
       if (!mapViewerRef.value) {
         console.error('mapViewerRef.value is null or undefined')
@@ -622,7 +622,7 @@ export default {
 
     // 处理图层添加事件
     const onLayerAdded = (/* event */) => { // 注释掉未使用的参数
-      //console.log('收到图层添加事件:', event)
+      ////console.log('收到图层添加事件:', event)
       // 刷新当前场景的图层列表
       if (selectedSceneId.value) {
         fetchSceneLayers(selectedSceneId.value)
@@ -648,7 +648,7 @@ export default {
     
     // 选择图层
     const selectLayer = (layer) => {
-      console.log('选择图层:', layer.layer_name)
+      //console.log('选择图层:', layer.layer_name)
       currentActiveLayer.value = layer
       
       // 通知MapViewer组件将该图层置顶
@@ -661,7 +661,7 @@ export default {
     
     // 处理图层选择事件
     const onLayerSelected = (layer) => {
-      console.log('收到图层选择事件:', layer)
+      //console.log('收到图层选择事件:', layer)
       // 直接设置当前活动图层，避免循环调用
       currentActiveLayer.value = layer
     }

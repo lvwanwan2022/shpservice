@@ -63,7 +63,7 @@ export default class WfsLayer {
       maxFeatures: this.options.maxFeatures
     };
     
-    //console.log('请求WFS数据:', this.options.url, params);
+    ////console.log('请求WFS数据:', this.options.url, params);
     
     // 发起请求
     return axios.get(this.options.url, { 
@@ -78,7 +78,7 @@ export default class WfsLayer {
       proxy: false
     })
       .then(response => {
-        //console.log('WFS数据请求成功:', response.status);
+        ////console.log('WFS数据请求成功:', response.status);
         this.data = response.data;
         
         // 创建GeoJSON图层
@@ -115,7 +115,7 @@ export default class WfsLayer {
    */
   _loadWithJsonp() {
     return new Promise((resolve) => {
-      //console.log('尝试使用JSONP方式加载WFS数据');
+      ////console.log('尝试使用JSONP方式加载WFS数据');
       
       // 使用WMS-JSON方式作为备选方案（如果GeoServer支持）
       const wmsUrl = this.options.url.replace('wfs', 'wms');

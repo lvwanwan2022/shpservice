@@ -138,8 +138,8 @@ export default {
       const tileUrl = getMartinTileUrl(this.tableName, this.martinUrl)
       const tableMetadata = getTableMetadata(this.tableName)
       
-      console.log('Martin Tile URL:', tileUrl)
-      console.log('Table Metadata:', tableMetadata)
+      //console.log('Martin Tile URL:', tileUrl)
+      //console.log('Table Metadata:', tableMetadata)
       
       // 使用通用样式函数，根据layer字段动态应用样式
       const layerStyles = createUniversalStyleFunction(
@@ -147,7 +147,7 @@ export default {
         tableMetadata.layerField
       )
       
-      console.log('Applied Styles:', layerStyles)
+      //console.log('Applied Styles:', layerStyles)
       
       // 创建vector grid图层
       this.vectorLayer = L.vectorGrid.protobuf(tileUrl, {
@@ -159,7 +159,7 @@ export default {
         
         // 鼠标点击事件
         onclick: (e) => {
-          console.log('要素点击:', e.layer.properties)
+          //console.log('要素点击:', e.layer.properties)
           this.showFeaturePopup(e)
         },
         

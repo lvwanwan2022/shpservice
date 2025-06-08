@@ -178,7 +178,7 @@ const wmsLayer = L.tileLayer.wms(wmsUrl, {
 
 wmsLayer.on('tileerror', function(e) {
   console.error('瓦片加载失败:', e.coords, e.error)
-  console.log('失败的URL:', e.tile.src)
+  //console.log('失败的URL:', e.tile.src)
 })
 ```
 
@@ -192,7 +192,7 @@ import { diagnoseTifLayer } from '@/utils/tifLayerDiagnostics'
 
 // 使用诊断工具
 const diagnosticReport = await diagnoseTifLayer(map, layerConfig)
-console.log('诊断结果:', diagnosticReport)
+//console.log('诊断结果:', diagnosticReport)
 ```
 
 ### 2. 手动测试页面
@@ -216,7 +216,7 @@ console.log('诊断结果:', diagnosticReport)
 
 // 3. 手动测试WMS请求
 const testUrl = `${wmsUrl}?service=WMS&version=1.1.1&request=GetMap&layers=${layerName}&styles=&bbox=-180,-90,180,90&width=256&height=256&srs=EPSG:4326&format=image/png&transparent=true`
-console.log('测试URL:', testUrl)
+//console.log('测试URL:', testUrl)
 ```
 
 ## 修复流程

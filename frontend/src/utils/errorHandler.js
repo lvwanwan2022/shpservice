@@ -63,7 +63,7 @@ export function installGlobalErrorHandlers() {
     }
   }
   
-  console.log('✅ 全局错误处理器已安装')
+  //console.log('✅ 全局错误处理器已安装')
 }
 
 /**
@@ -72,7 +72,7 @@ export function installGlobalErrorHandlers() {
 export function uninstallGlobalErrorHandlers() {
   window.removeEventListener('error', handleResizeObserverError, true)
   window.removeEventListener('unhandledrejection', handleResizeObserverError)
-  console.log('✅ 全局错误处理器已卸载')
+  //console.log('✅ 全局错误处理器已卸载')
 }
 
 /**

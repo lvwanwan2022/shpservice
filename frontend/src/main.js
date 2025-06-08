@@ -104,7 +104,7 @@ app.mount('#app')
 // 当Leaflet加载完成后应用坐标修复补丁
 const applyGlobalCoordinateFix = () => {
   if (window.L) {
-    //console.log('应用全局Martin坐标修复补丁...')
+    ////console.log('应用全局Martin坐标修复补丁...')
     applyMartinCoordinateFixes(window.L)
   }
 }
@@ -122,4 +122,4 @@ if (!window.L) {
   }, 100)
 }
 
-console.log('�� 应用已启动，错误处理器已安装')
+//console.log('�� 应用已启动，错误处理器已安装')

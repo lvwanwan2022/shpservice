@@ -14,7 +14,7 @@ import { Style, Fill, Stroke, Circle } from 'ol/style'
 export function checkOpenLayersMVTSupport() {
   try {
     const hasSupport = !!(VectorTileLayer && VectorTile && MVT)
-    console.log('OpenLayers MVT支持检查:', hasSupport)
+    //console.log('OpenLayers MVT支持检查:', hasSupport)
     return hasSupport
   } catch (error) {
     console.error('OpenLayers MVT支持检查失败:', error)
@@ -132,7 +132,7 @@ export function createOpenLayersStyleFunction(styleConfig = {}, isDxf = false) {
  * @returns {Promise<VectorTileLayer>} OpenLayers图层对象
  */
 export async function createOpenLayersMVTLayer(layerConfig, options = {}) {
-  console.log('🎯 开始创建OpenLayers MVT图层:', layerConfig)
+  //console.log('🎯 开始创建OpenLayers MVT图层:', layerConfig)
   
   // 参数验证
   if (!layerConfig || !layerConfig.mvt_url) {
@@ -154,7 +154,7 @@ export async function createOpenLayersMVTLayer(layerConfig, options = {}) {
     // 移除.pbf后缀（如果存在）
     if (mvtUrl.includes('.pbf')) {
       mvtUrl = mvtUrl.replace('.pbf', '')
-      console.log('移除.pbf后缀，新URL:', mvtUrl)
+      //console.log('移除.pbf后缀，新URL:', mvtUrl)
     }
     
     // 处理localhost URL
@@ -168,8 +168,8 @@ export async function createOpenLayersMVTLayer(layerConfig, options = {}) {
       console.warn('⚠️ MVT URL格式可能不正确，缺少{z},{x},{y}参数:', mvtUrl)
     }
     
-    console.log('MVT URL:', mvtUrl)
-    console.log('TileJSON URL:', layerConfig.tilejson_url)
+    //console.log('MVT URL:', mvtUrl)
+    //console.log('TileJSON URL:', layerConfig.tilejson_url)
     
     // 创建样式函数
     const styleFunction = createOpenLayersStyleFunction(
@@ -215,10 +215,10 @@ export async function createOpenLayersMVTLayer(layerConfig, options = {}) {
     })
     
     mvtLayer.getSource().on('tileloadend', (evt) => {
-      console.log('MVT瓦片加载完成:', evt.tile.src_ || 'Unknown tile')
+      //console.log('MVT瓦片加载完成:', evt.tile.src_ || 'Unknown tile')
     })
     
-    console.log('✅ OpenLayers MVT图层创建成功')
+    //console.log('✅ OpenLayers MVT图层创建成功')
     return mvtLayer
     
   } catch (error) {
@@ -237,7 +237,7 @@ export function updateOpenLayersMVTLayerStyle(mvtLayer, newStyle, isDxf = false)
   try {
     const newStyleFunction = createOpenLayersStyleFunction(newStyle, isDxf)
     mvtLayer.setStyle(newStyleFunction)
-    console.log('✅ MVT图层样式更新成功')
+    //console.log('✅ MVT图层样式更新成功')
   } catch (error) {
     console.error('❌ MVT图层样式更新失败:', error)
     throw error
@@ -257,14 +257,14 @@ export async function getOpenLayersMVTLayerNames(tilejsonUrl) {
     }
     
     const tilejsonData = await response.json()
-    console.log('TileJSON数据:', tilejsonData)
+    //console.log('TileJSON数据:', tilejsonData)
     
     let layerNames = ['default']  // 默认图层名
     if (tilejsonData.vector_layers && Array.isArray(tilejsonData.vector_layers)) {
       layerNames = tilejsonData.vector_layers.map(layer => layer.id)
     }
     
-    console.log('检测到的图层名称:', layerNames)
+    //console.log('检测到的图层名称:', layerNames)
     return layerNames
     
   } catch (error) {

@@ -11,7 +11,7 @@ import 'leaflet.vectorgrid'
  */
 export function checkMVTSupport() {
   const hasSupport = !!(L.vectorGrid && L.vectorGrid.protobuf)
-  console.log('MVT支持检查:', hasSupport)
+  //console.log('MVT支持检查:', hasSupport)
   return hasSupport
 }
 
@@ -22,7 +22,7 @@ export function checkMVTSupport() {
  */
 function createStyleFunction(userStyle = {}) {
   return function(properties, zoom, geometryDimension) {
-    console.log('样式函数调用:', { properties, zoom, geometryDimension })
+    //console.log('样式函数调用:', { properties, zoom, geometryDimension })
     
     // 点样式 (geometryDimension === 1)
     if (geometryDimension === 1) {
@@ -92,7 +92,7 @@ function createStyleFunction(userStyle = {}) {
  * @returns {Promise<L.Layer>} Leaflet图层对象
  */
 export async function createMVTLayer(layerConfig) {
-  console.log('🎯 开始创建MVT图层:', layerConfig)
+  //console.log('🎯 开始创建MVT图层:', layerConfig)
   
   // 参数验证
   if (!layerConfig || !layerConfig.mvt_url) {
@@ -114,7 +114,7 @@ export async function createMVTLayer(layerConfig) {
     // 移除.pbf后缀（如果存在）
     if (mvtUrl.includes('.pbf')) {
       mvtUrl = mvtUrl.replace('.pbf', '')
-      console.log('移除.pbf后缀，新URL:', mvtUrl)
+      //console.log('移除.pbf后缀，新URL:', mvtUrl)
     }
     
     // 验证URL格式
@@ -122,8 +122,8 @@ export async function createMVTLayer(layerConfig) {
       console.warn('⚠️ MVT URL格式可能不正确，缺少{z},{x},{y}参数:', mvtUrl)
     }
     
-    console.log('MVT URL:', mvtUrl)
-    console.log('TileJSON URL:', layerConfig.tilejson_url)
+    //console.log('MVT URL:', mvtUrl)
+    //console.log('TileJSON URL:', layerConfig.tilejson_url)
     
     // 创建样式函数
     const styleFunction = createStyleFunction(layerConfig.style)
@@ -145,7 +145,7 @@ export async function createMVTLayer(layerConfig) {
       tolerance: 0  // 减少tolerance以避免坐标计算问题
     }
     
-    console.log('正在获取TileJSON确定图层名称...')
+    //console.log('正在获取TileJSON确定图层名称...')
     
     // 返回Promise，按HTML示例的逻辑处理
     return new Promise((resolve, reject) => {
@@ -159,7 +159,7 @@ export async function createMVTLayer(layerConfig) {
             return response.json()
           })
           .then(tilejsonData => {
-            console.log('TileJSON数据:', tilejsonData)
+            //console.log('TileJSON数据:', tilejsonData)
             
             // 获取图层名称 - 与HTML示例一致
             let layerNames = ['default']  // 默认图层名
@@ -167,14 +167,14 @@ export async function createMVTLayer(layerConfig) {
               layerNames = tilejsonData.vector_layers.map(layer => layer.id)
             }
             
-            console.log('检测到的图层名称:', layerNames)
+            //console.log('检测到的图层名称:', layerNames)
             
             // 为每个图层设置样式 - 与HTML示例一致
             layerNames.forEach(layerName => {
               vectorTileOptions.vectorTileLayerStyles[layerName] = styleFunction
             })
             
-            console.log('VectorGrid选项:', vectorTileOptions)
+            //console.log('VectorGrid选项:', vectorTileOptions)
             
             // 创建MVT图层 - 使用与HTML示例完全相同的方式
             const mvtLayer = L.vectorGrid.protobuf(mvtUrl, vectorTileOptions)
@@ -186,12 +186,12 @@ export async function createMVTLayer(layerConfig) {
             // 添加事件处理 - 与HTML示例保持一致
             addEventListeners(mvtLayer, layerConfig.layer_name)
             
-            console.log('✅ MVT图层创建成功')
+            //console.log('✅ MVT图层创建成功')
             resolve(mvtLayer)
           })
           .catch(error => {
             console.error('TileJSON获取失败:', error)
-            console.log('尝试使用默认图层名直接加载...')
+            //console.log('尝试使用默认图层名直接加载...')
             
             // 如果TileJSON获取失败，使用默认配置 - 与HTML示例一致
             vectorTileOptions.vectorTileLayerStyles['default'] = styleFunction
@@ -199,7 +199,7 @@ export async function createMVTLayer(layerConfig) {
             try {
               const mvtLayer = L.vectorGrid.protobuf(mvtUrl, vectorTileOptions)
               addEventListeners(mvtLayer, layerConfig.layer_name)
-              console.log('✅ 使用默认配置创建MVT图层成功')
+              //console.log('✅ 使用默认配置创建MVT图层成功')
               resolve(mvtLayer)
             } catch (directError) {
               console.error('直接加载也失败:', directError)
@@ -208,13 +208,13 @@ export async function createMVTLayer(layerConfig) {
           })
       } else {
         // 没有TileJSON URL，直接使用默认配置
-        console.log('没有TileJSON URL，使用默认图层名')
+        //console.log('没有TileJSON URL，使用默认图层名')
         vectorTileOptions.vectorTileLayerStyles['default'] = styleFunction
         
         try {
           const mvtLayer = L.vectorGrid.protobuf(mvtUrl, vectorTileOptions)
           addEventListeners(mvtLayer, layerConfig.layer_name)
-          console.log('✅ 使用默认配置创建MVT图层成功')
+          //console.log('✅ 使用默认配置创建MVT图层成功')
           resolve(mvtLayer)
         } catch (error) {
           console.error('默认配置加载失败:', error)
@@ -237,7 +237,7 @@ export async function createMVTLayer(layerConfig) {
 function addEventListeners(mvtLayer, layerName) {
   // click事件 - 显示属性弹窗
   mvtLayer.on('mouseover', function(e) {
-    console.log('mouseover事件:', e)
+    //console.log('mouseover事件:', e)
     // 添加click事件来显示属性弹窗
     if (e.layer && e.layer.properties) {
       const properties = e.layer.properties
@@ -258,7 +258,7 @@ function addEventListeners(mvtLayer, layerName) {
           .setLatLng(e.latlng)
           .openOn(e.target._map)
         
-        console.log('✅ 已显示要素属性弹窗')
+        //console.log('✅ 已显示要素属性弹窗')
       }
     }
   })
@@ -270,11 +270,11 @@ function addEventListeners(mvtLayer, layerName) {
   
   // 加载事件
   mvtLayer.on('loading', () => {
-    console.log(`图层 "${layerName}" 开始加载`)
+    //console.log(`图层 "${layerName}" 开始加载`)
   })
   
   mvtLayer.on('load', () => {
-    console.log(`✅ 图层 "${layerName}" 加载完成`)
+    //console.log(`✅ 图层 "${layerName}" 加载完成`)
   })
   
   mvtLayer.on('tileerror', (e) => {
@@ -292,7 +292,7 @@ function addEventListeners(mvtLayer, layerName) {
  * @returns {Promise<L.Layer>} 图层对象
  */
 export async function createMVTLayerFromMartin(martinLayer) {
-  console.log('🔧 从Martin服务创建MVT图层:', martinLayer)
+  //console.log('🔧 从Martin服务创建MVT图层:', martinLayer)
   
   const layerConfig = {
     mvt_url: martinLayer.mvt_url,
@@ -301,7 +301,7 @@ export async function createMVTLayerFromMartin(martinLayer) {
     style: martinLayer.style || {}
   }
   
-  console.log('构建的图层配置:', layerConfig)
+  //console.log('构建的图层配置:', layerConfig)
   
   return createMVTLayer(layerConfig)
 } 

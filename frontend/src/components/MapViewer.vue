@@ -255,7 +255,7 @@ export default {
     const addMartinLayer = async (layer) => {
       if (!layer.mvt_url || !checkMVTSupport()) return
       
-      console.log(`🎨 开始加载Martin图层: ${layer.layer_name}, 文件类型: ${layer.file_type}, Martin服务ID: ${layer.martin_service_id}`)
+      //console.log(`🎨 开始加载Martin图层: ${layer.layer_name}, 文件类型: ${layer.file_type}, Martin服务ID: ${layer.martin_service_id}`)
       
       let mvtUrl = layer.mvt_url
       if (mvtUrl.includes('localhost:3000')) {
@@ -266,13 +266,13 @@ export default {
       // 调试：获取Martin服务的TileJSON信息
       try {
         const tileJsonUrl = layer.tilejson_url || mvtUrl.replace('/{z}/{x}/{y}', '.json')
-        console.log('🎨 TileJSON URL:', tileJsonUrl)
+        //console.log('🎨 TileJSON URL:', tileJsonUrl)
         
         const response = await fetch(tileJsonUrl)
         if (response.ok) {
           const tileJson = await response.json()
-          console.log('🎨 TileJSON内容:', tileJson)
-          console.log('🎨 可用图层:', tileJson.vector_layers)
+          //console.log('🎨 TileJSON内容:', tileJson)
+          //console.log('🎨 可用图层:', tileJson.vector_layers)
         } else {
           console.warn('🎨 无法获取TileJSON:', response.status)
         }
@@ -289,11 +289,11 @@ export default {
       // 创建样式函数
       const styleFunction = await createLocalStyleFunction()
       
-      console.log('🎨 创建MVT图层，URL:', mvtUrl)
+      //console.log('🎨 创建MVT图层，URL:', mvtUrl)
       
       // 尝试从URL提取表名作为图层名
       const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
-      console.log('🎨 提取的表名/图层名:', tableName)
+      //console.log('🎨 提取的表名/图层名:', tableName)
       
       const mvtLayer = L.vectorGrid.protobuf(mvtUrl, {
         vectorTileLayerStyles: { 
@@ -540,7 +540,7 @@ export default {
     // 添加图层到场景
     const addLayerToScene = async (file, serviceType) => {
       try {
-        console.log('🔍 添加图层到场景 - 开始:', { file, serviceType, sceneId: props.sceneId })
+        //console.log('🔍 添加图层到场景 - 开始:', { file, serviceType, sceneId: props.sceneId })
         
         if (!props.sceneId) {
           console.error('❌ 缺少场景ID')
@@ -549,7 +549,7 @@ export default {
         }
         
         const serviceInfo = serviceType === 'martin' ? file.martin_service : file.geoserver_service
-        console.log('🔍 服务信息:', serviceInfo)
+        //console.log('🔍 服务信息:', serviceInfo)
         
         if (!serviceInfo?.is_published) {
           console.error('❌ 服务未发布或不存在:', serviceInfo)
@@ -567,15 +567,15 @@ export default {
           discipline: file.discipline
         }
         
-        console.log('🔍 基础图层数据:', layerData)
+        //console.log('🔍 基础图层数据:', layerData)
         
         if (serviceType === 'martin') {
-          console.log('🔍 处理Martin服务...')
+          //console.log('🔍 处理Martin服务...')
           const martinServices = await gisApi.searchMartinServices({ file_id: serviceInfo.file_id })
-          console.log('🔍 Martin服务搜索结果:', martinServices)
+          //console.log('🔍 Martin服务搜索结果:', martinServices)
           
           const martinService = martinServices.services.find(service => service.file_id === serviceInfo.file_id)
-          console.log('🔍 找到的Martin服务:', martinService)
+          //console.log('🔍 找到的Martin服务:', martinService)
           
           if (!martinService) {
             console.error('❌ 未找到对应的Martin服务')
@@ -592,7 +592,7 @@ export default {
             tilejson_url: serviceInfo.tilejson_url
           }
         } else {
-          console.log('🔍 处理GeoServer服务...')
+          //console.log('🔍 处理GeoServer服务...')
           // 对于GeoServer服务，layer_id应该是geoserver_layers表中的实际ID
           // 这里需要从serviceInfo中获取实际的layer_id
           const geoserverLayerId = serviceInfo.layer_id
@@ -611,12 +611,12 @@ export default {
           }
         }
         
-        console.log('🔍 最终图层数据:', layerData)
-        console.log('🔍 调用API添加图层到场景...')
+        //console.log('🔍 最终图层数据:', layerData)
+        //console.log('🔍 调用API添加图层到场景...')
         
         await gisApi.addLayerToScene(props.sceneId, layerData)
         
-        console.log('✅ 图层添加成功')
+        //console.log('✅ 图层添加成功')
         ElMessage.success(`图层 "${file.file_name}" 添加成功`)
         
         addLayerDialogVisible.value = false
@@ -694,11 +694,11 @@ export default {
         try {
           const { layerName, style, allStyles } = eventData
           
-          console.log('🎨 收到DXF样式更新事件:', eventData)
+          //console.log('🎨 收到DXF样式更新事件:', eventData)
           
           // 检查地图是否正在动画中
           if (map.value && (map.value._animating || map.value._zooming)) {
-            console.log('🎨 地图正在动画中，延迟样式更新...')
+            //console.log('🎨 地图正在动画中，延迟样式更新...')
             setTimeout(() => onDxfStylesUpdated(eventData), 100)
             return
           }
@@ -724,9 +724,9 @@ export default {
           await addMartinLayer(currentStyleLayer.value)
           
           if (layerName) {
-            console.log(`🎨 DXF图层 "${layerName}" 样式已更新`)
+            //console.log(`🎨 DXF图层 "${layerName}" 样式已更新`)
           } else {
-            console.log('🎨 DXF样式已更新')
+            //console.log('🎨 DXF样式已更新')
           }
           
         } catch (error) {
@@ -761,7 +761,7 @@ export default {
         // 重新添加图层（会自动应用最新样式）
         await addMartinLayer(layer)
         
-        console.log(`图层 "${layer.layer_name}" 样式已刷新`)
+        //console.log(`图层 "${layer.layer_name}" 样式已刷新`)
       } catch (error) {
         console.error('刷新图层样式失败:', error)
         throw error
@@ -811,11 +811,11 @@ export default {
       if (!mvtLayer || !map.value) return
       
       try {
-        console.log('🎨 开始更新MVT图层样式...')
+        //console.log('🎨 开始更新MVT图层样式...')
         
         // 检查地图是否正在动画中，如果是则等待动画完成
         if (map.value._animating || map.value._zooming) {
-          console.log('🎨 地图正在动画中，等待动画完成...')
+          //console.log('🎨 地图正在动画中，等待动画完成...')
           await new Promise(resolve => {
             const checkAnimation = () => {
               if (!map.value._animating && !map.value._zooming) {
@@ -865,7 +865,7 @@ export default {
           }, 10)
         }
         
-        console.log('🎨 MVT图层样式更新完成')
+        //console.log('🎨 MVT图层样式更新完成')
       } catch (error) {
         console.error('更新MVT图层样式失败:', error)
         throw error
@@ -878,7 +878,7 @@ export default {
       if (!targetLayer) return null
       
       const isDxf = targetLayer.file_type === 'dxf'
-      console.log('🎨 创建样式函数，isDxf:', isDxf)
+      //console.log('🎨 创建样式函数，isDxf:', isDxf)
       
       if (!isDxf) {
         // 非DXF文件使用默认样式

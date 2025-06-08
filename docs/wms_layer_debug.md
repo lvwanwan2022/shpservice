@@ -41,7 +41,7 @@ if (wmsUrl.includes('?')) {
 // 如果URL包含localhost:8083，使用代理路径
 if (wmsUrl.includes('localhost:8083/geoserver') || wmsUrl.includes('localhost:8080/geoserver')) {
   wmsUrl = '/geoserver/wms'
-  console.log('🔄 使用GeoServer代理路径:', wmsUrl)
+  //console.log('🔄 使用GeoServer代理路径:', wmsUrl)
 }
 
 // 确保URL不以?结尾

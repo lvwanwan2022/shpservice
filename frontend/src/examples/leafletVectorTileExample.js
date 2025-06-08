@@ -123,7 +123,7 @@ export function initializeDXFMap(containerId, config = {}) {
   const dxfLayer = createDynamicDXFVectorTileLayer(mapConfig.tileUrl, map, {
     // 添加点击事件
     onclick: function(e) {
-      console.log('要素点击事件:', e.layer.properties)
+      //console.log('要素点击事件:', e.layer.properties)
       
       // 显示要素信息弹窗
       if (e.layer.properties) {

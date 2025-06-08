@@ -117,7 +117,7 @@ export const createImprovedWmsLayer = (layerInfo, options = {}) => {
 
   // 添加加载完成事件
   wmsLayer.on('load', function() {
-    console.log('TIF图层加载完成:', layerInfo.layer_name)
+    //console.log('TIF图层加载完成:', layerInfo.layer_name)
   })
 
   return wmsLayer

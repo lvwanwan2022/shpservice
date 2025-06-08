@@ -202,7 +202,7 @@ export default {
         // 动态加载Leaflet
         const L = await this.loadLeaflet()
         
-        //console.log('创建Leaflet地图...')
+        ////console.log('创建Leaflet地图...')
         
         // 创建地图但不添加任何底图
         this.map = L.map(this.$refs.mapContainer, {
@@ -212,7 +212,7 @@ export default {
           attributionControl: true
         })
         
-        //console.log('Leaflet地图创建成功（无底图模式）')
+        ////console.log('Leaflet地图创建成功（无底图模式）')
         
         // 添加鼠标坐标显示
         this.map.on('mousemove', (e) => {
@@ -228,11 +228,11 @@ export default {
           if (e.latlng && e.latlng.lat !== undefined && e.latlng.lng !== undefined) {
             const lat = e.latlng.lat.toFixed(6)
             const lng = e.latlng.lng.toFixed(6)
-            //console.log('右键点击坐标:', lat, lng)
+            ////console.log('右键点击坐标:', lat, lng)
           }
         })
         
-        //console.log('地图初始化成功')
+        ////console.log('地图初始化成功')
         
       } catch (error) {
         console.error('地图初始化失败:', error)
@@ -276,7 +276,7 @@ export default {
       try {
         const response = await api.get('/geojson/files')
         this.availableFiles = response.data.files || []
-        //console.log('可用文件列表加载成功:', this.availableFiles.length)
+        ////console.log('可用文件列表加载成功:', this.availableFiles.length)
       } catch (error) {
         console.error('加载文件列表失败:', error)
         this.errorMessage = '加载文件列表失败'
@@ -307,7 +307,7 @@ export default {
           fileId: fileId
         })
         
-        //console.log('文件数据加载成功:', fileId)
+        ////console.log('文件数据加载成功:', fileId)
         
       } catch (error) {
         console.error('加载文件数据失败:', error)
@@ -335,7 +335,7 @@ export default {
         // 调用发布服务API
         const response = await api.publishService(file.file_id)
         
-        //console.log('服务发布成功:', response.data)
+        ////console.log('服务发布成功:', response.data)
         
         // 显示成功提示，包含服务URL
         this.errorMessage = `服务发布成功！
@@ -388,7 +388,7 @@ export default {
         this.customUrl = ''
         this.showDataPanel = false
         
-        //console.log('URL数据加载成功')
+        ////console.log('URL数据加载成功')
         
       } catch (error) {
         console.error('加载URL数据失败:', error)
@@ -459,7 +459,7 @@ export default {
         this.map.fitBounds(layerInfo.bounds, { padding: [20, 20] })
       }
       
-      //console.log('图层添加成功:', layerInfo)
+      ////console.log('图层添加成功:', layerInfo)
       
       return layerInfo
     },
@@ -550,7 +550,7 @@ export default {
       // 从列表移除
       this.layers.splice(index, 1)
       
-      //console.log('图层已移除:', layerInfo.name)
+      ////console.log('图层已移除:', layerInfo.name)
     },
     
     clearAllLayers() {
@@ -563,7 +563,7 @@ export default {
       })
       
       this.layers = []
-      //console.log('所有图层已清除')
+      ////console.log('所有图层已清除')
     },
     
     fitBounds() {

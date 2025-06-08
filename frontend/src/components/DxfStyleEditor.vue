@@ -357,7 +357,7 @@ export default {
             style: null,
             allStyles: layerStyles.value
           })
-          console.log('DXF样式编辑器初始化完成，已触发样式更新')
+          //console.log('DXF样式编辑器初始化完成，已触发样式更新')
         }
       } catch (error) {
         console.error('初始化DXF样式编辑器失败:', error)

@@ -692,13 +692,13 @@ export default {
 
     // 处理文件移除
     const handleRemove = () => {
-      //console.log('文件被移除')
+      ////console.log('文件被移除')
       uploadForm.file = null
     }
 
     // 处理文件变化（选择/拖拽）
     const handleFileChange = (file) => {
-      console.log('文件变化:', file)
+      //console.log('文件变化:', file)
       
       if (file && file.raw) {
         const validExtensions = ['tif', 'mbtiles', 'dwg', 'dxf', 'geojson', 'zip']
@@ -715,7 +715,7 @@ export default {
         }
         
         uploadForm.file = file.raw
-        console.log('文件已设置:', uploadForm.file)
+        //console.log('文件已设置:', uploadForm.file)
       } else {
         uploadForm.file = null
       }
@@ -730,7 +730,7 @@ export default {
 
     // 提交上传
     const submitUpload = async () => {
-      console.log('开始提交上传，当前文件:', uploadForm.file)
+      //console.log('开始提交上传，当前文件:', uploadForm.file)
       
       if (!uploadForm.file) {
         ElMessage.error('请选择文件')
@@ -764,8 +764,8 @@ export default {
           }
         })
         
-        console.log('表单数据准备完成，开始发送请求')
-        console.log('上传表单数据:', uploadForm)
+        //console.log('表单数据准备完成，开始发送请求')
+        //console.log('上传表单数据:', uploadForm)
         
         // 检查文件大小，显示相应提示和进度文本
         const fileSizeMB = uploadForm.file.size / 1024 / 1024
@@ -780,7 +780,7 @@ export default {
         
         // 发送上传请求
         await gisApi.uploadFile(formData, (progress) => {
-          console.log(`上传进度: ${progress}%`)
+          //console.log(`上传进度: ${progress}%`)
           uploadProgress.value = progress
           
           // 根据进度更新状态
@@ -934,7 +934,7 @@ export default {
       }
       
       try {
-        //console.log(`发布GeoServer服务：${file.id}`)
+        ////console.log(`发布GeoServer服务：${file.id}`)
         
         // 检查需要坐标系的文件类型是否需要坐标系选择
         let publishParams = {}

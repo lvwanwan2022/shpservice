@@ -278,7 +278,7 @@
                 // 地图视图变化事件
                 map.getView().on('change:resolution', updateLayerInfo);
                 
-                console.log('🗺️ 地图初始化完成');
+                //console.log('🗺️ 地图初始化完成');
                 showStatus('地图初始化完成', 'success');
                 
             } catch (error) {
@@ -320,7 +320,7 @@
                 
                 map.addLayer(mvtLayer);
                 
-                console.log('✅ MVT图层加载成功:', mvtUrl);
+                //console.log('✅ MVT图层加载成功:', mvtUrl);
                 showStatus('MVT图层加载成功', 'success');
                 updateLayerInfo();
                 
@@ -353,7 +353,7 @@
                 }
                 
                 const tilejson = await response.json();
-                console.log('📋 TileJSON信息:', tilejson);
+                //console.log('📋 TileJSON信息:', tilejson);
                 
                 // 显示TileJSON信息
                 const info = `
@@ -540,7 +540,7 @@
         
         // 页面加载完成后初始化
         window.addEventListener('load', function() {
-            console.log('🚀 开始初始化MVT瓦片查看器...');
+            //console.log('🚀 开始初始化MVT瓦片查看器...');
             
             try {
                 initMap();
@@ -562,7 +562,7 @@
             }
         });
         
-        console.log('🚀 MVT瓦片查看器脚本已加载');
+        //console.log('🚀 MVT瓦片查看器脚本已加载');
     </script>
 </body>
 </html> 

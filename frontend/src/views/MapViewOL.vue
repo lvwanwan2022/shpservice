@@ -519,7 +519,7 @@ export default {
             bbox = response.data.bbox
             // coordinate_system字段仅用于显示原始坐标系，bbox已经是EPSG:4326坐标
             originalCRS = response.data.coordinate_system || 'EPSG:4326'
-            console.log('从图层边界API获取到边界:', bbox, '(已转换为EPSG:4326), 原始坐标系:', originalCRS)
+            //console.log('从图层边界API获取到边界:', bbox, '(已转换为EPSG:4326), 原始坐标系:', originalCRS)
           }
         } catch (apiError) {
           console.warn('图层边界API调用失败，尝试其他方式:', apiError)
@@ -585,7 +585,7 @@ export default {
         
         // 5. 构建范围并进行坐标转换
         const originalExtent = [minx, miny, maxx, maxy]
-        console.log(`边界框坐标 (后端已转换为EPSG:4326):`, originalExtent, `原始坐标系: ${originalCRS}`)
+        //console.log(`边界框坐标 (后端已转换为EPSG:4326):`, originalExtent, `原始坐标系: ${originalCRS}`)
         
         let transformedExtent
         try {
@@ -596,7 +596,7 @@ export default {
             // 备用方案：直接使用OpenLayers的transformExtent
             transformedExtent = ol.proj.transformExtent(originalExtent, 'EPSG:4326', 'EPSG:3857')
           }
-          console.log(`转换后边界 (EPSG:3857):`, transformedExtent)
+          //console.log(`转换后边界 (EPSG:3857):`, transformedExtent)
         } catch (transformError) {
           console.error('坐标转换失败:', transformError)
           ElMessage.error(`坐标转换失败: ${transformError.message}`)
@@ -758,7 +758,7 @@ export default {
     
     // 选择图层
     const selectLayer = (layer) => {
-      console.log('选择图层:', layer.layer_name)
+      //console.log('选择图层:', layer.layer_name)
       currentActiveLayer.value = layer
       
       // 通知MapViewerOL组件将该图层置顶
@@ -771,7 +771,7 @@ export default {
     
     // 处理图层选择事件
     const onLayerSelected = (layer) => {
-      console.log('收到图层选择事件:', layer)
+      //console.log('收到图层选择事件:', layer)
       // 直接设置当前活动图层，避免循环调用
       currentActiveLayer.value = layer
     }

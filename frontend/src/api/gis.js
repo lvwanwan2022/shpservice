@@ -13,7 +13,7 @@ const service = axios.create({
 // 请求拦截器
 service.interceptors.request.use(
   config => {
-    //console.log('API请求:', config.method?.toUpperCase(), config.url, config.params || config.data)
+    ////console.log('API请求:', config.method?.toUpperCase(), config.url, config.params || config.data)
     return config
   },
   error => {
@@ -25,7 +25,7 @@ service.interceptors.request.use(
 // 响应拦截器
 service.interceptors.response.use(
   response => {
-    //console.log('API响应:', response.status, response.config.url)
+    ////console.log('API响应:', response.status, response.config.url)
     const res = response.data
     return res
   },
@@ -61,7 +61,7 @@ async function checkServiceStatus() {
       timeout: 5000 
     })
     if (response.ok) {
-      //console.log('✅ 后端服务正常')
+      ////console.log('✅ 后端服务正常')
     } else {
       console.error('❌ 后端服务异常:', response.status)
     }
@@ -139,12 +139,12 @@ export default {
         return Promise.reject(new Error(sizeCheck.message))
       }
       
-      console.log(`开始上传文件: ${file.name}, 大小: ${(file.size/1024/1024).toFixed(2)}MB`)
+      //console.log(`开始上传文件: ${file.name}, 大小: ${(file.size/1024/1024).toFixed(2)}MB`)
       
       // 对于大文件（>500MB）使用分片上传
       const fileSizeMB = file.size / 1024 / 1024
       if (fileSizeMB > 500) {
-        console.log('文件较大，使用分片上传模式')
+        //console.log('文件较大，使用分片上传模式')
         return this.uploadFileChunked(formData, onProgress)
       }
     }
@@ -170,7 +170,7 @@ export default {
         const percentCompleted = Math.round(
           (progressEvent.loaded * 100) / progressEvent.total
         )
-        console.log('上传进度:', percentCompleted, '%')
+        //console.log('上传进度:', percentCompleted, '%')
         if (onProgress && typeof onProgress === 'function') {
           onProgress(percentCompleted)
         }
@@ -185,7 +185,7 @@ export default {
     const totalChunks = Math.ceil(file.size / chunkSize)
     const uploadId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9)
     
-    console.log(`分片上传开始: ${file.name}, 总大小: ${(file.size/1024/1024).toFixed(2)}MB, 分片数: ${totalChunks}`)
+    //console.log(`分片上传开始: ${file.name}, 总大小: ${(file.size/1024/1024).toFixed(2)}MB, 分片数: ${totalChunks}`)
     
     try {
       // 1. 初始化分片上传
@@ -203,7 +203,7 @@ export default {
         
         while (retryCount < maxRetries) {
           try {
-            console.log(`上传分片 ${chunkIndex + 1}/${totalChunks}, 大小: ${(chunk.size/1024/1024).toFixed(2)}MB`)
+            //console.log(`上传分片 ${chunkIndex + 1}/${totalChunks}, 大小: ${(chunk.size/1024/1024).toFixed(2)}MB`)
             
             await this.uploadChunk(uploadId, chunkIndex, chunk)
             
@@ -229,11 +229,11 @@ export default {
       }
       
       // 3. 完成分片上传
-      console.log('所有分片上传完成，正在合并文件...')
+      //console.log('所有分片上传完成，正在合并文件...')
       if (onProgress) onProgress(99)
       const result = await this.completeChunkedUpload(uploadId)
       if (onProgress) onProgress(100)
-      console.log('分片上传成功完成')
+      //console.log('分片上传成功完成')
       return result
       
     } catch (error) {
@@ -625,7 +625,7 @@ export default {
   
   // 获取图层样式配置
   getLayerStyle(layerId) {
-    //console.log(`调用API: GET /api/layers/${layerId}/style`)
+    ////console.log(`调用API: GET /api/layers/${layerId}/style`)
     
     // 验证layerId
     if (!layerId || layerId === undefined || layerId === null) {
@@ -956,7 +956,7 @@ export default {
   // 发布服务到GeoServer
   async publishServiceToGeoServer(fileId) {
     try {
-      //console.log('开始发布到GeoServer，文件ID:', fileId)
+      ////console.log('开始发布到GeoServer，文件ID:', fileId)
       
       const response = await service({
         url: `/services/geoserver/publish/${fileId}`,
@@ -964,7 +964,7 @@ export default {
         timeout: 300000
       })
       
-      //console.log('GeoServer发布响应:', response)
+      ////console.log('GeoServer发布响应:', response)
       return response
     } catch (error) {
       console.error('发布到GeoServer失败:', error)

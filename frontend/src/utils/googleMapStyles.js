@@ -381,7 +381,7 @@ export const MVTAnimationCSS = `
  * @returns {Object} 样式对象
  */
 export function getModernStyle(geometryType, properties = {}, isHover = false) {
-  //console.log('获取样式 - 几何类型:', geometryType, '属性:', properties, '悬停:', isHover)
+  ////console.log('获取样式 - 几何类型:', geometryType, '属性:', properties, '悬停:', isHover)
   
   if (isHover) {
     if (geometryType === 'Point' || geometryType === 'MultiPoint') {
@@ -396,7 +396,7 @@ export function getModernStyle(geometryType, properties = {}, isHover = false) {
   // DXF特定的样式分类逻辑
   const style = getDXFSpecificStyle(geometryType, properties)
   if (style) {
-    //console.log('使用DXF特定样式:', style)
+    ////console.log('使用DXF特定样式:', style)
     return style
   }
 
@@ -718,5 +718,5 @@ export function injectMVTAnimationCSS() {
   style.textContent = MVTAnimationCSS
   document.head.appendChild(style)
   
-  //console.log('MVT动画样式已注入')
+  ////console.log('MVT动画样式已注入')
 } 

@@ -173,7 +173,7 @@ export function createMapLayerWithFallback(serviceKeys = SERVICE_PRIORITY, apiKe
     try {
       const layer = createMapLayer(serviceKey, apiKey)
       if (layer) {
-        //console.log(`使用地图服务: ${MAP_SERVICES[serviceKey].name}`)
+        ////console.log(`使用地图服务: ${MAP_SERVICES[serviceKey].name}`)
         return layer
       }
     } catch (error) {
