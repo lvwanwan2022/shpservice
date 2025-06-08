@@ -9,6 +9,7 @@ import re
 import zipfile
 import tempfile
 import shutil
+import stat
 from models.db import execute_query
 from config import GEOSERVER_CONFIG, DB_CONFIG
 
@@ -235,7 +236,7 @@ class GeoServerService:
                 except Exception as cleanup_error:
                     print(f"⚠️ 清理临时文件夹失败: {cleanup_error}")
     
-    def publish_geotiff(self, tif_path, store_name, file_id, coordinate_system=None):
+    def publish_geotiff(self, tif_path, store_name, file_id, coordinate_system=None, enable_transparency=True):
         """发布GeoTIFF服务
         
         注意：每次发布都会创建一个新的store，store名称格式为"文件名_store"
@@ -245,6 +246,7 @@ class GeoServerService:
             store_name: 数据存储名称（将被重新生成为"文件名_store"格式）
             file_id: 文件ID
             coordinate_system: 指定的坐标系，如'EPSG:2379'，如果为None则使用文件自带的坐标系
+            enable_transparency: 是否启用透明度设置，默认为True，将设置黑色背景为透明
             
         Returns:
             发布结果信息
@@ -253,6 +255,8 @@ class GeoServerService:
             print(f"开始发布GeoTIFF: {tif_path}")
             if coordinate_system:
                 print(f"指定坐标系: {coordinate_system}")
+            if enable_transparency:
+                print(f"启用透明度设置：将设置黑色背景为透明")
             
             # 修复文件路径问题
             corrected_path = self._correct_path(tif_path)
@@ -266,6 +270,12 @@ class GeoServerService:
             clean_filename = re.sub(r'[^a-zA-Z0-9_\-\u4e00-\u9fff]', '_', filename)
             generated_store_name = f"{clean_filename}_store"
             print(f"自动生成的存储名称: {generated_store_name}")
+            
+            # 检查是否为DOM文件，自动启用透明度
+            is_dom_file = 'dom' in filename.lower()
+            if is_dom_file:
+                enable_transparency = True
+                print(f"检测到DOM文件，自动启用透明度设置")
             
             # 获取工作空间ID
             workspace_id = self._get_workspace_id()
@@ -289,6 +299,14 @@ class GeoServerService:
                 print(f"  图层ID: {existing_record['layer_id']}, 图层名: {existing_record['layer_name']}")
                 print(f"  存储ID: {existing_record['store_id']}, 存储名: {existing_record['store_name']}")
                 
+                # 如果需要更新透明度设置，先更新现有的发布
+                if enable_transparency:
+                    try:
+                        self._update_coverage_transparency(generated_store_name, existing_record['layer_name'])
+                        print(f"✅ 已更新现有发布的透明度设置")
+                    except Exception as trans_error:
+                        print(f"⚠️ 更新现有发布透明度失败: {str(trans_error)}")
+                
                 # 返回已存在的发布信息，而不是报错
                 return {
                     "success": True,
@@ -297,7 +315,8 @@ class GeoServerService:
                     "store_name": existing_record['store_name'],
                     "layer_name": existing_record['layer_name'],
                     "layer_id": existing_record['layer_id'],
-                    "coordinate_system": coordinate_system
+                    "coordinate_system": coordinate_system,
+                    "transparency_enabled": enable_transparency
                 }
             
             # 预清理：删除可能存在的同名coveragestore（GeoServer中的残留）
@@ -308,7 +327,7 @@ class GeoServerService:
             store_id = self._create_coveragestore_in_db(generated_store_name, workspace_id, 'GeoTIFF', file_id)
             print(f"✅ 覆盖存储记录创建成功，store_id={store_id}")
             
-            # 2. 上传GeoTIFF到GeoServer
+            # 2. 上传GeoTIFF到GeoServer（如果启用透明度，使用ImageMosaic类型）
             upload_success = False
             max_retries = 3
             
@@ -330,14 +349,21 @@ class GeoServerService:
                     # 只有当coveragestore不存在时才创建
                     if not coveragestore_exists:
                         print(f"创建空的coveragestore")
-                        self._create_empty_coveragestore_for_existing_file(generated_store_name, corrected_path)
+                        if enable_transparency:
+                            # 使用ImageMosaic类型创建支持透明度的coveragestore
+                            self._create_imagemosaic_coveragestore(generated_store_name, corrected_path)
+                        else:
+                            self._create_empty_coveragestore_for_existing_file(generated_store_name, corrected_path)
                         print(f"✅ 空coveragestore创建成功")
                         coveragestore_exists = True  # 标记为已存在，避免重复创建
                     else:
                         print(f"跳过coveragestore创建步骤（已存在）")
                     
                     # 上传文件
-                    self._upload_geotiff_to_geoserver(corrected_path, generated_store_name)
+                    if enable_transparency:
+                        self._upload_geotiff_with_transparency(corrected_path, generated_store_name)
+                    else:
+                        self._upload_geotiff_to_geoserver(corrected_path, generated_store_name)
                     print(f"✅ GeoTIFF文件上传成功")
                     
                     upload_success = True
@@ -396,15 +422,24 @@ class GeoServerService:
                     print(f"⚠️ 更新GeoServer坐标系失败: {str(srs_error)}")
                     # 不中断发布流程，仅记录警告
             
-            # 6. 在数据库中创建覆盖记录
+            # 6. 设置透明度参数（在coverage创建之后）
+            if enable_transparency:
+                try:
+                    self._configure_coverage_transparency(generated_store_name)
+                    print(f"✅ 透明度设置配置成功")
+                except Exception as trans_error:
+                    print(f"⚠️ 透明度设置失败: {str(trans_error)}")
+                    # 不中断发布流程，仅记录警告
+            
+            # 7. 在数据库中创建覆盖记录
             coverage_id = self._create_coverage_in_db(coverage_info, store_id)
             print(f"✅ 覆盖记录创建成功，coverage_id={coverage_id}")
             
-            # 7. 在数据库中创建覆盖图层记录
+            # 8. 在数据库中创建覆盖图层记录
             layer_info = self._create_layer_in_db(coverage_info, workspace_id, coverage_id, file_id, 'coveragestore')
             print(f"✅ 覆盖图层记录创建成功，layer_id={layer_info['id']}")
             
-            # 8. 返回服务信息
+            # 9. 返回服务信息
             return {
                 "success": True,
                 "store_name": generated_store_name,  # 返回生成的store名称
@@ -412,7 +447,8 @@ class GeoServerService:
                 "wms_url": layer_info['wms_url'],
                 "layer_info": layer_info,
                 "filename": filename,
-                "coordinate_system": coordinate_system or coverage_info.get('featureType', {}).get('srs', 'EPSG:4326')
+                "coordinate_system": coordinate_system or coverage_info.get('featureType', {}).get('srs', 'EPSG:4326'),
+                "transparency_enabled": enable_transparency
             }
             
         except Exception as e:
@@ -2768,104 +2804,254 @@ class GeoServerService:
             return []
 
     def force_delete_file(self, file_path):
-        """强制删除文件或目录"""
+        """强制删除文件（即使是只读文件）"""
+        try:
+            if os.path.exists(file_path):
+                # 如果是只读文件，先修改权限
+                if not os.access(file_path, os.W_OK):
+                    os.chmod(file_path, stat.S_IWRITE)
+                os.remove(file_path)
+                print(f"强制删除文件成功: {file_path}")
+                return True
+        except Exception as e:
+            print(f"强制删除文件失败: {file_path}, 错误: {str(e)}")
+            return False
+    
+    def _create_imagemosaic_coveragestore(self, store_name, tif_path):
+        """创建ImageMosaic类型的CoverageStore以支持透明度设置"""
         try:
             import os
+            import tempfile
             import shutil
-            import time
-            import subprocess
-            import psutil
             
-            print(f"尝试删除: {file_path}")
+            # 创建临时目录用于ImageMosaic
+            temp_dir = tempfile.mkdtemp(prefix='geoserver_mosaic_')
+            print(f"创建临时目录用于ImageMosaic: {temp_dir}")
             
-            if not os.path.exists(file_path):
-                return {
-                    'success': True,
-                    'message': '文件不存在，无需删除'
-                }
-            
-            # 1. 首先尝试正常删除
             try:
-                if os.path.isdir(file_path):
-                    shutil.rmtree(file_path)
-                else:
-                    os.remove(file_path)
-                return {
-                    'success': True,
-                    'message': '文件删除成功'
-                }
-            except PermissionError:
-                print(f"文件被占用，尝试强制删除: {file_path}")
-            
-            # 2. 找到占用文件的进程
-            try:
-                processes_using_file = []
-                for proc in psutil.process_iter(['pid', 'name']):
-                    try:
-                        for open_file in proc.open_files():
-                            if file_path.lower() in open_file.path.lower():
-                                processes_using_file.append({
-                                    'pid': proc.info['pid'],
-                                    'name': proc.info['name']
-                                })
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        continue
+                # 复制TIF文件到临时目录
+                tif_filename = os.path.basename(tif_path)
+                temp_tif_path = os.path.join(temp_dir, tif_filename)
+                shutil.copy2(tif_path, temp_tif_path)
+                print(f"复制TIF文件到临时目录: {temp_tif_path}")
                 
-                if processes_using_file:
-                    print(f"文件被以下进程占用: {processes_using_file}")
-                    
-                    # 3. 如果是Java进程（可能是GeoServer），尝试温和地处理
-                    for proc_info in processes_using_file:
-                        if 'java' in proc_info['name'].lower():
-                            print(f"检测到Java进程占用文件: {proc_info}")
-                            return {
-                                'success': False,
-                                'message': f'文件被Java进程占用 (PID: {proc_info["pid"]}), 建议重启GeoServer服务',
-                                'occupied_by': processes_using_file
-                            }
+                # 创建indexer.properties文件（ImageMosaic配置）
+                indexer_content = f"""TimeAttribute=ingestion
+Schema=*the_geom:Polygon,location:String,ingestion:java.util.Date
+PropertyCollectors=TimestampFileNameExtractorSPI[timeregex](ingestion)
+"""
+                indexer_path = os.path.join(temp_dir, 'indexer.properties')
+                with open(indexer_path, 'w', encoding='utf-8') as f:
+                    f.write(indexer_content)
+                print(f"创建indexer.properties: {indexer_path}")
                 
-            except Exception as e:
-                print(f"检查进程占用失败: {str(e)}")
-            
-            # 4. 在Windows上尝试使用handle工具（如果可用）
-            try:
-                if os.name == 'nt':  # Windows
-                    # 尝试使用Windows的句柄工具
-                    result = subprocess.run([
-                        'powershell', '-Command',
-                        f'Get-Process | Where-Object {{$_.Modules.FileName -like "*{os.path.basename(file_path)}*"}}'
-                    ], capture_output=True, text=True, timeout=10)
-                    
-                    if result.stdout.strip():
-                        print(f"PowerShell检测到进程占用: {result.stdout}")
-            except Exception as e:
-                print(f"PowerShell检查失败: {str(e)}")
-            
-            # 5. 最后尝试：延迟删除
-            try:
-                time.sleep(2)  # 等待2秒
-                if os.path.isdir(file_path):
-                    shutil.rmtree(file_path)
+                # 创建datastore.properties文件（可选，用于设置透明度参数）
+                datastore_content = f"""SuggestedTileSize=512,512
+"""
+                datastore_path = os.path.join(temp_dir, 'datastore.properties')
+                with open(datastore_path, 'w', encoding='utf-8') as f:
+                    f.write(datastore_content)
+                print(f"创建datastore.properties: {datastore_path}")
+                
+                # 压缩为zip文件
+                import zipfile
+                zip_path = os.path.join(tempfile.gettempdir(), f"{store_name}_mosaic.zip")
+                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                    for root, dirs, files in os.walk(temp_dir):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            arc_name = os.path.relpath(file_path, temp_dir)
+                            zipf.write(file_path, arc_name)
+                print(f"创建ImageMosaic压缩包: {zip_path}")
+                
+                # 通过REST API创建ImageMosaic coveragestore
+                url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}/file.imagemosaic"
+                
+                headers = {
+                    'Content-Type': 'application/zip'
+                }
+                
+                with open(zip_path, 'rb') as f:
+                    response = requests.put(
+                        url,
+                        data=f,
+                        headers=headers,
+                        auth=self.auth,
+                        timeout=300
+                    )
+                
+                print(f"ImageMosaic coveragestore创建响应状态码: {response.status_code}")
+                
+                if response.status_code not in [200, 201]:
+                    print(f"ImageMosaic coveragestore创建失败: {response.text}")
+                    # 如果失败，尝试普通的GeoTIFF方式
+                    print("回退到普通GeoTIFF方式...")
+                    self._create_empty_coveragestore_for_existing_file(store_name, tif_path)
                 else:
-                    os.remove(file_path)
-                return {
-                    'success': True,
-                    'message': '延迟删除成功'
-                }
-            except Exception as e:
-                return {
-                    'success': False,
-                    'message': f'文件删除失败: {str(e)}',
-                    'suggestions': [
-                        '文件可能被GeoServer进程锁定',
-                        '建议重启GeoServer服务后再试',
-                        '可以使用Process Explorer查看具体占用进程',
-                        '临时解决方案：重命名文件而不是删除'
-                    ]
-                }
+                    print(f"✅ ImageMosaic coveragestore创建成功")
+                
+                # 清理临时文件
+                try:
+                    os.remove(zip_path)
+                    print(f"清理临时zip文件: {zip_path}")
+                except:
+                    pass
+                    
+            finally:
+                # 清理临时目录
+                try:
+                    shutil.rmtree(temp_dir)
+                    print(f"清理临时目录: {temp_dir}")
+                except Exception as cleanup_error:
+                    print(f"清理临时目录失败: {cleanup_error}")
+                    
+        except Exception as e:
+            print(f"创建ImageMosaic coveragestore失败: {str(e)}")
+            # 回退到普通方式
+            print("回退到普通GeoTIFF方式...")
+            self._create_empty_coveragestore_for_existing_file(store_name, tif_path)
+    
+    def _upload_geotiff_with_transparency(self, tif_path, store_name):
+        """上传GeoTIFF文件并设置透明度参数"""
+        try:
+            # 先尝试普通上传
+            self._upload_geotiff_to_geoserver(tif_path, store_name)
+            
+            # 等待处理
+            time.sleep(2)
+            
+            # 然后配置透明度
+            self._configure_coverage_transparency(store_name)
             
         except Exception as e:
-            return {
-                'success': False,
-                'error': str(e)
-            }
+            print(f"透明度上传失败，使用普通上传: {str(e)}")
+            self._upload_geotiff_to_geoserver(tif_path, store_name)
+    
+    def _configure_coverage_transparency(self, store_name):
+        """配置Coverage的透明度参数"""
+        try:
+            # 获取coverage名称
+            coverages_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}/coverages.json"
+            response = requests.get(coverages_url, auth=self.auth, timeout=30)
+            
+            if response.status_code != 200:
+                print(f"获取coverage列表失败: {response.text}")
+                return
+                
+            coverages_data = response.json()
+            coverage_name = None
+            
+            if 'coverages' in coverages_data and 'coverage' in coverages_data['coverages']:
+                coverages = coverages_data['coverages']['coverage']
+                if isinstance(coverages, list) and len(coverages) > 0:
+                    coverage_name = coverages[0]['name']
+                elif isinstance(coverages, dict):
+                    coverage_name = coverages['name']
+            
+            if not coverage_name:
+                coverage_name = store_name
+                
+            print(f"配置coverage透明度: {coverage_name}")
+            
+            # 获取当前coverage配置
+            coverage_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}/coverages/{coverage_name}.xml"
+            get_response = requests.get(coverage_url, auth=self.auth, timeout=30)
+            
+            if get_response.status_code != 200:
+                print(f"获取coverage配置失败: {get_response.text}")
+                return
+            
+            # 解析XML并添加透明度参数
+            from xml.etree import ElementTree as ET
+            
+            try:
+                root = ET.fromstring(get_response.text)
+                
+                # 查找或创建parameters节点
+                parameters_node = root.find('.//parameters')
+                if parameters_node is None:
+                    parameters_node = ET.SubElement(root, 'parameters')
+                
+                # 添加InputTransparentColor参数（设置黑色为透明）
+                input_transparent = ET.SubElement(parameters_node, 'entry')
+                input_key = ET.SubElement(input_transparent, 'string')
+                input_key.text = 'InputTransparentColor'
+                input_value = ET.SubElement(input_transparent, 'string')
+                input_value.text = '#000000'  # 黑色
+                
+                # 添加OutputTransparentColor参数
+                output_transparent = ET.SubElement(parameters_node, 'entry')
+                output_key = ET.SubElement(output_transparent, 'string')
+                output_key.text = 'OutputTransparentColor'
+                output_value = ET.SubElement(output_transparent, 'string')
+                output_value.text = '#000000'  # 黑色
+                
+                # 转换回XML字符串
+                updated_xml = ET.tostring(root, encoding='unicode')
+                
+                # 更新coverage配置
+                headers = {'Content-Type': 'application/xml'}
+                put_response = requests.put(
+                    coverage_url,
+                    data=updated_xml,
+                    headers=headers,
+                    auth=self.auth,
+                    timeout=60
+                )
+                
+                if put_response.status_code in [200, 201]:
+                    print(f"✅ 透明度参数设置成功")
+                else:
+                    print(f"透明度参数设置失败: {put_response.status_code} - {put_response.text}")
+                    
+            except ET.ParseError as xml_error:
+                print(f"XML解析失败: {xml_error}")
+                
+                # 备用方案：直接发送包含透明度参数的XML
+                self._set_transparency_alternative(coverage_url)
+                
+        except Exception as e:
+            print(f"配置透明度参数失败: {str(e)}")
+    
+    def _set_transparency_alternative(self, coverage_url):
+        """备用透明度设置方案"""
+        try:
+            # 使用简化的XML配置
+            transparency_xml = '''<?xml version="1.0" encoding="UTF-8"?>
+<coverage>
+    <parameters>
+        <entry>
+            <string>InputTransparentColor</string>
+            <string>#000000</string>
+        </entry>
+        <entry>
+            <string>OutputTransparentColor</string>
+            <string>#000000</string>
+        </entry>
+    </parameters>
+</coverage>'''
+            
+            headers = {'Content-Type': 'application/xml'}
+            response = requests.put(
+                coverage_url,
+                data=transparency_xml,
+                headers=headers,
+                auth=self.auth,
+                timeout=60
+            )
+            
+            if response.status_code in [200, 201]:
+                print(f"✅ 备用透明度设置成功")
+            else:
+                print(f"备用透明度设置失败: {response.status_code} - {response.text}")
+                
+        except Exception as e:
+            print(f"备用透明度设置异常: {str(e)}")
+    
+    def _update_coverage_transparency(self, store_name, layer_name):
+        """更新现有coverage的透明度设置"""
+        try:
+            print(f"更新现有coverage透明度: {store_name}")
+            self._configure_coverage_transparency(store_name)
+        except Exception as e:
+            print(f"更新现有coverage透明度失败: {str(e)}")

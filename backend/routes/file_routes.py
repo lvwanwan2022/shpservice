@@ -852,6 +852,17 @@ def publish_geoserver_service(file_id):
         else:
             print(f"发布栅格数据: {file_type}")
             # 栅格数据发布
+            
+            # 检查是否启用透明度（从请求参数获取，默认启用）
+            enable_transparency = True
+            if request.is_json:
+                data = request.get_json()
+                enable_transparency = data.get('enable_transparency', True)
+            elif request.form:
+                enable_transparency = request.form.get('enable_transparency', 'true').lower() in ['true', '1', 'yes']
+            
+            print(f"透明度设置: {enable_transparency}")
+            
             if coordinate_system:
                 # 验证坐标系格式
                 if not coordinate_system.upper().startswith('EPSG:'):
@@ -860,9 +871,9 @@ def publish_geoserver_service(file_id):
                         'error': f'坐标系格式错误，应为EPSG:xxxx格式，当前为: {coordinate_system}'
                     }), 400
                 
-                result = geoserver_service.publish_geotiff(file_path, store_name, file_id, coordinate_system)
+                result = geoserver_service.publish_geotiff(file_path, store_name, file_id, coordinate_system, enable_transparency)
             else:
-                result = geoserver_service.publish_geotiff(file_path, store_name, file_id)
+                result = geoserver_service.publish_geotiff(file_path, store_name, file_id, None, enable_transparency)
         
         print(f"GeoServer发布结果: {result}")
         return jsonify(result)

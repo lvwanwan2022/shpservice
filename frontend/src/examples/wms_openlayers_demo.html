@@ -244,7 +244,8 @@
                 <label>底图:</label>
                 <button id="osmButton" class="basemap-btn active">OpenStreetMap</button>
                 <button id="gaodeButton" class="basemap-btn">高德地图</button>
-                <button id="tiandituButton" class="basemap-btn">天地图</button>
+                <button id="gaodeSatelliteButton" class="basemap-btn">高德卫星地图</button>
+                <button id="osmButton2" class="basemap-btn">OpenStreetMap 2</button>
             </div>
             <div class="control-group">
                 <button id="toggleLayer">隐藏图层</button>
@@ -382,11 +383,20 @@
             visible: false
         });
 
-        // 天地图 - 使用矢量底图（不需要key）
-        const tiandituLayer = new ol.layer.Tile({
+        // 高德卫星地图
+        const gaodeSatelliteLayer = new ol.layer.Tile({
             source: new ol.source.XYZ({
-                url: 'http://t{0-7}.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
-                attributions: '© 天地图'
+                url: 'https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
+                attributions: '© 高德卫星'
+            }),
+            visible: false
+        });
+
+        // OpenStreetMap (第二个实例，如果需要)
+        const osmLayer2 = new ol.layer.Tile({
+            source: new ol.source.XYZ({
+                url: 'https://{a-c}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                attributions: '© OpenStreetMap contributors'
             }),
             visible: false
         });
@@ -457,7 +467,7 @@
         
         const map = new ol.Map({
             target: 'map',
-            layers: [osmLayer, gaodeLayer, tiandituLayer, wmsLayer],
+            layers: [osmLayer, gaodeLayer, gaodeSatelliteLayer, osmLayer2, wmsLayer],
             overlays: [popup],
             view: new ol.View({
                 center: centerInWebMercator,
@@ -521,7 +531,8 @@
             // 隐藏所有底图
             osmLayer.setVisible(false);
             gaodeLayer.setVisible(false);
-            tiandituLayer.setVisible(false);
+            gaodeSatelliteLayer.setVisible(false);
+            osmLayer2.setVisible(false);
             
             // 显示选择的底图
             switch(layerName) {
@@ -533,9 +544,13 @@
                     gaodeLayer.setVisible(true);
                     addDebugLog('🗺️ 切换到高德地图');
                     break;
-                case 'tianditu':
-                    tiandituLayer.setVisible(true);
-                    addDebugLog('🗺️ 切换到天地图');
+                case 'gaodeSatellite':
+                    gaodeSatelliteLayer.setVisible(true);
+                    addDebugLog('🗺️ 切换到高德卫星地图');
+                    break;
+                case 'osm2':
+                    osmLayer2.setVisible(true);
+                    addDebugLog('🗺️ 切换到 OpenStreetMap 2');
                     break;
                 default:
                     osmLayer.setVisible(true);
@@ -555,7 +570,8 @@
         // 底图切换按钮
         const osmButton = document.getElementById('osmButton');
         const gaodeButton = document.getElementById('gaodeButton');
-        const tiandituButton = document.getElementById('tiandituButton');
+        const gaodeSatelliteButton = document.getElementById('gaodeSatelliteButton');
+        const osmButton2 = document.getElementById('osmButton2');
         
         // 状态变量
         let layerVisible = true;
@@ -572,9 +588,14 @@
             updateActiveButton('gaode');
         });
         
-        tiandituButton.addEventListener('click', function() {
-            switchBaseLayer('tianditu');
-            updateActiveButton('tianditu');
+        gaodeSatelliteButton.addEventListener('click', function() {
+            switchBaseLayer('gaodeSatellite');
+            updateActiveButton('gaodeSatellite');
+        });
+        
+        osmButton2.addEventListener('click', function() {
+            switchBaseLayer('osm2');
+            updateActiveButton('osm2');
         });
         
         // 更新活跃按钮状态
@@ -582,7 +603,8 @@
             // 移除所有活跃状态
             osmButton.classList.remove('active');
             gaodeButton.classList.remove('active');
-            tiandituButton.classList.remove('active');
+            gaodeSatelliteButton.classList.remove('active');
+            osmButton2.classList.remove('active');
             
             // 设置当前活跃状态
             switch(activeLayer) {
@@ -592,8 +614,11 @@
                 case 'gaode':
                     gaodeButton.classList.add('active');
                     break;
-                case 'tianditu':
-                    tiandituButton.classList.add('active');
+                case 'gaodeSatellite':
+                    gaodeSatelliteButton.classList.add('active');
+                    break;
+                case 'osm2':
+                    osmButton2.classList.add('active');
                     break;
             }
         }

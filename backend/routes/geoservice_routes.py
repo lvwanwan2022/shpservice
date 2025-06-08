@@ -418,7 +418,14 @@ def publish_service(file_id):
                 result = geoserver_service.publish_geojson(file_path, store_name, file_id)
             elif file_type in ['tif', 'dem', 'dom']:
                 print("调用 publish_geotiff...")
-                result = geoserver_service.publish_geotiff(file_path, store_name, file_id)
+                
+                # 检查是否启用透明度（对于DOM文件默认启用）
+                enable_transparency = True
+                if 'dom' in file_type.lower() or 'dom' in file_info['file_name'].lower():
+                    enable_transparency = True
+                    print("检测到DOM文件，自动启用透明度")
+                
+                result = geoserver_service.publish_geotiff(file_path, store_name, file_id, None, enable_transparency)
             else:
                 print(f"❌ 不支持的文件类型: {file_type}")
                 return jsonify({'error': f'不支持的文件类型: {file_type}'}), 400

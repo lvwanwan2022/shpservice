@@ -138,7 +138,9 @@ class FileService:
             elif file_type in ['dem', 'dom']:
                 # 发布geotiff
                 if file_path.endswith('.tif'):
-                    result = geoserver.publish_geotiff(file_path, store_name)
+                    # 对DOM文件自动启用透明度
+                    enable_transparency = 'dom' in file_type.lower()
+                    result = geoserver.publish_geotiff(file_path, store_name, file_id, None, enable_transparency)
                 else:
                     print(f"警告: 栅格文件不是tif格式: {file_path}")
             elif file_type in ['dwg', 'dxf']:

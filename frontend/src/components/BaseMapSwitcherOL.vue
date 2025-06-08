@@ -6,12 +6,17 @@
       </el-button>
       <template #dropdown>
         <el-dropdown-menu>
-
           <el-dropdown-item command="gaode" :class="{ active: currentBaseMap === 'gaode' }">
             高德地图
           </el-dropdown-item>
-          <el-dropdown-item command="tianditu" :class="{ active: currentBaseMap === 'tianditu' }">
-            天地图
+          <el-dropdown-item command="gaodeSatellite" :class="{ active: currentBaseMap === 'gaodeSatellite' }">
+            高德卫星图
+          </el-dropdown-item>
+          <el-dropdown-item command="osm" :class="{ active: currentBaseMap === 'osm' }">
+            OpenStreetMap
+          </el-dropdown-item>
+          <el-dropdown-item command="esriSatellite" :class="{ active: currentBaseMap === 'esriSatellite' }">
+            Esri 世界影像
           </el-dropdown-item>
         </el-dropdown-menu>
       </template>
@@ -34,11 +39,13 @@ export default {
     const switchBaseMap = (command) => {
       if (!props.map || !props.map.baseLayers) return
       
-      const { gaode, tianditu } = props.map.baseLayers
+      const { gaode, gaodeSatellite, osm, esriSatellite } = props.map.baseLayers
       
       // 隐藏所有底图
       gaode.setVisible(false)
-      tianditu.setVisible(false)
+      gaodeSatellite.setVisible(false)
+      osm.setVisible(false)
+      esriSatellite.setVisible(false)
       
       // 显示选择的底图
       switch(command) {
@@ -46,9 +53,17 @@ export default {
           gaode.setVisible(true)
           currentBaseMap.value = 'gaode'
           break
-        case 'tianditu':
-          tianditu.setVisible(true)
-          currentBaseMap.value = 'tianditu'
+        case 'gaodeSatellite':
+          gaodeSatellite.setVisible(true)
+          currentBaseMap.value = 'gaodeSatellite'
+          break
+        case 'osm':
+          osm.setVisible(true)
+          currentBaseMap.value = 'osm'
+          break
+        case 'esriSatellite':
+          esriSatellite.setVisible(true)
+          currentBaseMap.value = 'esriSatellite'
           break
         default:
           gaode.setVisible(true)

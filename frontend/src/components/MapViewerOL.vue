@@ -354,10 +354,28 @@ export default {
           visible: true
         })
         
-        // 天地图
-        const tiandituLayer = new TileLayer({
+        // 高德卫星地图
+        const gaodeSatelliteLayer = new TileLayer({
           source: new XYZ({
-            url: 'https://t{0-7}.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=您的天地图key',
+            url: 'https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
+            crossOrigin: 'anonymous'
+          }),
+          visible: false
+        })
+        
+        // OpenStreetMap
+        const osmLayer = new TileLayer({
+          source: new XYZ({
+            url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            crossOrigin: 'anonymous'
+          }),
+          visible: false
+        })
+        
+        // Esri 世界影像（卫星图）
+        const esriSatelliteLayer = new TileLayer({
+          source: new XYZ({
+            url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
             crossOrigin: 'anonymous'
           }),
           visible: false
@@ -369,7 +387,7 @@ export default {
         console.log('创建地图实例...')
         map.value = new Map({
           target: mapContainer.value,
-          layers: [gaodeLayer, tiandituLayer],
+          layers: [gaodeLayer, gaodeSatelliteLayer, osmLayer, esriSatelliteLayer],
           view: new View({
             center: fromLonLat([104.0667, 30.6667]), // 成都坐标
             zoom: 10
@@ -379,7 +397,9 @@ export default {
         // 6. 设置底图引用供切换器使用
         map.value.baseLayers = {
           gaode: gaodeLayer,
-          tianditu: tiandituLayer
+          gaodeSatellite: gaodeSatelliteLayer,
+          osm: osmLayer,
+          esriSatellite: esriSatelliteLayer
         }
         
         console.log('✅ 地图实例创建成功')
@@ -449,7 +469,7 @@ export default {
         
         // 检查点击位置是否有要素
         const features = map.value.getFeaturesAtPixel(pixel)
-        console.log('features',features)
+        //console.log('features',features)
         if (features && features.length > 0) {
           // 找到第一个要素
           const feature = features[0]
@@ -651,7 +671,7 @@ export default {
         
         return (feature) => {
           const properties = feature.getProperties()
-          console.log('properties',properties)
+          //console.log('properties',properties)
           const geometryType = feature.getGeometry().getType()
           
           // 🔧 解决MVT layer属性冲突问题 - 后端方案

@@ -35,6 +35,36 @@ export const MAP_SERVICES = {
     }
   },
   
+  // OpenStreetMap
+  OSM: {
+    name: 'OpenStreetMap',
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    options: {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors',
+      maxZoom: 19,
+      minZoom: 1,
+      crossOrigin: true,
+      detectRetina: true,
+      tileSize: 256,
+      zoomOffset: 0
+    }
+  },
+  
+  // Esri 世界影像
+  ESRI_WORLD_IMAGERY: {
+    name: 'Esri 世界影像',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    options: {
+      attribution: '&copy; <a href="https://www.esri.com/">Esri</a>, DigitalGlobe, GeoEye, i-cubed, USDA, USGS, AEX, Getmapping, Aerogrid, IGN, IGP, swisstopo, and the GIS User Community',
+      maxZoom: 19,
+      minZoom: 1,
+      crossOrigin: true,
+      detectRetina: true,
+      tileSize: 256,
+      zoomOffset: 0
+    }
+  },
+  
   // 腾讯地图
   TENCENT: {
     name: '腾讯地图',
@@ -94,9 +124,11 @@ export const MAP_SERVICES = {
 
 // 服务优先级（按可靠性和速度排序）
 export const SERVICE_PRIORITY = [
-  'AMAP',           // 高德地图 - 首选
-  'AMAP_SATELLITE', // 高德卫星图 - 备选1
-  'TENCENT'         // 腾讯地图 - 备选2
+  'AMAP',              // 高德地图 - 首选
+  'AMAP_SATELLITE',    // 高德卫星图 - 备选1
+  'OSM',               // OpenStreetMap - 备选2
+  'ESRI_WORLD_IMAGERY', // Esri世界影像 - 备选3
+  'TENCENT'            // 腾讯地图 - 备选4
 ]
 
 // 获取地图服务配置
