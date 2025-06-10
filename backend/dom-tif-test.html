@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOM.tif文件发布测试</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1890ff;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #1890ff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #40a9ff;
+        }
+        button.secondary {
+            background-color: #52c41a;
+        }
+        button.secondary:hover {
+            background-color: #73d13d;
+        }
+        button.warning {
+            background-color: #ff4d4f;
+        }
+        button.warning:hover {
+            background-color: #ff7875;
+        }
+        .file-list {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+        }
+        .file-item {
+            padding: 8px 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }
+        .file-item:hover {
+            background-color: #f0f0f0;
+        }
+        .file-item.selected {
+            background-color: #e6f7ff;
+        }
+        #result {
+            background-color: #fafafa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .coordinate-types {
+            display: flex;
+            margin-bottom: 15px;
+        }
+        .coordinate-type {
+            background-color: #e6f7ff;
+            border: 1px solid #91d5ff;
+            border-radius: 4px;
+            padding: 8px 12px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+        .coordinate-type:hover {
+            background-color: #bae7ff;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .action-button {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            color: white;
+        }
+        .action-button.primary {
+            background-color: #1890ff;
+        }
+        .action-button.success {
+            background-color: #52c41a;
+        }
+        .action-button.warning {
+            background-color: #fa8c16;
+        }
+        .action-button.danger {
+            background-color: #f5222d;
+        }
+        .tab-container {
+            margin-bottom: 20px;
+        }
+        .tab-header {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 15px;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            margin-right: 5px;
+            border-radius: 4px 4px 0 0;
+        }
+        .tab.active {
+            background-color: #fff;
+            border-color: #ddd;
+            border-bottom: 1px solid #fff;
+            margin-bottom: -1px;
+            font-weight: bold;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>DOM.tif文件发布测试</h1>
+        
+        <div class="tab-container">
+            <div class="tab-header">
+                <div class="tab active" data-tab="file-list">文件列表</div>
+                <div class="tab" data-tab="publish-test">发布测试</div>
+                <div class="tab" data-tab="gdal-test">GDAL处理测试</div>
+            </div>
+            
+            <div id="file-list" class="tab-content active">
+                <div class="section">
+                    <h2>文件列表</h2>
+                    <p>查询系统中的TIF/DOM文件，点击选择要发布的文件</p>
+                    
+                    <button id="load-files">加载TIF文件列表</button>
+                    
+                    <div class="file-list" id="files-container">
+                        <div class="file-item">请点击"加载TIF文件列表"按钮</div>
+                    </div>
+                    
+                    <div id="selected-file-info" style="display: none;">
+                        <h3>已选择文件</h3>
+                        <p><strong>ID:</strong> <span id="selected-file-id"></span></p>
+                        <p><strong>名称:</strong> <span id="selected-file-name"></span></p>
+                        <p><strong>类型:</strong> <span id="selected-file-type"></span></p>
+                        <p><strong>路径:</strong> <span id="selected-file-path"></span></p>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="publish-test" class="tab-content">
+                <div class="section">
+                    <h2>DOM.tif发布测试</h2>
+                    <p>使用专门的DOM.tif发布接口，自动处理坐标系和透明度</p>
+                    
+                    <div>
+                        <label for="file-id">文件ID:</label>
+                        <input type="number" id="file-id" placeholder="请输入文件ID或从列表中选择">
+                    </div>
+                    
+                    <div>
+                        <label for="force-epsg">强制坐标系 (可选):</label>
+                        <input type="text" id="force-epsg" placeholder="例如: EPSG:2343">
+                    </div>
+                    
+                    <div>
+                        <label>
+                            <input type="checkbox" id="force-republish"> 强制重新发布 (如果已存在)
+                        </label>
+                    </div>
+                    
+                    <div class="action-buttons">
+                        <div class="action-button primary" id="publish-dom">
+                            🌐 发布DOM.tif
+                        </div>
+                        <div class="action-button success" id="publish-dom-2343">
+                            🎯 直接上传+设置EPSG:2343
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="gdal-test" class="tab-content">
+                <div class="section">
+                    <h2>GDAL处理测试</h2>
+                    <p>测试GDAL坐标系检查和处理功能</p>
+                    
+                    <div>
+                        <label for="test-file-path">文件路径:</label>
+                        <input type="text" id="test-file-path" placeholder="例如: G:/code/shpservice/FilesData/58cc01040e69460eb9fc8d96311d2e30.tif">
+                    </div>
+                    
+                    <div>
+                        <label for="target-epsg">目标EPSG坐标系:</label>
+                        <input type="text" id="target-epsg" value="EPSG:2343" placeholder="例如: EPSG:2343">
+                    </div>
+                    
+                    <div class="action-buttons">
+                        <div class="action-button primary" id="check-coordinate">
+                            🔍 检查坐标系
+                        </div>
+                        <div class="action-button warning" id="process-gdal">
+                            🔧 GDAL处理
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>结果输出</h2>
+            <div id="result">// 结果将显示在这里</div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const baseUrl = '';  // 根据实际情况设置API基础URL
+            let selectedFile = null;
+            
+            // 标签页切换
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // 移除所有标签页的active类
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    
+                    // 添加当前标签页的active类
+                    this.classList.add('active');
+                    const tabId = this.getAttribute('data-tab');
+                    document.getElementById(tabId).classList.add('active');
+                });
+            });
+            
+            // 加载文件列表
+            document.getElementById('load-files').addEventListener('click', async function() {
+                try {
+                    showResult('正在加载文件列表...');
+                    const response = await fetch(`${baseUrl}/file/list?filter=tif,dom`);
+                    const data = await response.json();
+                    
+                    if (data.files && data.files.length > 0) {
+                        const filesContainer = document.getElementById('files-container');
+                        filesContainer.innerHTML = '';
+                        
+                        data.files.forEach(file => {
+                            const fileItem = document.createElement('div');
+                            fileItem.className = 'file-item';
+                            fileItem.setAttribute('data-id', file.id);
+                            fileItem.innerHTML = `
+                                <strong>${file.file_name}</strong> (ID: ${file.id})<br>
+                                <small>${file.file_type} - ${formatSize(file.file_size)}</small>
+                            `;
+                            
+                            fileItem.addEventListener('click', function() {
+                                // 移除所有选中项的样式
+                                document.querySelectorAll('.file-item').forEach(item => {
+                                    item.classList.remove('selected');
+                                });
+                                
+                                // 添加当前选中项的样式
+                                this.classList.add('selected');
+                                
+                                // 设置选中的文件
+                                selectedFile = file;
+                                document.getElementById('file-id').value = file.id;
+                                
+                                // 显示选中文件的信息
+                                document.getElementById('selected-file-info').style.display = 'block';
+                                document.getElementById('selected-file-id').textContent = file.id;
+                                document.getElementById('selected-file-name').textContent = file.file_name;
+                                document.getElementById('selected-file-type').textContent = file.file_type;
+                                document.getElementById('selected-file-path').textContent = file.file_path || '未知';
+                                
+                                // 预填充测试路径
+                                document.getElementById('test-file-path').value = file.file_path || '';
+                            });
+                            
+                            filesContainer.appendChild(fileItem);
+                        });
+                        
+                        showResult(`成功加载 ${data.files.length} 个文件`);
+                    } else {
+                        showResult('未找到文件，或返回数据格式不正确');
+                    }
+                } catch (error) {
+                    showResult(`加载文件列表出错: ${error.message}`);
+                }
+            });
+            
+            // 发布DOM.tif
+            document.getElementById('publish-dom').addEventListener('click', async function() {
+                const fileId = document.getElementById('file-id').value;
+                if (!fileId) {
+                    return showResult('请输入或选择文件ID');
+                }
+                
+                const forceEpsg = document.getElementById('force-epsg').value;
+                const forceRepublish = document.getElementById('force-republish').checked;
+                
+                try {
+                    showResult('正在发布DOM.tif文件...');
+                    
+                    const params = {};
+                    if (forceEpsg) params.force_epsg = forceEpsg;
+                    if (forceRepublish) params.force = true;
+                    
+                    const response = await fetch(`${baseUrl}/file/${fileId}/publish/dom`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(params)
+                    });
+                    
+                    const data = await response.json();
+                    showResult(JSON.stringify(data, null, 2));
+                } catch (error) {
+                    showResult(`发布DOM.tif出错: ${error.message}`);
+                }
+            });
+            
+            // 直接上传+设置EPSG:2343
+            document.getElementById('publish-dom-2343').addEventListener('click', async function() {
+                const fileId = document.getElementById('file-id').value;
+                if (!fileId) {
+                    return showResult('请输入或选择文件ID');
+                }
+                
+                try {
+                    showResult('正在发布DOM.tif文件并强制设置EPSG:2343...');
+                    
+                    const response = await fetch(`${baseUrl}/file/${fileId}/publish/dom`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            force_epsg: 'EPSG:2343',
+                            force: true
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    showResult(JSON.stringify(data, null, 2));
+                } catch (error) {
+                    showResult(`发布DOM.tif出错: ${error.message}`);
+                }
+            });
+            
+            // 检查坐标系
+            document.getElementById('check-coordinate').addEventListener('click', async function() {
+                const filePath = document.getElementById('test-file-path').value;
+                if (!filePath) {
+                    return showResult('请输入文件路径');
+                }
+                
+                try {
+                    showResult('正在检查文件坐标系...');
+                    
+                    const response = await fetch(`${baseUrl}/file/check-coordinate`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            file_path: filePath
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    showResult(JSON.stringify(data, null, 2));
+                } catch (error) {
+                    showResult(`检查坐标系出错: ${error.message}\n\n注意：这个API可能需要您自己实现，或者直接使用DOM.tif发布API`);
+                }
+            });
+            
+            // GDAL处理
+            document.getElementById('process-gdal').addEventListener('click', async function() {
+                const filePath = document.getElementById('test-file-path').value;
+                const targetEpsg = document.getElementById('target-epsg').value;
+                
+                if (!filePath) {
+                    return showResult('请输入文件路径');
+                }
+                
+                if (!targetEpsg) {
+                    return showResult('请输入目标EPSG坐标系');
+                }
+                
+                try {
+                    showResult('正在使用GDAL处理文件...');
+                    
+                    const response = await fetch(`${baseUrl}/file/process-gdal`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            file_path: filePath,
+                            target_epsg: targetEpsg
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    showResult(JSON.stringify(data, null, 2));
+                } catch (error) {
+                    showResult(`GDAL处理出错: ${error.message}\n\n注意：这个API可能需要您自己实现，或者直接使用DOM.tif发布API`);
+                }
+            });
+            
+            // 辅助函数：显示结果
+            function showResult(content) {
+                document.getElementById('result').textContent = content;
+            }
+            
+            // 辅助函数：格式化文件大小
+            function formatSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+        });
+    </script>
+</body>
+</html> 

@@ -12,6 +12,18 @@ import shutil
 import stat
 from models.db import execute_query
 from config import GEOSERVER_CONFIG, DB_CONFIG
+import logging
+from datetime import datetime
+from pathlib import Path
+from urllib.parse import urljoin
+from bs4 import BeautifulSoup
+import xml.etree.ElementTree as ET
+import traceback
+import subprocess
+
+# 设置日志
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 class GeoServerService:
     """GeoServer服务类，用于管理GeoServer资源"""
@@ -329,7 +341,7 @@ class GeoServerService:
             
             # 2. 上传GeoTIFF到GeoServer（如果启用透明度，使用ImageMosaic类型）
             upload_success = False
-            max_retries = 3
+            max_retries = 2
             
             # 先检查GeoServer中是否已存在coveragestore
             check_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{generated_store_name}"
@@ -349,21 +361,17 @@ class GeoServerService:
                     # 只有当coveragestore不存在时才创建
                     if not coveragestore_exists:
                         print(f"创建空的coveragestore")
-                        if enable_transparency:
-                            # 使用ImageMosaic类型创建支持透明度的coveragestore
-                            self._create_imagemosaic_coveragestore(generated_store_name, corrected_path)
-                        else:
-                            self._create_empty_coveragestore_for_existing_file(generated_store_name, corrected_path)
+                        print(f"使用标准GeoTIFF方案")
+                        self._create_empty_coveragestore_for_existing_file(generated_store_name, corrected_path)
+                        
                         print(f"✅ 空coveragestore创建成功")
-                        coveragestore_exists = True  # 标记为已存在，避免重复创建
+                        coveragestore_exists = True
                     else:
                         print(f"跳过coveragestore创建步骤（已存在）")
                     
-                    # 上传文件
-                    if enable_transparency:
-                        self._upload_geotiff_with_transparency(corrected_path, generated_store_name)
-                    else:
-                        self._upload_geotiff_to_geoserver(corrected_path, generated_store_name)
+                    # 上传文件 - 统一使用标准方式
+                    print(f"开始上传GeoTIFF文件...")
+                    self._upload_geotiff_to_geoserver(corrected_path, generated_store_name)
                     print(f"✅ GeoTIFF文件上传成功")
                     
                     upload_success = True
@@ -373,7 +381,7 @@ class GeoServerService:
                     print(f"❌ 第{attempt + 1}次上传失败: {str(upload_error)}")
                     if attempt < max_retries - 1:
                         print(f"等待2秒后重试...")
-                        time.sleep(2)
+                        #time.sleep(2)
                         # 重试时不需要重新创建coveragestore
                     else:
                         print(f"所有上传尝试均失败")
@@ -383,7 +391,7 @@ class GeoServerService:
                 raise Exception("GeoTIFF上传失败")
             
             # 3. 等待GeoServer处理
-            time.sleep(3)
+            #time.sleep(3)
             
             # 4. 获取覆盖信息
             coverage_info = self._get_coverage_info(generated_store_name)
@@ -1026,13 +1034,29 @@ class GeoServerService:
                     print(f"开始删除coveragestore: {store_name}")
                     self._cleanup_existing_coveragestore(store_name)
                 else:
-                    # 矢量数据，使用datastore
-                    delete_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}?recurse=true"
+                    # 矢量数据，使用datastore，增加purge=all参数删除物理文件
+                    delete_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}?recurse=true&purge=all"
                     print(f"删除GeoServer资源: {delete_url}")
                     response = requests.delete(delete_url, auth=self.auth)
                     
+                    # 如果使用purge=all失败，尝试其他purge参数值
                     if response.status_code not in [200, 404]:
-                        print(f"⚠️ 删除GeoServer资源失败: {response.status_code} - {response.text}")
+                        print(f"⚠️ 使用purge=all删除失败，尝试其他参数")
+                        for purge_param in ['true', 'metadata']:
+                            alt_delete_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}?recurse=true&purge={purge_param}"
+                            print(f"尝试: {alt_delete_url}")
+                            alt_response = requests.delete(alt_delete_url, auth=self.auth)
+                            if alt_response.status_code in [200, 404]:
+                                print(f"✅ 使用purge={purge_param}删除成功")
+                                break
+                        else:
+                            # 最后尝试不使用purge参数
+                            simple_delete_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}?recurse=true"
+                            simple_response = requests.delete(simple_delete_url, auth=self.auth)
+                            if simple_response.status_code in [200, 404]:
+                                print(f"✅ 使用基本参数删除成功")
+                            else:
+                                print(f"⚠️ 删除GeoServer资源失败: {simple_response.status_code} - {simple_response.text}")
                     else:
                         print(f"✅ GeoServer资源删除成功")
             else:
@@ -1497,15 +1521,26 @@ class GeoServerService:
             raise e
     
     def _upload_geotiff_to_geoserver(self, tif_path, store_name):
-        """上传GeoTIFF到GeoServer，如果文件已存在则跳过上传"""
+        """上传GeoTIFF到GeoServer，根据REST API文档优化
+        
+        Args:
+            tif_path: GeoTIFF文件路径
+            store_name: 存储名称
+        """
         import os
+        
+        # 1. 首先验证GeoTIFF文件
+        print(f"开始验证GeoTIFF文件...")
+        is_valid, validation_msg = self._validate_geotiff_file(tif_path)
+        if not is_valid:
+            raise Exception(f"GeoTIFF文件验证失败: {validation_msg}")
         
         print(f"检查coveragestore中是否已有文件: {store_name}")
         
-        # 先检查coveragestore是否已经包含有效的覆盖数据
+        # 2. 检查coveragestore是否已经包含有效的覆盖数据
         try:
             coverages_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}/coverages.json"
-            check_response = requests.get(coverages_url, auth=self.auth)
+            check_response = requests.get(coverages_url, auth=self.auth, timeout=30)
             
             if check_response.status_code == 200:
                 coverages_data = check_response.json()
@@ -1513,118 +1548,97 @@ class GeoServerService:
                     'coverage' in coverages_data['coverages'] and 
                     coverages_data['coverages']['coverage']):
                     print(f"✅ coveragestore中已存在有效的覆盖数据，跳过文件上传")
-                    print(f"已存在的覆盖: {coverages_data['coverages']['coverage']}")
                     return
-                else:
-                    print(f"coveragestore存在但没有覆盖数据，检查文件是否已存在")
-            else:
-                print(f"无法获取覆盖信息，检查文件是否已存在")
+            
+            print(f"coveragestore中无覆盖数据，开始上传文件")
         except Exception as e:
-            print(f"⚠️ 检查覆盖数据时出错: {str(e)}，检查文件是否已存在")
+            print(f"⚠️ 检查覆盖数据时出错: {str(e)}，继续上传流程")
         
-        # 尝试配置coveragestore指向可能已存在的文件，而不是上传新文件
-        filename = os.path.basename(tif_path)
-        base_filename = os.path.splitext(filename)[0]
-        
-        # 可能的文件路径
-        possible_file_paths = [
-            
-            f"file:data/{self.workspace}/{store_name}/{store_name}.geotiff",
-            f"file:data/{filename}"
-        ]
-        
-        print(f"尝试配置coveragestore指向已存在的文件...")
-        
-        # 尝试更新coveragestore配置，指向已存在的文件
-        for file_path in possible_file_paths:
-            print(f"  尝试文件路径: {file_path}")
-            
-            try:
-                # 更新coveragestore配置
-                update_config = {
-                    "coverageStore": {
-                        "name": store_name,
-                        "type": "GeoTIFF",
-                        "enabled": True,
-                        "url": file_path,
-                        "workspace": {
-                            "name": self.workspace
-                        }
-                    }
-                }
-                
-                update_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}"
-                headers = {'Content-Type': 'application/json'}
-                
-                update_response = requests.put(
-                    update_url,
-                    json=update_config,
-                    auth=self.auth,
-                    headers=headers,
-                    timeout=60
-                )
-                
-                print(f"    配置更新响应状态码: {update_response.status_code}")
-                
-                if update_response.status_code in [200, 201]:
-                    print(f"    ✅ 成功配置coveragestore指向文件: {file_path}")
-                    
-                    # 等待处理并验证
-                    time.sleep(3)
-                    
-                    # 验证是否有覆盖数据
-                    verify_response = requests.get(coverages_url, auth=self.auth)
-                    if verify_response.status_code == 200:
-                        verify_data = verify_response.json()
-                        if ('coverages' in verify_data and 
-                            'coverage' in verify_data['coverages'] and 
-                            verify_data['coverages']['coverage']):
-                            print(f"    ✅ 验证成功：覆盖数据已可用，跳过文件上传")
-                            return
-                    
-                    print(f"    ⚠️ 配置成功但未生成覆盖数据，继续尝试其他路径")
-                else:
-                    print(f"    配置失败: {update_response.text[:200]}...")
-                    
-            except Exception as config_error:
-                print(f"    配置失败: {str(config_error)}")
-                continue
-        
-        # 如果所有文件路径都尝试失败，说明文件确实不存在，需要上传
-        print(f"未找到已存在的文件，开始上传GeoTIFF文件到coveragestore: {store_name}")
+        # 3. 根据GeoServer REST API文档进行文件上传
+        # 参考: https://docs.geoserver.org/stable/en/user/rest/api/coveragestores.html
         coveragestore_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}/file.geotiff"
         
-        headers = {'Content-type': 'image/tiff'}
-        with open(tif_path, 'rb') as f:
-            response = requests.put(
-                coveragestore_url,
-                data=f,
-                headers=headers,
-                auth=self.auth,
-                timeout=300  # 增加超时时间，适合大文件
-            )
+        # 设置正确的Content-Type - 根据官方文档
+        headers = {
+            'Content-Type': 'image/tiff',  # 官方文档推荐的MIME类型
+            'Accept': 'application/xml'
+        }
         
-        print(f"GeoTIFF上传响应状态码: {response.status_code}")
-        print(f"GeoTIFF上传响应内容: {response.text}")
+        print(f"上传URL: {coveragestore_url}")
+        print(f"文件大小: {os.path.getsize(tif_path)} 字节")
         
-        if response.status_code not in [201, 200]:
-            # 如果上传失败，最后再次检查是否是因为文件已存在导致的
-            if "already exists" in response.text.lower() or "error while storing" in response.text.lower():
-                print(f"⚠️ 上传失败可能是文件已存在，最后验证coveragestore状态")
+        try:
+            with open(tif_path, 'rb') as f:
+                response = requests.put(
+                    coveragestore_url,
+                    data=f,
+                    headers=headers,
+                    auth=self.auth,
+                    timeout=300  # 5分钟超时，适合大文件
+                )
+            
+            print(f"GeoTIFF上传响应状态码: {response.status_code}")
+            if response.text:
+                print(f"GeoTIFF上传响应内容: {response.text[:500]}...")
+            
+            if response.status_code in [200, 201]:
+                print(f"✅ GeoTIFF文件上传成功")
                 
-                # 重新检查是否有覆盖数据
-                verify_response = requests.get(coverages_url, auth=self.auth)
+                # 等待GeoServer处理文件
+                import time
+                time.sleep(2)
+                
+                # 验证上传结果
+                verify_response = requests.get(coverages_url, auth=self.auth, timeout=30)
                 if verify_response.status_code == 200:
                     verify_data = verify_response.json()
                     if ('coverages' in verify_data and 
                         'coverage' in verify_data['coverages'] and 
                         verify_data['coverages']['coverage']):
-                        print(f"✅ 最终验证确认：coveragestore中已有有效数据，上传可以跳过")
-                        return
-                        
-            raise Exception(f"上传GeoTIFF失败: {response.text}")
-        
-        print(f"✅ GeoTIFF文件上传成功")
+                        print(f"✅ 上传验证成功：覆盖数据已可用")
+                    else:
+                        print(f"⚠️ 上传成功但覆盖数据未就绪，可能需要更多处理时间")
+                
+                return
+                
+            else:
+                # 根据不同错误码提供具体的错误信息
+                error_msg = response.text
+                if response.status_code == 500:
+                    if "Could not acquire reader" in error_msg:
+                        raise Exception(f"GeoServer无法读取文件格式。请检查文件是否为有效的GeoTIFF格式。详细错误: {error_msg}")
+                    elif "already exists" in error_msg.lower():
+                        print(f"⚠️ 文件可能已存在，验证coveragestore状态")
+                        # 重新验证是否有数据
+                        verify_response = requests.get(coverages_url, auth=self.auth, timeout=30)
+                        if verify_response.status_code == 200:
+                            verify_data = verify_response.json()
+                            if ('coverages' in verify_data and 
+                                'coverage' in verify_data['coverages'] and 
+                                verify_data['coverages']['coverage']):
+                                print(f"✅ 验证确认：coveragestore中已有有效数据")
+                                return
+                        raise Exception(f"文件上传失败，可能已存在: {error_msg}")
+                    else:
+                        raise Exception(f"服务器内部错误: {error_msg}")
+                elif response.status_code == 400:
+                    raise Exception(f"请求格式错误。请检查文件格式和请求参数。详细错误: {error_msg}")
+                elif response.status_code == 404:
+                    raise Exception(f"找不到coveragestore '{store_name}'。请确保coveragestore已正确创建。详细错误: {error_msg}")
+                elif response.status_code == 415:
+                    raise Exception(f"不支持的媒体类型。请检查Content-Type设置。详细错误: {error_msg}")
+                else:
+                    raise Exception(f"上传失败 (HTTP {response.status_code}): {error_msg}")
+                
+        except requests.exceptions.Timeout:
+            raise Exception("上传超时。文件可能过大或网络连接不稳定")
+        except requests.exceptions.ConnectionError:
+            raise Exception("连接GeoServer失败。请检查GeoServer是否正在运行")
+        except Exception as e:
+            if "上传失败" in str(e) or "GeoServer无法读取" in str(e):
+                raise  # 重新抛出已格式化的错误
+            else:
+                raise Exception(f"上传GeoTIFF失败: {str(e)}")
     
     def _create_empty_coveragestore_for_existing_file(self, store_name, file_path):
         """为已存在的文件创建空的coveragestore
@@ -2817,12 +2831,23 @@ class GeoServerService:
             print(f"强制删除文件失败: {file_path}, 错误: {str(e)}")
             return False
     
-    def _create_imagemosaic_coveragestore(self, store_name, tif_path):
-        """创建ImageMosaic类型的CoverageStore以支持透明度设置"""
+        """创建ImageMosaic类型的CoverageStore以支持透明度设置
+        
+        根据GeoServer官方REST API文档：
+        PUT /workspaces/<ws>/coveragestores/<cs>/file.imagemosaic
+        """
         try:
             import os
             import tempfile
             import shutil
+            import zipfile
+            
+            # 首先验证TIF文件
+            print(f"验证TIF文件用于ImageMosaic...")
+            is_valid, validation_msg = self._validate_geotiff_file(tif_path)
+            if not is_valid:
+                print(f"❌ TIF文件验证失败: {validation_msg}")
+                return False
             
             # 创建临时目录用于ImageMosaic
             temp_dir = tempfile.mkdtemp(prefix='geoserver_mosaic_')
@@ -2835,26 +2860,21 @@ class GeoServerService:
                 shutil.copy2(tif_path, temp_tif_path)
                 print(f"复制TIF文件到临时目录: {temp_tif_path}")
                 
-                # 创建indexer.properties文件（ImageMosaic配置）
-                indexer_content = f"""TimeAttribute=ingestion
-Schema=*the_geom:Polygon,location:String,ingestion:java.util.Date
-PropertyCollectors=TimestampFileNameExtractorSPI[timeregex](ingestion)
+                # 创建简化的indexer.properties文件（最小配置）
+                indexer_content = """# ImageMosaic最小配置
+Schema=*the_geom:Polygon,location:String
+Caching=false
+CheckAuxiliaryMetadata=false
+CanBeEmpty=false
+Recursive=false
+AbsolutePath=false
 """
                 indexer_path = os.path.join(temp_dir, 'indexer.properties')
                 with open(indexer_path, 'w', encoding='utf-8') as f:
                     f.write(indexer_content)
                 print(f"创建indexer.properties: {indexer_path}")
                 
-                # 创建datastore.properties文件（可选，用于设置透明度参数）
-                datastore_content = f"""SuggestedTileSize=512,512
-"""
-                datastore_path = os.path.join(temp_dir, 'datastore.properties')
-                with open(datastore_path, 'w', encoding='utf-8') as f:
-                    f.write(datastore_content)
-                print(f"创建datastore.properties: {datastore_path}")
-                
                 # 压缩为zip文件
-                import zipfile
                 zip_path = os.path.join(tempfile.gettempdir(), f"{store_name}_mosaic.zip")
                 with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                     for root, dirs, files in os.walk(temp_dir):
@@ -2865,12 +2885,17 @@ PropertyCollectors=TimestampFileNameExtractorSPI[timeregex](ingestion)
                 print(f"创建ImageMosaic压缩包: {zip_path}")
                 
                 # 通过REST API创建ImageMosaic coveragestore
+                # 根据官方文档的正确端点格式
                 url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}/file.imagemosaic"
+                print(f"ImageMosaic coveragestore创建URL: {url}")
                 
+                # 设置正确的HTTP headers
                 headers = {
-                    'Content-Type': 'application/zip'
+                    'Content-Type': 'application/zip',
+                    'Accept': 'application/xml'
                 }
                 
+                # 读取zip文件并发送PUT请求
                 with open(zip_path, 'rb') as f:
                     response = requests.put(
                         url,
@@ -2881,23 +2906,27 @@ PropertyCollectors=TimestampFileNameExtractorSPI[timeregex](ingestion)
                     )
                 
                 print(f"ImageMosaic coveragestore创建响应状态码: {response.status_code}")
+                if response.text:
+                    print(f"响应内容: {response.text[:500] if response.text else 'None'}...")
                 
-                if response.status_code not in [200, 201]:
-                    print(f"ImageMosaic coveragestore创建失败: {response.text}")
-                    # 如果失败，尝试普通的GeoTIFF方式
-                    print("回退到普通GeoTIFF方式...")
-                    self._create_empty_coveragestore_for_existing_file(store_name, tif_path)
+                if response.status_code in [200, 201]:
+                    print(f"✅ ImageMosaic coveragestore '{store_name}' 创建成功")
+                    return True
                 else:
-                    print(f"✅ ImageMosaic coveragestore创建成功")
-                
-                # 清理临时文件
-                try:
-                    os.remove(zip_path)
-                    print(f"清理临时zip文件: {zip_path}")
-                except:
-                    pass
+                    print(f"❌ ImageMosaic coveragestore创建失败: {response.status_code}")
+                    if response.text:
+                        print(f"错误详情: {response.text}")
+                    return False
                     
             finally:
+                # 清理临时文件
+                try:
+                    if 'zip_path' in locals() and os.path.exists(zip_path):
+                        os.remove(zip_path)
+                        print(f"清理临时zip文件: {zip_path}")
+                except Exception as cleanup_error:
+                    print(f"清理zip文件失败: {cleanup_error}")
+                    
                 # 清理临时目录
                 try:
                     shutil.rmtree(temp_dir)
@@ -2907,25 +2936,7 @@ PropertyCollectors=TimestampFileNameExtractorSPI[timeregex](ingestion)
                     
         except Exception as e:
             print(f"创建ImageMosaic coveragestore失败: {str(e)}")
-            # 回退到普通方式
-            print("回退到普通GeoTIFF方式...")
-            self._create_empty_coveragestore_for_existing_file(store_name, tif_path)
-    
-    def _upload_geotiff_with_transparency(self, tif_path, store_name):
-        """上传GeoTIFF文件并设置透明度参数"""
-        try:
-            # 先尝试普通上传
-            self._upload_geotiff_to_geoserver(tif_path, store_name)
-            
-            # 等待处理
-            time.sleep(2)
-            
-            # 然后配置透明度
-            self._configure_coverage_transparency(store_name)
-            
-        except Exception as e:
-            print(f"透明度上传失败，使用普通上传: {str(e)}")
-            self._upload_geotiff_to_geoserver(tif_path, store_name)
+            return False
     
     def _configure_coverage_transparency(self, store_name):
         """配置Coverage的透明度参数"""
@@ -2953,105 +2964,513 @@ PropertyCollectors=TimestampFileNameExtractorSPI[timeregex](ingestion)
                 
             print(f"配置coverage透明度: {coverage_name}")
             
-            # 获取当前coverage配置
+            # 通过Coverage Editor参数设置透明度
+            # 根据官方文档设置背景色为透明
             coverage_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}/coverages/{coverage_name}.xml"
+            
+            # 获取当前coverage配置
             get_response = requests.get(coverage_url, auth=self.auth, timeout=30)
             
             if get_response.status_code != 200:
                 print(f"获取coverage配置失败: {get_response.text}")
                 return
             
-            # 解析XML并添加透明度参数
-            from xml.etree import ElementTree as ET
-            
-            try:
-                root = ET.fromstring(get_response.text)
-                
-                # 查找或创建parameters节点
-                parameters_node = root.find('.//parameters')
-                if parameters_node is None:
-                    parameters_node = ET.SubElement(root, 'parameters')
-                
-                # 添加InputTransparentColor参数（设置黑色为透明）
-                input_transparent = ET.SubElement(parameters_node, 'entry')
-                input_key = ET.SubElement(input_transparent, 'string')
-                input_key.text = 'InputTransparentColor'
-                input_value = ET.SubElement(input_transparent, 'string')
-                input_value.text = '#000000'  # 黑色
-                
-                # 添加OutputTransparentColor参数
-                output_transparent = ET.SubElement(parameters_node, 'entry')
-                output_key = ET.SubElement(output_transparent, 'string')
-                output_key.text = 'OutputTransparentColor'
-                output_value = ET.SubElement(output_transparent, 'string')
-                output_value.text = '#000000'  # 黑色
-                
-                # 转换回XML字符串
-                updated_xml = ET.tostring(root, encoding='unicode')
-                
-                # 更新coverage配置
-                headers = {'Content-Type': 'application/xml'}
-                put_response = requests.put(
-                    coverage_url,
-                    data=updated_xml,
-                    headers=headers,
-                    auth=self.auth,
-                    timeout=60
-                )
-                
-                if put_response.status_code in [200, 201]:
-                    print(f"✅ 透明度参数设置成功")
-                else:
-                    print(f"透明度参数设置失败: {put_response.status_code} - {put_response.text}")
-                    
-            except ET.ParseError as xml_error:
-                print(f"XML解析失败: {xml_error}")
-                
-                # 备用方案：直接发送包含透明度参数的XML
-                self._set_transparency_alternative(coverage_url)
-                
-        except Exception as e:
-            print(f"配置透明度参数失败: {str(e)}")
-    
-    def _set_transparency_alternative(self, coverage_url):
-        """备用透明度设置方案"""
-        try:
-            # 使用简化的XML配置
-            transparency_xml = '''<?xml version="1.0" encoding="UTF-8"?>
+            # 设置透明度参数 - 使用XML格式，按照GeoServer REST API文档要求
+            xml_content = """
 <coverage>
-    <parameters>
-        <entry>
-            <string>InputTransparentColor</string>
-            <string>#000000</string>
-        </entry>
-        <entry>
-            <string>OutputTransparentColor</string>
-            <string>#000000</string>
-        </entry>
-    </parameters>
-</coverage>'''
+  <parameters>
+    <entry>
+      <string>InputTransparentColor</string>
+      <string>#000000</string>
+    </entry>
+    <entry>
+      <string>OutputTransparentColor</string>
+      <string>#000000</string>
+    </entry>
+  </parameters>
+</coverage>
+"""
             
-            headers = {'Content-Type': 'application/xml'}
-            response = requests.put(
+            headers = {'Content-Type': 'text/xml'}
+            put_response = requests.put(
                 coverage_url,
-                data=transparency_xml,
+                data=xml_content,
                 headers=headers,
                 auth=self.auth,
                 timeout=60
             )
             
-            if response.status_code in [200, 201]:
-                print(f"✅ 备用透明度设置成功")
+            if put_response.status_code in [200, 201]:
+                print(f"✅ 透明度参数设置成功")
             else:
-                print(f"备用透明度设置失败: {response.status_code} - {response.text}")
+                print(f"透明度参数设置失败: {put_response.status_code} - {put_response.text[:200]}...")
                 
         except Exception as e:
-            print(f"备用透明度设置异常: {str(e)}")
+            print(f"配置透明度参数失败: {str(e)}")
     
-    def _update_coverage_transparency(self, store_name, layer_name):
-        """更新现有coverage的透明度设置"""
+    def _validate_geotiff_file(self, tif_path):
+        """验证GeoTIFF文件是否有效
+        
+        Args:
+            tif_path: GeoTIFF文件路径
+            
+        Returns:
+            tuple: (is_valid, error_message)
+        """
         try:
-            print(f"更新现有coverage透明度: {store_name}")
-            self._configure_coverage_transparency(store_name)
+            import os
+            from osgeo import gdal
+            
+            # 检查文件是否存在
+            if not os.path.exists(tif_path):
+                return False, f"文件不存在: {tif_path}"
+            
+            # 检查文件大小
+            file_size = os.path.getsize(tif_path)
+            if file_size == 0:
+                return False, "文件大小为0字节"
+            
+            print(f"验证GeoTIFF文件: {tif_path} (大小: {file_size} 字节)")
+            
+            # 使用GDAL验证文件
+            gdal.UseExceptions()
+            dataset = gdal.Open(tif_path, gdal.GA_ReadOnly)
+            
+            if dataset is None:
+                return False, "GDAL无法打开文件，可能不是有效的GeoTIFF格式"
+            
+            # 检查基本属性
+            width = dataset.RasterXSize
+            height = dataset.RasterYSize
+            bands = dataset.RasterCount
+            projection = dataset.GetProjection()
+            geotransform = dataset.GetGeoTransform()
+            
+            print(f"  图像尺寸: {width}x{height}")
+            print(f"  波段数: {bands}")
+            print(f"  投影信息: {projection[:100] if projection else 'None'}...")
+            print(f"  地理变换: {geotransform}")
+            
+            # 验证必要的地理信息
+            if not projection and not geotransform:
+                return False, "文件缺少地理参考信息（投影或地理变换）"
+            
+            if width <= 0 or height <= 0:
+                return False, f"无效的图像尺寸: {width}x{height}"
+            
+            if bands <= 0:
+                return False, f"无效的波段数: {bands}"
+            
+            # 检查数据类型
+            band1 = dataset.GetRasterBand(1)
+            datatype = gdal.GetDataTypeName(band1.DataType)
+            print(f"  数据类型: {datatype}")
+            
+            # 检查nodata值
+            nodata = band1.GetNoDataValue()
+            if nodata is not None:
+                print(f"  NoData值: {nodata}")
+            
+            dataset = None  # 关闭数据集
+            print(f"✅ GeoTIFF文件验证通过")
+            return True, "文件验证通过"
+            
+        except ImportError:
+            print("⚠️ GDAL未安装，跳过详细验证")
+            # 如果没有GDAL，做基本文件验证
+            try:
+                import os
+                if not os.path.exists(tif_path):
+                    return False, f"文件不存在: {tif_path}"
+                
+                file_size = os.path.getsize(tif_path)
+                if file_size == 0:
+                    return False, "文件大小为0字节"
+                
+                # 检查文件头是否为TIFF格式
+                with open(tif_path, 'rb') as f:
+                    header = f.read(4)
+                    # TIFF文件头标识：MM* (大端) 或 II* (小端)
+                    if header[:2] not in [b'MM', b'II']:
+                        return False, "文件头不符合TIFF格式"
+                
+                print(f"✅ 基本文件验证通过 (大小: {file_size} 字节)")
+                return True, "基本验证通过"
+                
+            except Exception as basic_error:
+                return False, f"基本文件验证失败: {str(basic_error)}"
+            
         except Exception as e:
-            print(f"更新现有coverage透明度失败: {str(e)}")
+            return False, f"验证失败: {str(e)}"
+
+    def publish_dom_geotiff(self, tif_path, store_name, file_id, force_epsg=None):
+        """发布DOM.tif文件到GeoServer，特别处理坐标系问题
+        
+        Args:
+            tif_path (str): TIF文件路径
+            store_name (str): 存储名称
+            file_id (int): 文件ID
+            force_epsg (str, optional): 强制使用的EPSG坐标系，例如 "EPSG:2343"
+        
+        Returns:
+            dict: 发布结果信息
+        """
+        try:
+            logger.info(f"开始处理DOM.tif文件: {tif_path}")
+            
+            # 检查文件是否存在
+            if not os.path.exists(tif_path):
+                raise Exception(f"文件不存在: {tif_path}")
+            
+            # 检查文件是否为TIF格式
+            file_extension = os.path.splitext(tif_path)[1].lower()
+            if file_extension not in ['.tif', '.tiff']:
+                raise Exception(f"文件不是TIF格式: {file_extension}")
+            
+            # 创建临时目录用于处理文件
+            temp_dir = tempfile.mkdtemp()
+            processed_tif_path = os.path.join(temp_dir, f"processed_{os.path.basename(tif_path)}")
+            
+            try:
+                # 1. 使用gdalinfo检查文件坐标系信息
+                logger.info("使用gdalinfo检查文件坐标系信息")
+                gdalinfo_cmd = ['gdalinfo', '-json', tif_path]
+                gdalinfo_result = subprocess.run(gdalinfo_cmd, capture_output=True, text=True, check=True)
+                gdalinfo_data = json.loads(gdalinfo_result.stdout)
+                
+                # 检查是否有坐标参考系统
+                original_srs = None
+                if 'coordinateSystem' in gdalinfo_data and 'wkt' in gdalinfo_data['coordinateSystem']:
+                    original_srs = gdalinfo_data['coordinateSystem']['wkt']
+                    logger.info(f"检测到原始坐标系: {original_srs[:100]}...")
+                
+                # 提取EPSG码（如果存在）
+                epsg_code = None
+                if 'coordinateSystem' in gdalinfo_data and 'wkt' in gdalinfo_data['coordinateSystem']:
+                    wkt = gdalinfo_data['coordinateSystem']['wkt']
+                    # 尝试从WKT中提取EPSG代码
+                    epsg_match = re.search(r'ID\[\"EPSG\",(\d+)\]', wkt)
+                    if epsg_match:
+                        epsg_code = f"EPSG:{epsg_match.group(1)}"
+                        # 排除单位代码，通常是9001等
+                        if epsg_match.group(1) in ['9001', '9002', '9003']:
+                            epsg_code = None
+                        else:
+                            logger.info(f"从WKT中提取到EPSG代码: {epsg_code}")
+                
+                # 2. 检查是否需要处理坐标系
+                needs_srs_processing = False
+                target_epsg = force_epsg
+                
+                if not epsg_code:
+                    logger.info("未检测到标准EPSG代码")
+                    needs_srs_processing = True
+                elif original_srs and ("unnamed" in original_srs.lower() or "unknown" in original_srs.lower()):
+                    logger.info("检测到未命名或未知坐标系")
+                    needs_srs_processing = True
+                
+                # 如果需要处理坐标系且没有指定强制EPSG，尝试从数据库中获取文件坐标系信息
+                if needs_srs_processing and not target_epsg:
+                    # 查询files表中的坐标系信息
+                    try:
+                        coord_sql = "SELECT coordinate_system FROM files WHERE id = %s"
+                        coord_result = execute_query(coord_sql, (file_id,))
+                        if coord_result and coord_result[0]['coordinate_system']:
+                            db_coord = coord_result[0]['coordinate_system']
+                            # 检查是否是有效的EPSG格式
+                            if db_coord.startswith('EPSG:') or re.match(r'^\d+$', db_coord):
+                                # 如果只是数字，加上EPSG:前缀
+                                if re.match(r'^\d+$', db_coord):
+                                    target_epsg = f"EPSG:{db_coord}"
+                                else:
+                                    target_epsg = db_coord
+                                logger.info(f"从数据库获取到坐标系: {target_epsg}")
+                    except Exception as e:
+                        logger.warning(f"获取数据库坐标系信息失败: {str(e)}")
+                
+                # 如果仍未获取到坐标系，使用默认值
+                if needs_srs_processing and not target_epsg:
+                    # 默认使用EPSG:2343 (CGCS2000)
+                    target_epsg = "EPSG:2343"
+                    logger.info(f"未指定强制坐标系，默认使用 {target_epsg}")
+                
+                # 3. 处理文件 - 如果需要处理坐标系
+                if needs_srs_processing and target_epsg:
+                    logger.info(f"使用gdal_translate处理坐标系: {target_epsg}")
+                    # 使用gdal_translate设置坐标系
+                    gdal_cmd = [
+                        'gdal_translate', 
+                        '-a_srs', target_epsg,
+                        '-co', 'TILED=YES',
+                        '-co', 'COMPRESS=DEFLATE',
+                        tif_path, 
+                        processed_tif_path
+                    ]
+                    subprocess.run(gdal_cmd, check=True)
+                    # 使用处理后的文件
+                    final_tif_path = processed_tif_path
+                else:
+                    # 不需要处理，直接使用原始文件
+                    logger.info("无需处理坐标系，使用原始文件")
+                    final_tif_path = tif_path
+                    # 如果没有从文件中提取到EPSG，但提供了force_epsg，使用force_epsg
+                    if not epsg_code and force_epsg:
+                        target_epsg = force_epsg
+                
+                # 4. 使用geotiff_publish接口发布文件
+                logger.info(f"使用标准GeoTIFF发布接口发布文件")
+                
+                # 获取文件名为store_name
+                if not store_name:
+                    filename = os.path.splitext(os.path.basename(tif_path))[0]
+                    clean_filename = re.sub(r'[^a-zA-Z0-9_\-\u4e00-\u9fff]', '_', filename)
+                    store_name = f"{clean_filename}_store"
+                
+                # 使用标准geotiff发布接口
+                result = self.publish_geotiff(
+                    tif_path=final_tif_path,
+                    store_name=store_name,
+                    file_id=file_id,
+                    coordinate_system=target_epsg,
+                    enable_transparency=True  # 启用透明度设置
+                )
+                
+                # 5. 仅使用XML方法设置透明度
+                logger.info("仅使用XML方法设置透明度")
+                
+                # 获取coverage名称
+                workspace_name = self.workspace
+                coverages_url = f"{self.rest_url}/workspaces/{workspace_name}/coveragestores/{store_name}/coverages.json"
+                cov_response = requests.get(coverages_url, auth=self.auth)
+                
+                coverage_name = None
+                if cov_response.status_code == 200:
+                    coverages_data = cov_response.json()
+                    if 'coverages' in coverages_data and 'coverage' in coverages_data['coverages']:
+                        coverages = coverages_data['coverages']['coverage']
+                        if isinstance(coverages, list) and len(coverages) > 0:
+                            coverage_name = coverages[0]['name']
+                        elif isinstance(coverages, dict):
+                            coverage_name = coverages['name']
+                
+                if not coverage_name:
+                    coverage_name = store_name
+                
+                # 使用XML格式设置透明度参数
+                logger.info(f"使用XML方法设置透明度参数: {coverage_name}")
+                coverage_url = f"{self.rest_url}/workspaces/{workspace_name}/coveragestores/{store_name}/coverages/{coverage_name}.xml"
+                
+                xml_content = """
+<coverage>
+  <parameters>
+    <entry>
+      <string>InputTransparentColor</string>
+      <string>#000000</string>
+    </entry>
+    <entry>
+      <string>OutputTransparentColor</string>
+      <string>#000000</string>
+    </entry>
+  </parameters>
+</coverage>
+"""
+                
+                headers = {'Content-Type': 'text/xml'}
+                trans_response = requests.put(
+                    coverage_url,
+                    data=xml_content,
+                    headers=headers,
+                    auth=self.auth
+                )
+                
+                if trans_response.status_code in [200, 201]:
+                    logger.info(f"✅ 透明度参数设置成功")
+                else:
+                    logger.warning(f"透明度参数设置失败: {trans_response.status_code} {trans_response.text}")
+                
+                # 返回发布结果，包含标准服务URL
+                layer_name = coverage_name
+                full_layer_name = f"{workspace_name}:{layer_name}"
+                
+                # 如果result中已有layer信息，使用result
+                if 'layer_name' in result:
+                    return result
+                else:
+                    # 构建返回结果
+                    return {
+                        'success': True,
+                        'message': '成功发布DOM.tif文件',
+                        'workspace': workspace_name,
+                        'store': store_name,
+                        'layer': layer_name,
+                        'layer_name': full_layer_name,
+                        'epsg': target_epsg or epsg_code,
+                        'wms_url': f"{self.url}/wms?service=WMS&version=1.1.0&request=GetCapabilities&layers={full_layer_name}",
+                        'wfs_url': f"{self.url}/wfs?service=WFS&version=1.0.0&request=GetCapabilities&typeName={full_layer_name}",
+                        'wcs_url': f"{self.url}/wcs?service=WCS&version=1.0.0&request=GetCapabilities&coverage={full_layer_name}",
+                        'preview_url': f"{self.url}/gwc/demo/{full_layer_name}?format=image/png&zoom=0"
+                    }
+                
+            finally:
+                # 清理临时文件
+                try:
+                    shutil.rmtree(temp_dir)
+                except Exception as e:
+                    logger.warning(f"清理临时文件失败: {str(e)}")
+        
+        except Exception as e:
+            logger.error(f"发布DOM.tif失败: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise Exception(f"发布DOM.tif失败: {str(e)}")
+    
+    def _update_database_record(self, file_id, workspace, layer_name, epsg_code=None):
+        """更新数据库记录，标记文件已发布到GeoServer"""
+        try:
+            # 查找文件记录
+            check_file_sql = "SELECT id, file_name FROM files WHERE id = %s"
+            file_results = execute_query(check_file_sql, (file_id,))
+            
+            if not file_results:
+                logger.warning(f"未找到文件记录: ID {file_id}")
+                return
+            
+            # 获取workspace_id
+            workspace_id_sql = "SELECT id FROM geoserver_workspaces WHERE name = %s"
+            workspace_results = execute_query(workspace_id_sql, (workspace,))
+            
+            if not workspace_results:
+                logger.warning(f"未找到工作空间: {workspace}")
+                return
+                
+            workspace_id = workspace_results[0]['id']
+            
+            # 检查是否已存在图层记录
+            check_layer_sql = "SELECT id, name FROM geoserver_layers WHERE file_id = %s"
+            layer_results = execute_query(check_layer_sql, (file_id,))
+            
+            # 首先创建store记录（如果不存在）
+            store_check_sql = "SELECT id FROM geoserver_stores WHERE name = %s"
+            store_results = execute_query(store_check_sql, (layer_name,))
+            
+            store_id = None
+            if not store_results:
+                # 创建coveragestore记录
+                create_store_sql = """
+                INSERT INTO geoserver_stores (name, workspace_id, store_type, data_type, file_id, enabled, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, TRUE, NOW(), NOW())
+                RETURNING id
+                """
+                store_results = execute_query(create_store_sql, (layer_name, workspace_id, 'coveragestore', 'GeoTIFF', file_id))
+                if store_results:
+                    store_id = store_results[0]['id']
+                    logger.info(f"创建store记录: ID {store_id}")
+            else:
+                store_id = store_results[0]['id']
+                logger.info(f"使用现有store: ID {store_id}")
+            
+            # 检查是否需要创建coverage记录
+            coverage_id = None
+            if store_id:
+                coverage_check_sql = "SELECT id FROM geoserver_coverages WHERE name = %s AND store_id = %s"
+                coverage_results = execute_query(coverage_check_sql, (layer_name, store_id))
+                
+                if not coverage_results:
+                    # 创建coverage记录
+                    insert_coverage_sql = """
+                    INSERT INTO geoserver_coverages (name, store_id, srs, native_name, enabled, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, TRUE, NOW(), NOW())
+                    RETURNING id
+                    """
+                    coverage_result = execute_query(insert_coverage_sql, (layer_name, store_id, epsg_code, layer_name))
+                    if coverage_result:
+                        coverage_id = coverage_result[0]['id']
+                        logger.info(f"创建coverage记录: ID {coverage_id}")
+                else:
+                    coverage_id = coverage_results[0]['id']
+                    logger.info(f"使用现有coverage: ID {coverage_id}")
+            else:
+                logger.error("无法创建或获取store_id，无法继续创建coverage记录")
+            
+            # 如果没有成功创建coverage_id，则不能继续
+            if coverage_id is None:
+                logger.warning("没有有效的coverage_id，无法创建或更新图层记录")
+                return
+                
+            if layer_results:
+                # 更新现有记录 - 确保服务URL也被更新
+                # 构建标准服务URL
+                full_layer_name = f"{workspace}:{layer_name}"
+                wms_url = f"{self.url}/wms?service=WMS&version=1.1.0&request=GetCapabilities&layers={full_layer_name}"
+                wfs_url = f"{self.url}/wfs?service=WFS&version=1.0.0&request=GetCapabilities&typeName={full_layer_name}"
+                wcs_url = f"{self.url}/wcs?service=WCS&version=1.0.0&request=GetCapabilities&coverage={full_layer_name}"
+                
+                update_sql = """
+                UPDATE geoserver_layers 
+                SET name = %s, coverage_id = %s, featuretype_id = NULL, 
+                    wms_url = %s, wfs_url = %s, wcs_url = %s, updated_at = NOW()
+                WHERE file_id = %s
+                """
+                execute_query(update_sql, (
+                    layer_name, coverage_id, 
+                    wms_url, wfs_url, wcs_url,
+                    file_id
+                ))
+                logger.info(f"更新图层记录: ID {layer_results[0]['id']}")
+                logger.info(f"更新服务URL: WMS={wms_url}, WFS={wfs_url}, WCS={wcs_url}")
+            else:
+                # 创建新记录 - 确保featuretype_id为NULL以符合check_data_source约束
+                # 构建标准服务URL
+                full_layer_name = f"{workspace}:{layer_name}"
+                wms_url = f"{self.url}/wms?service=WMS&version=1.1.0&request=GetCapabilities&layers={full_layer_name}"
+                wfs_url = f"{self.url}/wfs?service=WFS&version=1.0.0&request=GetCapabilities&typeName={full_layer_name}"
+                wcs_url = f"{self.url}/wcs?service=WCS&version=1.0.0&request=GetCapabilities&coverage={full_layer_name}"
+                
+                insert_sql = """
+                INSERT INTO geoserver_layers (
+                    file_id, name, workspace_id, coverage_id, featuretype_id, 
+                    enabled, queryable, opaque, wms_url, wfs_url, wcs_url,
+                    created_at, updated_at
+                )
+                VALUES (%s, %s, %s, %s, NULL, TRUE, TRUE, FALSE, %s, %s, %s, NOW(), NOW())
+                RETURNING id
+                """
+                result = execute_query(insert_sql, (
+                    file_id, layer_name, workspace_id, coverage_id,
+                    wms_url, wfs_url, wcs_url
+                ))
+                logger.info(f"创建图层记录: ID {result[0]['id']}")
+                logger.info(f"服务URL: WMS={wms_url}, WFS={wfs_url}, WCS={wcs_url}")
+            
+            # 更新文件状态 - 检查files表结构并适配更新
+            try:
+                # 首先检查表结构，查询字段列表
+                check_columns_sql = """
+                SELECT column_name FROM information_schema.columns 
+                WHERE table_name = 'files' AND table_schema = 'public'
+                """
+                columns_result = execute_query(check_columns_sql)
+                columns = [col['column_name'] for col in columns_result]
+                
+                if 'publish_status' in columns and 'update_time' in columns:
+                    # 方式1: 使用publish_status和update_time字段
+                    update_file_sql = "UPDATE files SET publish_status = 1, update_time = NOW() WHERE id = %s"
+                    execute_query(update_file_sql, (file_id,))
+                    logger.info("使用publish_status字段更新文件状态")
+                elif 'status' in columns:
+                    # 方式2: 使用status字段
+                    update_file_sql = "UPDATE files SET status = 'published' WHERE id = %s"
+                    execute_query(update_file_sql, (file_id,))
+                    logger.info("使用status字段更新文件状态")
+                else:
+                    # 如果没有合适的状态字段，只记录日志，不进行更新
+                    logger.warning("files表中没有找到可用的状态字段，跳过状态更新")
+            except Exception as update_error:
+                logger.warning(f"更新文件状态失败: {str(update_error)}")
+                # 不中断主流程
+            
+            logger.info(f"数据库记录更新成功: 文件ID {file_id}, 图层 {layer_name}")
+            
+        except Exception as e:
+            logger.error(f"更新数据库记录失败: {str(e)}")
+            logger.error(traceback.format_exc())
+            # 不抛出异常，避免影响主流程

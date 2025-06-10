@@ -863,17 +863,52 @@ def publish_geoserver_service(file_id):
             
             print(f"透明度设置: {enable_transparency}")
             
-            if coordinate_system:
+            # 如果是DOM文件，使用增强版的处理逻辑
+            is_dom_file = file_type.lower() in ['dom', 'dom.tif'] or 'dom' in file_info.get('file_name', '').lower()
+            
+            if is_dom_file or file_type.lower() in ['tif', 'tiff']:
+                print(f"检测到DOM/TIF文件，使用增强版发布流程")
+                
+                # 获取强制设置的坐标系
+                force_epsg = None
+                if coordinate_system:
+                    force_epsg = coordinate_system
+                elif request.is_json:
+                    data = request.get_json()
+                    force_epsg = data.get('force_epsg')
+                elif request.form:
+                    force_epsg = request.form.get('force_epsg')
+                
                 # 验证坐标系格式
-                if not coordinate_system.upper().startswith('EPSG:'):
+                if force_epsg and not force_epsg.upper().startswith('EPSG:'):
                     return jsonify({
                         'success': False, 
-                        'error': f'坐标系格式错误，应为EPSG:xxxx格式，当前为: {coordinate_system}'
+                        'error': f'坐标系格式错误，应为EPSG:xxxx格式，当前为: {force_epsg}'
                     }), 400
                 
-                result = geoserver_service.publish_geotiff(file_path, store_name, file_id, coordinate_system, enable_transparency)
+                if force_epsg:
+                    print(f"使用强制坐标系: {force_epsg}")
+                
+                # 使用增强版DOM.tif发布方法
+                result = geoserver_service.publish_dom_geotiff(
+                    tif_path=file_path,
+                    store_name=store_name,
+                    file_id=file_id,
+                    force_epsg=force_epsg
+                )
             else:
-                result = geoserver_service.publish_geotiff(file_path, store_name, file_id, None, enable_transparency)
+                # 其他栅格数据使用原有方法
+                if coordinate_system:
+                    # 验证坐标系格式
+                    if not coordinate_system.upper().startswith('EPSG:'):
+                        return jsonify({
+                            'success': False, 
+                            'error': f'坐标系格式错误，应为EPSG:xxxx格式，当前为: {coordinate_system}'
+                        }), 400
+                    
+                    result = geoserver_service.publish_geotiff(file_path, store_name, file_id, coordinate_system, enable_transparency)
+                else:
+                    result = geoserver_service.publish_geotiff(file_path, store_name, file_id, None, enable_transparency)
         
         print(f"GeoServer发布结果: {result}")
         return jsonify(result)
@@ -931,6 +966,130 @@ def unpublish_martin_service(file_id):
     except Exception as e:
         current_app.logger.error(f"取消发布Martin服务错误: {str(e)}")
         return jsonify({'error': f'取消发布Martin服务失败: {str(e)}'}), 500
+
+@file_bp.route('/<int:file_id>/publish/dom', methods=['POST'])
+def publish_dom_geoserver_service(file_id):
+    """发布DOM.tif文件到GeoServer服务 - 专门处理DOM.tif文件
+    
+    功能特点：
+    1. 使用gdalinfo检查文件坐标系信息
+    2. 如果坐标系不是标准EPSG，使用gdal_translate设置坐标系
+    3. 使用标准GeoTIFF方式发布（不使用ImageMosaic）
+    4. 自动设置黑色背景为透明（Input Transparent Color: 000000）
+    
+    参数:
+    - force_epsg: 强制设置的EPSG坐标系，如'EPSG:2343'（可选）
+    
+    返回:
+    - 成功: {'success': True, 'layer_name': '图层名称', 'wms_url': 'WMS服务地址', ...}
+    - 失败: {'success': False, 'error': '错误信息'}
+    """
+    try:
+        # 1. 获取文件信息
+        file_info = file_service.get_file_by_id(file_id)
+        if not file_info:
+            return jsonify({'success': False, 'error': '文件不存在'}), 404
+        
+        file_type = file_info.get('file_type', '').lower()
+        file_path = file_info['file_path']
+        file_name = file_info['file_name']
+        
+        print(f"=== 开始发布DOM.tif文件到GeoServer ===")
+        print(f"文件ID: {file_id}, 文件类型: {file_type}")
+        print(f"文件路径: {file_path}")
+        print(f"文件名称: {file_name}")
+        
+        # 2. 检查文件类型
+        dom_types = ['tif', 'tiff', 'dom', 'dem', 'dom.tif', 'dem.tif']
+        if file_type not in dom_types:
+            return jsonify({
+                'success': False, 
+                'error': f'不支持的文件类型: {file_type}。该接口仅支持DOM/TIF类型: {", ".join(dom_types)}'
+            }), 400
+        
+        # 3. 检查是否已经发布
+        existing_layer_sql = """
+        SELECT gl.id, gl.name, gw.name as workspace_name,
+               gl.featuretype_id, gl.coverage_id,
+               gs.name as store_name, gs.store_type
+        FROM geoserver_layers gl
+        LEFT JOIN geoserver_workspaces gw ON gl.workspace_id = gw.id
+        LEFT JOIN geoserver_featuretypes gft ON gl.featuretype_id = gft.id
+        LEFT JOIN geoserver_coverages gcov ON gl.coverage_id = gcov.id
+        LEFT JOIN geoserver_stores gs ON (gft.store_id = gs.id OR gcov.store_id = gs.id)
+        WHERE gl.file_id = %s
+        """
+        existing_layers = execute_query(existing_layer_sql, (file_id,))
+        
+        if existing_layers:
+            layer_info = existing_layers[0]
+            # 如果请求参数包含force=true，则删除现有发布后重新发布
+            force_republish = False
+            if request.is_json:
+                data = request.get_json()
+                force_republish = data.get('force', False)
+            elif request.form:
+                force_republish = request.form.get('force', 'false').lower() in ['true', '1', 'yes']
+            
+            if not force_republish:
+                return jsonify({
+                    'success': False, 
+                    'error': f'文件已发布为图层: {layer_info["workspace_name"]}:{layer_info["name"]}',
+                    'existing_layer': {
+                        'id': layer_info['id'],
+                        'name': f"{layer_info['workspace_name']}:{layer_info['name']}",
+                        'store_name': layer_info['store_name'],
+                        'store_type': layer_info['store_type']
+                    }
+                }), 400
+            else:
+                print(f"强制重新发布：删除现有图层 {layer_info['id']}")
+                from services.geoserver_service import GeoServerService
+                geoserver_service = GeoServerService()
+                # 删除现有图层
+                geoserver_service.unpublish_layer(layer_info['id'])
+                print(f"✅ 现有图层删除成功")
+        
+        # 4. 获取强制设置的坐标系信息
+        force_epsg = None
+        if request.is_json:
+            data = request.get_json()
+            force_epsg = data.get('force_epsg')
+        elif request.form:
+            force_epsg = request.form.get('force_epsg')
+        
+        if force_epsg:
+            # 验证坐标系格式
+            if not force_epsg.upper().startswith('EPSG:'):
+                return jsonify({
+                    'success': False, 
+                    'error': f'坐标系格式错误，应为EPSG:xxxx格式，当前为: {force_epsg}'
+                }), 400
+            print(f"强制设置坐标系: {force_epsg}")
+        
+        # 5. 生成存储名称
+        store_name = f"dom_{file_id}"
+        
+        # 6. 使用专门的DOM.tif发布方法
+        from services.geoserver_service import GeoServerService
+        geoserver_service = GeoServerService()
+        
+        print(f"开始使用DOM.tif专用方法发布到GeoServer，存储名称: {store_name}")
+        result = geoserver_service.publish_dom_geotiff(
+            tif_path=file_path,
+            store_name=store_name,
+            file_id=file_id,
+            force_epsg=force_epsg
+        )
+        
+        print(f"DOM.tif发布结果: {result}")
+        return jsonify(result)
+            
+    except Exception as e:
+        print(f"发布DOM.tif到GeoServer失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'发布失败: {str(e)}'}), 500
 
 @file_bp.route('/<int:file_id>/unpublish/geoserver', methods=['DELETE'])
 def unpublish_geoserver_service(file_id):
