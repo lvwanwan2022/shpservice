@@ -3550,7 +3550,7 @@ AbsolutePath=false
                 if 'layer_name' in result:
                     return result
                 else:
-                    # 构建返回结果
+                        # 构建返回结果
                     return {
                         'success': True,
                         'message': '成功发布DOM.tif文件',
@@ -3558,10 +3558,10 @@ AbsolutePath=false
                         'store': store_name,
                         'layer': layer_name,
                         'layer_name': full_layer_name,
-                                'epsg': target_epsg or epsg_code,
-                                'wms_url': f"{self.url}/wms?service=WMS&version=1.1.0&request=GetCapabilities&layers={full_layer_name}",
-                                'wfs_url': f"{self.url}/wfs?service=WFS&version=1.0.0&request=GetCapabilities&typeName={full_layer_name}",
-                                'wcs_url': f"{self.url}/wcs?service=WCS&version=1.0.0&request=GetCapabilities&coverage={full_layer_name}",
+                                    'epsg': target_epsg or epsg_code,
+                                    'wms_url': f"{self.url}/wms?service=WMS&version=1.1.0&request=GetCapabilities&layers={full_layer_name}",
+                                    'wfs_url': f"{self.url}/wfs?service=WFS&version=1.0.0&request=GetCapabilities&typeName={full_layer_name}",
+                                    'wcs_url': f"{self.url}/wcs?service=WCS&version=1.0.0&request=GetCapabilities&coverage={full_layer_name}",
                         'preview_url': f"{self.url}/gwc/demo/{full_layer_name}?format=image/png&zoom=0"
                     }
                 
@@ -3728,3 +3728,341 @@ AbsolutePath=false
             logger.error(f"更新数据库记录失败: {str(e)}")
             logger.error(traceback.format_exc())
             # 不抛出异常，避免影响主流程
+
+    def publish_dem_geotiff(self, tif_path, store_name, file_id, force_epsg=None):
+        """发布DEM.tif文件到GeoServer，特别处理坐标系问题并设置高程显示样式
+        
+        Args:
+            tif_path (str): TIF文件路径
+            store_name (str): 存储名称
+            file_id (int): 文件ID
+            force_epsg (str, optional): 强制使用的EPSG坐标系，例如 "EPSG:4326"
+        
+        Returns:
+            dict: 发布结果信息
+        """
+        try:
+            logger.info(f"开始处理DEM.tif文件: {tif_path}")
+            
+            # 检查文件是否存在
+            if not os.path.exists(tif_path):
+                raise Exception(f"文件不存在: {tif_path}")
+            
+            # 检查文件是否为TIF格式
+            file_extension = os.path.splitext(tif_path)[1].lower()
+            if file_extension not in ['.tif', '.tiff']:
+                raise Exception(f"文件不是TIF格式: {file_extension}")
+            
+            # 创建临时目录用于处理文件
+            temp_dir = tempfile.mkdtemp()
+            processed_tif_path = os.path.join(temp_dir, f"processed_{os.path.basename(tif_path)}")
+            
+            try:
+                # 1. 使用gdalinfo检查文件坐标系信息
+                logger.info("使用gdalinfo检查文件坐标系信息")
+                gdalinfo_cmd = ['gdalinfo', '-json', tif_path]
+                gdalinfo_result = subprocess.run(gdalinfo_cmd, capture_output=True, text=True, check=True)
+                gdalinfo_data = json.loads(gdalinfo_result.stdout)
+                
+                # 检查是否有坐标参考系统
+                original_srs = None
+                if 'coordinateSystem' in gdalinfo_data and 'wkt' in gdalinfo_data['coordinateSystem']:
+                    original_srs = gdalinfo_data['coordinateSystem']['wkt']
+                    logger.info(f"检测到原始坐标系: {original_srs[:100]}...")
+                
+                # 提取EPSG码（如果存在）
+                epsg_code = None
+                if 'coordinateSystem' in gdalinfo_data and 'wkt' in gdalinfo_data['coordinateSystem']:
+                    wkt = gdalinfo_data['coordinateSystem']['wkt']
+                    # 尝试从WKT中提取EPSG代码
+                    epsg_match = re.search(r'ID\[\"EPSG\",(\d+)\]', wkt)
+                    if epsg_match:
+                        epsg_code = f"EPSG:{epsg_match.group(1)}"
+                        # 排除单位代码，通常是9001等
+                        if epsg_match.group(1) in ['9001', '9002', '9003']:
+                            epsg_code = None
+                        else:
+                            logger.info(f"从WKT中提取到EPSG代码: {epsg_code}")
+                
+                # 2. 检查是否需要处理坐标系
+                needs_srs_processing = False
+                target_epsg = force_epsg
+                
+                if not epsg_code:
+                    logger.info("未检测到标准EPSG代码")
+                    needs_srs_processing = True
+                elif original_srs and ("unnamed" in original_srs.lower() or "unknown" in original_srs.lower()):
+                    logger.info("检测到未命名或未知坐标系")
+                    needs_srs_processing = True
+                
+                # 如果需要处理坐标系且没有指定强制EPSG，尝试从数据库中获取文件坐标系信息
+                if needs_srs_processing and not target_epsg:
+                    # 查询files表中的坐标系信息
+                    try:
+                        coord_sql = "SELECT coordinate_system FROM files WHERE id = %s"
+                        coord_result = execute_query(coord_sql, (file_id,))
+                        if coord_result and coord_result[0]['coordinate_system']:
+                            db_coord = coord_result[0]['coordinate_system']
+                            # 检查是否是有效的EPSG格式
+                            if db_coord.startswith('EPSG:') or re.match(r'^\d+$', db_coord):
+                                # 如果只是数字，加上EPSG:前缀
+                                if re.match(r'^\d+$', db_coord):
+                                    target_epsg = f"EPSG:{db_coord}"
+                                else:
+                                    target_epsg = db_coord
+                                logger.info(f"从数据库获取到坐标系: {target_epsg}")
+                    except Exception as e:
+                        logger.warning(f"获取数据库坐标系信息失败: {str(e)}")
+                
+                # 如果仍未获取到坐标系，使用默认值
+                if needs_srs_processing and not target_epsg:
+                    # 默认使用EPSG:4326 (WGS84)
+                    target_epsg = "EPSG:4326"
+                    logger.info(f"未指定强制坐标系，默认使用 {target_epsg}")
+                
+                # 3. 处理文件 - 如果需要处理坐标系
+                if needs_srs_processing and target_epsg:
+                    logger.info(f"使用gdal_translate处理坐标系: {target_epsg}")
+                    # 使用gdal_translate设置坐标系
+                    gdal_cmd = [
+                        'gdal_translate', 
+                        '-a_srs', target_epsg,
+                        '-co', 'TILED=YES',
+                        '-co', 'COMPRESS=DEFLATE',
+                        tif_path, 
+                        processed_tif_path
+                    ]
+                    subprocess.run(gdal_cmd, check=True)
+                    # 使用处理后的文件
+                    final_tif_path = processed_tif_path
+                else:
+                    # 不需要处理，直接使用原始文件
+                    logger.info("无需处理坐标系，使用原始文件")
+                    final_tif_path = tif_path
+                    # 如果没有从文件中提取到EPSG，但提供了force_epsg，使用force_epsg
+                    if not epsg_code and force_epsg:
+                        target_epsg = force_epsg
+                
+                # 4. 使用geotiff_publish接口发布文件
+                logger.info(f"使用标准GeoTIFF发布接口发布文件")
+                
+                # 获取文件名为store_name
+                if not store_name:
+                    filename = os.path.splitext(os.path.basename(tif_path))[0]
+                    clean_filename = re.sub(r'[^a-zA-Z0-9_\-\u4e00-\u9fff]', '_', filename)
+                    store_name = f"{clean_filename}_store"
+                
+                # 使用标准geotiff发布接口，但不启用透明度
+                result = self.publish_geotiff(
+                    tif_path=final_tif_path,
+                    store_name=store_name,
+                    file_id=file_id,
+                    coordinate_system=target_epsg,
+                    enable_transparency=False  # DEM不需要透明度
+                )
+                
+                # 5. 为DEM创建并应用高程样式
+                logger.info("为DEM创建高程显示样式")
+                
+                # 获取图层名称
+                workspace_name = self.workspace
+                layer_name = None
+                
+                if 'layer_name' in result:
+                    full_layer_name = result['layer_name']
+                    if ':' in full_layer_name:
+                        layer_name = full_layer_name.split(':')[1]
+                
+                if not layer_name:
+                    layer_name = store_name
+                
+                # 创建DEM热力图样式
+                style_name = f"dem_heatmap_{layer_name}"
+                style_created = self._create_dem_style(style_name)
+                
+                if style_created:
+                    # 应用样式到图层
+                    style_applied = self._apply_style_to_layer(layer_name, style_name)
+                    if style_applied:
+                        logger.info(f"✅ 高程显示样式已应用到图层: {layer_name}")
+                        # 在结果中添加样式信息
+                        result['style_name'] = style_name
+                        result['style_applied'] = True
+                    else:
+                        logger.warning(f"⚠️ 无法应用高程样式到图层: {layer_name}")
+                        result['style_applied'] = False
+                else:
+                    logger.warning("⚠️ 创建DEM样式失败")
+                    result['style_applied'] = False
+                
+                # 返回发布结果
+                return result
+                
+            finally:
+                # 清理临时文件
+                try:
+                    shutil.rmtree(temp_dir)
+                except Exception as e:
+                    logger.warning(f"清理临时文件失败: {str(e)}")
+        
+        except Exception as e:
+            logger.error(f"发布DEM.tif失败: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise Exception(f"发布DEM.tif失败: {str(e)}")
+    
+    def _create_dem_style(self, style_name):
+        """创建DEM高程显示样式
+        
+        Args:
+            style_name: 样式名称
+            
+        Returns:
+            bool: 是否创建成功
+        """
+        try:
+            print(f"创建DEM高程样式: {style_name}")
+            
+            # DEM热力图样式定义
+            style_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<StyledLayerDescriptor xmlns="http://www.opengis.net/sld" xmlns:ogc="http://www.opengis.net/ogc" 
+                       xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+                       xsi:schemaLocation="http://www.opengis.net/sld http://schemas.opengis.net/sld/1.0.0/StyledLayerDescriptor.xsd" 
+                       version="1.0.0">
+  <NamedLayer>
+    <Name>DEM-HeatMap</Name>
+    <UserStyle>
+      <Name>{style_name}</Name>
+      <Title>DEM Elevation Style</Title>
+      <Abstract>Heat map style for Digital Elevation Model</Abstract>
+        <FeatureTypeStyle>
+         <Rule>
+           <RasterSymbolizer>
+              <ColorMap type="ramp">
+                <ColorMapEntry color="#2851CC" quantity="0" opacity="0.7" label="0"/>
+                <ColorMapEntry color="#211F1F" quantity="50" opacity="0.8" label="50"/>
+                <ColorMapEntry color="#EE0F0F" quantity="100" opacity="0.8" label="100"/>
+                <ColorMapEntry color="#AAAAAA" quantity="200" opacity="0.8" label="200"/>
+                <ColorMapEntry color="#6FEE4F" quantity="300" opacity="0.8" label="300"/>
+                <ColorMapEntry color="#3ECC1B" quantity="450" opacity="0.8" label="450"/>
+                <ColorMapEntry color="#886363" quantity="700" opacity="0.8" label="700"/>
+                <ColorMapEntry color="#5194CC" quantity="1000" opacity="0.8" label="1000"/>
+                <ColorMapEntry color="#2C58DD" quantity="1500" opacity="0.8" label="1500"/>
+                <ColorMapEntry color="#DDB02C" quantity="2000" opacity="0.8" label="2000"/>
+              </ColorMap>
+           </RasterSymbolizer>
+         </Rule>
+       </FeatureTypeStyle>
+    </UserStyle>
+  </NamedLayer>
+</StyledLayerDescriptor>
+"""
+            
+            # 检查样式是否存在
+            style_check_url = f"{self.rest_url}/styles/{style_name}.xml"
+            style_check_response = requests.get(style_check_url, auth=self.auth)
+            
+            if style_check_response.status_code == 200:
+                print(f"样式 {style_name} 已存在，将更新")
+                # 更新样式
+                style_url = f"{self.rest_url}/styles/{style_name}"
+                headers = {'Content-Type': 'application/vnd.ogc.sld+xml'}
+                style_response = requests.put(
+                    style_url, 
+                    data=style_xml, 
+                    headers=headers, 
+                    auth=self.auth
+                )
+            else:
+                print(f"创建新样式: {style_name}")
+                # 创建样式
+                # 1. 先创建样式定义
+                create_style_url = f"{self.rest_url}/styles"
+                create_style_data = {
+                    "style": {
+                        "name": style_name,
+                        "filename": f"{style_name}.sld"
+                    }
+                }
+                
+                headers_json = {'Content-Type': 'application/json'}
+                create_response = requests.post(
+                    create_style_url, 
+                    json=create_style_data, 
+                    headers=headers_json, 
+                    auth=self.auth
+                )
+                
+                if create_response.status_code not in [201, 200]:
+                    print(f"创建样式定义失败: {create_response.status_code} - {create_response.text}")
+                    return False
+                
+                # 2. 上传样式内容
+                headers_xml = {'Content-Type': 'application/vnd.ogc.sld+xml'}
+                style_content_url = f"{self.rest_url}/styles/{style_name}"
+                
+                style_response = requests.put(
+                    style_content_url, 
+                    data=style_xml, 
+                    headers=headers_xml, 
+                    auth=self.auth
+                )
+            
+            if style_response.status_code not in [200, 201]:
+                print(f"上传样式内容失败: {style_response.status_code} - {style_response.text}")
+                return False
+            
+            print(f"✅ DEM样式创建/更新成功: {style_name}")
+            return True
+            
+        except Exception as e:
+            print(f"创建DEM样式失败: {str(e)}")
+            return False
+    
+    def _apply_style_to_layer(self, layer_name, style_name):
+        """将样式应用到图层
+        
+        Args:
+            layer_name: 图层名称
+            style_name: 样式名称
+            
+        Returns:
+            bool: 是否应用成功
+        """
+        try:
+            print(f"将样式 {style_name} 应用到图层 {layer_name}")
+            
+            # 获取完整的图层名称（包含工作空间前缀）
+            full_layer_name = f"{self.workspace}:{layer_name}" if ':' not in layer_name else layer_name
+            
+            # 图层信息更新URL
+            layer_url = f"{self.rest_url}/layers/{full_layer_name}"
+            
+            # 构建更新请求数据
+            update_data = {
+                "layer": {
+                    "defaultStyle": {
+                        "name": style_name
+                    }
+                }
+            }
+            
+            headers = {'Content-Type': 'application/json'}
+            
+            # 发送更新请求
+            response = requests.put(
+                layer_url,
+                json=update_data,
+                headers=headers,
+                auth=self.auth
+            )
+            
+            if response.status_code not in [200, 201]:
+                print(f"应用样式失败: {response.status_code} - {response.text}")
+                return False
+            
+            print(f"✅ 样式应用成功")
+            return True
+            
+        except Exception as e:
+            print(f"应用样式失败: {str(e)}")
+            return False

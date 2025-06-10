@@ -853,13 +853,10 @@ def publish_geoserver_service(file_id):
             print(f"发布栅格数据: {file_type}")
             # 栅格数据发布
             
-            # 检查是否启用透明度（从请求参数获取，默认启用）
-            enable_transparency = True
-            if request.is_json:
-                data = request.get_json()
-                enable_transparency = data.get('enable_transparency', True)
-            elif request.form:
-                enable_transparency = request.form.get('enable_transparency', 'true').lower() in ['true', '1', 'yes']
+            # 检查是否启用透明度（从请求参数获取，默认不启用）
+            enable_transparency = False
+            if file_type== 'dom.tif':                
+                enable_transparency = True            
             
             print(f"透明度设置: {enable_transparency}")
             
