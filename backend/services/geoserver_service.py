@@ -1523,11 +1523,16 @@ class GeoServerService:
     def _upload_geotiff_to_geoserver(self, tif_path, store_name):
         """上传GeoTIFF到GeoServer，根据REST API文档优化
         
+        支持两种方式：
+        1. 使用文件上传方式（适用于小文件）
+        2. 使用外部文件引用方式（适用于大文件，避免上传）
+        
         Args:
             tif_path: GeoTIFF文件路径
             store_name: 存储名称
         """
         import os
+        import shutil
         
         # 1. 首先验证GeoTIFF文件
         print(f"开始验证GeoTIFF文件...")
@@ -1550,12 +1555,21 @@ class GeoServerService:
                     print(f"✅ coveragestore中已存在有效的覆盖数据，跳过文件上传")
                     return
             
-            print(f"coveragestore中无覆盖数据，开始上传文件")
+            print(f"coveragestore中无覆盖数据，开始配置文件")
         except Exception as e:
             print(f"⚠️ 检查覆盖数据时出错: {str(e)}，继续上传流程")
         
-        # 3. 根据GeoServer REST API文档进行文件上传
-        # 参考: https://docs.geoserver.org/stable/en/user/rest/api/coveragestores.html
+        file_size = os.path.getsize(tif_path)
+        print(f"文件大小: {file_size} 字节")
+        
+        # 如果文件大于10MB，使用外部文件引用方式
+        # 这可以避免通过REST API上传大文件
+        if file_size > 10 * 1024 * 1024:  # 10MB
+            print(f"文件大于10MB，使用外部文件引用方式")
+            return self._create_external_geotiff_reference(tif_path, store_name)
+        
+        # 3. 对于小文件，使用标准上传方式
+        print(f"文件较小，使用标准文件上传方式")
         coveragestore_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}/file.geotiff"
         
         # 设置正确的Content-Type - 根据官方文档
@@ -1565,7 +1579,6 @@ class GeoServerService:
         }
         
         print(f"上传URL: {coveragestore_url}")
-        print(f"文件大小: {os.path.getsize(tif_path)} 字节")
         
         try:
             with open(tif_path, 'rb') as f:
@@ -1602,43 +1615,284 @@ class GeoServerService:
                 return
                 
             else:
-                # 根据不同错误码提供具体的错误信息
-                error_msg = response.text
-                if response.status_code == 500:
-                    if "Could not acquire reader" in error_msg:
-                        raise Exception(f"GeoServer无法读取文件格式。请检查文件是否为有效的GeoTIFF格式。详细错误: {error_msg}")
-                    elif "already exists" in error_msg.lower():
-                        print(f"⚠️ 文件可能已存在，验证coveragestore状态")
-                        # 重新验证是否有数据
-                        verify_response = requests.get(coverages_url, auth=self.auth, timeout=30)
-                        if verify_response.status_code == 200:
-                            verify_data = verify_response.json()
-                            if ('coverages' in verify_data and 
-                                'coverage' in verify_data['coverages'] and 
-                                verify_data['coverages']['coverage']):
-                                print(f"✅ 验证确认：coveragestore中已有有效数据")
-                                return
-                        raise Exception(f"文件上传失败，可能已存在: {error_msg}")
-                    else:
-                        raise Exception(f"服务器内部错误: {error_msg}")
-                elif response.status_code == 400:
-                    raise Exception(f"请求格式错误。请检查文件格式和请求参数。详细错误: {error_msg}")
-                elif response.status_code == 404:
-                    raise Exception(f"找不到coveragestore '{store_name}'。请确保coveragestore已正确创建。详细错误: {error_msg}")
-                elif response.status_code == 415:
-                    raise Exception(f"不支持的媒体类型。请检查Content-Type设置。详细错误: {error_msg}")
-                else:
-                    raise Exception(f"上传失败 (HTTP {response.status_code}): {error_msg}")
+                # 如果上传失败，尝试使用外部文件引用方式
+                print(f"⚠️ 标准上传失败，尝试使用外部文件引用方式")
+                return self._create_external_geotiff_reference(tif_path, store_name)
                 
         except requests.exceptions.Timeout:
-            raise Exception("上传超时。文件可能过大或网络连接不稳定")
+            print("上传超时。文件可能过大或网络连接不稳定，尝试使用外部文件引用方式")
+            return self._create_external_geotiff_reference(tif_path, store_name)
         except requests.exceptions.ConnectionError:
+            print("连接GeoServer失败。请检查GeoServer是否正在运行")
             raise Exception("连接GeoServer失败。请检查GeoServer是否正在运行")
         except Exception as e:
-            if "上传失败" in str(e) or "GeoServer无法读取" in str(e):
-                raise  # 重新抛出已格式化的错误
+            print(f"上传过程中出错: {str(e)}")
+            print("尝试使用外部文件引用方式")
+            return self._create_external_geotiff_reference(tif_path, store_name)
+            
+    def _create_external_geotiff_reference(self, tif_path, store_name):
+        """创建外部GeoTIFF文件引用
+        
+        不上传文件，而是让GeoServer直接引用服务器上已存在的文件
+        优先使用GeoServer数据目录中已存在的文件，避免复制源文件
+        
+        Args:
+            tif_path: GeoTIFF文件路径
+            store_name: 存储名称
+            
+        Returns:
+            bool: 是否创建成功
+        """
+        import os
+        import shutil
+        
+        try:
+            # 1. 确定目标路径 - 使用GeoServer数据目录
+            geoserver_data_dir = self._get_geoserver_data_dir()
+            if not geoserver_data_dir:
+                raise Exception("无法确定GeoServer数据目录")
+                
+            workspace_data_dir = os.path.join(geoserver_data_dir, "data", self.workspace)
+            store_data_dir = os.path.join(workspace_data_dir, store_name)
+            
+            # 2. 检查GeoServer数据目录中是否已存在对应的文件
+            # 获取源文件名和可能的目标文件名
+            source_filename = os.path.basename(tif_path)
+            tif_basename = os.path.splitext(source_filename)[0]
+            
+            # 可能的文件名列表 (基于观察和GeoServer命名规则)
+            possible_filenames = [
+                f"{tif_basename}.geotiff",
+                f"{store_name}.geotiff",
+                f"{source_filename}",
+                f"{tif_basename}.tif",
+                "file.geotiff",
+                "file.tif"
+            ]
+            
+            print(f"检查GeoServer数据目录中是否已存在文件...")
+            
+            existing_file_path = None
+            # 如果store目录已存在，检查是否已有文件
+            if os.path.exists(store_data_dir):
+                print(f"存储目录已存在: {store_data_dir}")
+                for filename in possible_filenames:
+                    test_path = os.path.join(store_data_dir, filename)
+                    if os.path.exists(test_path):
+                        existing_file_path = test_path
+                        print(f"✅ 找到现有文件: {existing_file_path}")
+                        break
+                
+                # 如果找不到可能的文件名，尝试列出目录中所有文件
+                if not existing_file_path:
+                    print(f"使用备用方法搜索GeoTIFF文件...")
+                    for filename in os.listdir(store_data_dir):
+                        if filename.lower().endswith(('.tif', '.tiff', '.geotiff')):
+                            existing_file_path = os.path.join(store_data_dir, filename)
+                            print(f"✅ 找到备用现有文件: {existing_file_path}")
+                            break
+            
+            # 3. 确定使用的文件和路径
+            relative_path = None
+            
+            if existing_file_path:
+                # 使用已存在的文件
+                print(f"使用GeoServer数据目录中已存在的文件: {existing_file_path}")
+                tif_filename = os.path.basename(existing_file_path)
+                relative_path = f"file:data/{self.workspace}/{store_name}/{tif_filename}"
             else:
-                raise Exception(f"上传GeoTIFF失败: {str(e)}")
+                # 如果没有找到现有文件，则需要复制源文件
+                print(f"未找到现有文件，将复制源文件到GeoServer数据目录")
+                
+                # 确保目录存在
+                os.makedirs(store_data_dir, exist_ok=True)
+                
+                # 复制文件到GeoServer数据目录
+                tif_filename = f"{store_name}.geotiff"
+                target_file_path = os.path.join(store_data_dir, tif_filename)
+                
+                print(f"将文件复制到GeoServer数据目录: {target_file_path}")
+                
+                # 如果目标文件已存在，先尝试删除
+                if os.path.exists(target_file_path):
+                    self._force_delete_if_exists(target_file_path)
+                
+                # 复制文件
+                shutil.copy2(tif_path, target_file_path)
+                print(f"✅ 文件复制成功")
+                
+                relative_path = f"file:data/{self.workspace}/{store_name}/{tif_filename}"
+            
+            # 4. 创建引用该文件的coveragestore
+            coveragestore_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores"
+            
+            coveragestore_data = {
+                "coverageStore": {
+                    "name": store_name,
+                    "type": "GeoTIFF",
+                    "enabled": True,
+                    "workspace": {"name": self.workspace},
+                    "url": relative_path
+                }
+            }
+            
+            headers = {'Content-Type': 'application/json'}
+            
+            # 首先检查coveragestore是否已存在
+            check_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}"
+            check_response = requests.get(check_url, auth=self.auth)
+            
+            if check_response.status_code == 200:
+                # 如果已存在，使用PUT更新
+                print(f"Coveragestore已存在，更新现有store")
+                update_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}"
+                response = requests.put(
+                    update_url,
+                    json=coveragestore_data,
+                    headers=headers,
+                    auth=self.auth
+                )
+            else:
+                # 如果不存在，使用POST创建
+                print(f"创建新的coveragestore")
+                response = requests.post(
+                    coveragestore_url,
+                    json=coveragestore_data,
+                    headers=headers,
+                    auth=self.auth
+                )
+            
+            print(f"Coveragestore创建/更新响应状态码: {response.status_code}")
+            if response.text:
+                print(f"响应内容: {response.text[:500]}...")
+            
+            if response.status_code not in [200, 201]:
+                raise Exception(f"创建外部引用coveragestore失败: HTTP {response.status_code} - {response.text}")
+            
+            # 5. 检查是否有coverage，如果没有则创建
+            import time
+            time.sleep(2)  # 等待GeoServer处理
+            
+            coverage_list_url = f"{self.rest_url}/workspaces/{self.workspace}/coveragestores/{store_name}/coverages"
+            coverage_list_response = requests.get(f"{coverage_list_url}.json", auth=self.auth)
+            
+            coverage_exists = False
+            coverage_name = store_name
+            
+            if coverage_list_response.status_code == 200:
+                coverage_data = coverage_list_response.json()
+                if 'coverages' in coverage_data and 'coverage' in coverage_data['coverages']:
+                    coverages = coverage_data['coverages']['coverage']
+                    if isinstance(coverages, list) and len(coverages) > 0:
+                        coverage_exists = True
+                        coverage_name = coverages[0]['name']
+                    elif isinstance(coverages, dict):
+                        coverage_exists = True
+                        coverage_name = coverages['name']
+            
+            if not coverage_exists:
+                print(f"创建coverage")
+                coverage_data = {
+                    "coverage": {
+                        "name": store_name,
+                        "nativeName": store_name,
+                        "title": store_name,
+                        "enabled": True
+                    }
+                }
+                
+                coverage_create_response = requests.post(
+                    coverage_list_url,
+                    json=coverage_data,
+                    headers=headers,
+                    auth=self.auth
+                )
+                
+                print(f"Coverage创建响应状态码: {coverage_create_response.status_code}")
+                if coverage_create_response.text:
+                    print(f"响应内容: {coverage_create_response.text[:500]}...")
+                
+                if coverage_create_response.status_code not in [200, 201]:
+                    print(f"⚠️ 创建coverage失败: {coverage_create_response.text}")
+                else:
+                    print(f"✅ Coverage创建成功")
+            else:
+                print(f"✅ Coverage已存在: {coverage_name}")
+            
+            # 6. 返回成功
+            print(f"✅ 外部GeoTIFF引用创建成功: {relative_path}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ 创建外部GeoTIFF引用失败: {str(e)}")
+            raise Exception(f"创建外部GeoTIFF引用失败: {str(e)}")
+    
+    def _get_geoserver_data_dir(self):
+        """获取GeoServer数据目录
+        
+        尝试多种方式确定GeoServer数据目录的位置
+        
+        Returns:
+            str: GeoServer数据目录路径
+        """
+        import os
+        
+        # 常见的GeoServer数据目录位置
+        possible_dirs = [
+            r'D:\ProgramData\GeoServer\data',
+            r'D:\ProgramData\GeoServer',
+            r'C:\ProgramData\GeoServer\data',
+            r'C:\ProgramData\GeoServer',
+            r'C:\Program Files\GeoServer\data_dir',
+            r'C:\Program Files (x86)\GeoServer\data_dir',
+            r'/opt/geoserver/data_dir',
+            r'/var/lib/geoserver/data'
+        ]
+        
+        # 首先从环境变量获取
+        geoserver_data_dir = os.environ.get('GEOSERVER_DATA_DIR')
+        if geoserver_data_dir and os.path.exists(geoserver_data_dir):
+            print(f"从环境变量获取GeoServer数据目录: {geoserver_data_dir}")
+            return geoserver_data_dir
+            
+        # 尝试常见位置
+        for dir_path in possible_dirs:
+            if os.path.exists(dir_path):
+                print(f"在常见位置找到GeoServer数据目录: {dir_path}")
+                return dir_path
+                
+        # 使用默认位置
+        default_dir = r'D:\ProgramData\GeoServer\data'
+        print(f"未找到GeoServer数据目录，使用默认值: {default_dir}")
+        return default_dir
+        
+    def _force_delete_if_exists(self, file_path):
+        """如果文件存在就强制删除，处理被占用的情况"""
+        import os
+        import stat
+        
+        if os.path.exists(file_path):
+            try:
+                # 先尝试正常删除
+                os.remove(file_path)
+                print(f"成功删除文件: {file_path}")
+                return True
+            except PermissionError:
+                # 文件被占用，尝试强制删除
+                try:
+                    print(f"文件被占用，尝试强制删除: {file_path}")
+                    # 修改文件权限
+                    os.chmod(file_path, stat.S_IWRITE)
+                    os.remove(file_path)
+                    print(f"成功强制删除文件: {file_path}")
+                    return True
+                except Exception as e:
+                    print(f"强制删除文件失败: {file_path}, 错误: {str(e)}")
+                    return False
+            except Exception as e:
+                print(f"删除文件失败: {file_path}, 错误: {str(e)}")
+                return False
+        return True
     
     def _create_empty_coveragestore_for_existing_file(self, store_name, file_path):
         """为已存在的文件创建空的coveragestore
@@ -3234,7 +3488,7 @@ AbsolutePath=false
                     coordinate_system=target_epsg,
                     enable_transparency=True  # 启用透明度设置
                 )
-                
+                        
                 # 5. 仅使用XML方法设置透明度
                 logger.info("仅使用XML方法设置透明度")
                 
@@ -3304,10 +3558,10 @@ AbsolutePath=false
                         'store': store_name,
                         'layer': layer_name,
                         'layer_name': full_layer_name,
-                        'epsg': target_epsg or epsg_code,
-                        'wms_url': f"{self.url}/wms?service=WMS&version=1.1.0&request=GetCapabilities&layers={full_layer_name}",
-                        'wfs_url': f"{self.url}/wfs?service=WFS&version=1.0.0&request=GetCapabilities&typeName={full_layer_name}",
-                        'wcs_url': f"{self.url}/wcs?service=WCS&version=1.0.0&request=GetCapabilities&coverage={full_layer_name}",
+                                'epsg': target_epsg or epsg_code,
+                                'wms_url': f"{self.url}/wms?service=WMS&version=1.1.0&request=GetCapabilities&layers={full_layer_name}",
+                                'wfs_url': f"{self.url}/wfs?service=WFS&version=1.0.0&request=GetCapabilities&typeName={full_layer_name}",
+                                'wcs_url': f"{self.url}/wcs?service=WCS&version=1.0.0&request=GetCapabilities&coverage={full_layer_name}",
                         'preview_url': f"{self.url}/gwc/demo/{full_layer_name}?format=image/png&zoom=0"
                     }
                 
