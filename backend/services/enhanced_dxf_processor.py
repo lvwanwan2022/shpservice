@@ -52,7 +52,7 @@ class EnhancedDXFProcessor:
                 '-dim', 'XY',
                 
                 # 增强样式保留配置
-                '--config', 'DXF_ENCODING', 'ASCII',# 设置编码，20250610由UTF-8改为ASCII
+                '--config', 'DXF_ENCODING', 'GB18030',# 设置编码，20250610由UTF-8改为ASCII
                 '--config', 'DXF_HEADER_ONLY', 'NO',          # 包含所有图层
                 '--config', 'DXF_INCLUDE_RAW_CODE_VALUES', 'YES',  # 包含原始代码值
                 '--config', 'DXF_TRANSLATE_ESCAPE_SEQUENCES', 'YES', # 转换转义序列
@@ -142,7 +142,7 @@ class EnhancedDXFProcessor:
             '-lco', 'FID=gid',
             '-t_srs', coordinate_system,
             '-dim', 'XY',
-            '--config', 'DXF_ENCODING', 'ASCII'#改为ASCII
+            '--config', 'DXF_ENCODING', 'GB18030'#改为ASCII
         ]
         
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
