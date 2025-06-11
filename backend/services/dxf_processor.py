@@ -327,11 +327,11 @@ class DXFProcessor:
                 '-t_srs', target_srs,            # 目标坐标系
                 '-dim', 'XY',                    # 强制2D
                 '-skipfailures',                 # 跳过失败的要素，继续处理
-                '--config', 'DXF_ENCODING', 'ASCII',  # 设置编码#改为ASCII
+                '--config', 'DXF_ENCODING', 'GB18030',  # 设置编码#改为ASCII
                 '--config', 'DXF_MERGE_BLOCK_GEOMETRIES', 'YES',  # 合并块几何
                 '--config', 'DXF_INCLUDE_RAW_CODE_VALUES', 'TRUE',  # 包含原始代码值（包括颜色）
-                '--config', 'SHAPE_ENCODING', 'ASCII',  # 额外的编码设置
-                '--config', 'GDAL_DATA_ENCODING', 'ASCII',  # GDAL数据编码
+                '--config', 'SHAPE_ENCODING', 'GB18030',  # 额外的编码设置
+                '--config', 'GDAL_DATA_ENCODING', 'GB18030',  # GDAL数据编码
                 # 🔧 解决MVT layer属性冲突：将DXF的layer字段重命名为cad_layer
                 # 原因：MVT规范会自动添加layer属性（值为表名），与DXF的layer字段冲突
                 # 解决方案：导入时保持原始字段名，导入后通过SQL重命名字段

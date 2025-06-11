@@ -229,6 +229,183 @@ def publish_dxf_martin_service(file_id):
         current_app.logger.error(f"发布DXF Martin服务失败: {str(e)}")
         return jsonify({'error': f'发布DXF Martin服务失败: {str(e)}'}), 500
 
+@dxf_bp.route('/publish-martin-ezdxf/<int:file_id>', methods=['POST'])
+def publish_dxf_martin_service_ezdxf(file_id):
+    """发布DXF文件为Martin MVT服务（使用ezdxf库直接导入）"""
+    try:
+        from services.file_service import FileService
+        from services.enhanced_dxf_processor import dxf_to_postgis
+        from models.db import execute_query
+        import uuid
+        import os
+        
+        # 获取文件信息
+        file_service = FileService()
+        file_info = file_service.get_file_by_id(file_id)
+        
+        if not file_info:
+            return jsonify({'error': '文件不存在'}), 404
+        
+        if file_info['file_type'].lower() != 'dxf':
+            return jsonify({'error': '只支持DXF文件'}), 400
+        
+        # 检查文件是否已经发布到Martin
+        check_sql = """
+        SELECT id, table_name, status FROM vector_martin_services 
+        WHERE (file_id = %s OR original_filename = %s) AND vector_type = 'dxf'
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+        existing = execute_query(check_sql, (str(file_id), file_info['file_name']))
+        if existing:
+            existing_record = existing[0]
+            if existing_record['status'] == 'active':
+                return jsonify({
+                    'error': 'DXF文件已发布到Martin服务',
+                    'service_id': existing_record['id'],
+                    'table_name': existing_record['table_name']
+                }), 400
+            else:
+                # 如果存在非活跃状态的记录，先清理它
+                current_app.logger.info(f"发现非活跃状态的Martin服务记录，准备清理: {existing_record}")
+                cleanup_sql = """
+                DELETE FROM vector_martin_services 
+                WHERE id = %s
+                """
+                execute_query(cleanup_sql, (existing_record['id'],))
+                
+                # 同时清理可能存在的PostGIS表
+                if existing_record['table_name']:
+                    try:
+                        drop_sql = f"DROP TABLE IF EXISTS {existing_record['table_name']}"
+                        execute_query(drop_sql, [])
+                        current_app.logger.info(f"清理了遗留的PostGIS表: {existing_record['table_name']}")
+                    except Exception as cleanup_error:
+                        current_app.logger.warning(f"清理PostGIS表失败: {cleanup_error}")
+                
+                current_app.logger.info(f"✅ 清理完成，继续发布Martin服务")
+        
+        # 获取请求参数
+        data = request.get_json() or {}
+        coordinate_system = data.get('coordinate_system') or file_info.get('coordinate_system') or 'EPSG:4326'
+        
+        # 验证坐标系格式
+        if not coordinate_system.startswith('EPSG:'):
+            return jsonify({'error': '坐标系格式错误，请使用EPSG:XXXX格式'}), 400
+        
+        current_app.logger.info(f"开始发布DXF文件到Martin服务(使用Enhanced EZDXF): {file_info['file_name']}, 坐标系: {coordinate_system}")
+        
+        # 生成唯一的表名 - 使用vector前缀
+        table_name = f"vector_{uuid.uuid4().hex[:8]}"
+        
+        # Martin通常在Web Mercator下性能最佳，但我们先保持用户指定的坐标系
+        # 如果需要转换为3857，可以在这里设置target_srs
+        target_srs = coordinate_system
+        
+        # 如果原始坐标系不是Web Mercator，建议转换为3857以获得更好的瓦片性能
+        if coordinate_system != 'EPSG:3857':
+            current_app.logger.info(f"坐标系 {coordinate_system} 将转换为 EPSG:3857 以优化瓦片性能")
+            target_srs = 'EPSG:3857'
+        
+        # 使用enhanced_dxf_processor中的ezdxf方法导入DXF到PostGIS
+        import_result = dxf_to_postgis(
+            file_path=file_info['file_path'],
+            table_name=table_name,
+            source_srs=coordinate_system,
+            target_srs=target_srs
+        )
+        
+        if not import_result['success']:
+            return jsonify({
+                'error': f'DXF导入PostGIS失败: {import_result.get("error")}'
+            }), 500
+        
+        # Martin会在重启时自动发现vector_开头的表，无需额外配置
+        
+        # 生成服务URL（参照geojson逻辑）
+        from config import MARTIN_CONFIG
+        base_url = MARTIN_CONFIG.get('base_url', 'http://localhost:3000')
+        service_url = f"{base_url}/{table_name}"
+        mvt_url = f"{service_url}/{{z}}/{{x}}/{{y}}.pbf"
+        tilejson_url = service_url  # TileJSON URL就是service_url，不需要.json后缀
+        
+        # 构建DXF信息（参照geojson逻辑）
+        dxf_info = {
+            'total_features': import_result.get('original_feature_count', 0),
+            'imported_features': import_result.get('feature_count', 0),
+            'skipped_features': import_result.get('skipped_features', 0),
+            'success_rate': import_result.get('success_rate', 0),
+            'geometry_types': import_result.get('geometry_types', []),
+            'bbox': import_result.get('bbox'),
+            'layers': import_result.get('layers', []),
+            'warnings': import_result.get('warnings', [])
+        }
+        
+        # 收集PostGIS信息（参照geojson逻辑）
+        postgis_info = {
+            'table_name': table_name,
+            'geometry_column': 'geom',
+            'srid': int(target_srs.replace('EPSG:', '')) if target_srs.startswith('EPSG:') else 3857
+        }
+        
+        # 记录到vector_martin_services表（参照geojson逻辑）
+        insert_sql = """
+        INSERT INTO vector_martin_services 
+        (file_id, original_filename, file_path, vector_type, table_name, service_url, mvt_url, tilejson_url, vector_info, postgis_info, user_id)
+        VALUES (%(file_id)s, %(original_filename)s, %(file_path)s, %(vector_type)s, %(table_name)s, %(service_url)s, %(mvt_url)s, %(tilejson_url)s, %(vector_info)s, %(postgis_info)s, %(user_id)s)
+        RETURNING id
+        """
+        
+        params = {
+            'file_id': str(file_id),
+            'original_filename': file_info['file_name'],
+            'file_path': file_info['file_path'],
+            'vector_type': 'dxf',
+            'table_name': table_name,
+            'service_url': service_url,
+            'mvt_url': mvt_url,
+            'tilejson_url': tilejson_url,
+            'vector_info': json.dumps(dxf_info),
+            'postgis_info': json.dumps(postgis_info),
+            'user_id': file_info.get('user_id')
+        }
+        
+        result = execute_query(insert_sql, params)
+        service_id = result[0]['id'] if result else None
+        
+        if not service_id:
+            cleanup_failed_table(table_name)
+            return jsonify({'error': '服务记录保存失败'}), 500
+        
+        current_app.logger.info(f"✅ DXF Martin服务发布成功(Enhanced EZDXF): {table_name}")
+        
+        # 生成响应消息
+        import_stats = import_result
+        success_message = f'DXF Martin服务发布成功(Enhanced EZDXF)'
+        
+        # 如果有要素被跳过，添加统计信息
+        if import_stats.get('skipped_features', 0) > 0:
+            success_rate = import_stats.get('success_rate', 0)
+            success_message += f"（成功导入 {import_stats.get('feature_count', 0)} 个要素，跳过 {import_stats.get('skipped_features', 0)} 个，成功率 {success_rate:.1f}%）"
+        
+        return jsonify({
+            'success': True,
+            'message': success_message,
+            'service_id': service_id,
+            'table_name': table_name,
+            'service_url': service_url,
+            'mvt_url': mvt_url,
+            'tilejson_url': tilejson_url,
+            'coordinate_system': coordinate_system,
+            'target_srs': target_srs,
+            'dxf_info': dxf_info,
+            'postgis_info': postgis_info
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"发布DXF Martin服务失败(Enhanced EZDXF): {str(e)}")
+        return jsonify({'error': f'发布DXF Martin服务失败(Enhanced EZDXF): {str(e)}'}), 500
+
 def cleanup_failed_table(table_name):
     """清理失败的表"""
     try:

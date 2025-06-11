@@ -22,7 +22,7 @@ class MartinService:
         self.config = MARTIN_CONFIG
         self.db_config = DB_CONFIG
         self.process = None
-        self.config_file_path = os.path.join(os.path.dirname(__file__), 'martin_config.yaml')
+        self.config_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'martin_config.yaml')
         
         # 修复Windows上的连接问题：服务器监听0.0.0.0，但客户端连接使用localhost
         host = self.config['host']

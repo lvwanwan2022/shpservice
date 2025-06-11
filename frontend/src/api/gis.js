@@ -876,7 +876,7 @@ export default {
   // 发布DXF的Martin服务
   publishDxfMartinService(fileId, params = {}) {
     return service({
-      url: `/dxf/publish-martin/${fileId}`,
+      url: `/dxf/publish-martin-ezdxf/${fileId}`,
       method: 'post',
       data: params
     })
