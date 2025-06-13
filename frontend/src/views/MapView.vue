@@ -652,9 +652,9 @@ export default {
       currentActiveLayer.value = layer
       
       // 通知MapViewer组件将该图层置顶
-      if (mapViewerRef.value) {
-        mapViewerRef.value.bringLayerToTop(layer)
-      }
+      // if (mapViewerRef.value) {
+      //   mapViewerRef.value.bringLayerToTop(layer)
+      // }
       
       ElMessage.success(`已选中图层: ${layer.layer_name}，该图层已置顶并启用属性弹窗`)
     }
