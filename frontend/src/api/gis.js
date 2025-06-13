@@ -881,6 +881,14 @@ export default {
       data: params
     })
   },
+  // 发布DXF的Martin服务
+  publishMbtilesMartinService(fileId, params = {}) {
+    return service({
+      url: `/dxf/publish-martin-mbtiles/${fileId}`,
+      method: 'post',
+      data: params
+    })
+  },
 
   // 分析DXF样式
   analyzeDxfStyles(fileId) {

@@ -769,6 +769,97 @@ def publish_martin_service(file_id):
         current_app.logger.error(f"发布Martin服务错误: {str(e)}")
         return jsonify({'error': f'发布Martin服务失败: {str(e)}'}), 500
 
+@file_bp.route('/<int:file_id>/publish/martin-mbtiles', methods=['POST'])
+def publish_martin_mbtiles_service(file_id):
+    """发布MBTiles文件到Martin服务"""
+    try:
+        # 检查文件是否存在
+        file_info = file_service.get_file_by_id(file_id)
+        if not file_info:
+            return jsonify({'error': '文件不存在'}), 404
+        
+        # 检查文件类型是否支持Martin服务
+        file_type = file_info.get('file_type', '').lower()
+        if file_type not in ['geojson', 'shp', 'dxf', 'mbtiles']:
+            return jsonify({'error': 'Martin服务仅支持GeoJSON、SHP、DXF和MBTiles文件'}), 400
+        
+        # 检查是否已发布到Martin（统一表查询）
+        check_sql = """
+        SELECT id, file_id, vector_type FROM vector_martin_services 
+        WHERE original_filename = %s AND status = 'active'
+        """
+        existing = execute_query(check_sql, (file_info['file_name'],))
+        if existing:
+            return jsonify({
+                'error': '文件已发布到Martin服务',
+                'martin_file_id': existing[0]['file_id'],
+                'vector_type': existing[0]['vector_type']
+            }), 400
+        
+        # 根据文件类型选择发布服务
+        if file_type in ['geojson', 'shp']:
+            # 使用统一的Vector Martin服务
+            from services.vector_martin_service import VectorMartinService
+            martin_service = VectorMartinService()
+            
+            if file_type == 'geojson':
+                result = martin_service.publish_geojson_martin(
+                    file_id=str(file_id),
+                    file_path=file_info['file_path'],
+                    original_filename=file_info['file_name'],
+                    user_id=file_info.get('user_id')
+                )
+            elif file_type == 'shp':
+                result = martin_service.publish_shp_martin(
+                    file_id=str(file_id),
+                    zip_file_path=file_info['file_path'],
+                    original_filename=file_info['file_name'],
+                    user_id=file_info.get('user_id')
+                )
+        
+        elif file_type == 'dxf':
+            # 使用DXF服务发布
+            from services.dxf_service import DXFService
+            dxf_service = DXFService()
+            
+            # 从请求中获取坐标系参数
+            coordinate_system = request.json.get('coordinate_system', 'EPSG:4326') if request.is_json else 'EPSG:4326'
+            
+            result = dxf_service.publish_dxf_martin_service(
+                file_id=str(file_id),
+                file_path=file_info['file_path'],
+                original_filename=file_info['file_name'],
+                coordinate_system=coordinate_system,
+                user_id=file_info.get('user_id')
+            )
+        
+        elif file_type == 'mbtiles':
+            # 使用栅格Martin服务发布MBTiles文件
+            from services.raster_martin_service import RasterMartinService
+            raster_martin_service = RasterMartinService()
+            
+            result = raster_martin_service.publish_mbtiles_martin(
+                file_id=str(file_id),
+                file_path=file_info['file_path'],
+                original_filename=file_info['file_name'],
+                user_id=file_info.get('user_id')
+            )
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'message': 'Martin服务发布成功',
+                'martin_info': result
+            }), 200
+        else:
+            return jsonify({
+                'error': f'Martin服务发布失败: {result.get("error", "未知错误")}'
+            }), 500
+    
+    except Exception as e:
+        current_app.logger.error(f"发布Martin服务错误: {str(e)}")
+        return jsonify({'error': f'发布Martin服务失败: {str(e)}'}), 500
+
 @file_bp.route('/<int:file_id>/publish/geoserver', methods=['POST'])
 def publish_geoserver_service(file_id):
     """发布文件到GeoServer服务 - 统一处理矢量和栅格数据"""
@@ -945,6 +1036,11 @@ def unpublish_martin_service(file_id):
             dxf_service = DXFService()
             result = dxf_service.delete_dxf_martin_service(service_id)
             success = result.get('success', False)
+        elif vector_type == 'mbtiles':
+            # 使用栅格Martin服务删除MBTiles服务
+            from services.raster_martin_service import RasterMartinService
+            raster_martin_service = RasterMartinService()
+            success = raster_martin_service.delete_martin_service(service_id)
         else:
             # 使用统一的Vector Martin服务删除
             from services.vector_martin_service import VectorMartinService

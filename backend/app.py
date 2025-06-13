@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
@@ -179,6 +178,16 @@ except ImportError:
     logger.info("DXF 服务路由不存在，跳过")
 except Exception as e:
     logger.warning(f"⚠️ DXF 服务路由注册失败: {str(e)}")
+
+# MBTiles 服务路由
+try:
+    from routes.mbtiles_routes import mbtiles_bp
+    app.register_blueprint(mbtiles_bp, url_prefix='/api/mbtiles')
+    logger.info("✅ MBTiles 服务路由注册成功")
+except ImportError:
+    logger.info("MBTiles 服务路由不存在，跳过")
+except Exception as e:
+    logger.warning(f"⚠️ MBTiles 服务路由注册失败: {str(e)}")
 
 # GIS 通用路由
 try:

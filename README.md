@@ -316,8 +316,8 @@ server {
 - **资源管理**：避免不必要的服务占用GeoServer资源
 
 ### 支持的文件类型
-- **可发布服务**：shp、geojson、tif、dem、dom
-- **仅存储**：dwg、dxf、mbtiles（暂不支持自动发布）
+- **可发布服务**：shp、geojson、tif、dem、dom、mbtiles
+- **仅存储**：dwg、dxf（现已支持自动发布）
 
 ### 操作说明
 1. 点击"数据上传"按钮上传文件
@@ -385,6 +385,31 @@ python test_publish_service.py 8
 - 如果发布后显示警告，请等待几秒钟后使用"调试"功能检查
 - 对于Shapefile，系统会自动提取ZIP包内的实际文件名作为图层名
 - 如果遇到问题，可以运行测试脚本进行诊断 
+
+## MBTiles 支持
+
+系统现已支持 MBTiles 文件的发布和管理，提供以下功能：
+
+1. **MBTiles 文件上传**：支持上传 MBTiles 格式的瓦片数据
+2. **自动发布为 Martin 服务**：上传后可一键发布为 Martin 瓦片服务
+3. **专用 API 接口**：提供 `/api/mbtiles/` 系列接口管理 MBTiles 服务
+4. **服务管理**：支持查看、删除 MBTiles 服务
+
+### MBTiles 服务使用方法
+
+1. **上传 MBTiles 文件**：通过文件上传功能上传 .mbtiles 文件
+2. **发布服务**：在文件列表中找到上传的 MBTiles 文件，点击"发布服务"按钮
+3. **使用服务**：发布成功后可获取服务地址，格式为 `http://localhost:3000/mbtiles/{文件名}/{z}/{x}/{y}`
+
+### MBTiles API 接口
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/mbtiles/services/list` | GET | 获取所有 MBTiles 服务列表 |
+| `/api/mbtiles/services/{service_id}` | GET | 获取指定 MBTiles 服务详情 |
+| `/api/mbtiles/services/{service_id}` | DELETE | 删除指定 MBTiles 服务 |
+| `/api/mbtiles/publish/{file_id}` | POST | 发布 MBTiles 文件为服务 |
+| `/api/mbtiles/unpublish/{file_id}` | DELETE | 取消发布 MBTiles 服务 |
 
 GeoServer概念          →  数据库表                →  说明
 ─────────────────────────────────────────────────────────────
