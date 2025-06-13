@@ -312,3 +312,25 @@ mvtLayer.addTo(map);
 
 -   **`MapViewerOL.vue` -> `initializeProjections()`**:
     -   在地图初始化时调用，通过 API 从后端获取 `proj4` 坐标系定义，并注册到 OpenLayers 中，使得地图能够支持和正确转换各种非标准的地理坐标系。这是确保从不同数据源获取的 WMS 服务能正确叠加的关键。
+### 5.4. openlayers加载高德底图纠偏方法
+-   **`坐标转换文件`**
+    :\frontend\src\utils\GCJ02.js
+    // 高德地图 - 使用GCJ02坐标系修正偏移
+        const gaodeLayer = new TileLayer({
+          source: new XYZ({
+            url: 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+            crossOrigin: 'anonymous',
+            projection:  gcj02Mecator // 使用GCJ02坐标系
+          }),
+          visible: true
+        })
+        
+        // 高德卫星地图 - 使用GCJ02坐标系修正偏移
+        const gaodeSatelliteLayer = new TileLayer({
+          source: new XYZ({
+            url: 'https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
+            crossOrigin: 'anonymous',
+            projection: gcj02Mecator // 使用GCJ02坐标系
+          }),
+          visible: false
+        })

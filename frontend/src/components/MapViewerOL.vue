@@ -161,6 +161,7 @@ import TileLayer from 'ol/layer/Tile'
 import VectorTileLayer from 'ol/layer/VectorTile'
 import { TileWMS, VectorTile, XYZ } from 'ol/source'
 import { fromLonLat, transformExtent, transform } from 'ol/proj'
+import * as projlv from 'ol/proj'
 import Overlay from 'ol/Overlay'
 import { Style, Fill, Stroke, Circle } from 'ol/style'
 import { MVT } from 'ol/format'
@@ -171,7 +172,7 @@ import defaultDxfStylesConfig from '@/config/defaultDxfStyles.json'
 import proj4 from 'proj4'
 import { register } from 'ol/proj/proj4'
 // 引入ol-proj-ch库中的GCJ02坐标系
-import { GCJ02 } from 'ol-proj-ch'
+import  gcj02Mecator  from '@/utils/GCJ02'
 
 export default {
   name: 'MapViewerOL',
@@ -222,7 +223,7 @@ export default {
           
           // 注册到OpenLayers
           register(proj4)
-          
+         
           //console.log(`✅ 坐标系初始化完成，共注册${Object.keys(response.proj4_definitions).length}个坐标系`)
           return true
         } else {
@@ -346,13 +347,23 @@ export default {
       try {
         // 4. 创建底图图层
         //console.log('创建底图图层...')
+        // 创建GCJ02坐标系,对高德地图进行纠偏
+        // const gcj02Extent = [-20037508.342789244, -20037508.342789244, 20037508.342789244, 20037508.342789244];
+        //   const gcjMecator = new projlv.Projection({
+        //     code: "GCJ-02",
+        //     extent: gcj02Extent,
+        //     units: "m"
+        //   });
+        //   projlv.addProjection(gcjMecator);
+ // 设置GCJ02的有效范围（基于中国区域）
         
+
         // 高德地图 - 使用GCJ02坐标系修正偏移
         const gaodeLayer = new TileLayer({
           source: new XYZ({
             url: 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
             crossOrigin: 'anonymous',
-            projection: GCJ02.CODE // 使用GCJ02坐标系
+            projection:  gcj02Mecator // 使用GCJ02坐标系
           }),
           visible: true
         })
@@ -362,7 +373,7 @@ export default {
           source: new XYZ({
             url: 'https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
             crossOrigin: 'anonymous',
-            projection: GCJ02.CODE // 使用GCJ02坐标系
+            projection: gcj02Mecator // 使用GCJ02坐标系
           }),
           visible: false
         })
