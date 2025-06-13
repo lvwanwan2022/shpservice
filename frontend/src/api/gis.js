@@ -817,6 +817,14 @@ export default {
       data: params
     })
   },
+  // 发布mbtiles的Martin服务
+  publishMbtilesMartinService(fileId, params = {}) {
+    return service({
+      url: `/files/${fileId}/publish/martin-mbtiles`,
+      method: 'post',
+      data: params
+    })
+  },
 
   // 取消发布Martin服务
   unpublishMartinService(fileId) {
@@ -881,14 +889,7 @@ export default {
       data: params
     })
   },
-  // 发布DXF的Martin服务
-  publishMbtilesMartinService(fileId, params = {}) {
-    return service({
-      url: `/dxf/publish-martin-mbtiles/${fileId}`,
-      method: 'post',
-      data: params
-    })
-  },
+  
 
   // 分析DXF样式
   analyzeDxfStyles(fileId) {

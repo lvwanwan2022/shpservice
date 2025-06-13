@@ -998,6 +998,9 @@ export default {
           
           // 使用DXF专用的Martin发布接口
           result = await gisApi.publishDxfMartinService(file.id, publishParams)
+        } else if (file.file_type.toLowerCase() === 'mbtiles') {
+          // 使用MBTiles专用的Martin发布接口
+          result = await gisApi.publishMbtilesMartinService(file.id, publishParams)
         } else {
           // 使用通用的Martin发布接口
           result = await gisApi.publishMartinService(file.id, publishParams)
