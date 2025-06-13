@@ -2,7 +2,7 @@
  * @Author: WangNing
  * @Date: 2025-05-11 22:20:01
  * @LastEditors: WangNing
- * @LastEditTime: 2025-05-30 22:02:50
+ * @LastEditTime: 2025-06-13 20:47:53
  * @FilePath: \shpservice\frontend\src\router\index.js
  * @Description: 
  * Copyright (c) 2025 by VGE, All Rights Reserved. 
@@ -17,9 +17,9 @@ const routes = [
     component: () => import('@/views/Home.vue')
   },
   {
-    path: '/map',
-    name: 'Map',
-    component: () => import('@/views/MapView.vue')
+    path: '/map-lf',
+    name: 'MapLF',
+    component: () => import('@/views/MapViewLF.vue')
   },
   {
     path: '/map-ol',

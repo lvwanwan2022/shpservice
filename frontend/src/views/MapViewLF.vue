@@ -206,7 +206,7 @@ import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import gisApi from '@/api/gis'
-import MapViewer from '@/components/MapViewer.vue'
+import MapViewer from '@/components/MapViewerLF.vue'
 
 export default {
   name: 'MapView',
