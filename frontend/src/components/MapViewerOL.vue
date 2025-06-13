@@ -170,6 +170,8 @@ import defaultDxfStylesConfig from '@/config/defaultDxfStyles.json'
 // 引入proj4库用于坐标系转换
 import proj4 from 'proj4'
 import { register } from 'ol/proj/proj4'
+// 引入ol-proj-ch库中的GCJ02坐标系
+import { GCJ02 } from 'ol-proj-ch'
 
 export default {
   name: 'MapViewerOL',
@@ -345,20 +347,22 @@ export default {
         // 4. 创建底图图层
         //console.log('创建底图图层...')
         
-        // 高德地图
+        // 高德地图 - 使用GCJ02坐标系修正偏移
         const gaodeLayer = new TileLayer({
           source: new XYZ({
             url: 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
-            crossOrigin: 'anonymous'
+            crossOrigin: 'anonymous',
+            projection: GCJ02.CODE // 使用GCJ02坐标系
           }),
           visible: true
         })
         
-        // 高德卫星地图
+        // 高德卫星地图 - 使用GCJ02坐标系修正偏移
         const gaodeSatelliteLayer = new TileLayer({
           source: new XYZ({
             url: 'https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
-            crossOrigin: 'anonymous'
+            crossOrigin: 'anonymous',
+            projection: GCJ02.CODE // 使用GCJ02坐标系
           }),
           visible: false
         })

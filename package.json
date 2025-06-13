@@ -1,0 +1,5 @@
+{
+	"dependencies": {
+		"ol-proj-ch": "^1.0.4"
+	}
+}
