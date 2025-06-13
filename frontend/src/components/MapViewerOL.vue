@@ -630,7 +630,9 @@ export default {
         
         // 添加新图层
         for (const layer of layersList.value) {
+          //console.log('lvlayertype:', layer)
           if (layer.service_type === 'martin') {
+            
             await addMartinLayer(layer)
           } else {
             await addGeoServerLayer(layer)
@@ -647,6 +649,7 @@ export default {
     
     // 添加Martin图层
     const addMartinLayer = async (layer) => {
+      
       if (!layer.mvt_url) {
         console.warn('MVT URL不存在，跳过图层:', layer.layer_name)
         return
@@ -665,7 +668,7 @@ export default {
           // MBTiles 服务格式：http://localhost:3000/mbtiles/{文件名}/{z}/{x}/{y}
           const mbtilesMatch = mvtUrl.match(/\/mbtiles\/([^/]+)\/\{z\}/) || []
           const fileName = mbtilesMatch[1] || 'default'
-          mvtUrl = `http://localhost:3000/mbtiles/${fileName}/{z}/{x}/{y}`
+          mvtUrl = `http://localhost:3000/${fileName}/{z}/{x}/{y}`
         } else {
           // 普通 Martin 服务格式：http://localhost:3000/{tableName}/{z}/{x}/{y}
           const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
@@ -673,9 +676,7 @@ export default {
         }
       }
 
-      //console.log('创建MVT图层:', layer.layer_name, 'URL:', mvtUrl)
-
-      // 获取图层的样式配置
+     
       let layerStyleConfig = layerStyleCache[layer.id] || {}
       
       // 如果是DXF文件且没有缓存样式，使用默认DXF样式
@@ -1004,34 +1005,72 @@ export default {
       }
       
       try {
-        // 创建矢量切片图层 - 完整配置
-        const mvtLayer = new VectorTileLayer({
-          declutter: true, // 启用标注防冲突
-          source: new VectorTile({
-            format: new MVT(),
-            url: mvtUrl,
-            maxZoom: 22, // 最大缩放级别
-            minZoom: 0,  // 最小缩放级别
-            wrapX: false, // 防止世界重复
-            transition: 0, // 禁用过渡动画，提高性能
-            // 添加属性信息
-            attributions: layer.attribution || [],
-            // 设置瓦片缓存大小
-            cacheSize: 128
-          }),
-          style: createStyleFunction(),
-          opacity: typeof layer.opacity === 'number' ? layer.opacity : 1.0,
-          visible: layer.visibility !== false,
-          // 设置渲染顺序
-          zIndex: layer.zIndex || 1,
-          // 添加图层标识
-          properties: {
-            layerId: layer.id,
-            layerName: layer.layer_name,
-            serviceType: 'martin',
-            fileType: layer.file_type
-          }
-        })
+        // 检查是否为栅格mbtiles
+        const isRasterMbtiles = layer.file_type === 'raster.mbtiles';
+        
+        let olLayer;
+        
+        if (isRasterMbtiles) {
+          // 创建栅格XYZ图层 - 用于栅格mbtiles
+          olLayer = new TileLayer({
+            source: new XYZ({
+              url: mvtUrl,
+              maxZoom: 22,
+              minZoom: 0,
+              wrapX: false,
+              transition: 0,
+              attributions: layer.attribution || [],
+              cacheSize: 256
+            }),
+            opacity: typeof layer.opacity === 'number' ? layer.opacity : 1.0,
+            visible: layer.visibility !== false,
+            zIndex: layer.zIndex || 1,
+            properties: {
+              layerId: layer.id,
+              layerName: layer.layer_name,
+              serviceType: 'martin',
+              fileType: layer.file_type
+            }
+          });
+          
+          console.log('创建栅格MBTiles图层:', layer.layer_name);
+        } else {
+
+          
+          // 创建矢量切片图层 - 用于矢量mbtiles和其他矢量数据
+          olLayer = new VectorTileLayer({
+            declutter: true, // 启用标注防冲突
+            source: new VectorTile({
+              format: new MVT(),
+              url: mvtUrl,
+              maxZoom: 22, // 最大缩放级别
+              minZoom: 0,  // 最小缩放级别
+              wrapX: false, // 防止世界重复
+              transition: 0, // 禁用过渡动画，提高性能
+              // 添加属性信息
+              attributions: layer.attribution || [],
+              // 设置瓦片缓存大小
+              cacheSize: 128
+            }),
+            style: createStyleFunction(),
+            opacity: typeof layer.opacity === 'number' ? layer.opacity : 1.0,
+            visible: layer.visibility !== false,
+            // 设置渲染顺序
+            zIndex: layer.zIndex || 1,
+            // 添加图层标识
+            properties: {
+              layerId: layer.id,
+              layerName: layer.layer_name,
+              serviceType: 'martin',
+              fileType: layer.file_type
+            }
+          });
+          
+          console.log('创建矢量MBTiles图层:', layer.layer_name);
+        }
+        
+        // 使用统一变量名
+        const mvtLayer = olLayer;
         
         // 启用弹窗交互
         mvtLayer._popupEnabled = true

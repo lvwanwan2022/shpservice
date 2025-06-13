@@ -27,7 +27,7 @@ def get_mbtiles_services():
         SELECT vms.*, f.file_name, f.file_size, f.file_type, f.upload_date
         FROM vector_martin_services vms
         LEFT JOIN files f ON vms.file_id = f.id::text
-        WHERE vms.vector_type = 'mbtiles' AND vms.status = 'active'
+        WHERE vms.vector_type IN ('mbtiles', 'vector_mbtiles', 'raster_mbtiles') AND vms.status = 'active'
         ORDER BY vms.created_at DESC
         LIMIT %s OFFSET %s
         """
@@ -36,7 +36,7 @@ def get_mbtiles_services():
         count_sql = """
         SELECT COUNT(*) as total
         FROM vector_martin_services
-        WHERE vector_type = 'mbtiles' AND status = 'active'
+        WHERE vector_type IN ('mbtiles', 'vector_mbtiles', 'raster_mbtiles') AND status = 'active'
         """
         
         # 执行查询
@@ -65,7 +65,7 @@ def get_mbtiles_service(service_id):
     try:
         service = raster_martin_service.get_martin_service_by_id(service_id)
         
-        if not service or service['vector_type'] != 'mbtiles':
+        if not service or service['vector_type'] not in ['mbtiles', 'vector_mbtiles', 'raster_mbtiles']:
             return jsonify({'error': 'MBTiles服务不存在'}), 404
         
         return jsonify({
@@ -83,7 +83,7 @@ def delete_mbtiles_service(service_id):
     try:
         service = raster_martin_service.get_martin_service_by_id(service_id)
         
-        if not service or service['vector_type'] != 'mbtiles':
+        if not service or service['vector_type'] not in ['mbtiles', 'vector_mbtiles', 'raster_mbtiles']:
             return jsonify({'error': 'MBTiles服务不存在'}), 404
         
         success = raster_martin_service.delete_martin_service(service_id)
@@ -111,13 +111,13 @@ def publish_mbtiles(file_id):
         
         # 检查文件类型是否为MBTiles
         file_type = file_info.get('file_type', '').lower()
-        if file_type != 'mbtiles':
+        if file_type not in ['mbtiles', 'vector.mbtiles', 'raster.mbtiles']:
             return jsonify({'error': '只能发布MBTiles文件'}), 400
         
         # 检查是否已发布
         check_sql = """
         SELECT id, file_id, vector_type FROM vector_martin_services 
-        WHERE original_filename = %s AND status = 'active' AND vector_type = 'mbtiles'
+        WHERE original_filename = %s AND status = 'active' AND vector_type IN ('mbtiles', 'vector_mbtiles', 'raster_mbtiles')
         """
         existing = execute_query(check_sql, (file_info['file_name'],))
         
@@ -128,12 +128,20 @@ def publish_mbtiles(file_id):
                 'service_id': existing[0]['id']
             }), 400
         
+        # 确定MBTiles类型
+        mbtiles_type = None
+        if file_type == 'vector.mbtiles':
+            mbtiles_type = 'vector'
+        elif file_type == 'raster.mbtiles':
+            mbtiles_type = 'raster'
+        
         # 发布MBTiles服务
         result = raster_martin_service.publish_mbtiles_martin(
             file_id=str(file_id),
             file_path=file_info['file_path'],
             original_filename=file_info['file_name'],
-            user_id=file_info.get('user_id')
+            user_id=file_info.get('user_id'),
+            mbtiles_type=mbtiles_type
         )
         
         if result['success']:
@@ -163,7 +171,7 @@ def unpublish_mbtiles(file_id):
         # 查找Martin服务记录
         check_sql = """
         SELECT id, file_id FROM vector_martin_services 
-        WHERE original_filename = %s AND status = 'active' AND vector_type = 'mbtiles'
+        WHERE original_filename = %s AND status = 'active' AND vector_type IN ('mbtiles', 'vector_mbtiles', 'raster_mbtiles')
         """
         existing = execute_query(check_sql, (file_info['file_name'],))
         

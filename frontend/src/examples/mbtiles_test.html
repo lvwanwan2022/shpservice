@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>栅格MBTiles测试</title>
+  <!-- 引入OpenLayers库 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@7.4.0/ol.css">
+  <script src="https://cdn.jsdelivr.net/npm/ol@7.4.0/dist/ol.js"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+    .map-controls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 10px;
+      border-radius: 4px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+    .info-panel {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 10px;
+      border-radius: 4px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+      max-width: 300px;
+    }
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="map-controls">
+    <h3>图层控制</h3>
+    <div>
+      <label>
+        <input type="checkbox" id="layer-toggle" checked> 显示MBTiles图层
+      </label>
+    </div>
+    <div>
+      <label>透明度: 
+        <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="1">
+      </label>
+    </div>
+  </div>
+  <div class="info-panel">
+    <h3>栅格MBTiles测试</h3>
+    <p>URL: <span id="layer-url">http://localhost:3000/c1d3101c3dfe4fd3b05dd80ff3bd98c4/{z}/{x}/{y}</span></p>
+    <p>当前缩放: <span id="current-zoom">-</span></p>
+    <p>当前中心: <span id="current-center">-</span></p>
+    <div id="status">状态: 等待初始化...</div>
+  </div>
+
+  <script>
+    // 等待DOM和OpenLayers库完全加载
+    document.addEventListener('DOMContentLoaded', function() {
+      // 检查OpenLayers是否加载成功
+      if (typeof ol === 'undefined') {
+        console.error('OpenLayers库加载失败');
+        document.getElementById('status').innerHTML = '<span class="error">错误: OpenLayers库加载失败，请检查网络连接</span>';
+        return;
+      }
+
+      try {
+        initMap();
+      } catch (error) {
+        console.error('地图初始化错误:', error);
+        document.getElementById('status').innerHTML = `<span class="error">错误: 地图初始化失败 - ${error.message}</span>`;
+      }
+    });
+
+    function initMap() {
+      // 配置MBTiles图层URL
+      const mbtilesUrl = 'http://localhost:3000/c1d3101c3dfe4fd3b05dd80ff3bd98c4/{z}/{x}/{y}';
+      
+      // 创建底图
+      const osmLayer = new ol.layer.Tile({
+        source: new ol.source.OSM(),
+        visible: true
+      });
+      
+      // 创建栅格MBTiles图层
+      const mbtilesLayer = new ol.layer.Tile({
+        source: new ol.source.XYZ({
+          url: mbtilesUrl,
+          maxZoom: 22,
+          minZoom: 0,
+          wrapX: false,
+          transition: 0,
+          attributions: ['MBTiles Raster'],
+          cacheSize: 256
+        }),
+        opacity: 1.0,
+        visible: true,
+        properties: {
+          layerId: 'mbtiles-test',
+          layerName: '栅格MBTiles测试',
+          serviceType: 'martin',
+          fileType: 'raster.mbtiles'
+        }
+      });
+      
+      // 创建地图
+      const map = new ol.Map({
+        target: 'map',
+        layers: [osmLayer, mbtilesLayer],
+        view: new ol.View({
+          center: ol.proj.fromLonLat([116.4, 39.9]), // 默认北京中心
+          zoom: 10
+        })
+      });
+      
+      // 添加事件监听
+      document.getElementById('layer-toggle').addEventListener('change', function(e) {
+        mbtilesLayer.setVisible(e.target.checked);
+      });
+      
+      document.getElementById('opacity-slider').addEventListener('input', function(e) {
+        mbtilesLayer.setOpacity(parseFloat(e.target.value));
+      });
+      
+      // 监听图层加载事件
+      const mbtilesSource = mbtilesLayer.getSource();
+      
+      mbtilesSource.on('tileloadstart', function() {
+        document.getElementById('status').textContent = '状态: 正在加载瓦片...';
+      });
+      
+      mbtilesSource.on('tileloadend', function() {
+        document.getElementById('status').textContent = '状态: 瓦片加载成功';
+        document.getElementById('status').style.color = 'green';
+      });
+      
+      mbtilesSource.on('tileloaderror', function(e) {
+        console.error('瓦片加载失败:', e);
+        document.getElementById('status').innerHTML = '<span class="error">状态: 瓦片加载失败，请检查Martin服务是否运行</span>';
+      });
+      
+      // 更新缩放级别和中心点信息
+      map.on('moveend', function() {
+        const view = map.getView();
+        const zoom = view.getZoom();
+        const center = ol.proj.toLonLat(view.getCenter());
+        
+        document.getElementById('current-zoom').textContent = zoom.toFixed(2);
+        document.getElementById('current-center').textContent = `[${center[0].toFixed(4)}, ${center[1].toFixed(4)}]`;
+      });
+      
+      // 添加调试信息
+      console.log('页面加载完成，尝试加载MBTiles图层...');
+      console.log('MBTiles URL:', mbtilesUrl);
+      
+      // 尝试获取TileJSON信息，使用超时控制
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
+      
+      fetch('http://localhost:3000/c1d3101c3dfe4fd3b05dd80ff3bd98c4', {
+        signal: controller.signal
+      })
+        .then(response => {
+          clearTimeout(timeoutId);
+          if (!response.ok) {
+            throw new Error(`TileJSON请求失败: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(tileJson => {
+          console.log('TileJSON信息:', tileJson);
+          
+          // 如果有bounds信息，自动缩放到数据范围
+          if (tileJson.bounds) {
+            const bounds = tileJson.bounds;
+            const extent = ol.proj.transformExtent(
+              [bounds[0], bounds[1], bounds[2], bounds[3]],
+              'EPSG:4326',
+              'EPSG:3857'
+            );
+            map.getView().fit(extent, { padding: [20, 20, 20, 20] });
+          }
+          
+          // 更新状态信息
+          const statusEl = document.getElementById('status');
+          statusEl.textContent = '状态: TileJSON加载成功，正在渲染瓦片...';
+          statusEl.style.color = 'blue';
+        })
+        .catch(error => {
+          clearTimeout(timeoutId);
+          console.error('TileJSON获取失败:', error);
+          const statusEl = document.getElementById('status');
+          if (error.name === 'AbortError') {
+            statusEl.innerHTML = '<span class="error">状态: TileJSON请求超时，请检查Martin服务是否运行</span>';
+          } else {
+            statusEl.innerHTML = `<span class="error">状态: TileJSON获取失败: ${error.message}</span>`;
+          }
+        });
+    }
+  </script>
+</body>
+</html> 

@@ -302,7 +302,7 @@ export default {
       
       // 尝试从URL提取表名作为图层名
       let tableName = 'default'
-      if (layer.file_type === 'mbtiles' || mvtUrl.includes('/mbtiles/')) {
+      if (layer.file_type === 'mbtiles' || layer.file_type === 'vector.mbtiles' || layer.file_type === 'raster.mbtiles' || mvtUrl.includes('/mbtiles/')) {
         // 从 MBTiles URL 提取文件名
         const mbtilesMatch = mvtUrl.match(/\/mbtiles\/([^/]+)\/\{z\}/) || []
         tableName = mbtilesMatch[1] || 'default'
@@ -312,58 +312,94 @@ export default {
       }
       //console.log('🎨 提取的表名/图层名:', tableName)
       
-      const mvtLayer = L.vectorGrid.protobuf(mvtUrl, {
-        vectorTileLayerStyles: { 
-          // 使用多种可能的图层名称
-          [tableName]: styleFunction,
-          'default': styleFunction,
-          // 有时Martin使用完整的表名
-          [`public.${tableName}`]: styleFunction
-        },
-        interactive: true,
-        maxZoom: 22,
-        // 移除调试代码，避免性能问题
-        getFeatureId: function(feature) {
-          return feature.properties?.gid || feature.id;
-        }
-      })
+      let mvtLayer;
+      
+      // 检查是否为栅格mbtiles
+      if (layer.file_type === 'raster.mbtiles') {
+        console.log('创建栅格MBTiles图层:', layer.layer_name);
+        // 使用普通瓦片图层加载栅格mbtiles
+        mvtLayer = L.tileLayer(mvtUrl, {
+          maxZoom: 22,
+          attribution: `MBTiles: ${layer.layer_name}`
+        });
+      } else {
+        // 使用矢量瓦片加载矢量mbtiles和其他矢量数据
+        mvtLayer = L.vectorGrid.protobuf(mvtUrl, {
+          vectorTileLayerStyles: { 
+            // 使用多种可能的图层名称
+            [tableName]: styleFunction,
+            'default': styleFunction,
+            // 有时Martin使用完整的表名
+            [`public.${tableName}`]: styleFunction
+          },
+          interactive: true,
+          maxZoom: 22,
+          // 移除调试代码，避免性能问题
+          getFeatureId: function(feature) {
+            return feature.properties?.gid || feature.id;
+          }
+        });
+        console.log('创建矢量MBTiles图层:', layer.layer_name);
+      }
       
       // 简化事件监听，只保留必要的
-      mvtLayer.on('tileerror', (e) => {
-        console.error('🎨 MVT瓦片加载错误:', e)
-      })
       
-      mvtLayer.on('click', (e) => {
-        if (!e?.layer?.properties || !mvtLayer._popupEnabled) return
+      // 根据图层类型添加不同的事件监听器
+      if (layer.file_type === 'raster.mbtiles') {
+        // 栅格图层事件
+        mvtLayer.on('error', (e) => {
+          console.error('🎨 栅格MBTiles瓦片加载错误:', e)
+        })
         
-        currentActiveLayer.value = layer
-        emit('layer-selected', layer)
-        
-        const properties = e.layer.properties
-        
-        // 构建属性信息显示内容
-        const content = Object.entries(properties)
-          .filter(([, value]) => value != null && value !== 'NULL' && value !== '')
-          .map(([key, value]) => {
-            // 特殊处理CAD图层信息
-            if (key === 'cad_layer') {
-              return `<strong>CAD图层:</strong> ${value}`
-            }
-            return `<strong>${key}:</strong> ${value}`
-          })
-          .join('<br/>')
-        
-        if (e.latlng) {
-          // 显示图层名称和CAD图层信息
-          const title = layer.layer_name
-          const cadLayer = properties.cad_layer ? ` (${properties.cad_layer})` : ''
+        mvtLayer.on('click', (e) => {
+          currentActiveLayer.value = layer
+          emit('layer-selected', layer)
+          
+          // 栅格图层点击时只显示基本信息
           L.popup()
-            .setContent(`<h4>${title}${cadLayer}</h4>${content || '无属性信息'}`)
+            .setContent(`<h4>${layer.layer_name}</h4><p>栅格MBTiles图层</p>`)
             .setLatLng(e.latlng)
             .openOn(map.value)
-        }
-      })
+        })
+      } else {
+        // 矢量图层事件
+        mvtLayer.on('tileerror', (e) => {
+          console.error('🎨 MVT瓦片加载错误:', e)
+        })
+        
+        mvtLayer.on('click', (e) => {
+          if (!e?.layer?.properties || !mvtLayer._popupEnabled) return
+          
+          currentActiveLayer.value = layer
+          emit('layer-selected', layer)
+          
+          const properties = e.layer.properties
+          
+          // 构建属性信息显示内容
+          const content = Object.entries(properties)
+            .filter(([, value]) => value != null && value !== 'NULL' && value !== '')
+            .map(([key, value]) => {
+              // 特殊处理CAD图层信息
+              if (key === 'cad_layer') {
+                return `<strong>CAD图层:</strong> ${value}`
+              }
+              return `<strong>${key}:</strong> ${value}`
+            })
+            .join('<br/>')
+          
+          if (e.latlng) {
+            // 显示图层名称和CAD图层信息
+            const title = layer.layer_name
+            const cadLayer = properties.cad_layer ? ` (${properties.cad_layer})` : ''
+            L.popup()
+              .setContent(`<h4>${title}${cadLayer}</h4>${content || '无属性信息'}`)
+              .setLatLng(e.latlng)
+              .openOn(map.value)
+          }
+        })
+      }
       
+      // 为所有类型的图层设置通用属性
       mvtLayer._popupEnabled = true
       mvtLayers.value[layer.id] = mvtLayer
       

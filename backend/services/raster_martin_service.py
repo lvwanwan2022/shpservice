@@ -22,7 +22,7 @@ class RasterMartinService:
         self.db_url = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
         self.engine = create_engine(self.db_url)
         
-    def publish_mbtiles_martin(self, file_id, file_path, original_filename, user_id=None):
+    def publish_mbtiles_martin(self, file_id, file_path, original_filename, user_id=None, mbtiles_type=None):
         """发布MBTiles文件为Martin服务
         
         Args:
@@ -30,6 +30,7 @@ class RasterMartinService:
             file_path: MBTiles文件路径
             original_filename: 原始文件名
             user_id: 用户ID
+            mbtiles_type: MBTiles类型，'vector'或'raster'
             
         Returns:
             发布结果字典
@@ -63,11 +64,16 @@ class RasterMartinService:
             RETURNING id
             """
             
+            # 确定vector_type，默认为mbtiles，但如果指定了类型则使用指定类型
+            vector_type = 'mbtiles'
+            if mbtiles_type:
+                vector_type = f"{mbtiles_type}_mbtiles"
+            
             params = {
                 'file_id': file_id,
                 'original_filename': original_filename,
                 'file_path': file_path,
-                'vector_type': 'mbtiles',
+                'vector_type': vector_type,
                 'table_name': table_name,  # 使用生成的唯一表名
                 'service_url': service_url,
                 'mvt_url': mvt_url,

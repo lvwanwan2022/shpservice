@@ -134,6 +134,15 @@ export default {
         maxSize = 10000; // TIF和MBTiles文件允许10GB
       }
       
+      // 检查文件类型与表单选择是否匹配
+      const formFileType = formData.get('file_type');
+      if (formFileType) {
+        if (file.name.toLowerCase().endsWith('.mbtiles') && 
+            !['vector.mbtiles', 'raster.mbtiles'].includes(formFileType)) {
+          return Promise.reject(new Error('MBTiles文件必须选择正确的类型：vector.mbtiles(矢量瓦片)或raster.mbtiles(栅格瓦片)'))
+        }
+      }
+      
       const sizeCheck = checkFileSize(file, maxSize)
       if (!sizeCheck.valid) {
         return Promise.reject(new Error(sizeCheck.message))

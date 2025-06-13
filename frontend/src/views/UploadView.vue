@@ -364,7 +364,7 @@
             <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
             <template #tip>
               <div class="el-upload__tip">
-                支持格式：dem.tif(最大10GB), dom.tif(最大10GB), mbtiles(最大10GB), dwg, dxf, geojson, zip(最大500MB, shp需打包成zip上传)<br>
+                支持格式：dem.tif(最大10GB), dom.tif(最大10GB), vector.mbtiles(矢量瓦片,最大10GB), raster.mbtiles(栅格瓦片,最大10GB), dwg, dxf, geojson, zip(最大500MB, shp需打包成zip上传)<br>
                 <span style="color: #67C23A; font-size: 12px;">
                   💡 大文件(>500MB)将自动使用分片上传，网络中断时会自动重试，确保上传成功
                 </span>
@@ -481,7 +481,7 @@ export default {
     const fileList = ref([])
     const uploaders = ref([])
     const disciplines = ref(['综合', '测绘', '地勘', '水文', '水工', '施工', '建筑', '金结', '电一', '电二', '消防', '暖通', '给排水', '环水', '移民', '其他'])
-    const fileTypes = ref(['shp', 'dem.tif', 'dom.tif', 'dwg', 'dxf', 'geojson', 'mbtiles'])
+    const fileTypes = ref(['shp', 'dem.tif', 'dom.tif', 'dwg', 'dxf', 'geojson', 'vector.mbtiles', 'raster.mbtiles'])
     const total = ref(0)
     const currentPage = ref(1)
     const pageSize = ref(12)
@@ -712,6 +712,28 @@ export default {
           }
           uploadForm.file = null
           return
+        }
+        
+        // 根据文件扩展名自动设置文件类型
+        if (extension === 'mbtiles') {
+          // 对于mbtiles文件，需要用户选择是矢量还是栅格类型
+          // 默认不设置，让用户自己选择
+          if (!uploadForm.file_type || !uploadForm.file_type.includes('mbtiles')) {
+            ElMessage.info('请在下方选择正确的MBTiles类型：vector.mbtiles(矢量瓦片)或raster.mbtiles(栅格瓦片)')
+          }
+        } else if (extension === 'tif') {
+          // 对于tif文件，可以自动设置为dem.tif
+          if (!uploadForm.file_type || !uploadForm.file_type.includes('tif')) {
+            uploadForm.file_type = 'dem.tif'
+          }
+        } else if (extension === 'dxf') {
+          uploadForm.file_type = 'dxf'
+        } else if (extension === 'dwg') {
+          uploadForm.file_type = 'dwg'
+        } else if (extension === 'geojson') {
+          uploadForm.file_type = 'geojson'
+        } else if (extension === 'zip') {
+          uploadForm.file_type = 'shp'
         }
         
         uploadForm.file = file.raw

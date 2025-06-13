@@ -780,7 +780,7 @@ def publish_martin_mbtiles_service(file_id):
         
         # 检查文件类型是否支持Martin服务
         file_type = file_info.get('file_type', '').lower()
-        if file_type not in ['geojson', 'shp', 'dxf', 'mbtiles']:
+        if file_type not in ['geojson', 'shp', 'dxf', 'mbtiles', 'vector.mbtiles', 'raster.mbtiles']:
             return jsonify({'error': 'Martin服务仅支持GeoJSON、SHP、DXF和MBTiles文件'}), 400
         
         # 检查是否已发布到Martin（统一表查询）
@@ -833,16 +833,20 @@ def publish_martin_mbtiles_service(file_id):
                 user_id=file_info.get('user_id')
             )
         
-        elif file_type == 'mbtiles':
+        elif file_type in ['mbtiles', 'vector.mbtiles', 'raster.mbtiles']:
             # 使用栅格Martin服务发布MBTiles文件
             from services.raster_martin_service import RasterMartinService
             raster_martin_service = RasterMartinService()
+            
+            # 确定MBTiles类型
+            mbtiles_type = 'vector' if file_type == 'vector.mbtiles' else 'raster.mbtiles'
             
             result = raster_martin_service.publish_mbtiles_martin(
                 file_id=str(file_id),
                 file_path=file_info['file_path'],
                 original_filename=file_info['file_name'],
-                user_id=file_info.get('user_id')
+                user_id=file_info.get('user_id'),
+                mbtiles_type=mbtiles_type
             )
         
         if result['success']:
