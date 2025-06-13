@@ -1813,9 +1813,9 @@ export default {
   height: 100%;
   position: relative;
   background-color: #f5f5f5; /* 添加背景色以便调试 */
-  border: 2px solid #409eff; /* 临时添加边框以便调试 */
   min-height: 0; /* 防止flex容器高度计算问题 */
   contain: layout style; /* CSS containment 优化 */
+  border: none; /* 移除调试边框 */
 }
 
 .dialog-content {

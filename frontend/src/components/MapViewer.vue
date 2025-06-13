@@ -1119,13 +1119,15 @@ export default {
   position: relative;
   width: 100%;
   height: 100%;
-  min-height: 400px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .map-container {
   width: 100%;
   height: 100%;
-  min-height: 400px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .dialog-content {

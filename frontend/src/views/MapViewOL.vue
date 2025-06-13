@@ -762,11 +762,11 @@ export default {
       currentActiveLayer.value = layer
       
       // 通知MapViewerOL组件将该图层置顶
-      if (mapViewerRef.value) {
-        mapViewerRef.value.bringLayerToTop(layer)
-      }
+      // if (mapViewerRef.value) {
+      //   mapViewerRef.value.bringLayerToTop(layer)
+      // }
       
-      ElMessage.success(`已选中图层: ${layer.layer_name}，该图层已置顶并启用属性弹窗`)
+      ElMessage.success(`已选中图层: ${layer.layer_name}`)
     }
     
     // 处理图层选择事件
@@ -903,7 +903,7 @@ export default {
 
 <style scoped>
 .map-view {
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -925,6 +925,8 @@ export default {
   flex-direction: column;
   transition: width 0.3s ease;
   flex-shrink: 0; /* 防止面板被压缩 */
+  height: 100%;
+  overflow: hidden;
 }
 
 .layer-panel.collapsed {
@@ -938,6 +940,7 @@ export default {
   background-color: #f0f0f0; /* 临时背景色便于调试 */
   min-height: 0; /* 防止flex容器高度计算问题 */
   contain: layout style; /* CSS containment 优化 */
+  height: 100%;
 }
 
 .map-container-wrapper.with-panel {
@@ -1204,6 +1207,8 @@ export default {
 /* 图层卡片样式 */
 .layer-cards {
   padding: 0;
+  overflow-y: auto;
+  max-height: 100%;
 }
 
 .layer-card {
@@ -1364,11 +1369,13 @@ export default {
   flex: 1;
   overflow-y: auto;
   padding: 15px;
+  max-height: calc(100% - 120px); /* 减去面板头部和场景选择器的高度 */
 }
 
 .panel-content {
   height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 </style> 

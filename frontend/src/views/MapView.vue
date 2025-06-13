@@ -742,9 +742,10 @@ export default {
 
 <style scoped>
 .map-view {
-  height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .map-toolbar {
@@ -780,6 +781,8 @@ export default {
   flex-direction: column;
   transition: all 0.3s ease;
   position: relative;
+  height: 100%;
+  overflow: hidden;
 }
 
 .layer-panel.collapsed {
@@ -822,6 +825,7 @@ export default {
 .panel-body {
   flex: 1;
   overflow-y: auto;
+  max-height: calc(100% - 120px); /* 减去面板头部和场景选择器的高度 */
 }
 
 /* 新的图层卡片样式 */
@@ -830,6 +834,8 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow-y: auto;
+  max-height: 100%;
 }
 
 .layer-card {
@@ -1032,6 +1038,8 @@ export default {
   flex: 1;
   position: relative;
   transition: all 0.3s;
+  height: 100%;
+  overflow: hidden;
 }
 
 .map-container-wrapper.with-panel {
