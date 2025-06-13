@@ -480,7 +480,7 @@ export default {
     // 响应式数据
     const fileList = ref([])
     const uploaders = ref([])
-    const disciplines = ref(['地质学', '地理学', '测绘学', '城市规划', '环境科学', '农业', '林业', '水资源', '交通运输', '其他'])
+    const disciplines = ref(['综合', '测绘', '地勘', '水文', '水工', '施工', '建筑', '金结', '电一', '电二', '消防', '暖通', '给排水', '环水', '移民', '其他'])
     const fileTypes = ref(['shp', 'dem.tif', 'dom.tif', 'dwg', 'dxf', 'geojson', 'mbtiles'])
     const total = ref(0)
     const currentPage = ref(1)
@@ -922,7 +922,7 @@ export default {
 
     // 判断文件是否可以发布Martin服务
     const canPublishMartin = (file) => {
-      const martinSupportedTypes = ['geojson', 'shp', 'dxf']
+      const martinSupportedTypes = ['geojson', 'shp', 'dxf', 'mbtiles']
       return martinSupportedTypes.includes(file.file_type.toLowerCase())
     }
 

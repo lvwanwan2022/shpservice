@@ -67,9 +67,17 @@ class FileService:
         
         # 生成安全的文件名（使用UUID避免中文问题）
         unique_filename = f"{uuid.uuid4().hex}.{extension}"
-        
         # 构建文件路径
-        file_path = os.path.join(self.upload_folder, unique_filename)
+        if original_filename.lower().endswith('.mbtiles'):
+            # 确保mbtiles子目录存在
+            mbtiles_folder = os.path.join(self.upload_folder, 'mbtiles')
+            if not os.path.exists(mbtiles_folder):
+                os.makedirs(mbtiles_folder)
+            file_path = os.path.join(mbtiles_folder, unique_filename)
+        else:
+            file_path = os.path.join(self.upload_folder, unique_filename)
+        # 构建文件路径
+        #file_path = os.path.join(self.upload_folder, unique_filename)
         
         # 保存文件
         file.save(file_path)

@@ -8,3 +8,10 @@ postgres:
     tables:
       from_schemas: ["public"]
       id_regex: "^vector_.*"  # 只发布符合规则的表
+mbtiles:
+  # 指定MBTiles文件所在目录
+  dir: "G:\\code\\shpservice\\FilesData\\mbtiles"
+  # 可选：是否自动发布该目录下的所有MBTiles文件
+  auto_publish: true
+  # 可选：指定文件名匹配模式（使用glob模式）
+  file_regex: ".*\\.mbtiles$"  # 匹配所有.mbtiles文件
