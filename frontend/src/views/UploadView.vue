@@ -364,7 +364,7 @@
             <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
             <template #tip>
               <div class="el-upload__tip">
-                支持格式：dem.tif(最大10GB), dom.tif(最大10GB), mbtiles, dwg, dxf, geojson, zip(最大500MB, shp需打包成zip上传)<br>
+                支持格式：dem.tif(最大10GB), dom.tif(最大10GB), mbtiles(最大10GB), dwg, dxf, geojson, zip(最大500MB, shp需打包成zip上传)<br>
                 <span style="color: #67C23A; font-size: 12px;">
                   💡 大文件(>500MB)将自动使用分片上传，网络中断时会自动重试，确保上传成功
                 </span>

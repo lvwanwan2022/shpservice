@@ -130,8 +130,8 @@ export default {
       let maxSize = 100; // 默认100MB
       if (file.name.endsWith('.zip')) {
         maxSize = 500; // ZIP文件500MB
-      } else if (file.name.toLowerCase().endsWith('.tif') || file.name.toLowerCase().endsWith('.tiff')) {
-        maxSize = 10000; // TIF文件允许10GB
+      } else if (file.name.toLowerCase().endsWith('.tif') || file.name.toLowerCase().endsWith('.tiff') || file.name.toLowerCase().endsWith('.mbtiles')) {
+        maxSize = 10000; // TIF和MBTiles文件允许10GB
       }
       
       const sizeCheck = checkFileSize(file, maxSize)
