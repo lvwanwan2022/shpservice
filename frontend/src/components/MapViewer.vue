@@ -259,8 +259,17 @@ export default {
       
       let mvtUrl = layer.mvt_url
       if (mvtUrl.includes('localhost:3000')) {
-        const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
-        mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
+        // 检查是否是 MBTiles 服务
+        if (layer.file_type === 'mbtiles' || mvtUrl.includes('/mbtiles/')) {
+          // MBTiles 服务格式：http://localhost:3000/mbtiles/{文件名}/{z}/{x}/{y}
+          const mbtilesMatch = mvtUrl.match(/\/mbtiles\/([^/]+)\/\{z\}/) || []
+          const fileName = mbtilesMatch[1] || 'default'
+          mvtUrl = `http://localhost:3000/mbtiles/${fileName}/{z}/{x}/{y}`
+        } else {
+          // 普通 Martin 服务格式：http://localhost:3000/{tableName}/{z}/{x}/{y}
+          const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
+          mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
+        }
       }
       
       // 调试：获取Martin服务的TileJSON信息
@@ -292,7 +301,15 @@ export default {
       //console.log('🎨 创建MVT图层，URL:', mvtUrl)
       
       // 尝试从URL提取表名作为图层名
-      const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
+      let tableName = 'default'
+      if (layer.file_type === 'mbtiles' || mvtUrl.includes('/mbtiles/')) {
+        // 从 MBTiles URL 提取文件名
+        const mbtilesMatch = mvtUrl.match(/\/mbtiles\/([^/]+)\/\{z\}/) || []
+        tableName = mbtilesMatch[1] || 'default'
+      } else {
+        // 从普通 Martin URL 提取表名
+        tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
+      }
       //console.log('🎨 提取的表名/图层名:', tableName)
       
       const mvtLayer = L.vectorGrid.protobuf(mvtUrl, {

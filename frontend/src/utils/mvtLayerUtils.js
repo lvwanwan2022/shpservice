@@ -117,6 +117,21 @@ export async function createMVTLayer(layerConfig) {
       //console.log('移除.pbf后缀，新URL:', mvtUrl)
     }
     
+    // 处理localhost URL
+    if (mvtUrl.includes('localhost:3000')) {
+      // 检查是否是 MBTiles 服务
+      if (layerConfig.file_type === 'mbtiles' || mvtUrl.includes('/mbtiles/')) {
+        // MBTiles 服务格式：http://localhost:3000/mbtiles/{文件名}/{z}/{x}/{y}
+        const mbtilesMatch = mvtUrl.match(/\/mbtiles\/([^/]+)\/\{z\}/) || []
+        const fileName = mbtilesMatch[1] || 'default'
+        mvtUrl = `http://localhost:3000/mbtiles/${fileName}/{z}/{x}/{y}`
+      } else {
+        // 普通 Martin 服务格式：http://localhost:3000/{tableName}/{z}/{x}/{y}
+        const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
+        mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
+      }
+    }
+    
     // 验证URL格式
     if (!mvtUrl.includes('{z}') || !mvtUrl.includes('{x}') || !mvtUrl.includes('{y}')) {
       console.warn('⚠️ MVT URL格式可能不正确，缺少{z},{x},{y}参数:', mvtUrl)
@@ -298,7 +313,8 @@ export async function createMVTLayerFromMartin(martinLayer) {
     mvt_url: martinLayer.mvt_url,
     tilejson_url: martinLayer.tilejson_url,
     layer_name: martinLayer.layer_name || martinLayer.title,
-    style: martinLayer.style || {}
+    style: martinLayer.style || {},
+    file_type: martinLayer.file_type || 'shp' // 添加文件类型，用于区分 MBTiles 和其他格式
   }
   
   //console.log('构建的图层配置:', layerConfig)

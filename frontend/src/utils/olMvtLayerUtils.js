@@ -159,8 +159,17 @@ export async function createOpenLayersMVTLayer(layerConfig, options = {}) {
     
     // 处理localhost URL
     if (mvtUrl.includes('localhost:3000')) {
-      const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
-      mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
+      // 检查是否是 MBTiles 服务
+      if (layerConfig.file_type === 'mbtiles' || mvtUrl.includes('/mbtiles/')) {
+        // MBTiles 服务格式：http://localhost:3000/mbtiles/{文件名}/{z}/{x}/{y}
+        const mbtilesMatch = mvtUrl.match(/\/mbtiles\/([^/]+)\/\{z\}/) || []
+        const fileName = mbtilesMatch[1] || 'default'
+        mvtUrl = `http://localhost:3000/mbtiles/${fileName}/{z}/{x}/{y}`
+      } else {
+        // 普通 Martin 服务格式：http://localhost:3000/{tableName}/{z}/{x}/{y}
+        const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
+        mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
+      }
     }
     
     // 验证URL格式
