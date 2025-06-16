@@ -7,17 +7,7 @@ FilePath: \shpservice\backend\config.py
 Description: 
 Copyright (c) 2025 by VGE, All Rights Reserved. 
 '''
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-Author: WangNing
-Date: 2025-05-16 21:36:41
-LastEditors: WangNing
-LastEditTime: 2025-05-27 16:09:03
-FilePath: \\shpservice\\backend\\config.py
-Description: 配置文件
-Copyright (c) 2025 by VGE, All Rights Reserved. 
-"""
+
 
 import os
 
@@ -54,10 +44,10 @@ MARTIN_CONFIG = {
     'auto_publish_tables': True,  # 自动发现并发布 PostGIS 表
     'table_sources': [],  # 将在运行时动态填充
     'cors_enabled': True,
-    'cache_size': 512,  # MB
+    'cache_size': 5120,  # MB
     'pool_size': 20,
     # Martin 可执行文件路径配置 - 修正路径中的特殊字符
-    'martin_executable': r'G:\code\martin\martin-x86_64-pc-windows-msvc\martin.exe',
+    'martin_executable': r'F:\code\martin\martin-x86_64-pc-windows-msvc\martin.exe',
 }
 
 # GeoServer配置

@@ -32,8 +32,17 @@ class MartinService:
             client_host = host
             
         self.base_url = f"http://{client_host}:{self.config['port']}"
+        
         # 获取 Martin 可执行文件路径
         self.martin_executable = self.config.get('martin_executable', 'martin')
+        
+        # 检查可执行文件是否存在
+        if self.martin_executable and not os.path.isfile(self.martin_executable):
+            logger.warning(f"⚠️ 配置的Martin可执行文件不存在: {self.martin_executable}")
+            logger.warning("将尝试使用系统PATH中的martin命令")
+            self.martin_executable = 'martin'
+        else:
+            logger.info(f"✅ 使用Martin可执行文件: {self.martin_executable}")
         
     def is_enabled(self) -> bool:
         """检查 Martin 服务是否启用"""
@@ -193,44 +202,101 @@ class MartinService:
         return "\n".join(lines)
     
     def start_service(self) -> bool:
-        """备用启动方法 - 直接subprocess启动"""
+        """启动 Martin 服务"""
         if not self.is_enabled():
             logger.info("Martin 服务未启用")
             return False
             
-        if not self.check_martin_installed():
-            logger.error("Martin 未安装")
+        if not os.path.exists(self.martin_executable):
+            logger.error(f"Martin 可执行文件不存在: {self.martin_executable}")
             return False
         
         if not os.path.exists(self.config_file_path):
-            logger.error(f"配置文件不存在: {self.config_file_path}")
-            return False
+            logger.info(f"配置文件不存在: {self.config_file_path}")
+            logger.info("尝试生成配置文件...")
+            if not self.write_config_file():
+                logger.error("无法生成配置文件")
+                return False
+            logger.info(f"配置文件已生成: {self.config_file_path}")
             
         try:
             cmd = [self.martin_executable, '--config', self.config_file_path]
-            logger.info(f"直接启动Martin: {' '.join(cmd)}")
+            logger.info(f"启动Martin: {' '.join(cmd)}")
             
-            self.process = subprocess.Popen(cmd, 
-                                          stdout=subprocess.PIPE,
-                                          stderr=subprocess.PIPE,
-                                          text=False)
+            # 在Windows上使用特定的启动方式
+            if os.name == 'nt':
+                try:
+                    # 使用startupinfo隐藏控制台窗口
+                    import subprocess
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    startupinfo.wShowWindow = 0  # SW_HIDE
+                    
+                    self.process = subprocess.Popen(
+                        cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=False,
+                        startupinfo=startupinfo
+                    )
+                    logger.info(f"Windows方式启动Martin进程，PID: {self.process.pid if self.process else 'unknown'}")
+                except Exception as win_error:
+                    logger.error(f"Windows特定启动方式失败: {win_error}")
+                    # 回退到标准方式
+                    self.process = subprocess.Popen(
+                        cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=False
+                    )
+            else:
+                # 非Windows系统的标准启动方式
+                self.process = subprocess.Popen(
+                    cmd, 
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=False
+                )
             
-            import time
-            time.sleep(3)
+            # 等待服务启动
+            logger.info("等待Martin服务启动...")
+            max_retries = 5
+            retry_interval = 2
             
-            if self.process.poll() is not None:
-                logger.error("Martin进程启动后立即退出")
-                return False
+            for i in range(max_retries):
+                # 检查进程是否已退出
+                if self.process.poll() is not None:
+                    exit_code = self.process.poll()
+                    stderr_output = self._safe_decode(self.process.stderr.read() if self.process.stderr else b'')
+                    logger.error(f"Martin进程启动后立即退出，退出码: {exit_code}")
+                    logger.error(f"错误输出: {stderr_output}")
+                    return False
+                
+                # 检查服务是否可访问
+                if self.is_running():
+                    logger.info(f"✅ Martin服务启动成功 (尝试 {i+1}/{max_retries})")
+                    return True
+                
+                logger.info(f"Martin服务尚未就绪，等待重试... ({i+1}/{max_retries})")
+                time.sleep(retry_interval)
             
+            # 最后一次检查
             if self.is_running():
-                logger.info("Martin服务启动成功")
+                logger.info("✅ Martin服务最终启动成功")
                 return True
             else:
-                logger.error("Martin服务无法访问")
+                logger.error("❌ Martin服务无法访问，启动失败")
+                # 尝试获取错误输出
+                if self.process and self.process.stderr:
+                    stderr_output = self._safe_decode(self.process.stderr.read())
+                    if stderr_output:
+                        logger.error(f"错误输出: {stderr_output}")
                 return False
                 
         except Exception as e:
-            logger.error(f"启动Martin失败: {e}")
+            logger.error(f"启动Martin失败: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return False
     
     def _safe_decode(self, data: bytes) -> str:
@@ -436,34 +502,53 @@ class MartinService:
         return "未知版本"
     
     def refresh_tables(self) -> bool:
-        """重启Martin服务 - 使用kill+bat方式"""
+        """重启Martin服务 - 更智能地处理重启过程"""
         try:
             logger.info("=== 重启Martin服务 ===")
             
-            # 1. Kill所有Martin进程
-            logger.info("正在清理Martin进程...")
+            # 1. 停止当前服务
+            logger.info("正在停止当前Martin服务...")
             self.stop_service()
             
             # 2. 等待一下让系统清理资源
-            import time
             time.sleep(2)
             
-            # 3. 使用bat后台启动Martin服务
-            logger.info("正在使用bat后台启动Martin服务...")
-            if self.start_service_with_bat(background=True):
-                # 4. 等待服务启动并验证
-                time.sleep(4)  # 给bat启动一些时间
-                
-                if self.is_running():
-                    logger.info("✅ Martin服务重启成功")
-                    return True
-                else:
-                    logger.warning("⚠️ Martin启动命令已执行，服务可能正在启动中...")
-                    return True  # bat命令执行成功就算成功
-            else:
-                logger.error("❌ bat启动命令执行失败")
+            # 3. 检查Martin可执行文件
+            if not os.path.exists(self.martin_executable):
+                logger.error(f"❌ Martin可执行文件不存在: {self.martin_executable}")
                 return False
                 
+            # 4. 确保配置文件存在
+            if not os.path.exists(self.config_file_path):
+                logger.info("配置文件不存在，尝试生成...")
+                if not self.write_config_file():
+                    logger.error("❌ 无法生成配置文件")
+                    return False
+            
+            # 5. 尝试直接启动服务
+            logger.info("尝试直接启动Martin服务...")
+            if self.start_service():
+                logger.info("✅ Martin服务直接启动成功")
+                return True
+                
+            # 6. 如果直接启动失败，尝试使用bat文件启动
+            logger.info("直接启动失败，尝试使用bat文件启动...")
+            if self.start_service_with_bat(background=True):
+                # 等待服务启动并验证
+                time.sleep(4)
+                
+                if self.is_running():
+                    logger.info("✅ Martin服务通过bat启动成功")
+                    return True
+                else:
+                    logger.warning("⚠️ Martin服务正在启动中，但尚未就绪")
+                    return True  # bat命令执行成功就算成功
+            
+            logger.error("❌ 所有启动方法均失败")
+            return False
+                
         except Exception as e:
-            logger.error(f"❌ Martin服务重启失败: {e}")
+            logger.error(f"❌ Martin服务重启失败: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return False 

@@ -36,7 +36,7 @@ app = Flask(__name__)
 
 # 从配置模块加载配置
 try:
-    from config import APP_CONFIG, FILE_STORAGE
+    from config import APP_CONFIG, FILE_STORAGE, GEOSERVER_CONFIG
     app.config.update(APP_CONFIG)
     # 设置文件上传大小限制
     app.config['MAX_CONTENT_LENGTH'] = FILE_STORAGE['max_content_length']
@@ -72,11 +72,11 @@ try:
         logger.info("✅ 数据库连接成功")
         
         # 初始化数据库表
-        #try:
-            #init_database()
-            #logger.info("✅ 数据库初始化成功")
-        #except Exception as init_error:
-            #logger.warning(f"⚠️ 数据库初始化失败: {str(init_error)}")
+        try:
+            init_database()
+            logger.info("✅ 数据库初始化成功")
+        except Exception as init_error:
+            logger.warning(f"⚠️ 数据库初始化失败: {str(init_error)}")
             
     except Exception as conn_error:
         logger.warning(f"⚠️ 数据库连接失败: {str(conn_error)}")
@@ -211,7 +211,7 @@ def geoserver_proxy(path):
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
         return response
     
-    geoserver_url = 'http://localhost:8083/geoserver'
+    geoserver_url = GEOSERVER_CONFIG['url']
     target_url = f"{geoserver_url}/{path}"
     
     # 转发查询参数

@@ -77,30 +77,81 @@ class GeoServerService:
             raise Exception(error_msg)
     
     def _create_workspace_in_geoserver(self):
-        """在GeoServer中创建工作空间"""
-        headers = {'Content-type': 'application/json'}
-        workspace_url = f"{self.rest_url}/workspaces"
+        """在GeoServer中创建工作空间
+        
+        使用REST API检查工作空间是否存在，如果不存在则创建
+        """
+        print(f"检查GeoServer中是否存在工作空间: {self.workspace}")
         
         # 检查工作空间是否存在
-        check_url = f"{self.rest_url}/workspaces/{self.workspace}"
-        response = requests.get(check_url, auth=self.auth)
+        workspace_url = f"{self.rest_url}/workspaces/{self.workspace}"
+        print(f"检查URL: {workspace_url}")
         
-        if response.status_code != 200:
-            # 创建工作空间
-            workspace_data = {
-                "workspace": {
-                    "name": self.workspace
-                }
+        try:
+            check_response = requests.get(
+                workspace_url, 
+                auth=self.auth,
+                headers={'Accept': 'application/json'},
+                timeout=30
+            )
+            
+            print(f"检查响应状态码: {check_response.status_code}")
+            
+            if check_response.status_code == 200:
+                # 工作空间已存在
+                try:
+                    workspace_data = check_response.json()
+                    print(f"工作空间信息: {workspace_data}")
+                except:
+                    pass
+                print(f"✅ 工作空间 '{self.workspace}' 已存在，无需创建")
+                return True
+            elif check_response.status_code != 404:
+                # 非404错误，可能是连接问题
+                print(f"⚠️ 检查工作空间时出现非404错误: {check_response.status_code}")
+                if check_response.text:
+                    print(f"响应内容: {check_response.text}")
+        except Exception as e:
+            print(f"⚠️ 检查工作空间时出现异常: {str(e)}")
+            print("尝试直接创建工作空间...")
+        
+        # 创建工作空间
+        print(f"创建工作空间: {self.workspace}")
+        workspace_url = f"{self.rest_url}/workspaces"
+        headers = {'Content-type': 'application/json'}
+        
+        # 构建请求数据
+        workspace_data = {
+            "workspace": {
+                "name": self.workspace
             }
+        }
+        
+        try:
             response = requests.post(
                 workspace_url, 
                 data=json.dumps(workspace_data), 
                 headers=headers, 
-                auth=self.auth
+                auth=self.auth,
+                timeout=30
             )
             
-            if response.status_code not in [201, 200]:
-                raise Exception(f"创建工作空间失败: {response.text}")
+            print(f"创建响应状态码: {response.status_code}")
+            
+            if response.status_code in [201, 200]:
+                print(f"✅ 工作空间 '{self.workspace}' 创建成功")
+                return True
+            else:
+                print(f"❌ 创建工作空间失败: HTTP {response.status_code}")
+                if response.text:
+                    print(f"响应内容: {response.text}")
+                raise Exception(f"创建工作空间失败: HTTP {response.status_code} - {response.text}")
+        except requests.exceptions.RequestException as e:
+            print(f"❌ 请求异常: {str(e)}")
+            raise Exception(f"创建工作空间请求失败: {str(e)}")
+        except Exception as e:
+            print(f"❌ 其他异常: {str(e)}")
+            raise
     
     def publish_shapefile(self, shp_zip_path, store_name, file_id):
         """发布Shapefile服务 - 解压验证版本
@@ -2387,6 +2438,27 @@ class GeoServerService:
         """
         
         print(f"创建PostGIS数据源: {store_name}")
+        print(f"使用工作空间: {self.workspace}")
+        
+        # 确保工作空间存在
+        try:
+            # 先检查GeoServer中是否存在该工作空间
+            workspace_url = f"{self.rest_url}/workspaces/{self.workspace}"
+            check_response = requests.get(workspace_url, auth=self.auth)
+            
+            if check_response.status_code != 200:
+                print(f"⚠️ GeoServer中不存在工作空间 {self.workspace}，尝试创建...")
+                self._create_workspace_in_geoserver()
+                print(f"✅ GeoServer中工作空间 {self.workspace} 创建成功")
+            else:
+                print(f"✅ GeoServer中工作空间 {self.workspace} 已存在")
+                
+            # 同时确保数据库中也有对应的记录
+            workspace_id = self._get_workspace_id()
+            print(f"✅ 数据库中工作空间记录存在，ID: {workspace_id}")
+        except Exception as e:
+            print(f"⚠️ 工作空间检查/创建失败: {str(e)}")
+            print("尝试继续创建数据存储...")
         
         # 清理可能存在的同名数据存储
         self._cleanup_existing_datastore(store_name)
@@ -2398,8 +2470,7 @@ class GeoServerService:
                 "type": "PostGIS",
                 "enabled": True,
                 "workspace": {
-                    "name": self.workspace,
-                    "href": f"{self.rest_url}/workspaces/{self.workspace}.json"
+                    "name": self.workspace
                 },
                 "connectionParameters": {
                     "entry": [
@@ -2448,31 +2519,48 @@ class GeoServerService:
         url = f"{self.rest_url}/workspaces/{self.workspace}/datastores"
         headers = {'Content-Type': 'application/json'}
         
-        response = requests.post(
-            url, 
-            json=datastore_config,
-            auth=self.auth,
-            headers=headers,
-            timeout=60
-        )
+        print(f"发送请求到: {url}")
         
-        print(f"创建数据存储响应状态码: {response.status_code}")
-        if response.text:
-            print(f"响应内容: {response.text[:500]}...")
-        
-        if response.status_code not in [201, 200]:
-            raise Exception(f"创建PostGIS数据存储失败: HTTP {response.status_code} - {response.text}")
-        
-        # 验证数据存储是否创建成功
-        time.sleep(2)  # 等待GeoServer处理
-        
-        verify_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}.json"
-        verify_response = requests.get(verify_url, auth=self.auth)
-        
-        if verify_response.status_code != 200:
-            raise Exception(f"PostGIS数据存储创建后验证失败: {verify_response.text}")
-        
-        print(f"✅ PostGIS数据存储创建并验证成功: {store_name}")
+        try:
+            response = requests.post(
+                url, 
+                json=datastore_config,
+                auth=self.auth,
+                headers=headers,
+                timeout=60
+            )
+            
+            print(f"创建数据存储响应状态码: {response.status_code}")
+            if response.text:
+                print(f"响应内容: {response.text[:500]}...")
+            
+            if response.status_code not in [201, 200]:
+                # 尝试获取更多错误信息
+                try:
+                    error_detail = response.json()
+                    print(f"错误详情: {json.dumps(error_detail)}")
+                except:
+                    pass
+                
+                raise Exception(f"创建PostGIS数据存储失败: HTTP {response.status_code} - {response.text}")
+            
+            # 验证数据存储是否创建成功
+            time.sleep(2)  # 等待GeoServer处理
+            
+            verify_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}.json"
+            print(f"验证URL: {verify_url}")
+            verify_response = requests.get(verify_url, auth=self.auth)
+            
+            if verify_response.status_code != 200:
+                raise Exception(f"PostGIS数据存储创建后验证失败: {verify_response.text}")
+            
+            print(f"✅ PostGIS数据存储创建并验证成功: {store_name}")
+        except requests.exceptions.RequestException as e:
+            print(f"❌ 请求异常: {str(e)}")
+            raise Exception(f"创建PostGIS数据存储请求失败: {str(e)}")
+        except Exception as e:
+            print(f"❌ 其他异常: {str(e)}")
+            raise
     
     def _publish_featuretype_from_postgis(self, store_name, table_name, featuretype_name):
         """从PostGIS发布要素类型

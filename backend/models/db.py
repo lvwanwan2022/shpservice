@@ -229,6 +229,88 @@ def check_table_exists(table_name):
 def init_database():
     """初始化数据库表"""
     try:
+        # 检查并创建PostGIS扩展
+        check_postgis_sql = """
+        SELECT EXISTS (
+            SELECT 1 FROM pg_extension WHERE extname = 'postgis'
+        )
+        """
+        result = execute_query(check_postgis_sql)
+        has_postgis = result[0]['exists']
+        
+        if not has_postgis:
+            print("PostGIS扩展不存在，尝试创建...")
+            try:
+                create_postgis_sql = "CREATE EXTENSION postgis"
+                execute_query(create_postgis_sql, fetch=False)
+                print("✅ PostGIS扩展创建成功")
+                
+                # 创建PostGIS拓扑扩展（可选）
+                create_postgis_topology_sql = "CREATE EXTENSION postgis_topology"
+                execute_query(create_postgis_topology_sql, fetch=False)
+                print("✅ PostGIS拓扑扩展创建成功")
+                
+                # 创建其他有用的PostGIS相关扩展
+                try:
+                    # 用于栅格数据处理
+                    execute_query("CREATE EXTENSION postgis_raster", fetch=False)
+                    print("✅ PostGIS栅格扩展创建成功")
+                except Exception as e:
+                    print(f"⚠️ 创建PostGIS栅格扩展失败: {str(e)}")
+                
+                try:
+                    # 用于地址解析和地理编码
+                    execute_query("CREATE EXTENSION fuzzystrmatch", fetch=False)
+                    execute_query("CREATE EXTENSION address_standardizer", fetch=False)
+                    execute_query("CREATE EXTENSION address_standardizer_data_us", fetch=False)
+                    execute_query("CREATE EXTENSION postgis_tiger_geocoder", fetch=False)
+                    print("✅ PostGIS地理编码扩展创建成功")
+                except Exception as e:
+                    print(f"⚠️ 创建地理编码扩展失败: {str(e)}")
+                    print("部分地理编码功能可能不可用")
+                
+                # 创建空间索引扩展
+                try:
+                    execute_query("CREATE EXTENSION btree_gist", fetch=False)
+                    print("✅ GiST索引扩展创建成功")
+                except Exception as e:
+                    print(f"⚠️ 创建GiST索引扩展失败: {str(e)}")
+            except Exception as e:
+                print(f"⚠️ 创建PostGIS扩展失败: {str(e)}")
+                print("请确保PostgreSQL已安装PostGIS，并且当前用户有创建扩展的权限")
+        else:
+            print("✅ PostGIS扩展已存在")
+            
+            # 检查PostGIS版本
+            postgis_version_sql = "SELECT PostGIS_Version()"
+            try:
+                version_result = execute_query(postgis_version_sql)
+                print(f"✅ 当前PostGIS版本: {version_result[0]['postgis_version']}")
+            except:
+                print("⚠️ 无法获取PostGIS版本信息")
+            
+            # 检查其他扩展
+            check_extensions_sql = """
+            SELECT extname FROM pg_extension 
+            WHERE extname IN ('postgis_topology', 'postgis_raster', 'fuzzystrmatch', 
+                             'address_standardizer', 'postgis_tiger_geocoder', 'btree_gist')
+            """
+            try:
+                extensions_result = execute_query(check_extensions_sql)
+                installed_extensions = [ext['extname'] for ext in extensions_result]
+                print(f"✅ 已安装的扩展: {', '.join(installed_extensions)}")
+                
+                # 检查缺失的扩展
+                all_extensions = ['postgis_topology', 'postgis_raster', 'fuzzystrmatch', 
+                                 'address_standardizer', 'postgis_tiger_geocoder', 'btree_gist']
+                missing_extensions = [ext for ext in all_extensions if ext not in installed_extensions]
+                
+                if missing_extensions:
+                    print(f"⚠️ 缺少的扩展: {', '.join(missing_extensions)}")
+                    print("部分空间数据功能可能受限")
+            except:
+                print("⚠️ 无法检查已安装扩展")
+        
         # 创建用户表
         create_users_table = """
         CREATE TABLE IF NOT EXISTS users (
@@ -563,18 +645,69 @@ def init_database():
         
         print("数据库表创建成功")
         
-        # 插入默认工作空间
-        insert_default_workspace = """
-        INSERT INTO geoserver_workspaces (name, namespace_uri, namespace_prefix, description, is_default)
-        VALUES ('shpservice', 'http://shpservice', 'shpservice', 'Default workspace for SHP service', TRUE)
-        ON CONFLICT (name) DO NOTHING
-        """
-        execute_query(insert_default_workspace, fetch=False)
-        
-        print("默认工作空间创建成功")
+
         
         # 执行数据库迁移
         _migrate_database()
+        
+        # 确保GeoServer工作空间存在
+        try:
+            from config import GEOSERVER_CONFIG
+            workspace_name = GEOSERVER_CONFIG.get('workspace', 'shpservice')
+            
+            # 检查geoserver_workspaces表中是否已存在该工作空间
+            workspace_check_sql = """
+            SELECT id FROM geoserver_workspaces WHERE name = %s
+            """
+            workspace_result = execute_query(workspace_check_sql, (workspace_name,))
+            
+            if not workspace_result:
+                print(f"在数据库中创建GeoServer工作空间记录: {workspace_name}")
+                # 在数据库中创建工作空间记录
+                insert_workspace_sql = """
+                INSERT INTO geoserver_workspaces 
+                (name, namespace_uri, namespace_prefix, description, is_default, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                RETURNING id
+                """
+                
+                result = execute_query(insert_workspace_sql, (
+                    workspace_name,
+                    f"http://{workspace_name}",
+                    workspace_name,
+                    f"Default workspace for {workspace_name}",
+                    True
+                ))
+                
+                workspace_id = result[0]['id']
+                print(f"✅ 数据库中GeoServer工作空间记录创建成功，ID: {workspace_id}")
+                
+                # 尝试在GeoServer中创建工作空间
+                try:
+                    # 导入GeoServerService并创建工作空间
+                    from services.geoserver_service import GeoServerService
+                    geoserver = GeoServerService()
+                    geoserver._create_workspace_in_geoserver()
+                    print(f"✅ GeoServer中工作空间 {workspace_name} 创建成功")
+                except Exception as e:
+                    print(f"⚠️ GeoServer中创建工作空间失败: {str(e)}")
+                    print("请确保GeoServer服务正在运行，并检查连接配置")
+            else:
+                print(f"✅ 数据库中GeoServer工作空间 {workspace_name} 已存在，ID: {workspace_result[0]['id']}")
+                
+                # 检查GeoServer中是否存在该工作空间
+                try:
+                    from services.geoserver_service import GeoServerService
+                    geoserver = GeoServerService()
+                    # 检查工作空间
+                    geoserver._ensure_workspace_exists()
+                    print(f"✅ GeoServer中工作空间 {workspace_name} 已存在")
+                except Exception as e:
+                    print(f"⚠️ GeoServer工作空间检查失败: {str(e)}")
+        except Exception as e:
+            print(f"⚠️ GeoServer工作空间初始化失败: {str(e)}")
+        
+        print("数据库初始化完成")
         
     except Exception as e:
         print(f"初始化数据库失败: {str(e)}")

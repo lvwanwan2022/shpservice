@@ -26,4 +26,4 @@ postgres:
 mbtiles:
   paths:
     # scan this whole dir, matching all *.mbtiles files
-    - G:/code/shpservice/FilesData/mbtiles
+    - F:/PluginDevelopment/shpservice/FilesData/mbtiles
