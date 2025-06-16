@@ -27,3 +27,4 @@ mbtiles:
   paths:
     # scan this whole dir, matching all *.mbtiles files
     - F:/PluginDevelopment/shpservice/FilesData/mbtiles
+    

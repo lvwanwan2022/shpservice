@@ -445,6 +445,7 @@ def init_database():
             file_id INTEGER REFERENCES files(id),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            style_config JSONB,
             UNIQUE(workspace_id, name),
             CONSTRAINT check_data_source CHECK (
                 (featuretype_id IS NOT NULL AND coverage_id IS NULL) OR 
@@ -510,15 +511,18 @@ def init_database():
             martin_service_id INTEGER,
             martin_service_type VARCHAR(20) DEFAULT NULL,
             layer_type VARCHAR(20) DEFAULT 'geoserver',
-            layer_order INTEGER DEFAULT 1,
+            layer_order INTEGER DEFAULT 0,
             visible BOOLEAN DEFAULT true,
-            opacity REAL DEFAULT 1.0,
+            opacity NUMERIC(3,2) DEFAULT 1.0,
             style_name VARCHAR(100),
             custom_style JSONB,
             queryable BOOLEAN DEFAULT true,
             selectable BOOLEAN DEFAULT true,
+            service_reference VARCHAR(100),
+            service_url TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT chk_layer_type CHECK (layer_type IN ('geoserver', 'martin'))
         )
         """
         
@@ -588,7 +592,8 @@ def init_database():
             "CREATE INDEX IF NOT EXISTS idx_scene_layers_scene_id ON scene_layers(scene_id)",
             "CREATE INDEX IF NOT EXISTS idx_scene_layers_layer_id ON scene_layers(layer_id)",
             "CREATE INDEX IF NOT EXISTS idx_scene_layers_martin_service_id ON scene_layers(martin_service_id)",
-            "CREATE INDEX IF NOT EXISTS idx_scene_layers_layer_order ON scene_layers(layer_order)"
+            "CREATE INDEX IF NOT EXISTS idx_scene_layers_layer_order ON scene_layers(layer_order)",
+            "CREATE INDEX IF NOT EXISTS idx_scene_layers_order ON scene_layers(scene_id, layer_order)"
         ]
         
         # 创建其他表的索引（为了保持一致性）

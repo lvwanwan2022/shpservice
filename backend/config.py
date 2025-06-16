@@ -86,7 +86,7 @@ GEOSERVER_CONFIG = {
 
 # 文件存储配置
 FILE_STORAGE = {
-    'upload_folder': os.path.join(os.path.dirname(os.path.dirname(__file__)), 'FilesData'),
+    'upload_folder': 'F:/PluginDevelopment/shpservice/FilesData',#os.path.join(os.path.dirname(os.path.dirname(__file__)), 'FilesData'),
     'temp_folder': os.path.join(os.path.dirname(os.path.dirname(__file__)), 'temp'),  # 临时文件目录
     'allowed_extensions': ['zip', 'shp', 'geojson', 'json', 'kml', 'gpkg', 'tif', 'tiff', 'dxf', 'mbtiles'],
     'max_content_length': 10 * 1024 * 1024 * 1024,  # 10GB
