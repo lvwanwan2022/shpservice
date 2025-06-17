@@ -53,7 +53,7 @@ export class DxfStyleManager {
     try {
       const response = await gisApi.getMartinServiceStyle(martinServiceId)
       //console.log('API响应:', response)
-      
+      //console.log('Lv-getMartinServiceStyle:', response)
       if (response?.success && response.data?.style_config) {
         // 返回style_config字段（从后端API）
         return response.data.style_config

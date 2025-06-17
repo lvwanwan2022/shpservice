@@ -361,27 +361,7 @@ def get_martin_service_style(service_id):
         
         # 如果没有样式配置，提供默认配置
         if not style_config:
-            style_config = {
-                'point': {
-                    'color': '#FF0000',
-                    'size': 6,
-                    'shape': 'circle',
-                    'opacity': 1.0
-                },
-                'line': {
-                    'color': '#0000FF',
-                    'width': 2,
-                    'style': 'solid',
-                    'opacity': 1.0
-                },
-                'polygon': {
-                    'fillColor': '#00FF00',
-                    'fillOpacity': 0.3,
-                    'outlineColor': '#000000',
-                    'outlineWidth': 1,
-                    'opacity': 1.0
-                }
-            }
+            style_config = {}
             current_app.logger.info(f"使用默认样式配置")
         
         return jsonify({

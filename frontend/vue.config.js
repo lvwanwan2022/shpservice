@@ -60,7 +60,7 @@ module.exports = defineConfig({
           console.error('目标:', 'http://localhost:8083' + req.url)
         },
         onProxyReq: (proxyReq, req, res) => {
-          ////console.log('GeoServer代理请求:', req.method, req.url, '-> http://localhost:8085' + req.url)
+          ////console.log('GeoServer代理请求:', req.method, req.url, '-> http://localhost:8083' + req.url)
         },
         onProxyRes: (proxyRes, req, res) => {
           ////console.log('GeoServer代理响应:', proxyRes.statusCode, req.url)

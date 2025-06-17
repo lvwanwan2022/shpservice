@@ -341,7 +341,7 @@ export default {
 
         // 获取现有样式配置
         const savedStyles = await dxfStyleManager.getMartinServiceStyle(props.martinServiceId)
-        
+        //console.log('Lv-savedStyles:', savedStyles)
         if (savedStyles) {
           layerStyles.value = savedStyles
         } else {
