@@ -491,6 +491,7 @@ export default {
     // 缩放到图层 - 针对OpenLayers优化，支持动态坐标系
     const zoomToLayer = async (layer) => {
       try {
+        //console.log('lvzoomToLayer:', layer)
         // 更安全的地图可用性检查
         if (!mapViewerRef.value) {
           ElMessage.error('地图组件引用不存在')
@@ -514,7 +515,8 @@ export default {
         
         // 1. 优先使用新的图层边界API（bbox已经是转换后的EPSG:4326坐标）
         try {
-          const response = await gisApi.getLayerBounds(layer.id)
+          //20250617更改给后端传scene_layer_id，而不是layer.id
+          const response = await gisApi.getLayerBounds(layer.scene_layer_id)
           if (response?.success && response.data?.bbox) {
             bbox = response.data.bbox
             // coordinate_system字段仅用于显示原始坐标系，bbox已经是EPSG:4326坐标
@@ -557,7 +559,7 @@ export default {
           ElMessage.warning('无法获取图层边界信息')
           return
         }
-        
+        console.log('bbox:', bbox)
         // 4. 验证边界框数据并转换格式
         let minx, miny, maxx, maxy
         
@@ -567,13 +569,7 @@ export default {
           miny = parseFloat(bbox.miny)
           maxx = parseFloat(bbox.maxx)
           maxy = parseFloat(bbox.maxy)
-        } else if (Array.isArray(bbox) && bbox.length === 4) {
-          // 数组格式 [minx, miny, maxx, maxy]
-          minx = parseFloat(bbox[0])
-          miny = parseFloat(bbox[1])
-          maxx = parseFloat(bbox[2])
-          maxy = parseFloat(bbox[3])
-        } else {
+        }  else {
           ElMessage.warning('边界框数据格式不正确')
           return
         }

@@ -23,14 +23,7 @@ import atexit
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 导入Martin服务
-try:
-    from services.martin_service import MartinService
-    martin_service = MartinService()
-    logger.info("✅ Martin服务模块加载成功")
-except Exception as e:
-    martin_service = None
-    logger.warning(f"⚠️ Martin服务模块加载失败: {str(e)}")
+
 
 app = Flask(__name__)
 
@@ -199,6 +192,26 @@ except ImportError:
 except Exception as e:
     logger.warning(f"⚠️ GIS 通用路由注册失败: {str(e)}")
 
+# 导入Martin服务
+try:
+    from services.martin_service import MartinService
+    martin_service = MartinService()
+    logger.info("✅ Martin服务模块加载成功")
+    try:
+        martin_service.stop_service()
+        success = martin_service.start_service()
+        
+        if success:
+            logger.info('✅Martin 服务启动成功')
+        else:
+            logger.warning('⚠️Martin 服务启动失败')
+            
+    except Exception as e:
+        logger.error(f"重启服务失败: {e}")
+    
+except Exception as e:
+    martin_service = None
+    logger.warning(f"⚠️ Martin服务模块加载失败: {str(e)}")
 # GeoServer代理路由（解决CORS问题）
 @app.route('/geoserver/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
 def geoserver_proxy(path):

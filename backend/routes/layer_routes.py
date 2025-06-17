@@ -715,31 +715,84 @@ def get_style_template(geometry_type):
             'error_type': 'internal_error'
         }), 500
 
-@layer_bp.route('/<int:layer_id>/bounds', methods=['GET'])
-def get_layer_bounds(layer_id):
+@layer_bp.route('/<int:scene_layer_id>/bounds', methods=['GET'])
+def get_layer_bounds(scene_layer_id):
     """获取图层边界信息
     
     Args:
-        layer_id: 图层ID（geoserver_layers表或其他图层表的ID）
+        scene_layer_id: 图层ID（scenes_layers表的ID）
     """
     try:
         with get_db_connection() as conn:
             from psycopg2.extras import RealDictCursor
             cursor = conn.cursor(cursor_factory=RealDictCursor)
-            
             # 首先尝试从geoserver_layers表获取图层信息
             cursor.execute("""
-                SELECT gl.id, gl.name, gl.title, gl.wms_url, gl.file_id,
-                       gw.name as workspace_name, f.file_name, f.bbox, f.coordinate_system
-                FROM geoserver_layers gl
-                LEFT JOIN geoserver_workspaces gw ON gl.workspace_id = gw.id
-                LEFT JOIN files f ON gl.file_id = f.id
-                WHERE gl.id = %s
-            """, (layer_id,))
+                SELECT sl.id, sl.layer_id, sl.layer_type
+                FROM scene_layers sl                
+                WHERE sl.id = %s
+            """, (scene_layer_id,))
             
-            layer_record = cursor.fetchone()
+            scene_layer_record = cursor.fetchone()
+            layer_id = scene_layer_record['layer_id']
+            layer_type = scene_layer_record['layer_type']
+
+            if layer_type == 'geoserver':
+              # 首先尝试从geoserver_layers表获取图层信息
+              cursor.execute("""
+                  SELECT gl.id, gl.name, gl.title, gl.wms_url, gl.file_id,
+                        gw.name as workspace_name, f.file_name, f.bbox, f.coordinate_system
+                  FROM geoserver_layers gl
+                  LEFT JOIN geoserver_workspaces gw ON gl.workspace_id = gw.id
+                  LEFT JOIN files f ON gl.file_id = f.id
+                  WHERE gl.id = %s
+              """, (layer_id,))
+              
+              layer_record = cursor.fetchone()
             
-            if not layer_record:
+              # GeoServer图层处理
+              layer_name = layer_record['file_name'] or layer_record['title'] or layer_record['name']
+              file_id = layer_record['file_id']
+              coordinate_system = layer_record['coordinate_system'] or 'EPSG:4326'
+              
+              # 构建完整图层名称用于GetCapabilities查询
+              full_layer_name = f"{layer_record['workspace_name']}:{layer_record['name']}"
+              wms_url = layer_record['wms_url']
+              
+              # 尝试从GeoServer GetCapabilities获取边界
+              bbox = get_geoserver_layer_bounds(full_layer_name, wms_url)
+              
+              # 如果GetCapabilities失败，尝试从文件bbox获取
+              if not bbox and layer_record.get('bbox'):
+                  if isinstance(layer_record['bbox'], str):
+                      try:
+                          bbox = json.loads(layer_record['bbox'])
+                      except:
+                          pass
+                  else:
+                      bbox = layer_record['bbox']
+              
+              if not bbox:
+                  return jsonify({
+                      'success': False,
+                      'error': '无法获取GeoServer图层边界信息'
+                  }), 500
+              
+              return jsonify({
+                  'success': True,
+                  'data': {
+                      'bbox': bbox,
+                      'layer_id': layer_id,
+                      'layer_name': layer_name,
+                      'service_type': 'geoserver',
+                      'coordinate_system': coordinate_system,
+                      'file_id': file_id,
+                      'file_name': layer_record['file_name'],
+                      'workspace_name': layer_record['workspace_name']
+                  }
+              })
+            
+            elif layer_type == 'martin':
                 # 如果在geoserver_layers中没找到，尝试从vector_martin_services表查找
                 cursor.execute("""
                     SELECT vms.id, vms.table_name, vms.original_filename, vms.file_id,
@@ -793,48 +846,7 @@ def get_layer_bounds(layer_id):
                         'file_name': martin_record['file_name']
                     }
                 })
-            else:
-                # GeoServer图层处理
-                layer_name = layer_record['file_name'] or layer_record['title'] or layer_record['name']
-                file_id = layer_record['file_id']
-                coordinate_system = layer_record['coordinate_system'] or 'EPSG:4326'
-                
-                # 构建完整图层名称用于GetCapabilities查询
-                full_layer_name = f"{layer_record['workspace_name']}:{layer_record['name']}"
-                wms_url = layer_record['wms_url']
-                
-                # 尝试从GeoServer GetCapabilities获取边界
-                bbox = get_geoserver_layer_bounds(full_layer_name, wms_url)
-                
-                # 如果GetCapabilities失败，尝试从文件bbox获取
-                if not bbox and layer_record.get('bbox'):
-                    if isinstance(layer_record['bbox'], str):
-                        try:
-                            bbox = json.loads(layer_record['bbox'])
-                        except:
-                            pass
-                    else:
-                        bbox = layer_record['bbox']
-                
-                if not bbox:
-                    return jsonify({
-                        'success': False,
-                        'error': '无法获取GeoServer图层边界信息'
-                    }), 500
-                
-                return jsonify({
-                    'success': True,
-                    'data': {
-                        'bbox': bbox,
-                        'layer_id': layer_id,
-                        'layer_name': layer_name,
-                        'service_type': 'geoserver',
-                        'coordinate_system': coordinate_system,
-                        'file_id': file_id,
-                        'file_name': layer_record['file_name'],
-                        'workspace_name': layer_record['workspace_name']
-                    }
-                })
+            
             
     except Exception as e:
         logger.error(f"获取图层边界失败: {str(e)}")
@@ -984,16 +996,19 @@ def get_geoserver_layer_bounds(layer_name, wms_url):
                 # 查找边界框
                 bbox_elem = layer.find('wms:BoundingBox[@CRS="EPSG:4326"]', namespaces)
                 if bbox_elem is not None:
+                    #logger.info(f"找到EPSG:4326的边界框: {bbox_elem.get('minx')}, {bbox_elem.get('miny')}, {bbox_elem.get('maxx')}, {bbox_elem.get('maxy')}")
                     return {
-                        'minx': float(bbox_elem.get('minx')),
-                        'miny': float(bbox_elem.get('miny')),
-                        'maxx': float(bbox_elem.get('maxx')),
-                        'maxy': float(bbox_elem.get('maxy'))
+                        # 20250617测试Geojson数据，坐标x是纬度，y是经度，数据可以在地图正常加载，这里需要交换minx和miny，maxx和maxy
+                        'minx': float(bbox_elem.get('miny')),
+                        'miny': float(bbox_elem.get('minx')),
+                        'maxx': float(bbox_elem.get('maxy')),
+                        'maxy': float(bbox_elem.get('maxx'))
                     }
                     
                 # 如果没有找到EPSG:4326的边界框，尝试其他CRS
                 bbox_elem = layer.find('wms:BoundingBox', namespaces)
                 if bbox_elem is not None:
+                    #logger.info(f"找到其他CRS的边界框: {bbox_elem.get('minx')}, {bbox_elem.get('miny')}, {bbox_elem.get('maxx')}, {bbox_elem.get('maxy')}")
                     return {
                         'minx': float(bbox_elem.get('minx')),
                         'miny': float(bbox_elem.get('miny')),
