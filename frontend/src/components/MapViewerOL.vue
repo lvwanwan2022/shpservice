@@ -491,9 +491,11 @@ export default {
           
           // 找到要素所属的图层
           const targetLayer = map.value.forEachFeatureAtPixel(pixel, (feat, layer) => {
-            if (feat === feature && layer && mvtLayers.value && Object.values(mvtLayers.value).includes(layer)) {
-              return layer
-            }
+             if (feat === feature && layer && mvtLayers.value && Object.values(mvtLayers.value).includes(layer)) {
+              //console.log('lv-targetLayer:', layer)
+               return layer
+             }
+            
             return null
           })
           
@@ -534,12 +536,10 @@ export default {
       const properties = feature.getProperties()
       
       // 找到对应的图层信息
-      const layerInfo = Object.values(layersList.value).find(l => 
-        mvtLayers.value[l.id] === layer
-      )
-      
-      if (!layerInfo) return
-      
+      const layerInfo = layer._layerInfo
+      //console.log('lv-layer:', layer)
+      //if (!layerInfo) return
+      //console.log('layerInfo:', layerInfo)
       // 构建弹窗内容
       let content = `<div style="padding: 10px;">
         <h4 style="margin: 0 0 10px 0; color: #333; border-bottom: 1px solid #eee; padding-bottom: 5px;">
@@ -558,7 +558,7 @@ export default {
           if (typeof value === 'object') return false
           return true
         })
-        .slice(0, 6) // 限制为6个属性
+        //.slice(0, 6) // 限制为6个属性
       
       if (filteredProperties.length === 0) {
         content += '<div style="color: #999; font-style: italic;">暂无属性信息</div>'
@@ -583,7 +583,7 @@ export default {
         
         const totalProperties = Object.keys(properties).length - 2 // 排除geometry等
         if (totalProperties > 6) {
-          content += `<div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee; color: #999; font-style: italic; font-size: 12px; text-align: center;">还有 ${totalProperties - 6} 个属性</div>`
+          content += `<div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee; color: #999; font-style: italic; font-size: 12px; text-align: center;">共 ${totalProperties} 个属性</div>`
         }
       }
       

@@ -944,7 +944,7 @@ export default {
 
     // 判断文件是否可以发布Martin服务
     const canPublishMartin = (file) => {
-      const martinSupportedTypes = ['geojson', 'shp', 'dxf', 'mbtiles']
+      const martinSupportedTypes = ['geojson', 'shp', 'dxf', 'mbtiles', 'vector.mbtiles', 'raster.mbtiles']
       return martinSupportedTypes.includes(file.file_type.toLowerCase())
     }
 
@@ -1020,7 +1020,7 @@ export default {
           
           // 使用DXF专用的Martin发布接口
           result = await gisApi.publishDxfMartinService(file.id, publishParams)
-        } else if (file.file_type.toLowerCase() === 'mbtiles') {
+        } else if (file.file_type.toLowerCase() === 'mbtiles' || file.file_type.toLowerCase() === 'vector.mbtiles' || file.file_type.toLowerCase() === 'raster.mbtiles') {
           // 使用MBTiles专用的Martin发布接口
           result = await gisApi.publishMbtilesMartinService(file.id, publishParams)
         } else {
