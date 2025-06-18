@@ -215,6 +215,42 @@ export default {
     const hasPolygonGeometry = computed(() => isVectorLayer.value)
     const isDxfMartinLayer = computed(() => currentStyleLayer.value?.service_type === 'martin' && currentStyleLayer.value?.file_type === 'dxf' && currentStyleLayer.value?.martin_service_id)
     
+    // 全局变量，用于跟踪地图状态
+    const mapState = reactive({
+      isAnimating: false,
+      isZooming: false,
+      popupsEnabled: true
+    })
+    
+    // 安全地显示弹窗的辅助函数
+    const safeShowPopup = (latlng, content) => {
+      if (!map.value || !latlng || mapState.isAnimating || mapState.isZooming || !mapState.popupsEnabled) {
+        return null
+      }
+      
+      try {
+        // 确保先关闭所有现有弹窗
+        map.value.closePopup()
+        
+        // 创建新弹窗，禁用关闭按钮
+        const popup = L.popup({
+          closeButton: false, // 禁用关闭按钮
+          className: 'no-close-button-popup', // 添加自定义类名，以便于样式控制
+          autoClose: true, // 点击地图其他位置时自动关闭
+          closeOnEscapeKey: true // 按ESC键可关闭
+        })
+          .setContent(content)
+          .setLatLng(latlng)
+        
+        // 添加到地图
+        popup.openOn(map.value)
+        return popup
+      } catch (error) {
+        console.error('显示弹窗时出错:', error)
+        return null
+      }
+    }
+    
     // 初始化地图
     const initMap = () => {
       if (map.value) {
@@ -232,28 +268,108 @@ export default {
       if (baseLayer) baseLayer.addTo(map.value)
       
       L.control.scale({ imperial: false }).addTo(map.value)
+      
+      // 添加地图事件监听器，在可能导致弹窗位置错误的操作前关闭所有弹窗
+      map.value.on('zoomstart', () => {
+        if (map.value) {
+          // 更新地图状态
+          mapState.isZooming = true
+          mapState.popupsEnabled = false
+          
+          // 关闭所有弹窗
+          map.value.closePopup()
+          
+          // 临时禁用所有图层的弹窗功能
+          Object.values(mvtLayers.value).forEach(layer => {
+            if (layer) {
+              layer._popupEnabled = false
+            }
+          })
+          
+          // 移除地图上可能存在的弹窗元素
+          const popups = document.querySelectorAll('.leaflet-popup')
+          popups.forEach(popup => {
+            popup.remove()
+          })
+          
+          // 清除可能存在的弹窗相关引用
+          if (map.value._popup) {
+            map.value._popup = null
+          }
+        }
+      })
+      
+      // 缩放结束后重新启用弹窗功能
+      map.value.on('zoomend', () => {
+        // 延迟一点重新启用弹窗功能，确保缩放动画完全结束
+        setTimeout(() => {
+          mapState.isZooming = false
+          mapState.popupsEnabled = true
+          
+          Object.values(mvtLayers.value).forEach(layer => {
+            if (layer) {
+              layer._popupEnabled = true
+            }
+          })
+        }, 100)
+      })
+      
+      map.value.on('dragstart', () => {
+        if (map.value) {
+          // 更新地图状态
+          mapState.isAnimating = true
+          mapState.popupsEnabled = false
+          
+          // 关闭所有弹窗
+          map.value.closePopup()
+        }
+      })
+      
+      map.value.on('dragend', () => {
+        // 延迟一点重新启用弹窗功能，确保拖动动画完全结束
+        setTimeout(() => {
+          mapState.isAnimating = false
+          mapState.popupsEnabled = true
+        }, 100)
+      })
     }
     
     // 加载场景
     const loadScene = async (sceneId) => {
-      const response = await gisApi.getScene(sceneId)
-      currentScene.value = response.scene
-      layersList.value = response.layers
-      
-      clearAllLayers()
-      
-      for (const layer of layersList.value) {
-        if (layer.service_type === 'martin') {
-          await addMartinLayer(layer)
-        } else {
-          await addGeoServerLayer(layer)
+      try {
+        // 确保地图实例已经初始化
+        if (!map.value) {
+          console.warn('地图尚未初始化，等待初始化完成后再加载场景')
+          return
         }
+
+        const response = await gisApi.getScene(sceneId)
+        currentScene.value = response.scene
+        layersList.value = response.layers
+        
+        clearAllLayers()
+        
+        for (const layer of layersList.value) {
+          if (layer.service_type === 'martin') {
+            await addMartinLayer(layer)
+          } else {
+            await addGeoServerLayer(layer)
+          }
+        }
+      } catch (error) {
+        console.error('加载场景失败:', error)
       }
     }
     
     // 添加Martin图层
     const addMartinLayer = async (layer) => {
       if (!layer.mvt_url || !checkMVTSupport()) return
+      
+      // 确保地图实例已经初始化
+      if (!map.value) {
+        console.warn('地图尚未初始化，无法添加Martin图层')
+        return
+      }
       
       //console.log(`🎨 开始加载Martin图层: ${layer.layer_name}, 文件类型: ${layer.file_type}, Martin服务ID: ${layer.martin_service_id}`)
       
@@ -352,14 +468,14 @@ export default {
         })
         
         mvtLayer.on('click', (e) => {
+          // 如果地图状态不允许显示弹窗，直接返回
+          if (mapState.isAnimating || mapState.isZooming || !mapState.popupsEnabled) return
+          
           currentActiveLayer.value = layer
           emit('layer-selected', layer)
           
           // 栅格图层点击时只显示基本信息
-          L.popup()
-            .setContent(`<h4>${layer.layer_name}</h4><p>栅格MBTiles图层</p>`)
-            .setLatLng(e.latlng)
-            .openOn(map.value)
+          safeShowPopup(e.latlng, `<h4>${layer.layer_name}</h4><p>栅格MBTiles图层</p>`)
         })
       } else {
         // 矢量图层事件
@@ -368,7 +484,9 @@ export default {
         })
         
         mvtLayer.on('click', (e) => {
-          if (!e?.layer?.properties || !mvtLayer._popupEnabled) return
+          // 如果图层禁用了弹窗或地图状态不允许显示弹窗，直接返回
+          if (!e?.layer?.properties || !mvtLayer._popupEnabled || 
+              mapState.isAnimating || mapState.isZooming || !mapState.popupsEnabled) return
           
           currentActiveLayer.value = layer
           emit('layer-selected', layer)
@@ -391,10 +509,9 @@ export default {
             // 显示图层名称和CAD图层信息
             const title = layer.layer_name
             const cadLayer = properties.cad_layer ? ` (${properties.cad_layer})` : ''
-            L.popup()
-              .setContent(`<h4>${title}${cadLayer}</h4>${content || '无属性信息'}`)
-              .setLatLng(e.latlng)
-              .openOn(map.value)
+            
+            // 使用安全弹窗辅助函数
+            safeShowPopup(e.latlng, `<h4>${title}${cadLayer}</h4>${content || '无属性信息'}`)
           }
         })
       }
@@ -425,6 +542,12 @@ export default {
     const addGeoServerLayer = async (layer) => {
       if (!layer.wms_url || !layer.geoserver_layer) return
       
+      // 确保地图实例已经初始化
+      if (!map.value) {
+        console.warn('地图尚未初始化，无法添加GeoServer图层')
+        return
+      }
+      
       let wmsUrl = layer.wms_url.split('?')[0]
       if (wmsUrl.includes('localhost:8083/geoserver') || wmsUrl.includes('localhost:8080/geoserver')) {
         wmsUrl = '/geoserver/wms'
@@ -445,11 +568,18 @@ export default {
       
       mapLayers.value[layer.id] = wmsLayer
       
-      if (layer.visibility) map.value.addLayer(wmsLayer)
+      if (layer.visibility && map.value) map.value.addLayer(wmsLayer)
     }
     
     // 清除所有图层
     const clearAllLayers = () => {
+      // 如果地图未初始化，直接返回
+      if (!map.value) {
+        mvtLayers.value = {}
+        mapLayers.value = {}
+        return
+      }
+      
       // 清理MVT图层
       Object.entries(mvtLayers.value).forEach(([layerId, layer]) => {
         try {
@@ -1044,20 +1174,47 @@ export default {
     
     // 监听sceneId变化
     watch(() => props.sceneId, (newValue, oldValue) => {
-      if (newValue && newValue !== oldValue && map.value) {
-        setTimeout(() => loadScene(newValue), 100)
+      if (newValue && newValue !== oldValue) {
+        // 确保地图已经初始化并加载完成
+        if (map.value && map.value._loaded) {
+          loadScene(newValue)
+        } else {
+          console.warn('地图尚未初始化完成，等待初始化后再加载场景')
+          // 等待地图初始化完成后再加载场景
+          const loadSceneWhenReady = () => {
+            if (map.value && map.value._loaded) {
+              loadScene(newValue)
+            } else {
+              // 如果地图尚未加载完成，等待一段时间后再次检查
+              setTimeout(loadSceneWhenReady, 100)
+            }
+          }
+          setTimeout(loadSceneWhenReady, 200)
+        }
       }
     })
     
     onMounted(() => {
       nextTick(() => {
-        setTimeout(() => {
-          initMap()
-          const sceneId = props.sceneId || route.query.scene_id
-          if (sceneId) {
-            setTimeout(() => loadScene(sceneId), 500)
+        // 初始化地图
+        initMap()
+        
+        // 使用地图的 'load' 事件确保地图完全初始化后再加载场景
+        const sceneId = props.sceneId || route.query.scene_id
+        if (sceneId && map.value) {
+          // 使用一次性事件监听器确保地图准备就绪后加载场景
+          const loadSceneWhenReady = () => {
+            if (map.value && map.value._loaded) {
+              loadScene(sceneId)
+            } else {
+              // 如果地图尚未加载完成，等待一段时间后再次检查
+              setTimeout(loadSceneWhenReady, 100)
+            }
           }
-        }, 100)
+          
+          // 延迟执行以确保地图有足够时间初始化
+          setTimeout(loadSceneWhenReady, 500)
+        }
       })
     })
     
@@ -1164,5 +1321,29 @@ export default {
 .style-dialog-content h4 {
   margin: 15px 0 10px;
   color: #606266;
+}
+
+/* 自定义弹窗样式 */
+:global(.no-close-button-popup) {
+  margin: 0;
+  padding: 0;
+}
+
+:global(.no-close-button-popup .leaflet-popup-content-wrapper) {
+  border-radius: 8px;
+  box-shadow: 0 3px 14px rgba(0,0,0,0.2);
+}
+
+:global(.no-close-button-popup .leaflet-popup-content) {
+  margin: 13px 19px;
+  line-height: 1.4;
+}
+
+:global(.no-close-button-popup .leaflet-popup-tip-container) {
+  margin: 0 auto;
+  width: 40px;
+  height: 20px;
+  position: relative;
+  overflow: hidden;
 }
 </style>
