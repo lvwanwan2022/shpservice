@@ -51,7 +51,7 @@
                 :key="layer.id" 
                 class="layer-card"
                 :class="{ 
-                  'active': currentActiveLayer && currentActiveLayer.id === layer.id,
+                  'active': currentActiveLayer && currentActiveLayer.scene_layer_id === layer.scene_layer_id,
                   'invisible': !layer.visibility 
                 }"
                 @click="selectLayer(layer)"
@@ -65,7 +65,7 @@
                       @click.stop
                     ></el-checkbox>
                     <!-- 当前活动图层标识 -->
-                    <i v-if="currentActiveLayer && currentActiveLayer.id === layer.id" 
+                    <i v-if="currentActiveLayer && currentActiveLayer.scene_layer_id === layer.scene_layer_id" 
                        class="el-icon-location active-indicator" 
                        title="当前活动图层"></i>
                     <span class="layer-name">{{ layer.layer_name }}</span>

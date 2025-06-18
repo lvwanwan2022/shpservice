@@ -144,7 +144,7 @@
 
 <script>
 /* eslint-disable */
-import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick, toRaw } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import gisApi from '@/api/gis'
@@ -229,21 +229,25 @@ export default {
       }
       
       try {
+        // 获取原始地图对象，避免 Vue 响应式代理
+        const rawMap = toRaw(map.value)
+        // 获取原始坐标，避免 Vue 响应式代理
+        const rawLatLng = toRaw(latlng)
+        
         // 确保先关闭所有现有弹窗
-        map.value.closePopup()
+        rawMap.closePopup()
         
         // 创建新弹窗，禁用关闭按钮
-        const popup = L.popup({
-          closeButton: false, // 禁用关闭按钮
+        const popup = L.popup({          
           className: 'no-close-button-popup', // 添加自定义类名，以便于样式控制
           autoClose: true, // 点击地图其他位置时自动关闭
           closeOnEscapeKey: true // 按ESC键可关闭
         })
           .setContent(content)
-          .setLatLng(latlng)
+          .setLatLng(rawLatLng)
         
         // 添加到地图
-        popup.openOn(map.value)
+        popup.openOn(rawMap)
         return popup
       } catch (error) {
         console.error('显示弹窗时出错:', error)
@@ -272,17 +276,22 @@ export default {
       // 添加地图事件监听器，在可能导致弹窗位置错误的操作前关闭所有弹窗
       map.value.on('zoomstart', () => {
         if (map.value) {
+          // 获取原始地图对象，避免 Vue 响应式代理
+          const rawMap = toRaw(map.value)
+          
           // 更新地图状态
           mapState.isZooming = true
           mapState.popupsEnabled = false
           
           // 关闭所有弹窗
-          map.value.closePopup()
+          rawMap.closePopup()
           
           // 临时禁用所有图层的弹窗功能
           Object.values(mvtLayers.value).forEach(layer => {
             if (layer) {
-              layer._popupEnabled = false
+              // 获取原始图层对象，避免 Vue 响应式代理
+              const rawLayer = toRaw(layer)
+              rawLayer._popupEnabled = false
             }
           })
           
@@ -293,8 +302,8 @@ export default {
           })
           
           // 清除可能存在的弹窗相关引用
-          if (map.value._popup) {
-            map.value._popup = null
+          if (rawMap._popup) {
+            rawMap._popup = null
           }
         }
       })
@@ -308,7 +317,9 @@ export default {
           
           Object.values(mvtLayers.value).forEach(layer => {
             if (layer) {
-              layer._popupEnabled = true
+              // 获取原始图层对象，避免 Vue 响应式代理
+              const rawLayer = toRaw(layer)
+              rawLayer._popupEnabled = true
             }
           })
         }, 100)
@@ -316,12 +327,15 @@ export default {
       
       map.value.on('dragstart', () => {
         if (map.value) {
+          // 获取原始地图对象，避免 Vue 响应式代理
+          const rawMap = toRaw(map.value)
+          
           // 更新地图状态
           mapState.isAnimating = true
           mapState.popupsEnabled = false
           
           // 关闭所有弹窗
-          map.value.closePopup()
+          rawMap.closePopup()
         }
       })
       
@@ -523,12 +537,18 @@ export default {
       if (layer.visibility) {
         // 确保地图状态稳定后再添加图层
         if (map.value && !map.value._animating && !map.value._zooming) {
-          mvtLayer.addTo(map.value)
+          // 获取原始地图对象和图层，避免 Vue 响应式代理
+          const rawMap = toRaw(map.value)
+          const rawLayer = toRaw(mvtLayer)
+          rawLayer.addTo(rawMap)
         } else {
           // 如果地图正在动画，等待动画完成
           const addWhenReady = () => {
             if (map.value && !map.value._animating && !map.value._zooming) {
-              mvtLayer.addTo(map.value)
+              // 获取原始地图对象和图层，避免 Vue 响应式代理
+              const rawMap = toRaw(map.value)
+              const rawLayer = toRaw(mvtLayer)
+              rawLayer.addTo(rawMap)
             } else {
               setTimeout(addWhenReady, 50)
             }
@@ -568,7 +588,12 @@ export default {
       
       mapLayers.value[layer.id] = wmsLayer
       
-      if (layer.visibility && map.value) map.value.addLayer(wmsLayer)
+      if (layer.visibility && map.value) {
+        // 获取原始地图对象和图层，避免 Vue 响应式代理
+        const rawMap = toRaw(map.value)
+        const rawLayer = toRaw(wmsLayer)
+        rawLayer.addTo(rawMap)
+      }
     }
     
     // 清除所有图层
@@ -580,15 +605,19 @@ export default {
         return
       }
       
+      // 获取原始地图对象，避免 Vue 响应式代理
+      const rawMap = toRaw(map.value)
+      
       // 清理MVT图层
       Object.entries(mvtLayers.value).forEach(([layerId, layer]) => {
         try {
-          if (map.value && map.value.hasLayer(layer)) {
-            map.value.removeLayer(layer)
+          const rawLayer = toRaw(layer)
+          if (rawMap && rawMap.hasLayer(rawLayer)) {
+            rawMap.removeLayer(rawLayer)
           }
           // 清理事件监听器
-          if (layer.off) {
-            layer.off()
+          if (rawLayer.off) {
+            rawLayer.off()
           }
         } catch (error) {
           console.warn(`清理MVT图层 ${layerId} 时出错:`, error)
@@ -598,12 +627,13 @@ export default {
       // 清理WMS图层
       Object.entries(mapLayers.value).forEach(([layerId, layer]) => {
         try {
-          if (map.value && map.value.hasLayer(layer)) {
-            map.value.removeLayer(layer)
+          const rawLayer = toRaw(layer)
+          if (rawMap && rawMap.hasLayer(rawLayer)) {
+            rawMap.removeLayer(rawLayer)
           }
           // 清理事件监听器
-          if (layer.off) {
-            layer.off()
+          if (rawLayer.off) {
+            rawLayer.off()
           }
         } catch (error) {
           console.warn(`清理WMS图层 ${layerId} 时出错:`, error)
@@ -617,12 +647,16 @@ export default {
     // 切换图层可见性
     const toggleLayerVisibility = (layer) => {
       const targetLayer = layer.service_type === 'martin' ? mvtLayers.value[layer.id] : mapLayers.value[layer.id]
-      if (!targetLayer) return
+      if (!targetLayer || !map.value) return
+      
+      // 获取原始地图对象和图层，避免 Vue 响应式代理
+      const rawMap = toRaw(map.value)
+      const rawLayer = toRaw(targetLayer)
       
       if (layer.visibility) {
-        if (!map.value.hasLayer(targetLayer)) map.value.addLayer(targetLayer)
+        if (!rawMap.hasLayer(rawLayer)) rawMap.addLayer(rawLayer)
       } else {
-        if (map.value.hasLayer(targetLayer)) map.value.removeLayer(targetLayer)
+        if (rawMap.hasLayer(rawLayer)) rawMap.removeLayer(rawLayer)
       }
       
       updateLayerVisibility(layer.id, layer.visibility)
