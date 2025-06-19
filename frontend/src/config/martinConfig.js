@@ -6,7 +6,7 @@
 export const martinConfig = {
   // Martin服务地址
   //baseUrl: 'http://localhost:3000',
-  baseUrl: 'http://172.16.118.124:3000',
+  baseUrl: 'http://localhost:3000',
   
   // 数据库表配置
   tables: {

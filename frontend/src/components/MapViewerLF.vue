@@ -395,12 +395,12 @@ export default {
           const mbtilesMatch = mvtUrl.match(/\/mbtiles\/([^/]+)\/\{z\}/) || []
           const fileName = mbtilesMatch[1] || 'default'
           //mvtUrl = `http://localhost:3000/mbtiles/${fileName}/{z}/{x}/{y}`
-          mvtUrl = `http://172.16.118.124:3000/mbtiles/${fileName}/{z}/{x}/{y}`
+          mvtUrl = `http://localhost:3000/mbtiles/${fileName}/{z}/{x}/{y}`
         } else {
           // 普通 Martin 服务格式：http://localhost:3000/{tableName}/{z}/{x}/{y}
           const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
           //mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
-          mvtUrl = `http://172.16.118.124:3000/${tableName}/{z}/{x}/{y}`
+          mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
         }
       }
       
