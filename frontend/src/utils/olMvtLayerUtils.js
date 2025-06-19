@@ -164,11 +164,14 @@ export async function createOpenLayersMVTLayer(layerConfig, options = {}) {
         // MBTiles 服务格式：http://localhost:3000/mbtiles/{文件名}/{z}/{x}/{y}
         const mbtilesMatch = mvtUrl.match(/\/mbtiles\/([^/]+)\/\{z\}/) || []
         const fileName = mbtilesMatch[1] || 'default'
-        mvtUrl = `http://localhost:3000/mbtiles/${fileName}/{z}/{x}/{y}`
+        //mvtUrl = `http://localhost:3000/mbtiles/${fileName}/{z}/{x}/{y}`
+        mvtUrl = `http://172.16.118.124:3000/mbtiles/${fileName}/{z}/{x}/{y}`
       } else {
         // 普通 Martin 服务格式：http://localhost:3000/{tableName}/{z}/{x}/{y}
         const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
-        mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
+        //mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
+        mvtUrl = `http://172.16.118.124:3000/${tableName}/{z}/{x}/{y}`
+        console.log('lv-mvtUrl:', mvtUrl)
       }
     }
     
@@ -177,7 +180,7 @@ export async function createOpenLayersMVTLayer(layerConfig, options = {}) {
       console.warn('⚠️ MVT URL格式可能不正确，缺少{z},{x},{y}参数:', mvtUrl)
     }
     
-    //console.log('MVT URL:', mvtUrl)
+    console.log('lv-1MVT URL:', mvtUrl)
     //console.log('TileJSON URL:', layerConfig.tilejson_url)
     
     // 创建样式函数

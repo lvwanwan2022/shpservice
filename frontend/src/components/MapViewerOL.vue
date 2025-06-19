@@ -668,15 +668,18 @@ export default {
           // MBTiles 服务格式：http://localhost:3000/mbtiles/{文件名}/{z}/{x}/{y}
           const mbtilesMatch = mvtUrl.match(/\/mbtiles\/([^/]+)\/\{z\}/) || []
           const fileName = mbtilesMatch[1] || 'default'
-          mvtUrl = `http://localhost:3000/${fileName}/{z}/{x}/{y}`
+          //mvtUrl = `http://localhost:3000/${fileName}/{z}/{x}/{y}`
+          mvtUrl = `http://172.16.118.124:3000/${fileName}/{z}/{x}/{y}`
         } else {
           // 普通 Martin 服务格式：http://localhost:3000/{tableName}/{z}/{x}/{y}
           const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
-          mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
+          //mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
+          mvtUrl = `http://172.16.118.124:3000/${tableName}/{z}/{x}/{y}`
+          //console.log('lv-mvtUrl:', mvtUrl)
         }
       }
 
-     
+      //console.log('lv1-mvtUrl:', mvtUrl)
       let layerStyleConfig = layerStyleCache[layer.id] || {}
       
       // 如果是DXF文件且没有缓存样式，使用默认DXF样式

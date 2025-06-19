@@ -27,7 +27,7 @@ module.exports = defineConfig({
         }
       },
       '/martin': {
-        target: 'http://localhost:3000',
+        target: 'http://172.16.118.124:3000',
         changeOrigin: true,
         secure: false,
         logLevel: 'debug',
@@ -37,7 +37,7 @@ module.exports = defineConfig({
         onError: (err, req, res) => {
           console.error('Martin代理错误:', err.message)
           console.error('请求URL:', req.url)
-          console.error('目标:', 'http://localhost:3000' + req.url.replace('/martin', ''))
+          console.error('目标:', 'http://172.16.118.124:3000' + req.url.replace('/martin', ''))
         },
         onProxyReq: (proxyReq, req, res) => {
           //console.log('Martin代理请求:', req.method, req.url, '-> http://localhost:3000' + req.url.replace('/martin', ''))
@@ -47,7 +47,7 @@ module.exports = defineConfig({
         }
       },
       '/geoserver': {
-        target: 'http://localhost:8083',
+        target: 'http://172.16.118.124:8083',
         changeOrigin: true,
         secure: false,
         logLevel: 'debug',
@@ -57,7 +57,7 @@ module.exports = defineConfig({
         onError: (err, req, res) => {
           console.error('GeoServer代理错误:', err.message)
           console.error('请求URL:', req.url)
-          console.error('目标:', 'http://localhost:8083' + req.url)
+          console.error('目标:', 'http://172.16.118.124:8083' + req.url)
         },
         onProxyReq: (proxyReq, req, res) => {
           ////console.log('GeoServer代理请求:', req.method, req.url, '-> http://localhost:8083' + req.url)
