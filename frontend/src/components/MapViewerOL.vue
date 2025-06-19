@@ -2,7 +2,23 @@
   <div class="map-viewer">
     <div class="map-container" ref="mapContainer"></div>
     
-    <BaseMapSwitcherOL v-if="map" :map="map" @base-map-changed="onBaseMapChanged" />
+    <!-- 底图切换器和刷新按钮组 -->
+    <div class="map-controls">
+      <BaseMapSwitcherOL v-if="map" :map="map" @base-map-changed="onBaseMapChanged" />
+      <el-tooltip content="刷新图层" placement="left" :show-after="500">
+        <el-button 
+          v-if="map" 
+          type="success" 
+          circle 
+          size="small" 
+          @click="refreshAllLayers"
+          :loading="refreshing"
+          class="refresh-button"
+        >
+          <i class="el-icon-refresh"></i>
+        </el-button>
+      </el-tooltip>
+    </div>
     
     <!-- 添加图层对话框 -->
     <el-dialog title="添加图层" v-model="addLayerDialogVisible" width="800px">
@@ -195,6 +211,9 @@ export default {
     
     // 坐标系初始化状态
     const projectionsInitialized = ref(false)
+    
+    // 刷新状态
+    const refreshing = ref(false)
     
     // 异步初始化坐标系
     const initializeProjections = async () => {
@@ -1280,6 +1299,56 @@ export default {
         mvtLayers.value = {}
       }
     }
+
+    // 刷新所有图层
+    const refreshAllLayers = async () => {
+      if (!map.value) {
+        ElMessage.warning('地图未初始化')
+        return
+      }
+
+      if (!props.sceneId) {
+        ElMessage.warning('没有选中的场景')
+        return
+      }
+
+      refreshing.value = true
+      
+      try {
+        // 保存当前地图视口
+        const currentView = map.value.getView()
+        const currentCenter = currentView.getCenter()
+        const currentZoom = currentView.getZoom()
+        const currentRotation = currentView.getRotation()
+        
+        console.log('🔄 刷新图层 - 保存视口信息:', {
+          center: currentCenter,
+          zoom: currentZoom,
+          rotation: currentRotation
+        })
+
+        // 重新加载场景
+        await loadScene(props.sceneId)
+
+        // 恢复地图视口
+        if (currentCenter && currentZoom !== undefined) {
+          map.value.getView().setCenter(currentCenter)
+          map.value.getView().setZoom(currentZoom)
+          if (currentRotation !== undefined) {
+            map.value.getView().setRotation(currentRotation)
+          }
+          console.log('✅ 视口已恢复')
+        }
+
+        ElMessage.success('图层刷新成功')
+        
+      } catch (error) {
+        console.error('刷新图层失败:', error)
+        ElMessage.error(`刷新图层失败: ${error.message}`)
+      } finally {
+        refreshing.value = false
+      }
+    }
     
     // 切换图层可见性
     const toggleLayerVisibility = (layer) => {
@@ -1794,7 +1863,9 @@ export default {
       projectionsInitialized,
       layerStyleCache,
       applyDxfStylesToLayer,
-      popup
+      popup,
+      refreshing,
+      refreshAllLayers
     }
   },
   expose: ['showStyleDialog', 'showAddLayerDialog', 'toggleLayerVisibility', 'map', 'bringLayerToTop', 'setActiveLayer', 'currentActiveLayer', 'getLayerCRSInfo', 'transformCoordinates', 'initializeProjections', 'registerProjection', 'projectionsInitialized', 'applyDxfStylesToLayer']
@@ -1917,5 +1988,31 @@ export default {
 #popup-content {
   max-height: 300px;
   overflow-y: auto;
+}
+
+/* 地图控件组样式 */
+.map-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.refresh-button {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border: 1px solid #67c23a;
+}
+
+.refresh-button:hover {
+  background-color: #5daf34;
+  border-color: #5daf34;
+}
+
+.refresh-button.is-loading {
+  background-color: #85ce61;
+  border-color: #85ce61;
 }
 </style> 

@@ -1,26 +1,28 @@
 <template>
   <div class="base-map-switcher">
-    <el-dropdown @command="switchBaseMap" trigger="click">
-      <el-button type="primary" circle size="small">
-        <i class="el-icon-map-location"></i>
-      </el-button>
-      <template #dropdown>
-        <el-dropdown-menu>
-          <el-dropdown-item command="gaode" :class="{ active: currentBaseMap === 'gaode' }">
-            高德地图
-          </el-dropdown-item>
-          <el-dropdown-item command="gaodeSatellite" :class="{ active: currentBaseMap === 'gaodeSatellite' }">
-            高德卫星图
-          </el-dropdown-item>
-          <el-dropdown-item command="osm" :class="{ active: currentBaseMap === 'osm' }">
-            OpenStreetMap
-          </el-dropdown-item>
-          <el-dropdown-item command="esriSatellite" :class="{ active: currentBaseMap === 'esriSatellite' }">
-            Esri 世界影像
-          </el-dropdown-item>
-        </el-dropdown-menu>
-      </template>
-    </el-dropdown>
+    <el-tooltip content="切换底图" placement="left" :show-after="500">
+      <el-dropdown @command="switchBaseMap" trigger="click">
+        <el-button type="primary" circle size="small">
+          <i class="el-icon-map-location"></i>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="gaode" :class="{ active: currentBaseMap === 'gaode' }">
+              高德地图
+            </el-dropdown-item>
+            <el-dropdown-item command="gaodeSatellite" :class="{ active: currentBaseMap === 'gaodeSatellite' }">
+              高德卫星图
+            </el-dropdown-item>
+            <el-dropdown-item command="osm" :class="{ active: currentBaseMap === 'osm' }">
+              OpenStreetMap
+            </el-dropdown-item>
+            <el-dropdown-item command="esriSatellite" :class="{ active: currentBaseMap === 'esriSatellite' }">
+              Esri 世界影像
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+    </el-tooltip>
   </div>
 </template>
 
@@ -83,10 +85,8 @@ export default {
 
 <style scoped>
 .base-map-switcher {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 1000;
+  /* 移除绝对定位，现在由父容器 .map-controls 管理位置 */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .active {
