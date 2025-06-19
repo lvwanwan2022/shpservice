@@ -11,7 +11,7 @@ import re
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from config import FILE_STORAGE
-from models.db import execute_query
+from models.db import execute_query, insert_with_snowflake_id
 
 class GeoJsonDirectService:
     """GeoJSON直接服务类，用于处理GeoJSON文件的上传和检索"""
@@ -58,28 +58,20 @@ class GeoJsonDirectService:
                 f.write(file_content)
             
             # 记录到数据库
-            sql = """
-            INSERT INTO geojson_files
-            (file_id, original_filename, file_path, file_size, feature_count, geometry_types, 
-             property_fields, bbox, upload_date, status, user_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """
+            params = {
+                'file_id': file_id,
+                'original_filename': original_filename,
+                'file_path': file_path,
+                'file_size': len(file_content),
+                'feature_count': analysis['feature_count'],
+                'geometry_types': json.dumps(list(analysis['geometry_types'])),
+                'property_fields': json.dumps(analysis['properties']),
+                'bbox': json.dumps(analysis.get('bbox')),
+                'status': 'active',
+                'user_id': file_info.get('user_id')
+            }
             
-            params = (
-                file_id,
-                original_filename,
-                file_path,
-                len(file_content),
-                analysis['feature_count'],
-                json.dumps(list(analysis['geometry_types'])),
-                json.dumps(analysis['properties']),
-                json.dumps(analysis.get('bbox')),
-                datetime.now(),
-                'active',
-                file_info.get('user_id')
-            )
-            
-            execute_query(sql, params)
+            insert_with_snowflake_id('geojson_files', params)
             
             # 构建结果
             result = {

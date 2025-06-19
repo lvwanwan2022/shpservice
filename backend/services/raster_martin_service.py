@@ -9,7 +9,7 @@ import tempfile
 import shutil
 import geopandas as gpd
 from pathlib import Path
-from models.db import execute_query
+from models.db import execute_query, insert_with_snowflake_id
 from sqlalchemy import create_engine, text
 from config import DB_CONFIG, MARTIN_CONFIG
 
@@ -56,19 +56,12 @@ class RasterMartinService:
             mvt_url = f"{service_url}/{{z}}/{{x}}/{{y}}"
             tilejson_url = f"{service_url}"
             
-            # 保存服务信息到数据库,共用vector_martin_services表，vector_type为raster
-            insert_sql = """
-            INSERT INTO vector_martin_services 
-            (file_id, original_filename, file_path, vector_type, table_name, service_url, mvt_url, tilejson_url, user_id)
-            VALUES (%(file_id)s, %(original_filename)s, %(file_path)s, %(vector_type)s, %(table_name)s, %(service_url)s, %(mvt_url)s, %(tilejson_url)s, %(user_id)s)
-            RETURNING id
-            """
-            
             # 确定vector_type，默认为mbtiles，但如果指定了类型则使用指定类型
             vector_type = 'mbtiles'
             if mbtiles_type:
                 vector_type = f"{mbtiles_type}_mbtiles"
             
+            # 保存服务信息到数据库,共用vector_martin_services表，vector_type为raster
             params = {
                 'file_id': file_id,
                 'original_filename': original_filename,
@@ -81,8 +74,7 @@ class RasterMartinService:
                 'user_id': user_id
             }
             
-            result = execute_query(insert_sql, params)
-            service_id = result[0]['id']
+            service_id = insert_with_snowflake_id('vector_martin_services', params)
             
             print(f"✅ MBTiles Martin服务发布成功，服务ID: {service_id}")
             

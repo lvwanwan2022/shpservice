@@ -14,9 +14,11 @@ import shutil
 import warnings
 from datetime import datetime
 from werkzeug.utils import secure_filename
+import geopandas as gpd
+from pathlib import Path
 
 from config import FILE_STORAGE, DB_CONFIG
-from models.db import execute_query
+from models.db import execute_query, insert_with_snowflake_id
 from services.postgis_service import PostGISService
 from services.martin_service import MartinService
 
@@ -718,61 +720,49 @@ class ShpMartinService:
     def _record_to_database(self, file_id, original_filename, file_path, analysis, postgis_result, user_id):
         """记录服务信息到数据库"""
         try:
-            table_name = postgis_result['table_name']
-            
-            # 构建MVT和TileJSON URL
-            mvt_url = f"http://localhost:3000/{table_name}/{{z}}/{{x}}/{{y}}.pbf"
+            table_name = postgis_result["table_name"]
+            mvt_url = f"http://localhost:3000/{table_name}/{{z}}/{{x}}/{{y}}"
             tilejson_url = f"http://localhost:3000/{table_name}"
             
-            # 默认样式配置
+            # 创建默认样式
             default_style = {
                 "version": 8,
-                "name": f"Style for {original_filename}",
+                "name": f"style_{table_name}",
                 "sources": {
                     table_name: {
                         "type": "vector",
-                        "tiles": [mvt_url],
-                        "maxzoom": 14
+                        "url": tilejson_url
                     }
                 },
                 "layers": [
                     {
-                        "id": f"{table_name}-layer",
+                        "id": f"layer_{table_name}",
                         "source": table_name,
                         "source-layer": table_name,
-                        "type": "fill",
+                        "type": "line",
                         "paint": {
-                            "fill-color": "#3388ff",
-                            "fill-opacity": 0.6,
-                            "fill-outline-color": "#ffffff"
+                            "line-color": "#000000",
+                            "line-width": 1
                         }
                     }
                 ]
             }
             
-            sql = """
-            INSERT INTO shp_martin_services 
-            (file_id, original_filename, file_path, table_name, service_url, mvt_url, tilejson_url, style, shp_info, postgis_info, user_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-            """
+            params = {
+                'file_id': file_id,
+                'original_filename': original_filename,
+                'file_path': file_path,
+                'table_name': table_name,
+                'service_url': f"http://localhost:3000/{table_name}",
+                'mvt_url': mvt_url,
+                'tilejson_url': tilejson_url,
+                'style': json.dumps(default_style),
+                'shp_info': json.dumps(analysis),
+                'postgis_info': json.dumps(postgis_result),
+                'user_id': user_id
+            }
             
-            params = (
-                file_id,
-                original_filename,
-                file_path,
-                table_name,
-                f"http://localhost:3000/{table_name}",  # service_url
-                mvt_url,
-                tilejson_url,
-                json.dumps(default_style),
-                json.dumps(analysis),
-                json.dumps(postgis_result),
-                user_id
-            )
-            
-            result = execute_query(sql, params)
-            record_id = result[0]['id']
+            record_id = insert_with_snowflake_id('shp_martin_services', params)
             
             print(f"✅ 服务记录已保存到数据库，ID: {record_id}")
             print(f"   - MVT URL: {mvt_url}")

@@ -14,7 +14,7 @@ from sqlalchemy import create_engine, text
 from werkzeug.utils import secure_filename
 
 from config import FILE_STORAGE, DB_CONFIG
-from models.db import execute_query
+from models.db import execute_query, insert_with_snowflake_id
 from services.dxf_processor import DXFProcessor
 from services.martin_service import MartinService
 from services.geoserver_service import GeoServerService
@@ -292,18 +292,6 @@ class DXFService:
                               coordinate_system, martin_result, import_result, user_id):
         """记录Martin服务到vector_martin_services表"""
         try:
-            insert_sql = """
-            INSERT INTO vector_martin_services (
-                file_id, original_filename, file_path, table_name, 
-                coordinate_system, mvt_url, tilejson_url, source_id,
-                vector_type, status, created_at, updated_at, user_id
-            ) VALUES (
-                %(file_id)s, %(original_filename)s, %(file_path)s, %(table_name)s,
-                %(coordinate_system)s, %(mvt_url)s, %(tilejson_url)s, %(source_id)s,
-                %(vector_type)s, %(status)s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, %(user_id)s
-            ) RETURNING id;
-            """
-            
             params = {
                 'file_id': file_id,
                 'original_filename': original_filename,
@@ -318,8 +306,7 @@ class DXFService:
                 'user_id': user_id
             }
             
-            result = execute_query(insert_sql, params)
-            service_id = result[0]['id'] if result else None
+            service_id = insert_with_snowflake_id('vector_martin_services', params)
             
             logger.info(f"✅ Martin服务记录成功，ID: {service_id}")
             

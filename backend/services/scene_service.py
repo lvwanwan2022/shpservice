@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from models.db import execute_query
+from models.db import execute_query, insert_with_snowflake_id
 import json
 
 class SceneService:
@@ -16,16 +16,7 @@ class SceneService:
         Returns:
             场景ID
         """
-        sql = """
-        INSERT INTO scenes 
-        (name, description, is_public, user_id)
-        VALUES 
-        (%(name)s, %(description)s, %(is_public)s, %(user_id)s)
-        RETURNING id
-        """
-        
-        result = execute_query(sql, scene_data)
-        return result[0]['id']
+        return insert_with_snowflake_id('scenes', scene_data)
     
     def update_scene(self, scene_id, scene_data):
         """更新场景
@@ -192,35 +183,26 @@ class SceneService:
                 if vector_check:
                     martin_service_type = vector_check[0]['vector_type']
         
-        # 插入新的场景图层
-        sql = """
-        INSERT INTO scene_layers
-        (scene_id, layer_id, martin_service_id, martin_service_type, layer_type, layer_order, visible, opacity, style_name, custom_style, queryable, selectable)
-        VALUES
-        (%(scene_id)s, %(layer_id)s, %(martin_service_id)s, %(martin_service_type)s, %(layer_type)s, %(layer_order)s, %(visible)s, %(opacity)s, %(style_name)s, %(custom_style)s, %(queryable)s, %(selectable)s)
-        RETURNING id
-        """
-        
-        # 根据service_type确定layer_type
-        layer_type = 'martin' if service_type == 'martin' else 'geoserver'
-        
-        params = {
+        # 准备图层数据
+        layer_insert_data = {
             'scene_id': layer_data.get('scene_id'),
             'layer_id': layer_data.get('layer_id'),
             'martin_service_id': martin_service_id,
             'martin_service_type': martin_service_type,
-            'layer_type': layer_type,
+            'layer_type': service_type,
             'layer_order': layer_order,
             'visible': layer_data.get('visible', True),
             'opacity': layer_data.get('opacity', 1.0),
             'style_name': layer_data.get('style_name'),
             'custom_style': custom_style_json,
             'queryable': layer_data.get('queryable', True),
-            'selectable': layer_data.get('selectable', True)
+            'selectable': layer_data.get('selectable', True),
+            'service_reference': layer_data.get('service_reference'),
+            'service_url': layer_data.get('service_url')
         }
         
-        result = execute_query(sql, params)
-        return result[0]['id']
+        # 使用雪花算法生成ID并插入
+        return insert_with_snowflake_id('scene_layers', layer_insert_data)
     
     def update_scene_layer(self, scene_id, layer_id, layer_data):
         """更新场景图层

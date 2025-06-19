@@ -9,7 +9,7 @@ import tempfile
 import shutil
 import geopandas as gpd
 from pathlib import Path
-from models.db import execute_query
+from models.db import execute_query, insert_with_snowflake_id
 from sqlalchemy import create_engine, text
 from config import DB_CONFIG, MARTIN_CONFIG
 
@@ -82,13 +82,6 @@ class VectorMartinService:
             }
             
             # 保存服务信息到数据库
-            insert_sql = """
-            INSERT INTO vector_martin_services 
-            (file_id, original_filename, file_path, vector_type, table_name, service_url, mvt_url, tilejson_url, vector_info, postgis_info, user_id)
-            VALUES (%(file_id)s, %(original_filename)s, %(file_path)s, %(vector_type)s, %(table_name)s, %(service_url)s, %(mvt_url)s, %(tilejson_url)s, %(vector_info)s, %(postgis_info)s, %(user_id)s)
-            RETURNING id
-            """
-            
             params = {
                 'file_id': file_id,
                 'original_filename': original_filename,
@@ -103,8 +96,7 @@ class VectorMartinService:
                 'user_id': user_id
             }
             
-            result = execute_query(insert_sql, params)
-            service_id = result[0]['id']
+            service_id = insert_with_snowflake_id('vector_martin_services', params)
             
             print(f"✅ GeoJSON Martin服务发布成功，服务ID: {service_id}")
             
@@ -234,13 +226,6 @@ class VectorMartinService:
             }
             
             # 保存服务信息到数据库
-            insert_sql = """
-            INSERT INTO vector_martin_services 
-            (file_id, original_filename, file_path, vector_type, table_name, service_url, mvt_url, tilejson_url, vector_info, postgis_info, user_id)
-            VALUES (%(file_id)s, %(original_filename)s, %(file_path)s, %(vector_type)s, %(table_name)s, %(service_url)s, %(mvt_url)s, %(tilejson_url)s, %(vector_info)s, %(postgis_info)s, %(user_id)s)
-            RETURNING id
-            """
-            
             params = {
                 'file_id': file_id,
                 'original_filename': original_filename,
@@ -255,8 +240,7 @@ class VectorMartinService:
                 'user_id': user_id
             }
             
-            result = execute_query(insert_sql, params)
-            service_id = result[0]['id']
+            service_id = insert_with_snowflake_id('vector_martin_services', params)
             
             print(f"✅ SHP Martin服务发布成功，服务ID: {service_id}")
             

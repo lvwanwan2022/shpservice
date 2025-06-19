@@ -7,7 +7,8 @@ import shutil
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from config import FILE_STORAGE
-from models.db import execute_query
+from models.db import execute_query, insert_with_snowflake_id
+from utils.snowflake import get_snowflake_id
 
 class FileService:
     """文件服务类，用于处理文件上传、存储和元数据管理"""
@@ -106,18 +107,8 @@ class FileService:
             'user_id': metadata.get('user_id')
         }
         
-        # 插入数据库
-        sql = """
-        INSERT INTO files 
-        (file_name, file_path, original_name, file_size, is_public, 
-        discipline, dimension, file_type, coordinate_system, tags, description, user_id)
-        VALUES 
-        (%(file_name)s, %(file_path)s, %(original_name)s, %(file_size)s, %(is_public)s,
-        %(discipline)s, %(dimension)s, %(file_type)s, %(coordinate_system)s, %(tags)s, %(description)s, %(user_id)s)
-        RETURNING id
-        """
-        result = execute_query(sql, file_data)
-        file_id = result[0]['id']
+        # 使用雪花算法生成ID并插入数据库
+        file_id = insert_with_snowflake_id('files', file_data)
         
         # 注释掉自动发布逻辑，改为手动发布
         # self._publish_to_geoserver(file_path, file_id, metadata)

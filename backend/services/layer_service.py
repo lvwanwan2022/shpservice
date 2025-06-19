@@ -12,7 +12,7 @@ Copyright (c) 2025 by VGE, All Rights Reserved.
 
 import os
 import json
-from models.db import execute_query
+from models.db import execute_query, insert_with_snowflake_id
 from services.file_service import FileService
 from services.geoserver_service import GeoServerService
 from services.style_service import StyleService
@@ -374,26 +374,18 @@ class LayerService:
     def _create_store(self, store_data):
         """创建存储仓库"""
         try:
-            query = """
-            INSERT INTO geoserver_stores 
-            (name, workspace_id, store_type, data_type, connection_params, description, enabled, file_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-            """
+            store_params = {
+                'name': store_data['name'],
+                'workspace_id': store_data['workspace_id'],
+                'store_type': store_data['store_type'],
+                'data_type': store_data['data_type'],
+                'connection_params': json.dumps(store_data['connection_params']),
+                'description': store_data['description'],
+                'enabled': store_data['enabled'],
+                'file_id': store_data['file_id']
+            }
             
-            params = (
-                store_data['name'],
-                store_data['workspace_id'],
-                store_data['store_type'],
-                store_data['data_type'],
-                json.dumps(store_data['connection_params']),
-                store_data['description'],
-                store_data['enabled'],
-                store_data['file_id']
-            )
-            
-            result = execute_query(query, params)
-            return result[0]['id']
+            return insert_with_snowflake_id('geoserver_stores', store_params)
             
         except Exception as e:
             print(f"创建存储仓库失败: {str(e)}")
@@ -402,26 +394,18 @@ class LayerService:
     def _create_featuretype(self, featuretype_data):
         """创建要素类型"""
         try:
-            query = """
-            INSERT INTO geoserver_featuretypes 
-            (name, native_name, store_id, title, abstract, keywords, srs, enabled)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-            """
+            featuretype_params = {
+                'name': featuretype_data['name'],
+                'native_name': featuretype_data['native_name'],
+                'store_id': featuretype_data['store_id'],
+                'title': featuretype_data['title'],
+                'abstract': featuretype_data['abstract'],
+                'keywords': featuretype_data['keywords'],
+                'srs': featuretype_data['srs'],
+                'enabled': featuretype_data['enabled']
+            }
             
-            params = (
-                featuretype_data['name'],
-                featuretype_data['native_name'],
-                featuretype_data['store_id'],
-                featuretype_data['title'],
-                featuretype_data['abstract'],
-                featuretype_data['keywords'],
-                featuretype_data['srs'],
-                featuretype_data['enabled']
-            )
-            
-            result = execute_query(query, params)
-            return result[0]['id']
+            return insert_with_snowflake_id('geoserver_featuretypes', featuretype_params)
             
         except Exception as e:
             print(f"创建要素类型失败: {str(e)}")
@@ -430,26 +414,18 @@ class LayerService:
     def _create_coverage(self, coverage_data):
         """创建覆盖范围"""
         try:
-            query = """
-            INSERT INTO geoserver_coverages 
-            (name, native_name, store_id, title, abstract, keywords, srs, enabled)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-            """
+            coverage_params = {
+                'name': coverage_data['name'],
+                'native_name': coverage_data['native_name'],
+                'store_id': coverage_data['store_id'],
+                'title': coverage_data['title'],
+                'abstract': coverage_data['abstract'],
+                'keywords': coverage_data['keywords'],
+                'srs': coverage_data['srs'],
+                'enabled': coverage_data['enabled']
+            }
             
-            params = (
-                coverage_data['name'],
-                coverage_data['native_name'],
-                coverage_data['store_id'],
-                coverage_data['title'],
-                coverage_data['abstract'],
-                coverage_data['keywords'],
-                coverage_data['srs'],
-                coverage_data['enabled']
-            )
-            
-            result = execute_query(query, params)
-            return result[0]['id']
+            return insert_with_snowflake_id('geoserver_coverages', coverage_params)
             
         except Exception as e:
             print(f"创建覆盖范围失败: {str(e)}")
@@ -458,29 +434,20 @@ class LayerService:
     def _create_layer(self, layer_data):
         """创建图层"""
         try:
-            query = """
-            INSERT INTO geoserver_layers 
-            (name, workspace_id, featuretype_id, coverage_id, title, abstract, 
-             default_style, enabled, queryable, file_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-            """
+            layer_params = {
+                'name': layer_data['name'],
+                'workspace_id': layer_data['workspace_id'],
+                'featuretype_id': layer_data.get('featuretype_id'),
+                'coverage_id': layer_data.get('coverage_id'),
+                'title': layer_data['title'],
+                'abstract': layer_data['abstract'],
+                'default_style': layer_data['default_style'],
+                'enabled': layer_data['enabled'],
+                'queryable': layer_data['queryable'],
+                'file_id': layer_data['file_id']
+            }
             
-            params = (
-                layer_data['name'],
-                layer_data['workspace_id'],
-                layer_data.get('featuretype_id'),
-                layer_data.get('coverage_id'),
-                layer_data['title'],
-                layer_data['abstract'],
-                layer_data['default_style'],
-                layer_data['enabled'],
-                layer_data['queryable'],
-                layer_data['file_id']
-            )
-            
-            result = execute_query(query, params)
-            return result[0]['id']
+            return insert_with_snowflake_id('geoserver_layers', layer_params)
             
         except Exception as e:
             print(f"创建图层失败: {str(e)}")
@@ -861,49 +828,35 @@ class LayerService:
             }
 
     def _save_or_update_style_to_database(self, style_name, workspace_id, sld_content, style_config):
-        """保存或更新样式到geoserver_styles表"""
+        """保存或更新样式到数据库"""
         try:
             # 检查样式是否已存在
-            existing_style = execute_query(
-                "SELECT id FROM geoserver_styles WHERE name = %s AND workspace_id = %s",
-                (style_name, workspace_id)
-            )
+            check_query = "SELECT id FROM geoserver_styles WHERE name = %s AND workspace_id = %s"
+            result = execute_query(check_query, (style_name, workspace_id))
             
-            if existing_style:
+            if result:
                 # 更新现有样式
-                print(f"样式 {style_name} 已存在，正在更新...")
-                query = """
+                style_id = result[0]['id']
+                update_query = """
                 UPDATE geoserver_styles 
-                SET content = %s, description = %s, updated_at = CURRENT_TIMESTAMP
+                SET content = %s, updated_at = CURRENT_TIMESTAMP 
                 WHERE id = %s
                 """
-                params = (
-                    sld_content, 
-                    f"Custom style updated at {datetime.now().isoformat()}: {json.dumps(style_config)}", 
-                    existing_style[0]['id']
-                )
-                execute_query(query, params)
-                print(f"✅ 样式 {style_name} 数据库记录已更新")
-                return existing_style[0]['id']
+                execute_query(update_query, (sld_content, style_id), fetch=False)
+                return style_id
             else:
                 # 创建新样式
-                print(f"样式 {style_name} 不存在，正在创建...")
-                query = """
-                INSERT INTO geoserver_styles 
-                (name, workspace_id, content, format, description, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                RETURNING id
-                """
-                params = (
-                    style_name,
-                    workspace_id,
-                    sld_content,
-                    'sld',
-                    f"Custom style created at {datetime.now().isoformat()}: {json.dumps(style_config)}"
-                )
-                result = execute_query(query, params)
-                print(f"✅ 样式 {style_name} 数据库记录已创建")
-                return result[0]['id']
+                style_params = {
+                    'name': style_name,
+                    'workspace_id': workspace_id,
+                    'filename': f"{style_name}.sld",
+                    'format': 'sld',
+                    'language_version': '1.0.0',
+                    'content': sld_content,
+                    'description': f"Style for {style_name}"
+                }
+                
+                return insert_with_snowflake_id('geoserver_styles', style_params)
                 
         except Exception as e:
             print(f"保存样式到数据库失败: {str(e)}")

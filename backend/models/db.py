@@ -314,17 +314,43 @@ def init_database():
         # 创建用户表
         create_users_table = """
         CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
+            id BIGINT PRIMARY KEY,
             username VARCHAR(50) UNIQUE NOT NULL,
             password VARCHAR(100) NOT NULL,
+            email VARCHAR(100) UNIQUE NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """
+        execute_query(create_users_table, fetch=False)
+        
+        # 检查是否需要创建默认管理员用户
+        check_admin_user = "SELECT COUNT(*) FROM users WHERE username = 'admin'"
+        admin_count = execute_query(check_admin_user)[0]['count']
+        
+        if admin_count == 0:
+            # 创建默认管理员用户，使用雪花算法生成ID
+            import hashlib
+            from utils.snowflake import get_snowflake_id
+            
+            # 生成密码哈希
+            default_password = "admin123"
+            password_hash = hashlib.sha256(default_password.encode()).hexdigest()
+            
+            # 使用雪花算法生成ID
+            admin_id = get_snowflake_id()
+            
+            # 插入管理员用户
+            insert_admin_sql = """
+            INSERT INTO users (id, username, password, email    ) 
+            VALUES (%s, %s, %s, %s)
+            """
+            execute_query(insert_admin_sql, (admin_id, "admin", password_hash, "admin@example.com"), fetch=False)
+            print("✅ 已创建默认管理员用户 (用户名: admin, 密码: admin123)")
         
         # 创建文件表 - 更新以匹配新的数据库结构
         create_files_table = """
         CREATE TABLE IF NOT EXISTS files (
-            id SERIAL PRIMARY KEY,
+            id BIGINT PRIMARY KEY,
             file_name VARCHAR(100) NOT NULL,
             file_path VARCHAR(200) NOT NULL,
             original_name VARCHAR(100) NOT NULL,
@@ -336,7 +362,7 @@ def init_database():
             coordinate_system VARCHAR(20),
             tags VARCHAR(200),
             description TEXT,
-            user_id INTEGER REFERENCES users(id),
+            user_id BIGINT REFERENCES users(id),
             upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             status VARCHAR(20) DEFAULT 'uploaded',
             bbox JSONB,
@@ -349,7 +375,7 @@ def init_database():
         # 创建GeoServer工作空间表
         create_geoserver_workspaces_table = """
         CREATE TABLE IF NOT EXISTS geoserver_workspaces (
-            id SERIAL PRIMARY KEY,
+            id BIGINT PRIMARY KEY,
             name VARCHAR(100) UNIQUE NOT NULL,
             namespace_uri VARCHAR(255),
             namespace_prefix VARCHAR(100),
@@ -363,15 +389,15 @@ def init_database():
         # 创建GeoServer存储仓库表
         create_geoserver_stores_table = """
         CREATE TABLE IF NOT EXISTS geoserver_stores (
-            id SERIAL PRIMARY KEY,
+            id BIGINT PRIMARY KEY,
             name VARCHAR(100) NOT NULL,
-            workspace_id INTEGER REFERENCES geoserver_workspaces(id) ON DELETE CASCADE,
+            workspace_id BIGINT REFERENCES geoserver_workspaces(id) ON DELETE CASCADE,
             store_type VARCHAR(50) NOT NULL,
             data_type VARCHAR(50),
             connection_params JSONB,
             description TEXT,
             enabled BOOLEAN DEFAULT TRUE,
-            file_id INTEGER REFERENCES files(id),
+            file_id BIGINT REFERENCES files(id),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(workspace_id, name)
@@ -381,10 +407,10 @@ def init_database():
         # 创建GeoServer要素类型表
         create_geoserver_featuretypes_table = """
         CREATE TABLE IF NOT EXISTS geoserver_featuretypes (
-            id SERIAL PRIMARY KEY,
+            id BIGINT PRIMARY KEY,
             name VARCHAR(100) NOT NULL,
             native_name VARCHAR(100),
-            store_id INTEGER REFERENCES geoserver_stores(id) ON DELETE CASCADE,
+            store_id BIGINT REFERENCES geoserver_stores(id) ON DELETE CASCADE,
             title VARCHAR(255),
             abstract TEXT,
             keywords TEXT[],
@@ -403,10 +429,10 @@ def init_database():
         # 创建GeoServer覆盖范围表
         create_geoserver_coverages_table = """
         CREATE TABLE IF NOT EXISTS geoserver_coverages (
-            id SERIAL PRIMARY KEY,
+            id BIGINT PRIMARY KEY,
             name VARCHAR(100) NOT NULL,
             native_name VARCHAR(100),
-            store_id INTEGER REFERENCES geoserver_stores(id) ON DELETE CASCADE,
+            store_id BIGINT REFERENCES geoserver_stores(id) ON DELETE CASCADE,
             title VARCHAR(255),
             abstract TEXT,
             keywords TEXT[],
@@ -426,11 +452,11 @@ def init_database():
         # 创建GeoServer图层表 - 更新以支持矢量和栅格数据
         create_geoserver_layers_table = """
         CREATE TABLE IF NOT EXISTS geoserver_layers (
-            id SERIAL PRIMARY KEY,
+            id BIGINT PRIMARY KEY,
             name VARCHAR(100) NOT NULL,
-            workspace_id INTEGER REFERENCES geoserver_workspaces(id) ON DELETE CASCADE,
-            featuretype_id INTEGER REFERENCES geoserver_featuretypes(id) ON DELETE CASCADE,
-            coverage_id INTEGER REFERENCES geoserver_coverages(id) ON DELETE CASCADE,
+            workspace_id BIGINT REFERENCES geoserver_workspaces(id) ON DELETE CASCADE,
+            featuretype_id BIGINT REFERENCES geoserver_featuretypes(id) ON DELETE CASCADE,
+            coverage_id BIGINT REFERENCES geoserver_coverages(id) ON DELETE CASCADE,
             title VARCHAR(255),
             abstract TEXT,
             default_style VARCHAR(100),
@@ -442,7 +468,7 @@ def init_database():
             wms_url TEXT,
             wfs_url TEXT,
             wcs_url TEXT,
-            file_id INTEGER REFERENCES files(id),
+            file_id BIGINT REFERENCES files(id),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             style_config JSONB,
@@ -457,9 +483,9 @@ def init_database():
         # 创建GeoServer样式表
         create_geoserver_styles_table = """
         CREATE TABLE IF NOT EXISTS geoserver_styles (
-            id SERIAL PRIMARY KEY,
+            id BIGINT PRIMARY KEY,
             name VARCHAR(100) NOT NULL,
-            workspace_id INTEGER REFERENCES geoserver_workspaces(id) ON DELETE CASCADE,
+            workspace_id BIGINT REFERENCES geoserver_workspaces(id) ON DELETE CASCADE,
             filename VARCHAR(255),
             format VARCHAR(50) DEFAULT 'sld',
             language_version VARCHAR(20),
@@ -474,9 +500,9 @@ def init_database():
         # 创建GeoServer图层组表
         create_geoserver_layergroups_table = """
         CREATE TABLE IF NOT EXISTS geoserver_layergroups (
-            id SERIAL PRIMARY KEY,
+            id BIGINT PRIMARY KEY,
             name VARCHAR(100) NOT NULL,
-            workspace_id INTEGER REFERENCES geoserver_workspaces(id) ON DELETE CASCADE,
+            workspace_id BIGINT REFERENCES geoserver_workspaces(id) ON DELETE CASCADE,
             title VARCHAR(255),
             abstract TEXT,
             mode VARCHAR(50) DEFAULT 'SINGLE',
@@ -492,11 +518,11 @@ def init_database():
         # 创建场景表 - 更新以匹配新的数据库结构
         create_scenes_table = """
         CREATE TABLE IF NOT EXISTS scenes (
-            id SERIAL PRIMARY KEY,
+            id BIGINT PRIMARY KEY,
             name VARCHAR(100) NOT NULL,
             description TEXT,
             is_public BOOLEAN DEFAULT TRUE,
-            user_id INTEGER REFERENCES users(id),
+            user_id BIGINT REFERENCES users(id),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -505,10 +531,10 @@ def init_database():
         # 创建场景图层表 - 更新以匹配新的数据库结构
         create_scene_layers_table = """
         CREATE TABLE IF NOT EXISTS scene_layers (
-            id SERIAL PRIMARY KEY,
-            scene_id INTEGER NOT NULL REFERENCES scenes(id) ON DELETE CASCADE,
-            layer_id INTEGER NOT NULL,
-            martin_service_id INTEGER,
+            id BIGINT PRIMARY KEY,
+            scene_id BIGINT NOT NULL REFERENCES scenes(id) ON DELETE CASCADE,
+            layer_id BIGINT NOT NULL,
+            martin_service_id BIGINT,
             martin_service_type VARCHAR(20) DEFAULT NULL,
             layer_type VARCHAR(20) DEFAULT 'geoserver',
             layer_order INTEGER DEFAULT 0,
@@ -529,7 +555,7 @@ def init_database():
         # 创建统一的矢量Martin服务表（合并geojson和shp服务）
         create_vector_martin_services_table = """
         CREATE TABLE IF NOT EXISTS vector_martin_services (
-            id SERIAL PRIMARY KEY,
+            id BIGINT PRIMARY KEY,
             file_id VARCHAR(36) NOT NULL UNIQUE,
             original_filename VARCHAR(255) NOT NULL,
             file_path TEXT NOT NULL,
@@ -542,7 +568,7 @@ def init_database():
             vector_info JSONB,  -- 存储原始矢量文件信息
             postgis_info JSONB,
             status VARCHAR(20) DEFAULT 'active',
-            user_id INTEGER REFERENCES users(id),
+            user_id BIGINT REFERENCES users(id),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -551,7 +577,7 @@ def init_database():
         # 创建GeoJSON文件表（用于GeoJSON直接服务）
         create_geojson_files_table = """
         CREATE TABLE IF NOT EXISTS geojson_files (
-            id SERIAL PRIMARY KEY,
+            id BIGINT PRIMARY KEY,
             file_id VARCHAR(36) NOT NULL UNIQUE,
             original_filename VARCHAR(255) NOT NULL,
             file_path TEXT NOT NULL,
@@ -563,7 +589,7 @@ def init_database():
             bbox JSONB,
             upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             status VARCHAR(20) DEFAULT 'active',
-            user_id INTEGER REFERENCES users(id),
+            user_id BIGINT REFERENCES users(id),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -650,10 +676,8 @@ def init_database():
         
         print("数据库表创建成功")
         
-
+      
         
-        # 执行数据库迁移
-        _migrate_database()
         
         # 确保GeoServer工作空间存在
         try:
@@ -671,12 +695,15 @@ def init_database():
                 # 在数据库中创建工作空间记录
                 insert_workspace_sql = """
                 INSERT INTO geoserver_workspaces 
-                (name, namespace_uri, namespace_prefix, description, is_default, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                (id,name, namespace_uri, namespace_prefix, description, is_default, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 RETURNING id
                 """
-                
+                # 生成雪花算法ID
+                from utils.snowflake import get_snowflake_id
+                id=get_snowflake_id()
                 result = execute_query(insert_workspace_sql, (
+                    id,
                     workspace_name,
                     f"http://{workspace_name}",
                     workspace_name,
@@ -718,196 +745,55 @@ def init_database():
         print(f"初始化数据库失败: {str(e)}")
         raise
 
-def _migrate_database():
-    """执行数据库迁移"""
+def insert_with_snowflake_id(table_name, data):
+    """
+    使用雪花算法生成ID并插入数据
+    
+    Args:
+        table_name: 表名
+        data: 要插入的数据字典
+        
+    Returns:
+        插入的记录ID
+    """
     try:
-        print("检查数据库迁移...")
+        # 生成雪花算法ID
+        from utils.snowflake import get_snowflake_id
+        snowflake_id = get_snowflake_id()
         
-        # 检查 geoserver_featuretypes 表是否有 projection_policy 字段
-        check_projection_policy_sql = """
-        SELECT EXISTS (
-            SELECT 1 
-            FROM information_schema.columns 
-            WHERE table_name = 'geoserver_featuretypes' 
-            AND column_name = 'projection_policy'
-            AND table_schema = 'public'
-        )
+        # 添加ID到数据中
+        data['id'] = snowflake_id
+        
+        # 构建SQL语句
+        columns = list(data.keys())
+        placeholders = [f'%({col})s' for col in columns]
+        
+        query = f"""
+        INSERT INTO {table_name} ({', '.join(columns)})
+        VALUES ({', '.join(placeholders)})
+        RETURNING id
         """
         
-        result = execute_query(check_projection_policy_sql)
-        has_projection_policy = result[0]['exists']
+        # 执行插入
+        result = execute_query(query, data)
         
-        if not has_projection_policy:
-            print("添加 projection_policy 字段到 geoserver_featuretypes 表...")
-            add_projection_policy_sql = """
-            ALTER TABLE geoserver_featuretypes 
-            ADD COLUMN projection_policy VARCHAR(50) DEFAULT 'REPROJECT_TO_DECLARED'
-            """
-            execute_query(add_projection_policy_sql, fetch=False)
-            print("✅ projection_policy 字段添加成功")
-        else:
-            print("✅ projection_policy 字段已存在")
-        
-        # 检查 scene_layers 表是否有 martin_service_type 字段
-        check_scene_layers_fields_sql = """
-        SELECT 
-            EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name = 'scene_layers' 
-                AND column_name = 'martin_service_type'
-                AND table_schema = 'public'
-            ) as has_martin_service_type,
-            EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name = 'scene_layers' 
-                AND column_name = 'layer_type'
-                AND table_schema = 'public'
-            ) as has_layer_type
-        """
-        
-        result = execute_query(check_scene_layers_fields_sql)
-        scene_layers_fields = result[0]
-        
-        if not scene_layers_fields['has_martin_service_type']:
-            print("添加 martin_service_type 字段到 scene_layers 表...")
-            add_martin_service_type_sql = """
-            ALTER TABLE scene_layers 
-            ADD COLUMN martin_service_type VARCHAR(20) DEFAULT NULL
-            """
-            execute_query(add_martin_service_type_sql, fetch=False)
-            print("✅ martin_service_type 字段添加成功")
-        else:
-            print("✅ martin_service_type 字段已存在")
-        
-        if not scene_layers_fields['has_layer_type']:
-            print("添加 layer_type 字段到 scene_layers 表...")
-            add_layer_type_sql = """
-            ALTER TABLE scene_layers 
-            ADD COLUMN layer_type VARCHAR(20) DEFAULT 'geoserver'
-            """
-            execute_query(add_layer_type_sql, fetch=False)
-            print("✅ layer_type 字段添加成功")
-        else:
-            print("✅ layer_type 字段已存在")
-        
-        # 检查并迁移Martin服务表到统一的vector_martin_services表
-        check_vector_table_sql = """
-        SELECT EXISTS (
-            SELECT 1 FROM information_schema.tables 
-            WHERE table_name = 'vector_martin_services' 
-            AND table_schema = 'public'
-        )
-        """
-        
-        result = execute_query(check_vector_table_sql)
-        has_vector_table = result[0]['exists']
-        
-        if not has_vector_table:
-            print("创建vector_martin_services表...")
-            # 表会在init_database中创建，这里只是检查
-        else:
-            print("✅ vector_martin_services表已存在")
-        
-        # 数据迁移：从旧的geojson_martin_services和shp_martin_services迁移数据
-        print("检查数据迁移...")
-        
-        # 检查旧表是否存在
-        check_old_tables_sql = """
-        SELECT 
-            EXISTS (
-                SELECT 1 FROM information_schema.tables 
-                WHERE table_name = 'geojson_martin_services' 
-                AND table_schema = 'public'
-            ) as has_geojson_table,
-            EXISTS (
-                SELECT 1 FROM information_schema.tables 
-                WHERE table_name = 'shp_martin_services' 
-                AND table_schema = 'public'
-            ) as has_shp_table
-        """
-        
-        result = execute_query(check_old_tables_sql)
-        old_tables = result[0]
-        
-        # 迁移GeoJSON Martin服务数据
-        if old_tables['has_geojson_table']:
-            # 检查是否已经迁移过
-            check_geojson_migrated_sql = """
-            SELECT COUNT(*) as count FROM vector_martin_services WHERE vector_type = 'geojson'
-            """
-            result = execute_query(check_geojson_migrated_sql)
-            migrated_count = result[0]['count']
-            
-            # 检查原表数据数量
-            check_geojson_count_sql = "SELECT COUNT(*) as count FROM geojson_martin_services"
-            result = execute_query(check_geojson_count_sql)
-            original_count = result[0]['count']
-            
-            if migrated_count < original_count:
-                print(f"迁移GeoJSON Martin服务数据: {original_count} 条记录...")
-                migrate_geojson_sql = """
-                INSERT INTO vector_martin_services 
-                (file_id, original_filename, file_path, vector_type, table_name, service_url, mvt_url, tilejson_url, style, vector_info, postgis_info, status, user_id, created_at, updated_at)
-                SELECT 
-                    file_id, original_filename, file_path, 'geojson' as vector_type, table_name, service_url, mvt_url, tilejson_url, style, geojson_info as vector_info, postgis_info, status, user_id, created_at, updated_at
-                FROM geojson_martin_services 
-                WHERE file_id NOT IN (SELECT file_id FROM vector_martin_services WHERE vector_type = 'geojson')
-                """
-                execute_query(migrate_geojson_sql, fetch=False)
-                print("✅ GeoJSON Martin服务数据迁移完成")
-            else:
-                print("✅ GeoJSON Martin服务数据已迁移")
-        
-        # 迁移SHP Martin服务数据
-        if old_tables['has_shp_table']:
-            # 检查是否已经迁移过
-            check_shp_migrated_sql = """
-            SELECT COUNT(*) as count FROM vector_martin_services WHERE vector_type = 'shp'
-            """
-            result = execute_query(check_shp_migrated_sql)
-            migrated_count = result[0]['count']
-            
-            # 检查原表数据数量
-            check_shp_count_sql = "SELECT COUNT(*) as count FROM shp_martin_services"
-            result = execute_query(check_shp_count_sql)
-            original_count = result[0]['count']
-            
-            if migrated_count < original_count:
-                print(f"迁移SHP Martin服务数据: {original_count} 条记录...")
-                migrate_shp_sql = """
-                INSERT INTO vector_martin_services 
-                (file_id, original_filename, file_path, vector_type, table_name, service_url, mvt_url, tilejson_url, style, vector_info, postgis_info, status, user_id, created_at, updated_at)
-                SELECT 
-                    file_id, original_filename, file_path, 'shp' as vector_type, table_name, service_url, mvt_url, tilejson_url, style, shp_info as vector_info, postgis_info, status, user_id, created_at, updated_at
-                FROM shp_martin_services 
-                WHERE file_id NOT IN (SELECT file_id FROM vector_martin_services WHERE vector_type = 'shp')
-                """
-                execute_query(migrate_shp_sql, fetch=False)
-                print("✅ SHP Martin服务数据迁移完成")
-            else:
-                print("✅ SHP Martin服务数据已迁移")
-        
-        # 更新scene_layers表中的martin_service_type字段
-        print("更新scene_layers表中的martin_service_type字段...")
-        update_scene_layers_sql = """
-        UPDATE scene_layers 
-        SET martin_service_type = (
-            SELECT vector_type 
-            FROM vector_martin_services 
-            WHERE vector_martin_services.id = scene_layers.martin_service_id
-        )
-        WHERE martin_service_id IS NOT NULL 
-        AND martin_service_type IS NULL
-        """
-        execute_query(update_scene_layers_sql, fetch=False)
-        print("✅ scene_layers表martin_service_type字段更新完成")
-        
-        print("数据库迁移完成")
-        
+        # 返回插入的ID
+        if result and len(result) > 0:
+            return result[0]['id']
+        return snowflake_id
     except Exception as e:
-        print(f"数据库迁移失败: {str(e)}")
-        # 不抛出异常，允许应用继续运行
-        pass
+        error_msg = f"插入数据到{table_name}失败: {str(e)}"
+        print(error_msg)
+        print(f"数据: {data}")
+        print(f"雪花ID: {snowflake_id}")
+        
+        # 检查是否是整数范围错误
+        if "integer out of range" in str(e).lower():
+            print("错误: 雪花算法ID超出了INTEGER范围，请确保数据库表的ID字段类型是BIGINT")
+            print("解决方案: 请执行以下SQL修改表结构:")
+            print(f"ALTER TABLE {table_name} ALTER COLUMN id TYPE BIGINT;")
+        
+        raise
 
 if __name__ == "__main__":
     init_database() 

@@ -10,7 +10,7 @@ import zipfile
 import tempfile
 import shutil
 import stat
-from models.db import execute_query
+from models.db import execute_query, insert_with_snowflake_id
 from config import GEOSERVER_CONFIG, DB_CONFIG
 import logging
 from datetime import datetime
@@ -20,6 +20,10 @@ from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
 import traceback
 import subprocess
+import uuid
+import glob
+from urllib.parse import urlparse
+import rasterio
 
 # 设置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -40,9 +44,15 @@ class GeoServerService:
         self._ensure_workspace_exists()
     
     def _ensure_workspace_exists(self):
-        """确保工作空间存在"""
+        """确保工作空间存在
+        
+        检查工作空间是否存在，如果不存在则创建
+        
+        Returns:
+            工作空间ID
+        """
         try:
-            # 检查数据库中的工作空间
+            # 检查数据库中是否已有工作空间记录
             workspace_sql = "SELECT id FROM geoserver_workspaces WHERE name = %s"
             workspace_result = execute_query(workspace_sql, (self.workspace,))
             
@@ -51,19 +61,15 @@ class GeoServerService:
                 self._create_workspace_in_geoserver()
                 
                 # 在数据库中记录工作空间
-                insert_workspace_sql = """
-                INSERT INTO geoserver_workspaces (name, namespace_uri, namespace_prefix, description, is_default)
-                VALUES (%s, %s, %s, %s, %s)
-                RETURNING id
-                """
-                result = execute_query(insert_workspace_sql, (
-                    self.workspace,
-                    f"http://{self.workspace}",
-                    self.workspace,
-                    f"Workspace for {self.workspace}",
-                    True
-                ))
-                workspace_id = result[0]['id']
+                workspace_params = {
+                    'name': self.workspace,
+                    'namespace_uri': f"http://{self.workspace}",
+                    'namespace_prefix': self.workspace,
+                    'description': f"Workspace for {self.workspace}",
+                    'is_default': True
+                }
+                
+                workspace_id = insert_with_snowflake_id('geoserver_workspaces', workspace_params)
                 print(f"工作空间 {self.workspace} 创建成功，ID: {workspace_id}")
                 return workspace_id
             else:
@@ -827,183 +833,90 @@ class GeoServerService:
     def _create_datastore_in_db(self, store_name, workspace_id, data_type, file_id):
         """在数据库中创建数据存储记录
         
-        注意：每次都会创建新的store，如果存在同名store则先删除
+        Args:
+            store_name: 存储名称
+            workspace_id: 工作空间ID
+            data_type: 数据类型
+            file_id: 文件ID
+            
+        Returns:
+            存储ID
         """
         try:
-            # 检查是否已存在同名的数据存储，如果存在则删除
-            check_sql = """
-            SELECT id FROM geoserver_stores 
-            WHERE name = %s AND workspace_id = %s
-            """
-            existing_result = execute_query(check_sql, (store_name, workspace_id))
+            store_params = {
+                'name': store_name,
+                'workspace_id': workspace_id,
+                'store_type': 'datastore',
+                'data_type': data_type,
+                'description': f"{data_type} datastore",
+                'enabled': True,
+                'file_id': file_id,
+                'connection_params': json.dumps({'file': store_name})
+            }
             
-            if existing_result:
-                existing_store_id = existing_result[0]['id']
-                print(f"⚠️ 发现同名数据存储 '{store_name}'，将先删除旧记录，store_id={existing_store_id}")
-                
-                # 删除相关的图层记录
-                delete_layers_sql = "DELETE FROM geoserver_layers WHERE store_id = %s"
-                execute_query(delete_layers_sql, (existing_store_id,), fetch=False)
-                print("🗑️ 已删除相关图层记录")
-                
-                # 删除相关的要素类型记录
-                delete_featuretypes_sql = "DELETE FROM geoserver_featuretypes WHERE store_id = %s"
-                execute_query(delete_featuretypes_sql, (existing_store_id,), fetch=False)
-                print("🗑️ 已删除相关要素类型记录")
-                
-                # 删除数据存储记录
-                delete_store_sql = "DELETE FROM geoserver_stores WHERE id = %s"
-                execute_query(delete_store_sql, (existing_store_id,), fetch=False)
-                print("🗑️ 已删除旧的数据存储记录")
-            
-            # 检查file_id是否在files表中存在
-            file_exists = False
-            if file_id:
-                try:
-                    check_file_sql = "SELECT id FROM files WHERE id = %s"
-                    file_result = execute_query(check_file_sql, (file_id,))
-                    file_exists = bool(file_result)
-                except Exception as e:
-                    print(f"⚠️ 无法检查file_id={file_id}是否存在: {str(e)}")
-                    file_exists = False
-            
-            # 创建新的数据存储记录，如果file_id不存在则设为NULL
-            if file_exists:
-                sql = """
-                INSERT INTO geoserver_stores (name, workspace_id, store_type, data_type, file_id, enabled)
-                VALUES (%s, %s, 'datastore', %s, %s, TRUE)
-                RETURNING id
-                """
-                result = execute_query(sql, (store_name, workspace_id, data_type, file_id))
-                print(f"✅ 数据存储记录创建成功，关联file_id={file_id}")
-            else:
-                sql = """
-                INSERT INTO geoserver_stores (name, workspace_id, store_type, data_type, file_id, enabled)
-                VALUES (%s, %s, 'datastore', %s, NULL, TRUE)
-                RETURNING id
-                """
-                result = execute_query(sql, (store_name, workspace_id, data_type))
-                print(f"✅ 数据存储记录创建成功，file_id为NULL（测试模式或文件不存在）")
-            
-            store_id = result[0]['id']
-            print(f"✅ 新数据存储记录创建成功，store_id={store_id}")
+            store_id = insert_with_snowflake_id('geoserver_stores', store_params)
             return store_id
-            
         except Exception as e:
-            print(f"❌ 创建数据存储记录失败: {str(e)}")
-            raise Exception(f"创建数据存储记录失败: {str(e)}")
+            print(f"在数据库中创建数据存储记录失败: {str(e)}")
+            raise
     
     def _create_coveragestore_in_db(self, store_name, workspace_id, data_type, file_id):
-        """在数据库中创建覆盖存储记录"""
-        try:
-            # 检查是否已存在同名的store
-            check_sql = """
-            SELECT id FROM geoserver_stores 
-            WHERE name = %s AND workspace_id = %s AND store_type = 'coveragestore'
-            """
-            existing_result = execute_query(check_sql, (store_name, workspace_id))
-            
-            if existing_result:
-                existing_store_id = existing_result[0]['id']
-                print(f"⚠️ 数据库中已存在同名的coveragestore记录: {store_name}, store_id={existing_store_id}")
-                print(f"🗑️ 删除现有的store记录及其相关数据")
-                
-                # 删除相关的coverage记录
-                delete_coverages_sql = """
-                DELETE FROM geoserver_coverages WHERE store_id = %s
-                """
-                execute_query(delete_coverages_sql, (existing_store_id,), fetch=False)
-                
-                # 删除相关的layer记录
-                delete_layers_sql = """
-                DELETE FROM geoserver_layers 
-                WHERE coverage_id IN (
-                    SELECT id FROM geoserver_coverages WHERE store_id = %s
-                )
-                """
-                execute_query(delete_layers_sql, (existing_store_id,), fetch=False)
-                
-                # 删除store记录
-                delete_store_sql = """
-                DELETE FROM geoserver_stores WHERE id = %s
-                """
-                execute_query(delete_store_sql, (existing_store_id,), fetch=False)
-                print(f"✅ 清理完成，现有store记录已删除")
-            
-            # 创建新的store记录
-            sql = """
-            INSERT INTO geoserver_stores (name, workspace_id, store_type, data_type, file_id, enabled)
-            VALUES (%s, %s, 'coveragestore', %s, %s, TRUE)
-            RETURNING id
-            """
-            result = execute_query(sql, (store_name, workspace_id, data_type, file_id))
-            store_id = result[0]['id']
-            print(f"✅ 数据库coveragestore记录创建成功，store_id={store_id}")
-            return store_id
-            
-        except Exception as e:
-            print(f"❌ 创建coveragestore记录失败: {str(e)}")
-            raise Exception(f"创建coveragestore记录失败: {str(e)}")
-    
-    def _create_coverage_in_db(self, coverage_info, store_id):
-        """在数据库中创建覆盖记录
+        """在数据库中创建覆盖存储记录
         
         Args:
-            coverage_info: 覆盖信息（可能包装在featureType结构中）
+            store_name: 存储名称
+            workspace_id: 工作空间ID
+            data_type: 数据类型
+            file_id: 文件ID
+            
+        Returns:
+            存储ID
+        """
+        try:
+            store_params = {
+                'name': store_name,
+                'workspace_id': workspace_id,
+                'store_type': 'coveragestore',
+                'data_type': data_type,
+                'description': f"{data_type} coveragestore",
+                'enabled': True,
+                'file_id': file_id,
+                'connection_params': json.dumps({'file': store_name})
+            }
+            
+            store_id = insert_with_snowflake_id('geoserver_stores', store_params)
+            return store_id
+        except Exception as e:
+            print(f"在数据库中创建覆盖存储记录失败: {str(e)}")
+            raise
+    
+    def _create_coverage_in_db(self, coverage_info, store_id):
+        """在数据库中创建覆盖范围记录
+        
+        Args:
+            coverage_info: 覆盖范围信息
             store_id: 存储ID
             
         Returns:
-            覆盖ID
+            覆盖范围ID
         """
         try:
-            # 处理数据结构，支持两种格式：coverage和featureType
-            if 'coverage' in coverage_info:
-                coverage_data = coverage_info['coverage']
-            elif 'featureType' in coverage_info:
-                # 从featureType结构中提取coverage信息
-                coverage_data = coverage_info['featureType']
-            else:
-                raise Exception("无效的覆盖信息结构")
+            coverage_params = {
+                'name': coverage_info['name'],
+                'native_name': coverage_info['name'],
+                'store_id': store_id,
+                'title': coverage_info.get('title', coverage_info['name']),
+                'abstract': coverage_info.get('abstract', ''),
+                'keywords': coverage_info.get('keywords', []),
+                'srs': coverage_info.get('srs', 'EPSG:4326'),
+                'enabled': True
+            }
             
-            coverage_name = coverage_data['name']
-            title = coverage_data.get('title', coverage_name)
-            abstract = coverage_data.get('abstract', '')
-            srs = coverage_data.get('srs', 'EPSG:4326')
-            enabled = coverage_data.get('enabled', True)
-            
-            print(f"创建覆盖记录: name={coverage_name}, store_id={store_id}")
-            
-            # 检查是否已存在同名的覆盖
-            check_sql = """
-            SELECT id FROM geoserver_coverages 
-            WHERE name = %s AND store_id = %s
-            """
-            existing_result = execute_query(check_sql, (coverage_name, store_id))
-            
-            if existing_result:
-                print(f"⚠️ 覆盖 '{coverage_name}' 已存在，coverage_id={existing_result[0]['id']}")
-                
-                # 删除现有的覆盖记录以便重新创建
-                delete_sql = "DELETE FROM geoserver_coverages WHERE id = %s"
-                execute_query(delete_sql, (existing_result[0]['id'],), fetch=False)
-                print(f"🗑️ 删除现有覆盖记录")
-            
-            # 创建新的覆盖记录
-            sql = """
-            INSERT INTO geoserver_coverages (name, store_id, title, abstract, srs, enabled)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING id
-            """
-            result = execute_query(sql, (coverage_name, store_id, title, abstract, srs, enabled))
-            coverage_id = result[0]['id']
-            
-            print(f"✅ 覆盖记录创建成功，coverage_id={coverage_id}")
+            coverage_id = insert_with_snowflake_id('geoserver_coverages', coverage_params)
             return coverage_id
-            
         except Exception as e:
-            print(f"❌ 创建覆盖记录失败: {str(e)}")
-            print(f"store_id={store_id}, coverage_info={coverage_info}")
-            raise Exception(f"创建覆盖记录失败: {str(e)}")
+            print(f"在数据库中创建覆盖范围记录失败: {str(e)}")
+            raise
     
     def publish_dwg_dxf(self, file_path, store_name, coord_system):
         """发布DWG/DXF服务
@@ -2240,175 +2153,79 @@ class GeoServerService:
             return coverage_info
     
     def _create_featuretype_in_db(self, featuretype_info, store_id):
-        """在数据库中创建要素类型记录"""
+        """在数据库中创建要素类型记录
+        
+        Args:
+            featuretype_info: 要素类型信息
+            store_id: 存储ID
+            
+        Returns:
+            要素类型ID
+        """
         try:
             # 提取要素类型信息
-            ft = featuretype_info['featureType']
-            featuretype_name = ft.get('name')
-            native_name = ft.get('nativeName', featuretype_name)
-            title = ft.get('title', featuretype_name)
-            abstract = ft.get('abstract', '')
-            enabled = ft.get('enabled', True)
-            srs = ft.get('srs', 'EPSG:4326')
-            projection_policy = ft.get('projectionPolicy', 'REPROJECT_TO_DECLARED')
+            name = featuretype_info.get('name')
+            title = featuretype_info.get('title', name)
+            abstract = featuretype_info.get('abstract', '')
+            keywords = featuretype_info.get('keywords', [])
+            srs = featuretype_info.get('srs', 'EPSG:4326')
             
-            print(f"要素类型信息: name={featuretype_name}, store_id={store_id}, srs={srs}")
-            
-            # 检查是否已存在同名的要素类型
-            check_sql = """
-            SELECT id FROM geoserver_featuretypes 
-            WHERE name = %s AND store_id = %s
-            """
-            existing_result = execute_query(check_sql, (featuretype_name, store_id))
-            
-            if existing_result:
-                print(f"⚠️ 要素类型 '{featuretype_name}' 已存在，featuretype_id={existing_result[0]['id']}")
-                return existing_result[0]['id']
-            
-            # 创建新的要素类型记录
-            sql = """
-            INSERT INTO geoserver_featuretypes (name, store_id, native_name, title, abstract, enabled, srs, projection_policy)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-            """
-            result = execute_query(sql, (
-                featuretype_name,
-                store_id,
-                native_name,
-                title,
-                abstract,
-                enabled,
-                srs,
-                projection_policy
-            ))
-            featuretype_id = result[0]['id']
-            print(f"✅ 新要素类型记录创建成功，featuretype_id={featuretype_id}")
-            return featuretype_id
-            
-        except Exception as e:
-            print(f"❌ 创建要素类型记录失败: {str(e)}")
-            print(f"store_id={store_id}, featuretype_info={featuretype_info}")
-            raise Exception(f"创建要素类型记录失败: {str(e)}")
-    
-    def _create_layer_in_db(self, featuretype_info, workspace_id, featuretype_id, file_id, store_type='datastore'):
-        """在数据库中创建图层记录，并保存服务URL信息"""
-        try:
-            # 处理数据结构，支持两种格式：featureType和coverage
-            if 'featureType' in featuretype_info:
-                layer_data = featuretype_info['featureType']
-            elif 'coverage' in featuretype_info:
-                layer_data = featuretype_info['coverage']
-            else:
-                raise Exception("无效的图层信息结构，缺少featureType或coverage")
-            
-            layer_name = layer_data['name']
-            full_layer_name = f"{self.workspace}:{layer_name}"
-            
-            # 生成服务URL
-            wms_url = f"{self.url}/wms?service=WMS&version=1.1.0&request=GetCapabilities&layers={full_layer_name}"
-            wfs_url = f"{self.url}/wfs?service=WFS&version=1.0.0&request=GetCapabilities&typeName={full_layer_name}"
-            wcs_url = f"{self.url}/wcs?service=WCS&version=1.0.0&request=GetCapabilities&coverage={full_layer_name}" if store_type == 'coveragestore' else None
-            
-            print(f"创建图层记录: name={layer_name}, workspace_id={workspace_id}, featuretype_id={featuretype_id}, file_id={file_id}")
-            print(f"服务URL: WMS={wms_url}")
-            print(f"服务URL: WFS={wfs_url}")
-            if wcs_url:
-                print(f"服务URL: WCS={wcs_url}")
-            
-            # 检查是否已存在同名的图层
-            check_sql = """
-            SELECT id FROM geoserver_layers 
-            WHERE name = %s AND workspace_id = %s
-            """
-            existing_result = execute_query(check_sql, (layer_name, workspace_id))
-            
-            if existing_result:
-                print(f"⚠️ 图层 '{layer_name}' 已存在，layer_id={existing_result[0]['id']}")
-                
-                # 删除现有的图层记录以便重新创建
-                delete_sql = "DELETE FROM geoserver_layers WHERE id = %s"
-                execute_query(delete_sql, (existing_result[0]['id'],), fetch=False)
-                print(f"🗑️ 删除现有图层记录")
-            
-            # 检查file_id是否在files表中存在
-            file_exists = False
-            if file_id:
-                try:
-                    check_file_sql = "SELECT id FROM files WHERE id = %s"
-                    file_result = execute_query(check_file_sql, (file_id,))
-                    file_exists = bool(file_result)
-                except Exception as e:
-                    print(f"⚠️ 无法检查file_id={file_id}是否存在: {str(e)}")
-                    file_exists = False
-            
-            # 创建新的图层记录，包含服务URL信息
-            if file_exists:
-                sql = """
-                INSERT INTO geoserver_layers (name, workspace_id, featuretype_id, coverage_id, file_id, enabled, 
-                                            wms_url, wfs_url, wcs_url, title, queryable)
-                VALUES (%s, %s, %s, %s, %s, TRUE, %s, %s, %s, %s, TRUE)
-                RETURNING id
-                """
-                # 根据store类型决定featuretype_id还是coverage_id
-                if store_type == 'coveragestore':
-                    # 对于coveragestore，featuretype_id参数实际传递的是coverage_id
-                    result = execute_query(sql, (
-                        layer_name, workspace_id, None, featuretype_id, file_id,
-                        wms_url, wfs_url, wcs_url, layer_name
-                    ))
-                else:
-                    result = execute_query(sql, (
-                        layer_name, workspace_id, featuretype_id, None, file_id,
-                        wms_url, wfs_url, wcs_url, layer_name
-                    ))
-                print(f"✅ 图层记录创建成功，关联file_id={file_id}")
-            else:
-                sql = """
-                INSERT INTO geoserver_layers (name, workspace_id, featuretype_id, coverage_id, file_id, enabled,
-                                            wms_url, wfs_url, wcs_url, title, queryable)
-                VALUES (%s, %s, %s, %s, NULL, TRUE, %s, %s, %s, %s, TRUE)
-                RETURNING id
-                """
-                # 根据store类型决定featuretype_id还是coverage_id
-                if store_type == 'coveragestore':
-                    # 对于coveragestore，featuretype_id参数实际传递的是coverage_id
-                    result = execute_query(sql, (
-                        layer_name, workspace_id, None, featuretype_id,
-                        wms_url, wfs_url, wcs_url, layer_name
-                    ))
-                else:
-                    result = execute_query(sql, (
-                        layer_name, workspace_id, featuretype_id, None,
-                        wms_url, wfs_url, wcs_url, layer_name
-                    ))
-                print(f"✅ 图层记录创建成功，file_id为NULL（测试模式或文件不存在）")
-            
-            # 构建完整的图层名称和信息
-            layer_info = {
-                'id': result[0]['id'],
-                'name': layer_name,
-                'full_name': full_layer_name,
-                'workspace_id': workspace_id,
-                'featuretype_id': featuretype_id if store_type != 'coveragestore' else None,
-                'coverage_id': featuretype_id if store_type == 'coveragestore' else None,
-                'file_id': file_id if file_exists else None,
-                'wms_url': wms_url,
-                'wfs_url': wfs_url,
-                'wcs_url': wcs_url
+            featuretype_params = {
+                'name': name,
+                'native_name': name,
+                'store_id': store_id,
+                'title': title,
+                'abstract': abstract,
+                'keywords': keywords,
+                'srs': srs,
+                'enabled': True
             }
             
-            print(f"✅ 新图层记录创建成功，layer_id={layer_info['id']}")
-            print(f"   - WMS URL: {wms_url}")
-            print(f"   - WFS URL: {wfs_url}")
-            if wcs_url:
-                print(f"   - WCS URL: {wcs_url}")
-            
-            return layer_info
-            
+            featuretype_id = insert_with_snowflake_id('geoserver_featuretypes', featuretype_params)
+            return featuretype_id
         except Exception as e:
-            print(f"❌ 创建图层记录失败: {str(e)}")
-            print(f"workspace_id={workspace_id}, featuretype_id={featuretype_id}, file_id={file_id}, featuretype_info={featuretype_info}")
-            raise Exception(f"创建图层记录失败: {str(e)}")
+            print(f"在数据库中创建要素类型记录失败: {str(e)}")
+            raise
+    
+    def _create_layer_in_db(self, layer_info, workspace_id, featuretype_id=None, coverage_id=None, file_id=None, store_type='datastore'):
+        """在数据库中创建图层记录
+        
+        Args:
+            layer_info: 图层信息
+            workspace_id: 工作空间ID
+            featuretype_id: 要素类型ID
+            coverage_id: 覆盖范围ID
+            file_id: 文件ID
+            store_type: 存储类型
+            
+        Returns:
+            图层ID
+        """
+        try:
+            # 提取图层信息
+            name = layer_info.get('name')
+            title = layer_info.get('title', name)
+            abstract = layer_info.get('abstract', '')
+            default_style = layer_info.get('default_style', 'generic')
+            
+            layer_params = {
+                'name': name,
+                'workspace_id': workspace_id,
+                'featuretype_id': featuretype_id,
+                'coverage_id': coverage_id,
+                'title': title,
+                'abstract': abstract,
+                'default_style': default_style,
+                'enabled': True,
+                'queryable': True,
+                'file_id': file_id
+            }
+            
+            layer_id = insert_with_snowflake_id('geoserver_layers', layer_params)
+            return layer_id
+        except Exception as e:
+            print(f"在数据库中创建图层记录失败: {str(e)}")
+            raise
     
     def _delete_related_records_from_db(self, store_name):
         """从数据库中删除相关记录"""

@@ -14,7 +14,7 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 
 from config import FILE_STORAGE, DB_CONFIG
-from models.db import execute_query
+from models.db import execute_query, insert_with_snowflake_id
 from services.postgis_service import PostGISService
 from services.martin_service import MartinService
 
@@ -643,19 +643,7 @@ class GeoJsonMartinService:
         return analysis
     
     def _record_to_database(self, file_id, original_filename, file_path, analysis, postgis_result, user_id):
-        """记录服务信息到数据库
-        
-        Args:
-            file_id: 文件ID
-            original_filename: 原始文件名
-            file_path: 文件路径
-            analysis: GeoJSON分析结果
-            postgis_result: PostGIS存储结果
-            user_id: 用户ID
-            
-        Returns:
-            数据库记录ID
-        """
+        """记录服务信息到数据库"""
         try:
             table_name = postgis_result['table_name']
             
@@ -670,8 +658,7 @@ class GeoJsonMartinService:
                 "sources": {
                     table_name: {
                         "type": "vector",
-                        "tiles": [mvt_url],
-                        "maxzoom": 14
+                        "url": tilejson_url
                     }
                 },
                 "layers": [
@@ -689,29 +676,21 @@ class GeoJsonMartinService:
                 ]
             }
             
-            sql = """
-            INSERT INTO geojson_martin_services 
-            (file_id, original_filename, file_path, table_name, service_url, mvt_url, tilejson_url, style, geojson_info, postgis_info, user_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-            """
+            params = {
+                'file_id': file_id,
+                'original_filename': original_filename,
+                'file_path': file_path,
+                'table_name': table_name,
+                'service_url': f"http://localhost:3000/{table_name}",
+                'mvt_url': mvt_url,
+                'tilejson_url': tilejson_url,
+                'style': json.dumps(default_style),
+                'geojson_info': json.dumps(analysis),
+                'postgis_info': json.dumps(postgis_result),
+                'user_id': user_id
+            }
             
-            params = (
-                file_id,
-                original_filename,
-                file_path,
-                table_name,
-                f"http://localhost:3000/{table_name}",  # service_url
-                mvt_url,
-                tilejson_url,
-                json.dumps(default_style),
-                json.dumps(analysis),
-                json.dumps(postgis_result),
-                user_id
-            )
-            
-            result = execute_query(sql, params)
-            record_id = result[0]['id']
+            record_id = insert_with_snowflake_id('geojson_martin_services', params)
             
             print(f"✅ 服务记录已保存到数据库，ID: {record_id}")
             print(f"   - MVT URL: {mvt_url}")
