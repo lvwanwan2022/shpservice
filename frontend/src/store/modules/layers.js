@@ -133,7 +133,7 @@ const actions = {
       })
 
       const response = await gisApi.getLayers(queryParams)
-      
+      // console.log('lv-response:', response)
       commit('SET_LAYERS', {
         layers: response.layers || [],
         pagination: {

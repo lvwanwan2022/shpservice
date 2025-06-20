@@ -205,7 +205,7 @@ export default {
     const mapLayers = ref({})
     const mvtLayers = ref({})
     const currentScene = ref(null)
-    const layersList = ref([])
+    const layersList = ref([])  // 确保初始化为空数组
     const currentActiveLayer = ref(null)
     const popup = ref(null)
     
@@ -638,11 +638,23 @@ export default {
       
       try {
         //console.log('开始加载场景:', sceneId)
+        //console.log('sceneId:', String(sceneId))
         const response = await gisApi.getScene(sceneId)
-        currentScene.value = response.scene
-        layersList.value = response.layers
         
-        //console.log('场景数据加载完成，图层数量:', layersList.value.length)
+        
+        currentScene.value = response.scene || response.data?.scene
+        
+        // 🔥 确保layers是数组 - 检查不同的可能位置
+        const layers = response.layers || response.data?.layers || []
+        console.log('lv-response11:', layers)
+        if (Array.isArray(layers)) {
+          layersList.value = layers
+        } else {
+          console.warn('场景图层数据不是数组，使用空数组:', layers)
+          layersList.value = []
+        }
+        
+        console.log('场景数据加载完成，图层数量:', layersList.value.length)
         
         // 清除现有图层
         clearAllLayers()
@@ -651,7 +663,6 @@ export default {
         for (const layer of layersList.value) {
           //console.log('lvlayertype:', layer)
           if (layer.service_type === 'martin') {
-            
             await addMartinLayer(layer)
           } else {
             await addGeoServerLayer(layer)
@@ -1496,10 +1507,11 @@ export default {
           file_type: file.file_type,
           discipline: file.discipline
         }
-        
+        //const jsonbig=require('json-bigint')({ storeAsString: true })
         if (serviceType === 'martin') {
           const martinServices = await gisApi.searchMartinServices({ file_id: serviceInfo.file_id })
-          const martinService = martinServices.services.find(service => service.file_id === serviceInfo.file_id)
+          console.log('lv-martinServices:', martinServices)
+          const martinService = martinServices.data.services.find(service => service.file_id === serviceInfo.file_id)
           
           if (!martinService) {
             ElMessage.error('未找到对应的Martin服务')
@@ -1508,8 +1520,8 @@ export default {
           
           layerData = {
             ...layerData,
-            layer_id: martinService.database_record_id || martinService.id,
-            martin_service_id: martinService.database_record_id || martinService.id,
+            layer_id: String(martinService.database_record_id || martinService.id),  // 转换为字符串
+            martin_service_id: String(martinService.database_record_id || martinService.id),  // 转换为字符串
             mvt_url: serviceInfo.mvt_url,
             tilejson_url: serviceInfo.tilejson_url
           }
@@ -1522,7 +1534,7 @@ export default {
           
           layerData = {
             ...layerData,
-            layer_id: geoserverLayerId,
+            layer_id: String(geoserverLayerId),  // 转换为字符串
             geoserver_layer_name: serviceInfo.layer_name,
             wms_url: serviceInfo.wms_url,
             wfs_url: serviceInfo.wfs_url

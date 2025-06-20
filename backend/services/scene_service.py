@@ -97,7 +97,16 @@ class SceneService:
         
         sql += " ORDER BY s.updated_at DESC"
         
-        return execute_query(sql, params)
+        scenes = execute_query(sql, params)
+        
+        # 🔥 关键修复：将所有ID字段转换为字符串，避免JavaScript大整数精度丢失
+        for scene in scenes:
+            if scene.get('id'):
+                scene['id'] = str(scene['id'])
+            if scene.get('user_id'):
+                scene['user_id'] = str(scene['user_id'])
+        
+        return scenes
     
     def get_scene_by_id(self, scene_id):
         """根据ID获取场景
@@ -119,7 +128,15 @@ class SceneService:
         if not result:
             return None
         
-        return result[0]
+        scene = result[0]
+        
+        # 🔥 关键修复：将所有ID字段转换为字符串，避免JavaScript大整数精度丢失
+        if scene.get('id'):
+            scene['id'] = str(scene['id'])
+        if scene.get('user_id'):
+            scene['user_id'] = str(scene['user_id'])
+        
+        return scene
     
     # 图层管理
     def add_layer_to_scene(self, layer_data):
@@ -535,6 +552,18 @@ class SceneService:
                         'wfs_url': None,
                         'wcs_url': None
                     })
+            
+            # 🔥 关键修复：将所有ID字段转换为字符串，避免JavaScript大整数精度丢失
+            if layer.get('scene_layer_id'):
+                layer['scene_layer_id'] = str(layer['scene_layer_id'])
+            if layer.get('layer_id'):
+                layer['layer_id'] = str(layer['layer_id'])
+            if layer.get('martin_service_id'):
+                layer['martin_service_id'] = str(layer['martin_service_id'])
+            if layer.get('file_id'):
+                layer['file_id'] = str(layer['file_id'])
+            if layer.get('id'):
+                layer['id'] = str(layer['id'])
             
             result.append(layer)
         

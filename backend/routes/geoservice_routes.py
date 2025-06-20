@@ -223,7 +223,7 @@ def get_published_layers():
         current_app.logger.error(f"获取已发布图层列表错误: {str(e)}")
         return jsonify({'error': '服务器内部错误'}), 500
 
-@geoservice_bp.route('/publish/<int:file_id>', methods=['POST'])
+@geoservice_bp.route('/publish/<string:file_id>', methods=['POST'])
 def publish_service(file_id):
     """发布文件服务到GeoServer
     
@@ -467,7 +467,7 @@ def publish_service(file_id):
         current_app.logger.error(f"发布服务错误: {str(e)}")
         return jsonify({'error': '服务器内部错误'}), 500
 
-@geoservice_bp.route('/unpublish/<int:file_id>', methods=['DELETE'])
+@geoservice_bp.route('/unpublish/<string:file_id>', methods=['DELETE'])
 def unpublish_service(file_id):
     """取消发布文件服务
     ---
@@ -601,7 +601,7 @@ def unpublish_service(file_id):
         current_app.logger.error(f"取消发布服务错误: {str(e)}")
         return jsonify({'error': '服务器内部错误'}), 500
 
-@geoservice_bp.route('/debug/layer/<int:file_id>', methods=['GET'])
+@geoservice_bp.route('/debug/layer/<string:file_id>', methods=['GET'])
 def debug_layer(file_id):
     """调试图层配置
     ---

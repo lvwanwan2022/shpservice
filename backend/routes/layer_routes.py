@@ -123,7 +123,7 @@ def get_layer(layer_id):
         current_app.logger.error(f"获取图层详情错误: {str(e)}")
         return jsonify({'error': '服务器内部错误'}), 500
 
-@layer_bp.route('/publish/<int:file_id>', methods=['POST'])
+@layer_bp.route('/publish/<string:file_id>', methods=['POST'])
 def publish_layer(file_id):
     """发布图层服务
     ---
@@ -736,7 +736,7 @@ def get_layer_bounds(scene_layer_id):
             scene_layer_record = cursor.fetchone()
             layer_id = scene_layer_record['layer_id']
             layer_type = scene_layer_record['layer_type']
-
+            
             if layer_type == 'geoserver':
               # 首先尝试从geoserver_layers表获取图层信息
               cursor.execute("""
@@ -798,12 +798,12 @@ def get_layer_bounds(scene_layer_id):
                     SELECT vms.id, vms.table_name, vms.original_filename, vms.file_id,
                            f.file_name, f.bbox, f.coordinate_system
                     FROM vector_martin_services vms
-                    LEFT JOIN files f ON vms.file_id::integer = f.id
-                    WHERE vms.id = ABS(%s) AND vms.status = 'active'
+                    LEFT JOIN files f ON vms.file_id::bigint = f.id
+                    WHERE vms.id = %s AND vms.status = 'active'
                 """, (layer_id,))
                 
                 martin_record = cursor.fetchone()
-                
+                #logger.info(f"lv-martin_record:{martin_record}")
                 if not martin_record:
                     return jsonify({
                         'success': False,

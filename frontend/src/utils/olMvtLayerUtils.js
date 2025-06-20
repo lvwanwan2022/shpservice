@@ -171,7 +171,7 @@ export async function createOpenLayersMVTLayer(layerConfig, options = {}) {
         const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
         //mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
         mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
-        console.log('lv-mvtUrl:', mvtUrl)
+        //console.log('lv-mvtUrl:', mvtUrl)
       }
     }
     
@@ -180,7 +180,7 @@ export async function createOpenLayersMVTLayer(layerConfig, options = {}) {
       console.warn('⚠️ MVT URL格式可能不正确，缺少{z},{x},{y}参数:', mvtUrl)
     }
     
-    console.log('lv-1MVT URL:', mvtUrl)
+    //console.log('lv-1MVT URL:', mvtUrl)
     //console.log('TileJSON URL:', layerConfig.tilejson_url)
     
     // 创建样式函数

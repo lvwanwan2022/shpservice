@@ -3,11 +3,13 @@
 
 from flask import Blueprint, request, jsonify, current_app
 from services.scene_service import SceneService
+from auth.auth_service import require_auth, get_current_user  # 🔥 添加认证导入
 
 scene_bp = Blueprint('scene', __name__)
 scene_service = SceneService()
 
 @scene_bp.route('', methods=['POST'])
+@require_auth  # 🔥 添加认证装饰器
 def create_scene():
     """创建场景
     ---
@@ -47,19 +49,27 @@ def create_scene():
         if not data.get('name'):
             return jsonify({'error': '缺少必填字段: name'}), 400
         
+        # 🔥 获取当前登录用户ID
+        current_user = get_current_user()
+        from models.db import execute_query
+        user_query = execute_query("SELECT id FROM users WHERE username = %s", (current_user.get('username'),))
+        if not user_query:
+            return jsonify({'error': '用户不存在'}), 400
+        user_id = user_query[0]['id']
+        
         # 准备场景数据
         scene_data = {
             'name': data.get('name'),
             'description': data.get('description', ''),
             'is_public': data.get('is_public', True),
-            'user_id': data.get('user_id', 1)  # 暂时使用固定用户ID
+            'user_id': user_id  # 🔥 使用当前登录用户的真实ID
         }
         
         # 创建场景
         scene_id = scene_service.create_scene(scene_data)
         
         return jsonify({
-            'id': scene_id,
+            'id': str(scene_id),  # 🔥 转换为字符串避免JavaScript精度丢失
             'message': '场景创建成功'
         }), 200
     
@@ -68,6 +78,7 @@ def create_scene():
         return jsonify({'error': '服务器内部错误'}), 500
 
 @scene_bp.route('/<int:scene_id>', methods=['PUT'])
+@require_auth  # 🔥 添加认证装饰器
 def update_scene(scene_id):
     """更新场景
     ---
@@ -127,6 +138,7 @@ def update_scene(scene_id):
         return jsonify({'error': '服务器内部错误'}), 500
 
 @scene_bp.route('/<int:scene_id>', methods=['DELETE'])
+@require_auth  # 🔥 添加认证装饰器
 def delete_scene(scene_id):
     """删除场景
     ---
@@ -162,6 +174,7 @@ def delete_scene(scene_id):
         return jsonify({'error': '服务器内部错误'}), 500
 
 @scene_bp.route('', methods=['GET'])
+@require_auth  # 🔥 添加认证装饰器
 def list_scenes():
     """获取场景列表
     ---
@@ -184,15 +197,28 @@ def list_scenes():
         description: 场景列表
     """
     try:
+        # 🔥 获取当前登录用户信息
+        current_user = get_current_user()
+        current_app.logger.info(f"当前用户: {current_user}")
+        
         # 获取查询参数
         user_id = request.args.get('user_id')
         public_only = request.args.get('public_only', 'false').lower() == 'true'
+        
+        # 🔥 如果没有指定user_id，使用当前登录用户的ID
+        if not user_id and current_user:
+            from models.db import execute_query
+            user_query = execute_query("SELECT id FROM users WHERE username = %s", (current_user.get('username'),))
+            if user_query:
+                user_id = user_query[0]['id']
+                current_app.logger.info(f"使用当前用户ID: {user_id}")
         
         if user_id:
             user_id = int(user_id)
         
         # 获取场景列表
         scenes = scene_service.get_scenes(user_id, public_only)
+        current_app.logger.info(f"查询到场景数量: {len(scenes)}")
         
         return jsonify({
             'scenes': scenes
@@ -239,6 +265,7 @@ def get_scene(scene_id):
         return jsonify({'error': '服务器内部错误'}), 500
 
 @scene_bp.route('/<int:scene_id>/layers', methods=['POST'])
+@require_auth  # 🔥 添加认证装饰器
 def add_layer(scene_id):
     """添加图层到场景
     ---
@@ -473,7 +500,7 @@ def add_layer(scene_id):
         current_app.logger.info(f"图层添加成功: scene_layer_id={scene_layer_id}")
         
         return jsonify({
-            'id': scene_layer_id,
+            'id': str(scene_layer_id),  # 🔥 转换为字符串避免JavaScript精度丢失
             'message': '图层添加成功'
         }), 200
     
@@ -494,6 +521,7 @@ def add_layer(scene_id):
             return jsonify({'error': '服务器内部错误'}), 500
 
 @scene_bp.route('/<int:scene_id>/layers/<layer_id>', methods=['PUT'])
+@require_auth  # 🔥 添加认证装饰器
 def update_layer(scene_id, layer_id):
     """更新场景图层
     ---
@@ -589,6 +617,7 @@ def update_layer(scene_id, layer_id):
         return jsonify({'error': '服务器内部错误'}), 500
 
 @scene_bp.route('/<int:scene_id>/layers/<layer_id>', methods=['DELETE'])
+@require_auth  # 🔥 添加认证装饰器
 def delete_layer(scene_id, layer_id):
     """删除场景图层
     ---

@@ -50,18 +50,58 @@ class AuthService:
         :param password: 密码
         :return: 验证结果和用户信息
         """
-        if username not in self.users:
-            return False, None, "用户名不存在"
-        
-        user = self.users[username]
-        if user['password'] != self._hash_password(password):
-            return False, None, "密码错误"
-        
-        # 返回用户信息（去掉密码）
-        user_info = {k: v for k, v in user.items() if k != 'password'}
-        user_info['username'] = username
-        
-        return True, user_info, "登录成功"
+        # 优先从数据库查询用户
+        try:
+            from models.db import execute_query
+            sql = "SELECT id, username, password, email FROM users WHERE username = %s"
+            result = execute_query(sql, (username,))
+            
+            if result:
+                user = result[0]
+                if user['password'] == self._hash_password(password):
+                    # 返回用户信息（去掉密码）
+                    user_info = {
+                        'id': user['id'],
+                        'username': user['username'],
+                        'email': user['email'],
+                        'name': user['username'],  # 使用用户名作为显示名称
+                        'role': 'admin' if username == 'admin' else 'user'
+                    }
+                    return True, user_info, "登录成功"
+                else:
+                    return False, None, "密码错误"
+            else:
+                # 如果数据库中没有用户，回退到内存用户
+                if username not in self.users:
+                    return False, None, "用户名不存在"
+                
+                user = self.users[username]
+                if user['password'] != self._hash_password(password):
+                    return False, None, "密码错误"
+                
+                # 返回用户信息（去掉密码）
+                user_info = {k: v for k, v in user.items() if k != 'password'}
+                user_info['username'] = username
+                user_info['id'] = username  # 临时使用用户名作为ID
+                
+                return True, user_info, "登录成功"
+                
+        except Exception as e:
+            print(f"数据库查询用户失败: {e}")
+            # 回退到内存用户验证
+            if username not in self.users:
+                return False, None, "用户名不存在"
+            
+            user = self.users[username]
+            if user['password'] != self._hash_password(password):
+                return False, None, "密码错误"
+            
+            # 返回用户信息（去掉密码）
+            user_info = {k: v for k, v in user.items() if k != 'password'}
+            user_info['username'] = username
+            user_info['id'] = username  # 临时使用用户名作为ID
+            
+            return True, user_info, "登录成功"
     
     def generate_token(self, user_info):
         """

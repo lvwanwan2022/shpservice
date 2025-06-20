@@ -358,17 +358,32 @@ export default {
         }
 
         const response = await gisApi.getScene(sceneId)
+        console.log('Leaflet场景API响应:', response)
+        
         currentScene.value = response.scene
-        layersList.value = response.layers
+        
+        // 🔥 确保layers是数组
+        if (response.layers && Array.isArray(response.layers)) {
+          layersList.value = response.layers
+        } else {
+          console.warn('场景图层数据不是数组，使用空数组:', response.layers)
+          layersList.value = []
+        }
         
         clearAllLayers()
         
-        for (const layer of layersList.value) {
-          if (layer.service_type === 'martin') {
-            await addMartinLayer(layer)
-          } else {
-            await addGeoServerLayer(layer)
+        // 确保layersList是数组再进行迭代
+        if (layersList.value && Array.isArray(layersList.value)) {
+          for (const layer of layersList.value) {
+            console.log('Leaflet处理图层:', layer.layer_name, '服务类型:', layer.service_type)
+            if (layer.service_type === 'martin') {
+              await addMartinLayer(layer)
+            } else {
+              await addGeoServerLayer(layer)
+            }
           }
+        } else {
+          console.warn('layersList.value不是数组，跳过图层加载:', layersList.value)
         }
       } catch (error) {
         console.error('加载场景失败:', error)

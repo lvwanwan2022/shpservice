@@ -164,7 +164,7 @@ def search_martin_services():
         for service in services:
             service_info = {
                 "service_type": service['service_type'],
-                "id": service['id'],
+                "id": str(service['id']),
                 "file_id": service['file_id'],
                 "original_filename": service['original_filename'],
                 "table_name": service['table_name'],
@@ -175,7 +175,7 @@ def search_martin_services():
                 "user_id": service['user_id'],
                 "created_at": service['created_at'].isoformat() if service['created_at'] else None,
                 "updated_at": service['updated_at'].isoformat() if service['updated_at'] else None,
-                "database_record_id": service['id']
+                "database_record_id": str(service['id'])
             }
             result_services.append(service_info)
         

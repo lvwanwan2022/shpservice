@@ -18,13 +18,18 @@ from models.db import execute_query
 
 dxf_bp = Blueprint('dxf', __name__, url_prefix='/api/dxf')
 
-@dxf_bp.route('/analyze-styles/<int:file_id>', methods=['GET'])
+@dxf_bp.route('/analyze-styles/<string:file_id>', methods=['GET'])
 def analyze_dxf_styles(file_id):
     """分析DXF文件的样式信息"""
     try:
-        # 获取文件信息
+        # 获取文件信息 - 将字符串file_id转换为整数
+        try:
+            file_id_int = int(file_id)
+        except ValueError:
+            return jsonify({'error': '无效的文件ID格式'}), 400
+            
         sql = "SELECT * FROM files WHERE id = %s AND file_type = 'dxf'"
-        file_info = execute_query(sql, (file_id,))
+        file_info = execute_query(sql, (file_id_int,))
         
         if not file_info:
             return jsonify({'error': 'DXF文件不存在'}), 404
@@ -50,7 +55,7 @@ def analyze_dxf_styles(file_id):
         current_app.logger.error(f"DXF样式分析错误: {str(e)}")
         return jsonify({'error': f'样式分析失败: {str(e)}'}), 500
 
-@dxf_bp.route('/publish-martin/<int:file_id>', methods=['POST'])
+@dxf_bp.route('/publish-martin/<string:file_id>', methods=['POST'])
 def publish_dxf_martin_service(file_id):
     """发布DXF文件为Martin MVT服务"""
     try:
@@ -60,9 +65,14 @@ def publish_dxf_martin_service(file_id):
         import uuid
         import os
         
-        # 获取文件信息
+        # 获取文件信息 - 将字符串file_id转换为整数
+        try:
+            file_id_int = int(file_id)
+        except ValueError:
+            return jsonify({'error': '无效的文件ID格式'}), 400
+            
         file_service = FileService()
-        file_info = file_service.get_file_by_id(file_id)
+        file_info = file_service.get_file_by_id(file_id_int)
         
         if not file_info:
             return jsonify({'error': '文件不存在'}), 404
@@ -77,7 +87,7 @@ def publish_dxf_martin_service(file_id):
         ORDER BY created_at DESC
         LIMIT 1
         """
-        existing = execute_query(check_sql, (str(file_id), file_info['file_name']))
+        existing = execute_query(check_sql, (str(file_id_int), file_info['file_name']))
         if existing:
             existing_record = existing[0]
             if existing_record['status'] == 'active':
@@ -172,15 +182,18 @@ def publish_dxf_martin_service(file_id):
         }
         
         # 记录到vector_martin_services表（参照geojson逻辑）
+        from utils.snowflake import get_snowflake_id
+        service_id = get_snowflake_id()  # 🔥 使用雪花算法生成ID
+        
         insert_sql = """
         INSERT INTO vector_martin_services 
-        (file_id, original_filename, file_path, vector_type, table_name, service_url, mvt_url, tilejson_url, vector_info, postgis_info, user_id)
-        VALUES (%(file_id)s, %(original_filename)s, %(file_path)s, %(vector_type)s, %(table_name)s, %(service_url)s, %(mvt_url)s, %(tilejson_url)s, %(vector_info)s, %(postgis_info)s, %(user_id)s)
-        RETURNING id
+        (id, file_id, original_filename, file_path, vector_type, table_name, service_url, mvt_url, tilejson_url, vector_info, postgis_info, user_id)
+        VALUES (%(id)s, %(file_id)s, %(original_filename)s, %(file_path)s, %(vector_type)s, %(table_name)s, %(service_url)s, %(mvt_url)s, %(tilejson_url)s, %(vector_info)s, %(postgis_info)s, %(user_id)s)
         """
         
         params = {
-            'file_id': str(file_id),
+            'id': service_id,  # 🔥 使用雪花算法生成的ID
+            'file_id': str(file_id_int),
             'original_filename': file_info['file_name'],
             'file_path': file_info['file_path'],
             'vector_type': 'dxf',
@@ -194,7 +207,7 @@ def publish_dxf_martin_service(file_id):
         }
         
         result = execute_query(insert_sql, params)
-        service_id = result[0]['id'] if result else None
+        # service_id 已经通过雪花算法生成，不需要从结果中获取
         
         if not service_id:
             cleanup_failed_table(table_name)
@@ -229,7 +242,7 @@ def publish_dxf_martin_service(file_id):
         current_app.logger.error(f"发布DXF Martin服务失败: {str(e)}")
         return jsonify({'error': f'发布DXF Martin服务失败: {str(e)}'}), 500
 
-@dxf_bp.route('/publish-martin-ezdxf/<int:file_id>', methods=['POST'])
+@dxf_bp.route('/publish-martin-ezdxf/<string:file_id>', methods=['POST'])
 def publish_dxf_martin_service_ezdxf(file_id):
     """发布DXF文件为Martin MVT服务（使用ezdxf库直接导入）"""
     try:
@@ -239,9 +252,14 @@ def publish_dxf_martin_service_ezdxf(file_id):
         import uuid
         import os
         
-        # 获取文件信息
+        # 获取文件信息 - 将字符串file_id转换为整数
+        try:
+            file_id_int = int(file_id)
+        except ValueError:
+            return jsonify({'error': '无效的文件ID格式'}), 400
+            
         file_service = FileService()
-        file_info = file_service.get_file_by_id(file_id)
+        file_info = file_service.get_file_by_id(file_id_int)
         
         if not file_info:
             return jsonify({'error': '文件不存在'}), 404
@@ -256,7 +274,7 @@ def publish_dxf_martin_service_ezdxf(file_id):
         ORDER BY created_at DESC
         LIMIT 1
         """
-        existing = execute_query(check_sql, (str(file_id), file_info['file_name']))
+        existing = execute_query(check_sql, (str(file_id_int), file_info['file_name']))
         if existing:
             existing_record = existing[0]
             if existing_record['status'] == 'active':
@@ -349,15 +367,18 @@ def publish_dxf_martin_service_ezdxf(file_id):
         }
         
         # 记录到vector_martin_services表（参照geojson逻辑）
+        from utils.snowflake import get_snowflake_id
+        service_id = get_snowflake_id()  # 🔥 使用雪花算法生成ID
+        
         insert_sql = """
         INSERT INTO vector_martin_services 
-        (file_id, original_filename, file_path, vector_type, table_name, service_url, mvt_url, tilejson_url, vector_info, postgis_info, user_id)
-        VALUES (%(file_id)s, %(original_filename)s, %(file_path)s, %(vector_type)s, %(table_name)s, %(service_url)s, %(mvt_url)s, %(tilejson_url)s, %(vector_info)s, %(postgis_info)s, %(user_id)s)
-        RETURNING id
+        (id, file_id, original_filename, file_path, vector_type, table_name, service_url, mvt_url, tilejson_url, vector_info, postgis_info, user_id)
+        VALUES (%(id)s, %(file_id)s, %(original_filename)s, %(file_path)s, %(vector_type)s, %(table_name)s, %(service_url)s, %(mvt_url)s, %(tilejson_url)s, %(vector_info)s, %(postgis_info)s, %(user_id)s)
         """
         
         params = {
-            'file_id': str(file_id),
+            'id': service_id,  # 🔥 使用雪花算法生成的ID
+            'file_id': str(file_id_int),
             'original_filename': file_info['file_name'],
             'file_path': file_info['file_path'],
             'vector_type': 'dxf',
@@ -371,7 +392,7 @@ def publish_dxf_martin_service_ezdxf(file_id):
         }
         
         result = execute_query(insert_sql, params)
-        service_id = result[0]['id'] if result else None
+        # service_id 已经通过雪花算法生成，不需要从结果中获取
         
         if not service_id:
             cleanup_failed_table(table_name)
@@ -515,7 +536,7 @@ def delete_dxf_martin_service(service_id):
         current_app.logger.error(f"删除DXF Martin服务失败: {str(e)}")
         return jsonify({'error': f'删除服务失败: {str(e)}'}), 500
 
-@dxf_bp.route('/publish-both/<int:file_id>', methods=['POST'])
+@dxf_bp.route('/publish-both/<string:file_id>', methods=['POST'])
 def publish_both_services(file_id):
     """同时发布DXF文件到Martin和GeoServer服务"""
     try:

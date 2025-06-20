@@ -45,6 +45,8 @@
 
       <!-- 场景列表 -->
       <div class="scenes-grid">
+      
+        
         <div 
           v-for="scene in filteredScenes" 
           :key="scene.id" 
@@ -83,16 +85,20 @@
             
             <div class="scene-info">
               <div class="info-item">
-                <span class="label">图层数量:</span>
-                <span class="value">{{ scene.layer_count || 0 }}</span>
+                <span class="label">图层数量</span>
+                <span class="value">{{ scene.layer_count || 0 }} 个</span>
               </div>
               <div class="info-item">
-                <span class="label">创建时间:</span>
-                <span class="value">{{ formatDate(scene.created_at) }}</span>
+                <span class="label">创建者</span>
+                <span class="value">{{ scene.creator || '未知' }}</span>
               </div>
               <div class="info-item">
-                <span class="label">最后修改:</span>
-                <span class="value">{{ formatDate(scene.updated_at) }}</span>
+                <span class="label">创建时间</span>
+                <span class="value">{{ formatDateShort(scene.created_at) }}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">最后修改</span>
+                <span class="value">{{ formatDateShort(scene.updated_at) }}</span>
               </div>
             </div>
           </div>
@@ -269,12 +275,32 @@ export default {
     // 方法
     const loadScenes = async () => {
       try {
+        
+        
         const response = await gisApi.getScenes()
-        scenes.value = response.scenes || []
-        //console.log('场景列表加载成功:', scenes.value)
+       
+        
+        if (response && response.data.scenes) {
+          scenes.value = response.data.scenes
+
+        } else {
+          console.warn('API响应格式异常，使用空数组')
+          scenes.value = []
+        }
+        
+        console.log('最终场景数量:', scenes.value.length)
+        console.log('filteredScenes数量:', filteredScenes.value.length)
+        
       } catch (error) {
         console.error('加载场景列表失败:', error)
-        ElMessage.error('加载场景列表失败')
+        console.error('错误类型:', error.constructor.name)
+        console.error('错误信息:', error.message)
+        console.error('HTTP状态:', error.response?.status)
+        console.error('响应数据:', error.response?.data)
+        console.error('请求配置:', error.config)
+        
+        scenes.value = []
+        ElMessage.error('加载场景列表失败: ' + (error.response?.data?.error || error.message))
       }
     }
     
@@ -417,6 +443,24 @@ export default {
         minute: '2-digit' 
       })
     }
+
+    const formatDateShort = (dateString) => {
+      if (!dateString) return '-'
+      const date = new Date(dateString)
+      const now = new Date()
+      const diff = now - date
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+      
+      if (days === 0) {
+        return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+      } else if (days < 7) {
+        return `${days}天前`
+      } else if (days < 30) {
+        return `${Math.floor(days / 7)}周前`
+      } else {
+        return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+      }
+    }
     
     // 生命周期
     onMounted(() => {
@@ -450,7 +494,8 @@ export default {
       viewScene,
       removeLayerFromScene,
       openMapWithScene,
-      formatDate
+      formatDate,
+      formatDateShort
     }
   }
 }
@@ -503,89 +548,121 @@ export default {
   flex: 1;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
   padding: 10px;
 }
 
 .scene-card {
   background: white;
   border: 1px solid #e4e7ed;
-  border-radius: 8px;
-  padding: 20px;
+  border-radius: 12px;
+  padding: 16px;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  height: fit-content;
+  max-height: 280px;
 }
 
 .scene-card:hover {
   border-color: #409eff;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(64, 158, 255, 0.12);
 }
 
 .scene-card-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 15px;
+  margin-bottom: 12px;
 }
 
 .scene-card-header h3 {
   margin: 0;
   color: #303133;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
 }
 
 .scene-actions {
   display: flex;
-  gap: 5px;
+  gap: 4px;
   opacity: 0;
   transition: opacity 0.3s ease;
+  flex-shrink: 0;
 }
 
 .scene-card:hover .scene-actions {
   opacity: 1;
 }
 
+.scene-actions .el-button {
+  padding: 4px 8px;
+  font-size: 12px;
+  height: 24px;
+}
+
 .scene-card-body {
-  margin-bottom: 15px;
+  margin-bottom: 12px;
 }
 
 .scene-description {
   color: #606266;
-  margin: 0 0 15px 0;
-  line-height: 1.5;
-  min-height: 20px;
+  margin: 0 0 12px 0;
+  line-height: 1.4;
+  font-size: 13px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: 36px;
 }
 
 .scene-info {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+  font-size: 12px;
 }
 
 .info-item {
   display: flex;
-  justify-content: space-between;
-  font-size: 14px;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .info-item .label {
   color: #909399;
+  font-size: 11px;
 }
 
 .info-item .value {
   color: #606266;
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .scene-card-footer {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.scene-card-footer .el-tag {
+  font-size: 11px;
+  height: 20px;
+  line-height: 18px;
+  padding: 0 6px;
 }
 
 .empty-state {

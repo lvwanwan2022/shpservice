@@ -1,6 +1,10 @@
 import axios from 'axios'
 // 登录认证模块 - 一行代码实现带认证的API调用
-// import { authHttp } from '@/auth/authService'
+import { authHttp } from '@/auth/authService'
+//const data = await authHttp.get('/api/protected-data')
+
+// 🔥 导入JSONbig处理大整数
+//import JSONbig from 'json-bigint'
 
 // 创建axios实例
 const service = axios.create({
@@ -53,6 +57,8 @@ service.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+
 
 // 检测服务状态
 async function checkServiceStatus() {
@@ -169,7 +175,8 @@ export default {
       timeout = 1200000 // 20分钟
     }
     
-    return service({
+    // 使用带认证的axios实例进行文件上传
+    return authHttp({
       url: '/files/upload',
       method: 'post',
       data: formData,
@@ -268,7 +275,8 @@ export default {
       }
     }
     
-    return service({
+    // 使用带认证的axios实例进行分片上传初始化
+    return authHttp({
       url: '/files/upload/chunked/init',
       method: 'post',
       data: {
@@ -288,7 +296,8 @@ export default {
     chunkFormData.append('chunk_index', chunkIndex)
     chunkFormData.append('chunk', chunk)
     
-    return service({
+    // 使用带认证的axios实例上传分片
+    return authHttp({
       url: '/files/upload/chunked/chunk',
       method: 'post',
       data: chunkFormData,
@@ -301,7 +310,8 @@ export default {
 
   // 完成分片上传
   completeChunkedUpload(uploadId) {
-    return service({
+    // 使用带认证的axios实例完成分片上传
+    return authHttp({
       url: '/files/upload/chunked/complete',
       method: 'post',
       data: {
@@ -313,7 +323,8 @@ export default {
 
   // 取消分片上传
   abortChunkedUpload(uploadId) {
-    return service({
+    // 使用带认证的axios实例取消分片上传
+    return authHttp({
       url: '/files/upload/chunked/abort',
       method: 'post',
       data: {
@@ -480,7 +491,7 @@ export default {
   
   // 获取场景列表
   getScenes(params = {}) {
-    return service({
+    return authHttp({  // 🔥 使用带认证的请求
       url: '/scenes',
       method: 'get',
       params
@@ -489,15 +500,15 @@ export default {
   
   // 获取场景详情
   getScene(sceneId) {
-    return service({
-      url: `/scenes/${sceneId}`,
+    return authHttp({  // 🔥 使用带认证的请求
+      url: `/scenes/${String(sceneId)}`,  // 将sceneId转换为字符串，避免大数值被取整
       method: 'get'
     })
   },
   
   // 创建场景
   createScene(data) {
-    return service({
+    return authHttp({  // 🔥 使用带认证的请求
       url: '/scenes',
       method: 'post',
       data
@@ -506,7 +517,7 @@ export default {
   
   // 更新场景
   updateScene(sceneId, data) {
-    return service({
+    return authHttp({  // 🔥 使用带认证的请求
       url: `/scenes/${sceneId}`,
       method: 'put',
       data
@@ -515,7 +526,7 @@ export default {
   
   // 删除场景
   deleteScene(sceneId) {
-    return service({
+    return authHttp({  // 🔥 使用带认证的请求
       url: `/scenes/${sceneId}`,
       method: 'delete'
     })
@@ -523,7 +534,7 @@ export default {
   
   // 添加图层到场景
   addLayerToScene(sceneId, data) {
-    return service({
+    return authHttp({  // 🔥 使用带认证的请求
       url: `/scenes/${sceneId}/layers`,
       method: 'post',
       data
@@ -532,7 +543,7 @@ export default {
   
   // 更新场景图层
   updateSceneLayer(sceneId, layerId, data) {
-    return service({
+    return authHttp({  // 🔥 使用带认证的请求
       url: `/scenes/${sceneId}/layers/${layerId}`,
       method: 'put',
       data
@@ -541,7 +552,7 @@ export default {
   
   // 从场景删除图层
   removeLayerFromScene(sceneId, layerId) {
-    return service({
+    return authHttp({  // 🔥 使用带认证的请求
       url: `/scenes/${sceneId}/layers/${layerId}`,
       method: 'delete'
     })
@@ -549,7 +560,7 @@ export default {
   
   // 重新排序场景图层
   reorderSceneLayers(sceneId, layerOrders) {
-    return service({
+    return authHttp({  // 🔥 使用带认证的请求
       url: `/scenes/${sceneId}/layers/reorder`,
       method: 'post',
       data: { layer_orders: layerOrders }
@@ -875,7 +886,7 @@ export default {
 
   // 搜索Martin服务
   searchMartinServices(params = {}) {
-    return service({
+    return authHttp({
       url: '/martin-services/search',
       method: 'get',
       params
@@ -894,7 +905,7 @@ export default {
   
   // 发布DXF的Martin服务
   publishDxfMartinService(fileId, params = {}) {
-    return service({
+    return authHttp({  // 🔥 修复：使用带认证的axios实例
       url: `/dxf/publish-martin-ezdxf/${fileId}`,
       method: 'post',
       data: params
@@ -928,7 +939,7 @@ export default {
 
   // 发布DXF到双服务（GeoServer + Martin）
   publishDxfBothServices(fileId, params = {}) {
-    return service({
+    return authHttp({  // 🔥 修复：使用带认证的axios实例
       url: `/dxf/publish-both/${fileId}`,
       method: 'post',
       data: params

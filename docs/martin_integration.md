@@ -216,13 +216,13 @@ postgres:
 
 ```bash
 # 检查 Martin 服务状态
-curl http://localhost:3000/health
+curl http://172.16.118.124:3000/health
 
 # 查看可用表
-curl http://localhost:3000/catalog
+curl http://172.16.118.124:3000/catalog
 
 # 获取表的 TileJSON
-curl http://localhost:3000/public.your_table
+curl http://172.16.118.124:3000/public.your_table
 ```
 
 ### 日志监控

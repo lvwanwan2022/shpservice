@@ -18,6 +18,7 @@ import logging
 import os
 import requests
 import atexit
+import json
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -43,6 +44,27 @@ except ImportError:
 
 # 启用CORS
 CORS(app)
+
+# 🔥 添加全局中间件，处理大整数ID转换为字符串
+class BigIntJSONEncoder(json.JSONEncoder):
+    """自定义JSON编码器，将大整数转换为字符串"""
+    def default(self, obj):
+        if isinstance(obj, int):
+            # 如果整数大于JavaScript安全整数范围，转换为字符串
+            if obj > 9007199254740991 or obj < -9007199254740991:
+                return str(obj)
+        return super().default(obj)
+
+# 🔥 重写Flask的jsonify函数，使用自定义JSON编码器
+def custom_jsonify(*args, **kwargs):
+    """自定义jsonify函数，使用BigIntJSONEncoder处理大整数"""
+    return app.response_class(
+        json.dumps(dict(*args, **kwargs), cls=BigIntJSONEncoder),
+        mimetype='application/json'
+    )
+
+# 🔥 替换Flask的jsonify函数
+app.json.encoder = BigIntJSONEncoder
 
 # 配置API文档
 api = Api(
@@ -248,52 +270,68 @@ def geoserver_proxy(path):
         if request.method == 'GET':
             resp = requests.get(target_url, timeout=30, allow_redirects=False)
         elif request.method == 'POST':
-            resp = requests.post(target_url, data=request.get_data(), timeout=30, allow_redirects=False)
+            resp = requests.post(target_url, json=request.json, timeout=30, allow_redirects=False)
+        elif request.method == 'PUT':
+            resp = requests.put(target_url, json=request.json, timeout=30, allow_redirects=False)
+        elif request.method == 'DELETE':
+            resp = requests.delete(target_url, timeout=30, allow_redirects=False)
         else:
-            resp = requests.request(request.method, target_url, timeout=30, allow_redirects=False)
+            return jsonify({'error': '不支持的请求方法'}), 405
         
-        # 创建代理响应
+        # 创建响应
         response = Response(
             resp.content,
             status=resp.status_code,
-            content_type=resp.headers.get('content-type')
+            content_type=resp.headers.get('Content-Type', 'text/plain')
         )
         
-        # 添加CORS头
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        # 复制头信息
+        for key, value in resp.headers.items():
+            if key.lower() not in ('content-length', 'connection', 'content-encoding'):
+                response.headers[key] = value
         
-        logger.info(f"代理响应: {resp.status_code}")
+        # 设置CORS头
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        
         return response
         
-    except requests.exceptions.RequestException as e:
-        logger.error(f"GeoServer代理请求失败: {str(e)}")
-        response = jsonify({'error': f'GeoServer服务不可用: {str(e)}'})
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        return response, 503
+    except requests.RequestException as e:
+        logger.error(f"代理请求失败: {str(e)}")
+        return jsonify({'error': f'代理请求失败: {str(e)}'}), 500
 
 @app.route('/health')
 def health_check():
-    """健康检查端点"""
-    return {'status': 'healthy', 'message': 'SHP Service is running'}, 200
+    """健康检查接口"""
+    return jsonify({
+        'status': 'ok',
+        'service': 'shpservice'
+    })
 
 @app.route('/api/health')
 def api_health_check():
-    """API健康检查端点"""
-    return {'status': 'healthy', 'message': 'SHP Service API is running'}, 200
+    """API健康检查接口"""
+    return jsonify({
+        'status': 'ok',
+        'service': 'shpservice-api'
+    })
 
 @app.route('/')
 def index():
-    """根路径"""
-    return {'message': 'SHP Service API', 'version': '1.0.0'}, 200
+    """首页"""
+    return """
+    <h1>SHP Service API</h1>
+    <p>GIS文件管理和地图服务API</p>
+    <p><a href="/swagger/">API文档</a></p>
+    """
 
 @app.errorhandler(404)
 def not_found(error):
-    return jsonify({'error': '接口不存在'}), 404
+    """处理404错误"""
+    return jsonify({'error': '资源不存在'}), 404
 
 @app.errorhandler(500)
 def internal_error(error):
+    """处理500错误"""
     return jsonify({'error': '服务器内部错误'}), 500
 
 def cleanup_martin():

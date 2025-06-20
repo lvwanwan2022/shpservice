@@ -95,7 +95,7 @@ def get_service_info(file_id):
         return jsonify({'error': f'获取服务信息失败: {str(e)}'}), 500
 
 
-@shp_martin_bp.route('/publish/<int:file_id>', methods=['POST'])
+@shp_martin_bp.route('/publish/<string:file_id>', methods=['POST'])
 def publish_existing_file(file_id):
     """发布已上传的SHP文件到Martin服务"""
     try:

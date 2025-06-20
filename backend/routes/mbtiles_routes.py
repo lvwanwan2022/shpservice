@@ -100,7 +100,7 @@ def delete_mbtiles_service(service_id):
         current_app.logger.error(f"删除MBTiles服务失败: {str(e)}")
         return jsonify({'error': f'删除MBTiles服务失败: {str(e)}'}), 500
 
-@mbtiles_bp.route('/publish/<int:file_id>', methods=['POST'])
+@mbtiles_bp.route('/publish/<string:file_id>', methods=['POST'])
 def publish_mbtiles(file_id):
     """发布MBTiles文件为Martin服务"""
     try:
@@ -159,7 +159,7 @@ def publish_mbtiles(file_id):
         current_app.logger.error(f"发布MBTiles服务失败: {str(e)}")
         return jsonify({'error': f'发布MBTiles服务失败: {str(e)}'}), 500
 
-@mbtiles_bp.route('/unpublish/<int:file_id>', methods=['DELETE'])
+@mbtiles_bp.route('/unpublish/<string:file_id>', methods=['DELETE'])
 def unpublish_mbtiles(file_id):
     """取消发布MBTiles服务"""
     try:

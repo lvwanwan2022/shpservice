@@ -6,6 +6,8 @@ from services.file_service import FileService
 from models.db import execute_query
 from werkzeug.utils import secure_filename
 from config import FILE_STORAGE
+# 登录认证模块 - 一行代码实现文件上传权限验证
+from auth.auth_service import require_auth, get_current_user
 import os
 import json
 import time
@@ -14,6 +16,7 @@ file_bp = Blueprint('file', __name__)
 file_service = FileService()
 
 @file_bp.route('/upload', methods=['POST'])
+@require_auth  # 一行代码实现登录验证
 def upload_file():
     """上传文件接口"""
     print("=== 文件上传请求开始 ===")
@@ -32,6 +35,17 @@ def upload_file():
         return jsonify({'error': '未选择文件'}), 400
     
     try:
+        # 获取当前登录用户信息
+        current_user = get_current_user()
+        #current_app.logger.info(f"当前登录用户信息: {current_user}")
+        user_name = current_user.get('username', 'unknown')  
+        #从数据库中获取用户ID
+        user_id = execute_query("SELECT id FROM users WHERE username = %s", (user_name,))
+        if user_id:
+            user_id = user_id[0]['id']
+        else:
+            user_id = 'unknown'
+        
         # 从表单获取元数据
         metadata = {
             'file_name': request.form.get('file_name') or secure_filename(file.filename),
@@ -43,7 +57,7 @@ def upload_file():
             'coordinate_system': request.form.get('coordinate_system'),
             'tags': request.form.get('tags', ''),
             'description': request.form.get('description', ''),
-            'user_id': request.form.get('user_id', 1),  # 暂时使用固定用户ID
+            'user_id': user_id,  # 使用当前登录用户ID
             'status': 'uploaded',  # 新增状态字段
             'geometry_type': request.form.get('geometry_type'),  # 新增几何类型
             'feature_count': request.form.get('feature_count'),  # 新增要素数量
@@ -70,10 +84,10 @@ def upload_file():
         
         print(f"文件上传成功，ID: {file_id}")
         return jsonify({
-            'id': file_id,
+            'id': str(file_id),  # 🔥 关键修复：转换为字符串
             'message': '数据上传成功，如需发布服务请手动点击发布按钮',
             'file': {
-                'id': file_id,
+                'id': str(file_id),  # 🔥 关键修复：转换为字符串
                 'file_name': file_data['file_name'],
                 'original_name': file_data.get('original_name', ''),
                 'file_size': file_data['file_size'],
@@ -104,6 +118,7 @@ def upload_file():
 chunked_uploads = {}
 
 @file_bp.route('/upload/chunked/init', methods=['POST'])
+@require_auth  # 一行代码实现登录验证
 def init_chunked_upload():
     """初始化分片上传"""
     print("=== 初始化分片上传 ===")
@@ -141,6 +156,7 @@ def init_chunked_upload():
     return jsonify({'message': '分片上传初始化成功', 'upload_id': upload_id})
 
 @file_bp.route('/upload/chunked/chunk', methods=['POST'])
+@require_auth  # 一行代码实现登录验证
 def upload_chunk():
     """上传单个分片"""
     upload_id = request.form.get('upload_id')
@@ -176,6 +192,7 @@ def upload_chunk():
     })
 
 @file_bp.route('/upload/chunked/complete', methods=['POST'])
+@require_auth  # 一行代码实现登录验证
 def complete_chunked_upload():
     """完成分片上传，合并文件"""
     print("=== 完成分片上传 ===")
@@ -229,10 +246,15 @@ def complete_chunked_upload():
         
         file_obj = FileObject(final_file_path, upload_info['file_name'])
         
+        # 获取当前登录用户信息
+        current_user = get_current_user()
+        user_id = current_user.get('id', current_user.get('username', 'unknown'))  # 优先使用数据库ID，回退到用户名
+        
         # 使用现有的文件保存逻辑
         metadata = upload_info['metadata']
         metadata['file_name'] = metadata.get('file_name') or secure_filename(upload_info['file_name'])
         metadata['original_name'] = upload_info['file_name']
+        metadata['user_id'] = user_id  # 使用当前登录用户ID
         
         # 验证必填字段
         required_fields = ['file_name', 'original_name', 'discipline', 'dimension', 'file_type']
@@ -480,6 +502,18 @@ def get_file_list():
         
         # 处理结果
         for file in files:
+            # 🔥 关键修复：将所有ID字段转换为字符串，避免JavaScript大整数精度丢失
+            if file.get('id'):
+                file['id'] = str(file['id'])
+            if file.get('user_id'):
+                file['user_id'] = str(file['user_id'])
+            if file.get('martin_service_id'):
+                file['martin_service_id'] = str(file['martin_service_id'])
+            if file.get('martin_file_id'):
+                file['martin_file_id'] = str(file['martin_file_id'])
+            if file.get('geoserver_layer_id'):
+                file['geoserver_layer_id'] = str(file['geoserver_layer_id'])
+            
             # 处理JSON字段
             if file.get('bbox'):
                 try:
@@ -562,18 +596,30 @@ def get_file_list():
         current_app.logger.error(f"获取文件列表错误: {str(e)}")
         return jsonify({'error': '服务器内部错误'}), 500
 
-@file_bp.route('/files/<int:file_id>', methods=['GET'])
+@file_bp.route('/files/<string:file_id>', methods=['GET'])
 def get_files_file(file_id):
     """获取文件详情 - /files/<file_id> 端点"""
     return get_file(file_id)
 
-@file_bp.route('/<int:file_id>', methods=['GET'])
+@file_bp.route('/<string:file_id>', methods=['GET'])
 def get_file(file_id):
     """获取文件详情"""
     try:
-        file_info = file_service.get_file_by_id(file_id)
+        # 将字符串file_id转换为整数
+        try:
+            file_id_int = int(file_id)
+        except ValueError:
+            return jsonify({'error': '无效的文件ID格式'}), 400
+            
+        file_info = file_service.get_file_by_id(file_id_int)
         if not file_info:
             return jsonify({'error': '文件不存在'}), 404
+        
+        # 🔥 关键修复：将ID字段转换为字符串，避免JavaScript大整数精度丢失
+        if file_info.get('id'):
+            file_info['id'] = str(file_info['id'])
+        if file_info.get('user_id'):
+            file_info['user_id'] = str(file_info['user_id'])
         
         return jsonify(file_info), 200
     
@@ -581,14 +627,20 @@ def get_file(file_id):
         current_app.logger.error(f"获取文件详情错误: {str(e)}")
         return jsonify({'error': '服务器内部错误'}), 500
 
-@file_bp.route('/<int:file_id>', methods=['PUT'])
+@file_bp.route('/<string:file_id>', methods=['PUT'])
 def update_file(file_id):
     """更新文件信息"""
     try:
+        # 将字符串file_id转换为整数
+        try:
+            file_id_int = int(file_id)
+        except ValueError:
+            return jsonify({'error': '无效的文件ID格式'}), 400
+            
         data = request.json
         
         # 检查文件是否存在
-        file_info = file_service.get_file_by_id(file_id)
+        file_info = file_service.get_file_by_id(file_id_int)
         if not file_info:
             return jsonify({'error': '文件不存在'}), 404
         
@@ -605,7 +657,7 @@ def update_file(file_id):
                 update_data[field] = data[field]
         
         # 更新文件信息
-        file_service.update_file(file_id, update_data)
+        file_service.update_file(file_id_int, update_data)
         
         return jsonify({'message': '文件信息更新成功'}), 200
     
@@ -613,11 +665,17 @@ def update_file(file_id):
         current_app.logger.error(f"更新文件信息错误: {str(e)}")
         return jsonify({'error': '服务器内部错误'}), 500
 
-@file_bp.route('/<int:file_id>', methods=['DELETE'])
+@file_bp.route('/<string:file_id>', methods=['DELETE'])
 def delete_file(file_id):
     """删除文件"""
     try:
-        file_service.delete_file(file_id)
+        # 将字符串file_id转换为整数
+        try:
+            file_id_int = int(file_id)
+        except ValueError:
+            return jsonify({'error': '无效的文件ID格式'}), 400
+            
+        file_service.delete_file(file_id_int)
         return jsonify({'message': '文件删除成功'}), 200
     
     except ValueError as e:
@@ -690,12 +748,18 @@ def get_file_types():
         current_app.logger.error(f"获取文件类型列表错误: {str(e)}")
         return jsonify({'error': '服务器内部错误'}), 500
 
-@file_bp.route('/<int:file_id>/publish/martin', methods=['POST'])
+@file_bp.route('/<string:file_id>/publish/martin', methods=['POST'])
 def publish_martin_service(file_id):
     """发布文件到Martin服务"""
     try:
+        # 将字符串file_id转换为整数
+        try:
+            file_id_int = int(file_id)
+        except ValueError:
+            return jsonify({'error': '无效的文件ID格式'}), 400
+            
         # 检查文件是否存在
-        file_info = file_service.get_file_by_id(file_id)
+        file_info = file_service.get_file_by_id(file_id_int)
         if not file_info:
             return jsonify({'error': '文件不存在'}), 404
         
@@ -769,7 +833,7 @@ def publish_martin_service(file_id):
         current_app.logger.error(f"发布Martin服务错误: {str(e)}")
         return jsonify({'error': f'发布Martin服务失败: {str(e)}'}), 500
 
-@file_bp.route('/<int:file_id>/publish/martin-mbtiles', methods=['POST'])
+@file_bp.route('/<string:file_id>/publish/martin-mbtiles', methods=['POST'])
 def publish_martin_mbtiles_service(file_id):
     """发布MBTiles文件到Martin服务"""
     try:
@@ -864,7 +928,7 @@ def publish_martin_mbtiles_service(file_id):
         current_app.logger.error(f"发布Martin服务错误: {str(e)}")
         return jsonify({'error': f'发布Martin服务失败: {str(e)}'}), 500
 
-@file_bp.route('/<int:file_id>/publish/geoserver', methods=['POST'])
+@file_bp.route('/<string:file_id>/publish/geoserver', methods=['POST'])
 def publish_geoserver_service(file_id):
     """发布文件到GeoServer服务 - 统一处理矢量和栅格数据"""
     try:
@@ -1011,7 +1075,7 @@ def publish_geoserver_service(file_id):
         traceback.print_exc()
         return jsonify({'success': False, 'error': f'发布失败: {str(e)}'}), 500
 
-@file_bp.route('/<int:file_id>/unpublish/martin', methods=['DELETE'])
+@file_bp.route('/<string:file_id>/unpublish/martin', methods=['DELETE'])
 def unpublish_martin_service(file_id):
     """取消发布Martin服务"""
     try:
@@ -1064,7 +1128,7 @@ def unpublish_martin_service(file_id):
         current_app.logger.error(f"取消发布Martin服务错误: {str(e)}")
         return jsonify({'error': f'取消发布Martin服务失败: {str(e)}'}), 500
 
-@file_bp.route('/<int:file_id>/publish/dom', methods=['POST'])
+@file_bp.route('/<string:file_id>/publish/dom', methods=['POST'])
 def publish_dom_geoserver_service(file_id):
     """发布DOM.tif文件到GeoServer服务 - 专门处理DOM.tif文件
     
@@ -1188,7 +1252,7 @@ def publish_dom_geoserver_service(file_id):
         traceback.print_exc()
         return jsonify({'success': False, 'error': f'发布失败: {str(e)}'}), 500
 
-@file_bp.route('/<int:file_id>/unpublish/geoserver', methods=['DELETE'])
+@file_bp.route('/<string:file_id>/unpublish/geoserver', methods=['DELETE'])
 def unpublish_geoserver_service(file_id):
     """取消发布GeoServer服务 - 统一处理矢量和栅格数据"""
     try:
@@ -1543,7 +1607,7 @@ def get_common_coordinate_systems():
         current_app.logger.error(f"获取常用坐标系失败: {str(e)}")
         return jsonify({'error': f'获取常用坐标系失败: {str(e)}'}), 500
 
-@file_bp.route('/<int:file_id>/force-cleanup', methods=['POST'])
+@file_bp.route('/<string:file_id>/force-cleanup', methods=['POST'])
 def force_cleanup_geoserver_files(file_id):
     """强制清理GeoServer文件和缓存"""
     try:

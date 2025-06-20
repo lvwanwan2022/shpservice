@@ -8,7 +8,7 @@
           <div class="panel-header">
             <h3>图层管理</h3>
             <div class="header-right">
-              <span class="layer-count">{{ layersList.length }} 个图层</span>
+              <span class="layer-count">{{ (layersList || []).length }} 个图层</span>
               <el-button type="primary" size="small" @click="showAddLayerDialog">
                 <i class="el-icon-plus"></i> 添加图层
               </el-button>
@@ -45,7 +45,7 @@
           
           <div class="panel-body">
             <!-- 新的图层卡片列表 -->
-            <div class="layer-cards" v-if="layersList.length > 0">
+            <div class="layer-cards" v-if="layersList && layersList.length > 0">
               <div 
                 v-for="layer in layersList" 
                 :key="layer.id" 
@@ -81,10 +81,12 @@
                       class="zoom-btn"
                       title="缩放到图层范围"
                     >
-                      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                        <path d="M15.5 14h-.79l-.28-.27A6.5 6.5 0 1 0 13 15.5l.27.28v.79l5 4.99L19.49 20l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/>
-                        <path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/>
-                      </svg>
+                      <span>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                          <path d="M15.5 14h-.79l-.28-.27A6.5 6.5 0 1 0 13 15.5l.27.28v.79l5 4.99L19.49 20l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/>
+                          <path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/>
+                        </svg>
+                      </span>
                     </el-button>
                     
                     <!-- 样式设置 -->
@@ -94,9 +96,11 @@
                       class="style-btn"
                       title="样式设置"
                     >
-                      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                        <path d="M12,2A2,2 0 0,1 14,4C14,4.74 13.6,5.39 13,5.73V7H14A7,7 0 0,1 21,14H22A1,1 0 0,1 23,15V18A1,1 0 0,1 22,19H21V20A2,2 0 0,1 19,22H5A2,2 0 0,1 3,20V19H2A1,1 0 0,1 1,18V15A1,1 0 0,1 2,14H3A7,7 0 0,1 10,7H11V5.73C10.4,5.39 10,4.74 10,4A2,2 0 0,1 12,2M7.5,13A2.5,2.5 0 0,0 5,15.5A2.5,2.5 0 0,0 7.5,18A2.5,2.5 0 0,0 10,15.5A2.5,2.5 0 0,0 7.5,13M16.5,13A2.5,2.5 0 0,0 14,15.5A2.5,2.5 0 0,0 16.5,18A2.5,2.5 0 0,0 19,15.5A2.5,2.5 0 0,0 16.5,13Z"/>
-                      </svg>
+                      <span>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                          <path d="M12,2A2,2 0 0,1 14,4C14,4.74 13.6,5.39 13,5.73V7H14A7,7 0 0,1 21,14H22A1,1 0 0,1 23,15V18A1,1 0 0,1 22,19H21V20A2,2 0 0,1 19,22H5A2,2 0 0,1 3,20V19H2A1,1 0 0,1 1,18V15A1,1 0 0,1 2,14H3A7,7 0 0,1 10,7H11V5.73C10.4,5.39 10,4.74 10,4A2,2 0 0,1 12,2M7.5,13A2.5,2.5 0 0,0 5,15.5A2.5,2.5 0 0,0 7.5,18A2.5,2.5 0 0,0 10,15.5A2.5,2.5 0 0,0 7.5,13M16.5,13A2.5,2.5 0 0,0 14,15.5A2.5,2.5 0 0,0 16.5,18A2.5,2.5 0 0,0 19,15.5A2.5,2.5 0 0,0 16.5,13Z"/>
+                        </svg>
+                      </span>
                     </el-button>
                     
                     <!-- 删除图层 -->
@@ -106,9 +110,11 @@
                       class="remove-btn"
                       title="删除图层"
                     >
-                      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                        <path d="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z"/>
-                      </svg>
+                      <span>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                          <path d="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z"/>
+                        </svg>
+                      </span>
                     </el-button>
                   </div>
                 </div>
@@ -257,7 +263,7 @@ export default {
     // 响应式数据
     const sceneList = ref([])
     const selectedSceneId = ref(null)
-    const layersList = ref([])
+    const layersList = ref([])  // 确保初始化为空数组
     const loading = ref(false)
     const layerInfoDialogVisible = ref(false)
     const currentLayerInfo = ref(null)
@@ -267,15 +273,15 @@ export default {
     const fetchSceneList = async () => {
       try {
         const response = await gisApi.getScenes()
-        sceneList.value = response.scenes
-        
+        sceneList.value = response.data.scenes
+        console.log('sceneList:', sceneList.value)
         // 如果URL中有scene_id参数，设置为当前选中的场景
         const sceneIdFromQuery = route.query.scene_id
         if (sceneIdFromQuery) {
-          selectedSceneId.value = parseInt(sceneIdFromQuery)
-        } else if (sceneList.value.length > 0) {
+          selectedSceneId.value = sceneIdFromQuery
+        } else if (sceneList.length > 0) {
           // 如果没有指定场景，选择第一个场景
-          selectedSceneId.value = sceneList.value[0].id
+          selectedSceneId.value = sceneList[0].id
         }
       } catch (error) {
         console.error('获取场景列表失败', error)
@@ -284,19 +290,20 @@ export default {
     }
     
     // 选择场景
-    /* const selectScene = async (sceneId) => {
+     const selectScene = async (sceneId) => {
       if (selectedSceneId.value === sceneId) return
       
       selectedSceneId.value = sceneId
       
       try {
         const response = await gisApi.getScene(sceneId)
-        layersList.value = response.layers || []
+        layersList.value = response.data.layers || []
+        //console.log('lv-response22:', layersList)
       } catch (error) {
         console.error('加载场景详情失败:', error)
         ElMessage.error('加载场景详情失败')
       }
-    } */
+    } 
     
     // 显示创建场景对话框
     const showCreateSceneDialog = () => {
@@ -350,7 +357,7 @@ export default {
       try {
         loading.value = true
         const response = await gisApi.getScene(sceneId)
-        layersList.value = response.layers
+        layersList.value = response.data.layers
         // 清除选中状态
         currentActiveLayer.value = null
       } catch (error) {
