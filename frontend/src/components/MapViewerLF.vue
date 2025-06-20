@@ -406,16 +406,15 @@ export default {
       if (mvtUrl.includes('localhost:3000')) {
         // 检查是否是 MBTiles 服务
         if (layer.file_type === 'mbtiles' || mvtUrl.includes('/mbtiles/')) {
-          // MBTiles 服务格式：http://localhost:3000/mbtiles/{文件名}/{z}/{x}/{y}
           const mbtilesMatch = mvtUrl.match(/\/mbtiles\/([^/]+)\/\{z\}/) || []
           const fileName = mbtilesMatch[1] || 'default'
-          //mvtUrl = `http://localhost:3000/mbtiles/${fileName}/{z}/{x}/{y}`
-          mvtUrl = `http://localhost:3000/mbtiles/${fileName}/{z}/{x}/{y}`
+
+          mvtUrl = `${MARTIN_BASE_URL}/mbtiles/${fileName}/{z}/{x}/{y}`
         } else {
-          // 普通 Martin 服务格式：http://localhost:3000/{tableName}/{z}/{x}/{y}
+
           const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
-          //mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
-          mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
+
+          mvtUrl = `${MARTIN_BASE_URL}/${tableName}/{z}/{x}/{y}`
         }
       }
       

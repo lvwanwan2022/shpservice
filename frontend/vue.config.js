@@ -9,6 +9,12 @@
  */
 const { defineConfig } = require('@vue/cli-service')
 
+// 从环境变量获取Martin服务的基础URL，默认为http://192.168.1.17:3000
+const MARTIN_BASE_URL = 'http://192.168.1.17:3000'
+console.log('Vue配置中使用的 MARTIN_BASE_URL:', MARTIN_BASE_URL)
+
+
+
 module.exports = defineConfig({
   transpileDependencies: true,
   // 添加开发服务器代理配置
@@ -21,13 +27,10 @@ module.exports = defineConfig({
         logLevel: 'debug',
         onError: (err, req, res) => {
           console.error('API代理错误:', err.message)
-        },
-        onProxyReq: (proxyReq, req, res) => {
-          ////console.log('API代理请求:', req.method, req.url)
         }
       },
       '/martin': {
-        target: 'http://localhost:3000',
+        target: MARTIN_BASE_URL,
         changeOrigin: true,
         secure: false,
         logLevel: 'debug',
@@ -37,13 +40,7 @@ module.exports = defineConfig({
         onError: (err, req, res) => {
           console.error('Martin代理错误:', err.message)
           console.error('请求URL:', req.url)
-          console.error('目标:', 'http://localhost:3000' + req.url.replace('/martin', ''))
-        },
-        onProxyReq: (proxyReq, req, res) => {
-          //console.log('Martin代理请求:', req.method, req.url, '-> http://localhost:3000' + req.url.replace('/martin', ''))
-        },
-        onProxyRes: (proxyRes, req, res) => {
-          //console.log('Martin代理响应:', proxyRes.statusCode, req.url)
+          console.error('目标:', MARTIN_BASE_URL + req.url.replace('/martin', ''))
         }
       },
       '/geoserver': {
@@ -58,12 +55,6 @@ module.exports = defineConfig({
           console.error('GeoServer代理错误:', err.message)
           console.error('请求URL:', req.url)
           console.error('目标:', 'http://localhost:8083' + req.url)
-        },
-        onProxyReq: (proxyReq, req, res) => {
-          ////console.log('GeoServer代理请求:', req.method, req.url, '-> http://localhost:8083' + req.url)
-        },
-        onProxyRes: (proxyRes, req, res) => {
-          ////console.log('GeoServer代理响应:', proxyRes.statusCode, req.url)
         }
       }
     }

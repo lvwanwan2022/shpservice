@@ -32,6 +32,8 @@ Icon.Default.mergeOptions({
 // 导入坐标修复工具
 import { applyMartinCoordinateFixes } from './utils/martinCoordinateFix'
 
+
+
 // 安装全局错误处理器（在应用创建前安装）
 installGlobalErrorHandlers()
 
@@ -122,4 +124,4 @@ if (!window.L) {
   }, 100)
 }
 
-//console.log('�� 应用已启动，错误处理器已安装')
+//console.log('应用已启动，错误处理器已安装')

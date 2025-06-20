@@ -11,6 +11,9 @@ Copyright (c) 2025 by VGE, All Rights Reserved.
 
 import os
 
+# 从环境变量获取Martin服务的基础URL，默认为http://localhost:3000
+MARTIN_BASE_URL = os.environ.get('VUE_APP_MARTIN_BASE_URL', 'http://localhost:3000')
+
 # 数据库配置
 DB_CONFIG = {
     'host': 'localhost',
@@ -38,7 +41,7 @@ MARTIN_CONFIG = {
     'enabled': True,
     'port': 3000,
     'host': '0.0.0.0',
-    'base_url': 'http://localhost:3000',  # Martin服务基础URL
+    'base_url': MARTIN_BASE_URL,  # 使用环境变量或默认值
     'worker_processes': 'auto',
     'postgres_connection': f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}",
     'auto_publish_tables': True,  # 自动发现并发布 PostGIS 表

@@ -189,6 +189,7 @@ import proj4 from 'proj4'
 import { register } from 'ol/proj/proj4'
 // 引入ol-proj-ch库中的GCJ02坐标系
 import  gcj02Mecator  from '@/utils/GCJ02'
+import { MARTIN_BASE_URL } from '@/config/index'
 
 export default {
   name: 'MapViewerOL',
@@ -691,21 +692,26 @@ export default {
         return
       }
 
+      // 调试 MARTIN_BASE_URL
+      console.log('MARTIN_BASE_URL:', MARTIN_BASE_URL)
+      
+      // 确保 MARTIN_BASE_URL 有值，如果没有则使用默认值
+      const baseUrl = MARTIN_BASE_URL
+      console.log('使用的 baseUrl:', baseUrl)
+      
       let mvtUrl = layer.mvt_url
       if (mvtUrl.includes('localhost:3000')) {
+        // 替换硬编码的URL为配置变量
+        
         // 检查是否是 MBTiles 服务
         if (layer.file_type === 'mbtiles' || mvtUrl.includes('/mbtiles/')) {
-          // MBTiles 服务格式：http://localhost:3000/mbtiles/{文件名}/{z}/{x}/{y}
           const mbtilesMatch = mvtUrl.match(/\/mbtiles\/([^/]+)\/\{z\}/) || []
           const fileName = mbtilesMatch[1] || 'default'
-          //mvtUrl = `http://localhost:3000/${fileName}/{z}/{x}/{y}`
-          mvtUrl = `http://localhost:3000/${fileName}/{z}/{x}/{y}`
+          mvtUrl = `${MARTIN_BASE_URL}/${fileName}/{z}/{x}/{y}`
         } else {
-          // 普通 Martin 服务格式：http://localhost:3000/{tableName}/{z}/{x}/{y}
           const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
-          //mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
-          mvtUrl = `http://localhost:3000/${tableName}/{z}/{x}/{y}`
-          //console.log('lv-mvtUrl:', mvtUrl)
+          mvtUrl = `${MARTIN_BASE_URL}/${tableName}/{z}/{x}/{y}`
+          console.log('lv-mvtUrl:', mvtUrl)
         }
       }
 
