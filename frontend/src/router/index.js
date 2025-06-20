@@ -8,13 +8,22 @@
  * Copyright (c) 2025 by VGE, All Rights Reserved. 
  */
 import { createRouter, createWebHashHistory } from 'vue-router'
-
+// 登录认证模块 - 独立导入，方便移植
+import { authGuard } from '@/auth/authGuard'
 
 const routes = [
   {
     path: '/',
     name: 'Home',
-    component: () => import('@/views/Home.vue')
+    component: () => import('@/views/Home.vue'),
+    meta: { requiresAuth: false } // 首页不需要登录
+  },
+  // 登录认证路由 - 独立配置
+  {
+    path: '/login',
+    name: 'Login',
+    component: () => import('@/auth/LoginPage.vue'),
+    meta: { requiresAuth: false }
   },
   {
     path: '/map-lf',
@@ -43,5 +52,8 @@ const router = createRouter({
   history: createWebHashHistory(),
   routes
 })
+
+// 一行代码实现全局路由权限验证
+router.beforeEach(authGuard)
 
 export default router 

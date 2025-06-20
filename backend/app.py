@@ -192,6 +192,16 @@ except ImportError:
 except Exception as e:
     logger.warning(f"⚠️ GIS 通用路由注册失败: {str(e)}")
 
+# 登录认证路由 - 独立模块，方便移植
+try:
+    from auth.auth_routes import auth_bp
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    logger.info("✅ 登录认证路由注册成功")
+except ImportError:
+    logger.info("登录认证路由不存在，跳过")
+except Exception as e:
+    logger.warning(f"⚠️ 登录认证路由注册失败: {str(e)}")
+
 # 导入Martin服务
 try:
     from services.martin_service import MartinService

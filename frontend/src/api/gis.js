@@ -1,4 +1,6 @@
 import axios from 'axios'
+// 登录认证模块 - 一行代码实现带认证的API调用
+// import { authHttp } from '@/auth/authService'
 
 // 创建axios实例
 const service = axios.create({
