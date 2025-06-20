@@ -501,7 +501,7 @@ class GeoServerService:
             print(f"✅ 覆盖记录创建成功，coverage_id={coverage_id}")
             
             # 8. 在数据库中创建覆盖图层记录
-            layer_info = self._create_layer_in_db(coverage_info, workspace_id, coverage_id, file_id, 'coveragestore')
+            layer_info = self._create_layer_in_db(coverage_info, workspace_id, featuretype_id=None, coverage_id=coverage_id, file_id=file_id, store_type='coveragestore')
             print(f"✅ 覆盖图层记录创建成功，layer_id={layer_info['id']}")
             
             # 9. 返回服务信息
@@ -755,7 +755,7 @@ class GeoServerService:
         print(f"✅ 要素类型记录创建成功，featuretype_id={featuretype_id}")
         
         # 创建图层记录
-        layer_info = self._create_layer_in_db(featuretype_info, workspace_id, featuretype_id, file_id, 'datastore')
+        layer_info = self._create_layer_in_db(featuretype_info, workspace_id, featuretype_id,coverage_id=None, file_id=file_id, store_type='datastore')
         print(f"✅ 图层记录创建成功，layer_id={layer_info['id']}")
         
         # 5. 验证发布结果
@@ -901,11 +901,20 @@ class GeoServerService:
             覆盖范围ID
         """
         try:
+            # 处理数据结构，支持两种格式：coverage和featureType
+            if 'coverage' in coverage_info:
+                coverage_data = coverage_info['coverage']
+            elif 'featureType' in coverage_info:
+                # 从featureType结构中提取coverage信息
+                coverage_data = coverage_info['featureType']
+            else:
+                raise Exception("无效的覆盖信息结构")
+            
             coverage_params = {
-                'name': coverage_info['name'],
-                'native_name': coverage_info['name'],
+                'name': coverage_data['name'],
+                'native_name': coverage_data['name'],
                 'store_id': store_id,
-                'title': coverage_info.get('title', coverage_info['name']),
+                'title': coverage_info.get('title', coverage_data['name']),
                 'abstract': coverage_info.get('abstract', ''),
                 'keywords': coverage_info.get('keywords', []),
                 'srs': coverage_info.get('srs', 'EPSG:4326'),
@@ -2163,16 +2172,41 @@ class GeoServerService:
             要素类型ID
         """
         try:
-            # 提取要素类型信息
-            name = featuretype_info.get('name')
-            title = featuretype_info.get('title', name)
-            abstract = featuretype_info.get('abstract', '')
-            keywords = featuretype_info.get('keywords', [])
-            srs = featuretype_info.get('srs', 'EPSG:4326')
+            # 调试输出，查看实际的数据结构
+            print(f"featuretype_info结构: {featuretype_info}")
+            
+            # 检查是否有featureType键
+            if 'featureType' in featuretype_info:
+                feature_data = featuretype_info['featureType']
+            else:
+                feature_data = featuretype_info
+            
+            # 提取要素类型信息，提供默认值
+            name = feature_data.get('name') or feature_data.get('nativeName') or f"feature_{store_id}"
+            native_name = feature_data.get('nativeName') or name
+            title = feature_data.get('title') or name
+            abstract = feature_data.get('abstract') or ''
+            
+            # 处理keywords字段，确保是列表类型
+            keywords_raw = feature_data.get('keywords') or []
+            if isinstance(keywords_raw, dict):
+                # 如果是字典，提取值或键作为关键词
+                keywords = list(keywords_raw.values()) if keywords_raw.values() else list(keywords_raw.keys())
+            elif isinstance(keywords_raw, list):
+                keywords = keywords_raw
+            else:
+                keywords = [str(keywords_raw)] if keywords_raw else []
+            
+            srs = feature_data.get('srs') or 'EPSG:4326'
+            
+            # 确保name不为空
+            if not name:
+                name = f"feature_{store_id}"
+                print(f"警告: 要素类型名称为空，使用默认名称: {name}")
             
             featuretype_params = {
                 'name': name,
-                'native_name': name,
+                'native_name': native_name,
                 'store_id': store_id,
                 'title': title,
                 'abstract': abstract,
@@ -2180,6 +2214,8 @@ class GeoServerService:
                 'srs': srs,
                 'enabled': True
             }
+            
+            print(f"准备插入的要素类型参数: {featuretype_params}")
             
             featuretype_id = insert_with_snowflake_id('geoserver_featuretypes', featuretype_params)
             return featuretype_id
@@ -2199,14 +2235,36 @@ class GeoServerService:
             store_type: 存储类型
             
         Returns:
-            图层ID
+            图层信息字典
         """
         try:
-            # 提取图层信息
-            name = layer_info.get('name')
-            title = layer_info.get('title', name)
-            abstract = layer_info.get('abstract', '')
-            default_style = layer_info.get('default_style', 'generic')
+            # 调试输出，查看实际的数据结构
+            print(f"layer_info结构: {layer_info}")
+            
+            # 检查是否有featureType键或coverage键
+            if 'featureType' in layer_info:
+                layer_data = layer_info['featureType']
+            elif 'coverage' in layer_info:
+                layer_data = layer_info['coverage']
+            else:
+                layer_data = layer_info
+            
+            # 提取图层信息，提供默认值
+            name = layer_data.get('name') or layer_data.get('nativeName') or f"layer_{workspace_id}"
+            title = layer_data.get('title') or name
+            abstract = layer_data.get('abstract') or ''
+            default_style = layer_data.get('default_style') or 'generic'
+            layer_name = layer_data['name']
+            full_layer_name = f"{self.workspace}:{layer_name}"
+
+            # 生成服务URL
+            wms_url = f"{self.url}/wms?service=WMS&version=1.1.0&request=GetCapabilities&layers={full_layer_name}"
+            wfs_url = f"{self.url}/wfs?service=WFS&version=1.0.0&request=GetCapabilities&typeName={full_layer_name}"
+            wcs_url = f"{self.url}/wcs?service=WCS&version=1.0.0&request=GetCapabilities&coverage={full_layer_name}" if store_type == 'coveragestore' else None
+            # 确保name不为空
+            if not name:
+                name = f"layer_{workspace_id}_{featuretype_id or coverage_id}"
+                print(f"警告: 图层名称为空，使用默认名称: {name}")
             
             layer_params = {
                 'name': name,
@@ -2218,11 +2276,33 @@ class GeoServerService:
                 'default_style': default_style,
                 'enabled': True,
                 'queryable': True,
-                'file_id': file_id
+                'file_id': file_id,
+                'wms_url': wms_url,
+                'wfs_url': wfs_url,
+                'wcs_url': wcs_url
             }
             
+            logger.info(f"准备插入的图层参数: {layer_params}")
+            
             layer_id = insert_with_snowflake_id('geoserver_layers', layer_params)
-            return layer_id
+            
+            # 构建完整的图层信息返回
+            full_layer_name = f"{self.workspace}:{name}"
+            layer_result = {
+                'id': layer_id,
+                'name': name,
+                'full_name': full_layer_name,
+                'title': title,
+                'workspace_id': workspace_id,
+                'featuretype_id': featuretype_id if store_type != 'coveragestore' else None,
+                'coverage_id': featuretype_id if store_type == 'coveragestore' else None,
+                'abstract': abstract,
+                'wms_url': wms_url,
+                'wfs_url': wfs_url,
+                'wcs_url': wcs_url
+            }
+            
+            return layer_result
         except Exception as e:
             print(f"在数据库中创建图层记录失败: {str(e)}")
             raise

@@ -408,7 +408,7 @@ def init_database():
         create_geoserver_featuretypes_table = """
         CREATE TABLE IF NOT EXISTS geoserver_featuretypes (
             id BIGINT PRIMARY KEY,
-            name VARCHAR(100) NOT NULL,
+            name VARCHAR(100),
             native_name VARCHAR(100),
             store_id BIGINT REFERENCES geoserver_stores(id) ON DELETE CASCADE,
             title VARCHAR(255),
