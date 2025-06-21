@@ -176,7 +176,21 @@
             <el-table-column prop="service_type" label="服务类型" width="120" />
             <el-table-column label="状态" width="100">
               <template #default="scope">
-                <el-tag v-if="scope.row.is_visible" type="success" size="small">可见</el-tag>
+                <!-- 调试信息 -->
+                <div style="font-size: 10px; color: #999; margin-bottom: 2px;">
+                  {{ JSON.stringify({
+                    is_visible: scope.row.is_visible,
+                    visible: scope.row.visible,
+                    status: scope.row.status
+                  }) }}
+                </div>
+                <!-- 状态显示 -->
+                <el-tag 
+                  v-if="scope.row.visiblity === true" 
+                  type="success" 
+                  size="small">
+                  可见
+                </el-tag>
                 <el-tag v-else type="info" size="small">隐藏</el-tag>
               </template>
             </el-table-column>
@@ -288,16 +302,10 @@ export default {
           scenes.value = []
         }
         
-        console.log('最终场景数量:', scenes.value.length)
-        console.log('filteredScenes数量:', filteredScenes.value.length)
+        
         
       } catch (error) {
-        console.error('加载场景列表失败:', error)
-        console.error('错误类型:', error.constructor.name)
-        console.error('错误信息:', error.message)
-        console.error('HTTP状态:', error.response?.status)
-        console.error('响应数据:', error.response?.data)
-        console.error('请求配置:', error.config)
+        
         
         scenes.value = []
         ElMessage.error('加载场景列表失败: ' + (error.response?.data?.error || error.message))
@@ -391,7 +399,11 @@ export default {
         
         // 加载场景的图层信息
         const response = await gisApi.getScene(scene.id)
-        sceneLayers.value = response.layers || []
+        
+        
+        sceneLayers.value = response.data.layers || []
+        
+
         
         showDetailDialog.value = true
         

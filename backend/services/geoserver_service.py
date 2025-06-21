@@ -280,7 +280,7 @@ class GeoServerService:
             print(f"✅ 要素类型记录创建成功，featuretype_id={featuretype_id}")
             
             # 14. 在数据库中创建图层记录
-            layer_info = self._create_layer_in_db(featuretype_info, workspace_id, featuretype_id, file_id, 'datastore')
+            layer_info = self._create_layer_in_db(featuretype_info, workspace_id, featuretype_id, coverage_id=None, file_id=file_id,  store_type='datastore')
             print(f"✅ 图层记录创建成功，layer_id={layer_info['id']}")
             
             # 15. 返回服务信息
