@@ -368,9 +368,9 @@ export default {
     // 初始化数据
     const initializeData = async () => {
       loading.value = true
-      console.log('=== DxfStyleEditor initializeData 开始 ===')
-      console.log('props.layerData:', props.layerData)
-      console.log('props.martinServiceId:', props.martinServiceId)
+      //console.log('=== DxfStyleEditor initializeData 开始 ===')
+      //console.log('props.layerData:', props.layerData)
+      //console.log('props.martinServiceId:', props.martinServiceId)
       
       try {
         // 获取Martin服务的图层列表
@@ -378,18 +378,18 @@ export default {
         let tableName = null
         if (props.layerData.martin_table_name) {
           tableName = props.layerData.martin_table_name
-          console.log('使用 martin_table_name:', tableName)
+          //console.log('使用 martin_table_name:', tableName)
         } else if (props.layerData.martin_service?.postgis_table) {
           tableName = props.layerData.martin_service.postgis_table
-          console.log('使用 martin_service.postgis_table:', tableName)
+          //console.log('使用 martin_service.postgis_table:', tableName)
         }
         
         if (tableName) {
-          console.log('获取图层列表，表名:', tableName)
+          //console.log('获取图层列表，表名:', tableName)
           try {
             availableLayers.value = await dxfStyleManager.getLayersFromMartinService(tableName)
-            console.log('获取到的图层列表:', availableLayers.value)
-            console.log('图层列表长度:', availableLayers.value.length)
+            //console.log('获取到的图层列表:', availableLayers.value)
+            //console.log('图层列表长度:', availableLayers.value.length)
           } catch (layerError) {
             console.error('获取图层列表失败:', layerError)
             availableLayers.value = []
@@ -400,9 +400,9 @@ export default {
         }
 
         // 获取现有样式配置
-        console.log('获取样式配置，martinServiceId:', props.martinServiceId)
-        console.log('martinServiceId 类型:', typeof props.martinServiceId)
-        console.log('martinServiceId 原始值:', props.martinServiceId)
+        //console.log('获取样式配置，martinServiceId:', props.martinServiceId)
+        //console.log('martinServiceId 类型:', typeof props.martinServiceId)
+        //console.log('martinServiceId 原始值:', props.martinServiceId)
         
         let savedStyles = null
         try {

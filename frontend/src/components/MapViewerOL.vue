@@ -136,17 +136,7 @@
           </el-tab-pane>
 
           <el-tab-pane v-if="isDxfMartinLayer === true" label="Martin(DXF)" name="dxf">
-            <div v-if="currentStyleLayer && currentStyleLayer.martin_service_id && typeof currentStyleLayer.martin_service_id === 'string'">
-              <DxfStyleEditor 
-                :key="`dxf-editor-${currentStyleLayer.martin_service_id}`"
-                :layer-data="currentStyleLayer" 
-                :martin-service-id="parseInt(currentStyleLayer.martin_service_id)"
-                @styles-updated="onDxfStylesUpdated"
-                @popup-control-changed="onPopupControlChanged"
-                ref="dxfStyleEditorRef"
-              />
-            </div>
-            <div v-else-if="currentStyleLayer && currentStyleLayer.martin_service_id && typeof currentStyleLayer.martin_service_id === 'number'">
+            <div v-if="currentStyleLayer && currentStyleLayer.martin_service_id">
               <DxfStyleEditor 
                 :key="`dxf-editor-${currentStyleLayer.martin_service_id}`"
                 :layer-data="currentStyleLayer" 

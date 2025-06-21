@@ -84,14 +84,14 @@ export class DxfStyleManager {
       
       // 向后兼容：如果没有style_config，尝试style字段
       if (response?.success && response.data?.style) {
-        //console.log('找到 style 字段:', response.data.style)
+        console.log('找到 style 字段:', response.data.style)
         if (typeof response.data.style === 'string') {
           return JSON.parse(response.data.style)
         }
         return response.data.style
       }
       
-      //console.log('未找到样式配置，返回null')
+      console.log('未找到样式配置，返回null')
       return null
     } catch (error) {
       console.error('获取Martin服务样式失败:', error)
