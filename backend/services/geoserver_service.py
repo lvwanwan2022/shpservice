@@ -23,6 +23,18 @@ import subprocess
 import uuid
 import glob
 from urllib.parse import urlparse
+import os
+import sys
+import psycopg2
+from requests.auth import HTTPBasicAuth
+try:
+    from osgeo import gdal, osr
+    GDAL_AVAILABLE = True
+    # 配置GDAL以避免输出过多信息
+    gdal.UseExceptions()
+except ImportError:
+    GDAL_AVAILABLE = False
+    print("警告: GDAL Python绑定不可用，将尝试使用命令行工具")
 
 
 # 设置日志
@@ -3357,46 +3369,76 @@ AbsolutePath=false
         try:
             logger.info(f"开始处理DOM.tif文件: {tif_path}")
             
-            # 检查文件是否存在
-            if not os.path.exists(tif_path):
-                raise Exception(f"文件不存在: {tif_path}")
-            
-            # 检查文件是否为TIF格式
-            file_extension = os.path.splitext(tif_path)[1].lower()
-            if file_extension not in ['.tif', '.tiff']:
-                raise Exception(f"文件不是TIF格式: {file_extension}")
-            
             # 创建临时目录用于处理文件
             temp_dir = tempfile.mkdtemp()
             processed_tif_path = os.path.join(temp_dir, f"processed_{os.path.basename(tif_path)}")
             
             try:
-                # 1. 使用gdalinfo检查文件坐标系信息
-                logger.info("使用gdalinfo检查文件坐标系信息")
-                gdalinfo_cmd = ['gdalinfo', '-json', tif_path]
-                gdalinfo_result = subprocess.run(gdalinfo_cmd, capture_output=True, text=True, check=True)
-                gdalinfo_data = json.loads(gdalinfo_result.stdout)
+                # 1. 使用Python GDAL检查文件坐标系信息
+                logger.info("使用Python GDAL检查文件坐标系信息")
                 
-                # 检查是否有坐标参考系统
                 original_srs = None
-                if 'coordinateSystem' in gdalinfo_data and 'wkt' in gdalinfo_data['coordinateSystem']:
-                    original_srs = gdalinfo_data['coordinateSystem']['wkt']
-                    logger.info(f"检测到原始坐标系: {original_srs[:100]}...")
-                
-                # 提取EPSG码（如果存在）
                 epsg_code = None
-                if 'coordinateSystem' in gdalinfo_data and 'wkt' in gdalinfo_data['coordinateSystem']:
-                    wkt = gdalinfo_data['coordinateSystem']['wkt']
-                    # 尝试从WKT中提取EPSG代码
-                    epsg_match = re.search(r'ID\[\"EPSG\",(\d+)\]', wkt)
-                    if epsg_match:
-                        epsg_code = f"EPSG:{epsg_match.group(1)}"
-                        # 排除单位代码，通常是9001等
-                        if epsg_match.group(1) in ['9001', '9002', '9003']:
-                            epsg_code = None
-                        else:
-                            logger.info(f"从WKT中提取到EPSG代码: {epsg_code}")
                 
+                if GDAL_AVAILABLE:
+                    # 使用Python GDAL获取文件信息
+                    try:
+                        # 打开数据集
+                        dataset = gdal.Open(tif_path)
+                        if dataset is None:
+                            raise Exception("无法打开TIF文件")
+                        
+                        # 获取空间参考系统
+                        srs = dataset.GetSpatialRef()
+                        if srs is not None:
+                            original_srs = srs.ExportToWkt()
+                            logger.info(f"检测到原始坐标系: {original_srs[:100]}...")
+                            
+                            # 尝试获取EPSG代码
+                            auth_name = srs.GetAuthorityName(None)
+                            auth_code = srs.GetAuthorityCode(None)
+                            
+                            if auth_name == 'EPSG' and auth_code:
+                                # 排除单位代码，通常是9001等
+                                if auth_code not in ['9001', '9002', '9003']:
+                                    epsg_code = f"EPSG:{auth_code}"
+                                    logger.info(f"从Python GDAL中提取到EPSG代码: {epsg_code}")
+                                else:
+                                    epsg_code = None
+                        
+                        # 关闭数据集
+                        dataset = None
+                        
+                    except Exception as gdal_error:
+                        logger.warning(f"使用Python GDAL失败: {str(gdal_error)}")
+                        # 如果Python GDAL失败，尝试使用命令行工具
+                        raise gdal_error
+                        
+                else:
+                    # 回退到命令行工具
+                    logger.info("Python GDAL不可用，使用命令行gdalinfo")
+                    gdalinfo_cmd = ['gdalinfo', '-json', tif_path]
+                    gdalinfo_result = subprocess.run(gdalinfo_cmd, capture_output=True, text=True, check=True)
+                    gdalinfo_data = json.loads(gdalinfo_result.stdout)
+                    
+                    # 检查是否有坐标参考系统
+                    if 'coordinateSystem' in gdalinfo_data and 'wkt' in gdalinfo_data['coordinateSystem']:
+                        original_srs = gdalinfo_data['coordinateSystem']['wkt']
+                        logger.info(f"检测到原始坐标系: {original_srs[:100]}...")
+                    
+                    # 提取EPSG码（如果存在）
+                    if 'coordinateSystem' in gdalinfo_data and 'wkt' in gdalinfo_data['coordinateSystem']:
+                        wkt = gdalinfo_data['coordinateSystem']['wkt']
+                        # 尝试从WKT中提取EPSG代码
+                        epsg_match = re.search(r'ID\[\"EPSG\",(\d+)\]', wkt)
+                        if epsg_match:
+                            epsg_code = f"EPSG:{epsg_match.group(1)}"
+                            # 排除单位代码，通常是9001等
+                            if epsg_match.group(1) in ['9001', '9002', '9003']:
+                                epsg_code = None
+                            else:
+                                logger.info(f"从WKT中提取到EPSG代码: {epsg_code}")
+
                 # 2. 检查是否需要处理坐标系
                 needs_srs_processing = False
                 target_epsg = force_epsg
@@ -3435,19 +3477,58 @@ AbsolutePath=false
                 
                 # 3. 处理文件 - 如果需要处理坐标系
                 if needs_srs_processing and target_epsg:
-                    logger.info(f"使用gdal_translate处理坐标系: {target_epsg}")
-                    # 使用gdal_translate设置坐标系
-                    gdal_cmd = [
-                        'gdal_translate', 
-                        '-a_srs', target_epsg,
-                        '-co', 'TILED=YES',
-                        '-co', 'COMPRESS=DEFLATE',
-                        tif_path, 
-                        processed_tif_path
-                    ]
-                    subprocess.run(gdal_cmd, check=True)
-                    # 使用处理后的文件
-                    final_tif_path = processed_tif_path
+                    logger.info(f"使用Python GDAL处理坐标系: {target_epsg}")
+                    
+                    if GDAL_AVAILABLE:
+                        # 使用Python GDAL进行坐标系处理
+                        try:
+                            # 设置GDAL选项
+                            translate_options = gdal.TranslateOptions(
+                                outputSRS=target_epsg,
+                                creationOptions=['TILED=YES', 'COMPRESS=DEFLATE']
+                            )
+                            
+                            # 执行转换
+                            result_dataset = gdal.Translate(processed_tif_path, tif_path, options=translate_options)
+                            if result_dataset is None:
+                                raise Exception("GDAL转换失败")
+                            
+                            # 关闭数据集
+                            result_dataset = None
+                            
+                            logger.info("使用Python GDAL处理坐标系成功")
+                            # 使用处理后的文件
+                            final_tif_path = processed_tif_path
+                            
+                        except Exception as gdal_error:
+                            logger.warning(f"使用Python GDAL处理失败: {str(gdal_error)}")
+                            # 回退到命令行工具
+                            logger.info("回退到命令行gdal_translate")
+                            gdal_cmd = [
+                                'gdal_translate', 
+                                '-a_srs', target_epsg,
+                                '-co', 'TILED=YES',
+                                '-co', 'COMPRESS=DEFLATE',
+                                tif_path, 
+                                processed_tif_path
+                            ]
+                            subprocess.run(gdal_cmd, check=True)
+                            # 使用处理后的文件
+                            final_tif_path = processed_tif_path
+                    else:
+                        # 使用命令行工具
+                        logger.info("Python GDAL不可用，使用命令行gdal_translate")
+                        gdal_cmd = [
+                            'gdal_translate', 
+                            '-a_srs', target_epsg,
+                            '-co', 'TILED=YES',
+                            '-co', 'COMPRESS=DEFLATE',
+                            tif_path, 
+                            processed_tif_path
+                        ]
+                        subprocess.run(gdal_cmd, check=True)
+                        # 使用处理后的文件
+                        final_tif_path = processed_tif_path
                 else:
                     # 不需要处理，直接使用原始文件
                     logger.info("无需处理坐标系，使用原始文件")
@@ -3807,19 +3888,58 @@ AbsolutePath=false
                 
                 # 3. 处理文件 - 如果需要处理坐标系
                 if needs_srs_processing and target_epsg:
-                    logger.info(f"使用gdal_translate处理坐标系: {target_epsg}")
-                    # 使用gdal_translate设置坐标系
-                    gdal_cmd = [
-                        'gdal_translate', 
-                        '-a_srs', target_epsg,
-                        '-co', 'TILED=YES',
-                        '-co', 'COMPRESS=DEFLATE',
-                        tif_path, 
-                        processed_tif_path
-                    ]
-                    subprocess.run(gdal_cmd, check=True)
-                    # 使用处理后的文件
-                    final_tif_path = processed_tif_path
+                    logger.info(f"使用Python GDAL处理坐标系: {target_epsg}")
+                    
+                    if GDAL_AVAILABLE:
+                        # 使用Python GDAL进行坐标系处理
+                        try:
+                            # 设置GDAL选项
+                            translate_options = gdal.TranslateOptions(
+                                outputSRS=target_epsg,
+                                creationOptions=['TILED=YES', 'COMPRESS=DEFLATE']
+                            )
+                            
+                            # 执行转换
+                            result_dataset = gdal.Translate(processed_tif_path, tif_path, options=translate_options)
+                            if result_dataset is None:
+                                raise Exception("GDAL转换失败")
+                            
+                            # 关闭数据集
+                            result_dataset = None
+                            
+                            logger.info("使用Python GDAL处理坐标系成功")
+                            # 使用处理后的文件
+                            final_tif_path = processed_tif_path
+                            
+                        except Exception as gdal_error:
+                            logger.warning(f"使用Python GDAL处理失败: {str(gdal_error)}")
+                            # 回退到命令行工具
+                            logger.info("回退到命令行gdal_translate")
+                            gdal_cmd = [
+                                'gdal_translate', 
+                                '-a_srs', target_epsg,
+                                '-co', 'TILED=YES',
+                                '-co', 'COMPRESS=DEFLATE',
+                                tif_path, 
+                                processed_tif_path
+                            ]
+                            subprocess.run(gdal_cmd, check=True)
+                            # 使用处理后的文件
+                            final_tif_path = processed_tif_path
+                    else:
+                        # 使用命令行工具
+                        logger.info("Python GDAL不可用，使用命令行gdal_translate")
+                        gdal_cmd = [
+                            'gdal_translate', 
+                            '-a_srs', target_epsg,
+                            '-co', 'TILED=YES',
+                            '-co', 'COMPRESS=DEFLATE',
+                            tif_path, 
+                            processed_tif_path
+                        ]
+                        subprocess.run(gdal_cmd, check=True)
+                        # 使用处理后的文件
+                        final_tif_path = processed_tif_path
                 else:
                     # 不需要处理，直接使用原始文件
                     logger.info("无需处理坐标系，使用原始文件")
