@@ -167,7 +167,7 @@ export async function createOpenLayersMVTLayer(layerConfig, options = {}) {
       } else {
         const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
         mvtUrl = `${MARTIN_BASE_URL}/${tableName}/{z}/{x}/{y}`
-        //console.log('lv-mvtUrl:', mvtUrl)
+        
       }
     }
     

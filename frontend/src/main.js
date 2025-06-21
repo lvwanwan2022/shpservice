@@ -15,7 +15,7 @@ import router from './router'
 import store from './store'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet-draw/dist/leaflet.draw.css'
-import { fixVectorGridCompatibility } from './utils/leafletCompatibilityFix'
+//import { fixVectorGridCompatibility } from './utils/leafletCompatibilityFix'
 
 // 导入全局错误处理器
 import { installGlobalErrorHandlers } from './utils/errorHandler'
@@ -39,64 +39,64 @@ installGlobalErrorHandlers()
 
 const app = createApp(App)
 
-// 全局错误处理
-app.config.errorHandler = (err, vm, info) => {
-  console.warn('全局错误处理:', err, info)
+// // 全局错误处理
+// app.config.errorHandler = (err, vm, info) => {
+//   console.warn('全局错误处理:', err, info)
   
-  // 忽略ResizeObserver错误（这是一个无害的警告）
-  if (err.message && err.message.includes('ResizeObserver loop completed with undelivered notifications')) {
-    console.warn('忽略ResizeObserver循环警告（这是正常的）')
-    return
-  }
+//   // 忽略ResizeObserver错误（这是一个无害的警告）
+//   if (err.message && err.message.includes('ResizeObserver loop completed with undelivered notifications')) {
+//     console.warn('忽略ResizeObserver循环警告（这是正常的）')
+//     return
+//   }
   
-  // 针对VectorGrid已知的坐标问题进行特殊处理
-  if (err.message && (
-    err.message.includes("Cannot read properties of undefined (reading 'lat')") ||
-    err.message.includes("Cannot read properties of undefined (reading 'lng')")
-  )) {
-    console.warn('检测到VectorGrid坐标错误，已自动忽略:', err.message)
-    console.warn('这通常是由Martin服务的点要素引起的，已应用修复补丁')
-    return
-  }
+//   // 针对VectorGrid已知的坐标问题进行特殊处理
+//   if (err.message && (
+//     err.message.includes("Cannot read properties of undefined (reading 'lat')") ||
+//     err.message.includes("Cannot read properties of undefined (reading 'lng')")
+//   )) {
+//     console.warn('检测到VectorGrid坐标错误，已自动忽略:', err.message)
+//     console.warn('这通常是由Martin服务的点要素引起的，已应用修复补丁')
+//     return
+//   }
   
-  // 其他错误继续抛出
-  console.error('应用错误:', err)
-}
+//   // 其他错误继续抛出
+//   console.error('应用错误:', err)
+// }
 
 // 监听全局未捕获的Promise错误
-window.addEventListener('unhandledrejection', (event) => {
-  const error = event.reason
+// window.addEventListener('unhandledrejection', (event) => {
+//   const error = event.reason
   
-  // 忽略ResizeObserver错误
-  if (error && error.message && error.message.includes('ResizeObserver loop completed with undelivered notifications')) {
-    console.warn('忽略ResizeObserver Promise错误（这是正常的）')
-    event.preventDefault()
-    return
-  }
+//   // 忽略ResizeObserver错误
+//   if (error && error.message && error.message.includes('ResizeObserver loop completed with undelivered notifications')) {
+//     console.warn('忽略ResizeObserver Promise错误（这是正常的）')
+//     event.preventDefault()
+//     return
+//   }
   
-  if (error && error.message && (
-    error.message.includes("Cannot read properties of undefined (reading 'lat')") ||
-    error.message.includes("Cannot read properties of undefined (reading 'lng')")
-  )) {
-    console.warn('检测到未捕获的VectorGrid坐标Promise错误，已自动忽略:', error.message)
-    event.preventDefault()
-    return
-  }
+//   if (error && error.message && (
+//     error.message.includes("Cannot read properties of undefined (reading 'lat')") ||
+//     error.message.includes("Cannot read properties of undefined (reading 'lng')")
+//   )) {
+//     console.warn('检测到未捕获的VectorGrid坐标Promise错误，已自动忽略:', error.message)
+//     event.preventDefault()
+//     return
+//   }
   
-  console.error('未捕获的Promise错误:', error)
-})
+//   console.error('未捕获的Promise错误:', error)
+// })
 
-// 监听全局错误事件（包括ResizeObserver错误）
-window.addEventListener('error', (event) => {
-  if (event.message && event.message.includes('ResizeObserver loop completed with undelivered notifications')) {
-    console.warn('忽略ResizeObserver全局错误（这是正常的）')
-    event.preventDefault()
-    return false
-  }
-})
+// // 监听全局错误事件（包括ResizeObserver错误）
+// window.addEventListener('error', (event) => {
+//   if (event.message && event.message.includes('ResizeObserver loop completed with undelivered notifications')) {
+//     console.warn('忽略ResizeObserver全局错误（这是正常的）')
+//     event.preventDefault()
+//     return false
+//   }
+// })
 
 // 在应用启动前修复Leaflet VectorGrid兼容性问题
-fixVectorGridCompatibility()
+//fixVectorGridCompatibility()
 
 app.use(ElementPlus)
 app.use(router)
@@ -112,7 +112,7 @@ const applyGlobalCoordinateFix = () => {
 }
 
 // 立即尝试应用补丁
-applyGlobalCoordinateFix()
+//applyGlobalCoordinateFix()
 
 // 如果Leaflet还未加载，等待加载完成后再应用
 if (!window.L) {

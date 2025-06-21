@@ -225,18 +225,54 @@ export default {
     Search//,
     //QuestionFilled
   },
+  // 添加错误捕获
+  errorCaptured(err, instance, info) {
+    console.error('DxfStyleEditor 组件错误:', err, info)
+    console.error('错误实例:', instance)
+    return false // 阻止错误向上传播
+  },
   props: {
     layerData: {
       type: Object,
       required: true
     },
     martinServiceId: {
-      type: Number,
+      type: [Number, String],  // 接受数字或字符串
       required: true
     }
   },
   emits: ['styles-updated', 'popup-control-changed'],
   setup(props, { emit }) {
+    // // 添加调试信息
+    // console.log('DxfStyleEditor setup - props:', props)
+    // console.log('=== martinServiceId 精度检查 ===')
+    // console.log('原始 martinServiceId:', props.martinServiceId)
+    // console.log('类型:', typeof props.martinServiceId)
+    // console.log('作为字符串:', String(props.martinServiceId))
+    // console.log('作为数字:', Number(props.martinServiceId))
+    // console.log('是否为安全整数:', Number.isSafeInteger(props.martinServiceId))
+    // console.log('最大安全整数:', Number.MAX_SAFE_INTEGER)
+    // console.log('比较结果:', props.martinServiceId > Number.MAX_SAFE_INTEGER)
+    // console.log('================================')
+    
+    // 监听 props 变化
+    // watch(() => props.layerData, (newVal) => {
+    //   console.log('=== DxfStyleEditor layerData 变化 ===')
+    //   console.log('新值:', newVal)
+    //   if (newVal) {
+    //     console.log('layerData 完整对象:', JSON.stringify(newVal, null, 2))
+    //   }
+    //   console.log('=====================================')
+    // }, { immediate: true })
+    
+    // watch(() => props.martinServiceId, (newVal) => {
+    //   console.log('=== DxfStyleEditor martinServiceId 变化 ===')
+    //   console.log('新值:', newVal)
+    //   console.log('类型:', typeof newVal)
+    //   console.log('是否为安全整数:', Number.isSafeInteger(newVal))
+    //   console.log('=========================================')
+    // }, { immediate: true })
+    
     const loading = ref(false)
     const saving = ref(false)
     const layerStyles = ref({})
@@ -272,6 +308,7 @@ export default {
     // 计算分组图层
     const groupedLayers = computed(() => {
       const layerGroups = dxfStyleManager.getLayerGroups()
+      // console.log('Lv-layerGroups:', layerGroups)
       const grouped = {}
 
       Object.keys(layerGroups).forEach(groupName => {
@@ -331,39 +368,93 @@ export default {
     // 初始化数据
     const initializeData = async () => {
       loading.value = true
+      console.log('=== DxfStyleEditor initializeData 开始 ===')
+      console.log('props.layerData:', props.layerData)
+      console.log('props.martinServiceId:', props.martinServiceId)
+      
       try {
         // 获取Martin服务的图层列表
-        if (props.layerData.martin_service?.postgis_table) {
-          availableLayers.value = await dxfStyleManager.getLayersFromMartinService(
-            props.layerData.martin_service.postgis_table
-          )
+        // 修复：使用正确的字段名获取表名
+        let tableName = null
+        if (props.layerData.martin_table_name) {
+          tableName = props.layerData.martin_table_name
+          console.log('使用 martin_table_name:', tableName)
+        } else if (props.layerData.martin_service?.postgis_table) {
+          tableName = props.layerData.martin_service.postgis_table
+          console.log('使用 martin_service.postgis_table:', tableName)
+        }
+        
+        if (tableName) {
+          console.log('获取图层列表，表名:', tableName)
+          try {
+            availableLayers.value = await dxfStyleManager.getLayersFromMartinService(tableName)
+            console.log('获取到的图层列表:', availableLayers.value)
+            console.log('图层列表长度:', availableLayers.value.length)
+          } catch (layerError) {
+            console.error('获取图层列表失败:', layerError)
+            availableLayers.value = []
+          }
+        } else {
+          console.warn('未找到有效的表名，layerData:', props.layerData)
+          availableLayers.value = []
         }
 
         // 获取现有样式配置
-        const savedStyles = await dxfStyleManager.getMartinServiceStyle(props.martinServiceId)
-        //console.log('Lv-savedStyles:', savedStyles)
-        if (savedStyles) {
+        console.log('获取样式配置，martinServiceId:', props.martinServiceId)
+        console.log('martinServiceId 类型:', typeof props.martinServiceId)
+        console.log('martinServiceId 原始值:', props.martinServiceId)
+        
+        let savedStyles = null
+        try {
+          savedStyles = await dxfStyleManager.getMartinServiceStyle(props.martinServiceId)
+          //console.log('获取到的样式配置:', savedStyles)
+        } catch (styleError) {
+          console.error('获取样式配置失败:', styleError)
+        }
+        
+        if (savedStyles && Object.keys(savedStyles).length > 0) {
+          //console.log('使用已保存的样式配置')
           layerStyles.value = savedStyles
         } else {
           // 使用默认样式
+          //console.log('使用默认样式配置')
           const defaultStyles = dxfStyleManager.getDefaultStyles()
-          layerStyles.value = dxfStyleManager.mergeStyles(availableLayers.value, defaultStyles)
+          //console.log('默认样式:', defaultStyles)
+          
+          // 如果有可用图层，合并样式
+          if (availableLayers.value.length > 0) {
+            layerStyles.value = dxfStyleManager.mergeStyles(availableLayers.value, defaultStyles)
+            //console.log('合并后的样式:', layerStyles.value)
+          } else {
+            // 如果没有可用图层，直接使用默认样式
+            layerStyles.value = { ...defaultStyles }
+            //console.log('直接使用默认样式:', layerStyles.value)
+          }
         }
+        
+        //console.log('最终的 layerStyles:', layerStyles.value)
+        //console.log('layerStyles 键数量:', Object.keys(layerStyles.value).length)
         
         // 初始化完成后，触发一次样式更新事件，让地图应用当前样式
         if (Object.keys(layerStyles.value).length > 0) {
+          //console.log('触发样式更新事件...')
           emit('styles-updated', {
             layerName: null, // 表示所有图层
             style: null,
             allStyles: layerStyles.value
           })
           //console.log('DXF样式编辑器初始化完成，已触发样式更新')
+        } else {
+          console.warn('没有可用的样式配置，跳过样式更新')
         }
       } catch (error) {
         console.error('初始化DXF样式编辑器失败:', error)
+        console.error('错误详情:', error.message)
+        console.error('错误堆栈:', error.stack)
         ElMessage.error('加载图层样式失败')
       } finally {
         loading.value = false
+        //console.log('=== DxfStyleEditor initializeData 结束 ===')
       }
     }
 
@@ -484,7 +575,7 @@ export default {
           return false
         }
       } catch (error) {
-        console.error('保存样式配置失败:', error)
+        // console.error('保存样式配置失败:', error)
         ElMessage.error('保存样式配置失败')
         return false
       } finally {

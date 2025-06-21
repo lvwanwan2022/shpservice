@@ -28,19 +28,36 @@ export class DxfStyleManager {
 
   /**
    * 从Martin服务获取图层列表
-   * @param {string} tableName - PostGIS表名
+   * @param {string} tableName - 表名
    * @returns {Promise<Array>} 图层名称列表
    */
   async getLayersFromMartinService(tableName) {
     try {
       const response = await gisApi.getMartinServiceLayers(tableName)
+      console.log('Martin API 原始响应:', response)
+      
+      // 处理不同的响应格式
       if (response?.success && response.data?.layers) {
+        // 新格式：已处理的图层列表
         return response.data.layers
+      } else if (response?.vector_layers) {
+        // TileJSON 格式：直接从 vector_layers 提取
+        console.log('从 TileJSON vector_layers 提取图层:', response.vector_layers)
+        return response.vector_layers.map(layer => layer.id)
+      } else if (response?.data?.vector_layers) {
+        // TileJSON 格式：从 data.vector_layers 提取
+        console.log('从 data.vector_layers 提取图层:', response.data.vector_layers)
+        return response.data.vector_layers.map(layer => layer.id)
+      } else {
+        // 如果没有 vector_layers，使用表名作为默认图层
+        console.warn('未找到 vector_layers，使用表名作为默认图层:', tableName)
+        return [tableName]
       }
-      return []
     } catch (error) {
       console.error('获取Martin服务图层失败:', error)
-      return []
+      console.error('错误详情:', error.response?.data || error.message)
+      // 返回表名作为默认图层
+      return [tableName]
     }
   }
 
@@ -51,16 +68,23 @@ export class DxfStyleManager {
    */
   async getMartinServiceStyle(martinServiceId) {
     try {
+      //console.log('=== getMartinServiceStyle 调用 ===')
+      //console.log('传入的 martinServiceId:', martinServiceId)
+      //console.log('martinServiceId 类型:', typeof martinServiceId)
+      //console.log('martinServiceId 值:', JSON.stringify(martinServiceId))
+      
       const response = await gisApi.getMartinServiceStyle(martinServiceId)
       //console.log('API响应:', response)
-      //console.log('Lv-getMartinServiceStyle:', response)
+      
       if (response?.success && response.data?.style_config) {
+        //console.log('找到 style_config:', response.data.style_config)
         // 返回style_config字段（从后端API）
         return response.data.style_config
       }
       
       // 向后兼容：如果没有style_config，尝试style字段
       if (response?.success && response.data?.style) {
+        //console.log('找到 style 字段:', response.data.style)
         if (typeof response.data.style === 'string') {
           return JSON.parse(response.data.style)
         }
@@ -71,23 +95,39 @@ export class DxfStyleManager {
       return null
     } catch (error) {
       console.error('获取Martin服务样式失败:', error)
+      console.error('错误详情:', error.message)
+      console.error('错误响应:', error.response?.data)
       return null
     }
   }
 
   /**
    * 保存Martin服务的样式配置
-   * @param {number} martinServiceId - Martin服务ID
+   * @param {number|string} martinServiceId - Martin服务ID
    * @param {object} styleConfig - 样式配置
-   * @returns {Promise<boolean>} 保存结果
+   * @returns {Promise<boolean>} 是否保存成功
    */
   async saveMartinServiceStyle(martinServiceId, styleConfig) {
     try {
-      // 使用新的应用样式API，保存并应用样式
-      const response = await gisApi.applyMartinServiceStyle(martinServiceId, styleConfig)
-      return response?.success || false
+      console.log('=== saveMartinServiceStyle 调用 ===')
+      console.log('传入的 martinServiceId:', martinServiceId)
+      console.log('martinServiceId 类型:', typeof martinServiceId)
+      console.log('传入的 styleConfig:', styleConfig)
+      
+      const response = await gisApi.updateMartinServiceStyle(martinServiceId, styleConfig)
+      console.log('保存样式 API响应:', response)
+      
+      if (response?.success) {
+        console.log('样式保存成功')
+        return true
+      } else {
+        console.error('样式保存失败:', response?.error || '未知错误')
+        return false
+      }
     } catch (error) {
-      console.error('保存并应用Martin服务样式失败:', error)
+      console.error('保存Martin服务样式失败:', error)
+      console.error('错误详情:', error.message)
+      console.error('错误响应:', error.response?.data)
       return false
     }
   }

@@ -551,4 +551,187 @@ class MartinService:
             logger.error(f"❌ Martin服务重启失败: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
-            return False 
+            return False
+
+    def update_service_style(self, service_id: int, style_config: dict) -> dict:
+        """更新Martin服务样式配置"""
+        try:
+            # 导入数据库工具
+            from models.db import execute_query
+            
+            # 检查Martin服务是否存在
+            check_sql = """
+            SELECT id, vector_type, original_filename, style FROM vector_martin_services
+            WHERE id = %s AND status = 'active'
+            """
+            result = execute_query(check_sql, (service_id,))
+            
+            if not result:
+                return {
+                    'success': False,
+                    'error': f'Martin服务ID {service_id} 不存在'
+                }
+            
+            service = result[0]
+            logger.info(f"开始更新Martin服务 {service_id} 的样式，类型: {service['vector_type']}")
+            
+            # 将样式配置保存到style字段
+            update_sql = """
+            UPDATE vector_martin_services 
+            SET style = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+            """
+            
+            # 转换为JSON字符串格式保存
+            style_json = json.dumps(style_config, ensure_ascii=False)
+            execute_query(update_sql, (style_json, service_id), fetch=False)
+            
+            logger.info(f"✅ Martin服务样式更新成功: {service_id}")
+            
+            return {
+                'success': True,
+                'data': {
+                    'service_id': str(service_id),
+                    'service_type': service['vector_type'],
+                    'original_filename': service['original_filename'],
+                    'style_config': style_config
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"更新Martin服务样式失败: {str(e)}")
+            return {
+                'success': False,
+                'error': f'更新样式失败: {str(e)}'
+            }
+
+    def get_service_style(self, service_id: int) -> dict:
+        """获取Martin服务样式配置"""
+        try:
+            # 导入数据库工具
+            from models.db import execute_query
+            
+            # 检查Martin服务是否存在并获取样式配置
+            sql = """
+            SELECT id, vector_type, original_filename, style, vector_info FROM vector_martin_services
+            WHERE id = %s AND status = 'active'
+            """
+            
+            result = execute_query(sql, (service_id,))
+            if not result:
+                return {
+                    'success': False,
+                    'error': f'Martin服务ID {service_id} 不存在'
+                }
+            
+            service = result[0]
+            logger.info(f"获取Martin服务 {service_id} 的样式，类型: {service['vector_type']}")
+            
+            # 解析样式配置，优先从style字段读取
+            style_config = {}
+            
+            # 首先从style字段读取（统一的样式存储字段）
+            if service['style']:
+                try:
+                    if isinstance(service['style'], str):
+                        style_config = json.loads(service['style'])
+                    else:
+                        style_config = service['style']
+                    logger.info(f"从style字段读取到样式配置: {style_config}")
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(f"样式配置解析失败: {str(e)}")
+                    style_config = {}
+            
+            # 如果style字段为空，但是是DXF类型，尝试从vector_info中读取（向后兼容）
+            if not style_config and service['vector_type'] == 'dxf' and service['vector_info']:
+                try:
+                    vector_info = service['vector_info'] if isinstance(service['vector_info'], dict) else json.loads(service['vector_info'])
+                    style_config = vector_info.get('style_config', {})
+                    logger.info(f"从vector_info中读取到DXF样式配置: {style_config}")
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(f"DXF vector_info解析失败: {str(e)}")
+            
+            # 如果没有样式配置，提供默认配置
+            if not style_config:
+                style_config = {}
+                logger.info(f"使用默认样式配置")
+            
+            return {
+                'success': True,
+                'data': {
+                    'service_id': str(service_id),
+                    'service_type': service['vector_type'],
+                    'original_filename': service['original_filename'],
+                    'style_config': style_config,
+                    'vector_info': service['vector_info']
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"获取Martin服务样式失败: {str(e)}")
+            return {
+                'success': False,
+                'error': f'获取样式失败: {str(e)}'
+            }
+
+    def apply_service_style(self, service_id: int, style_config: dict) -> dict:
+        """应用Martin服务样式（保存并应用）"""
+        try:
+            # 导入数据库工具
+            from models.db import execute_query
+            
+            # 检查Martin服务是否存在
+            check_sql = """
+            SELECT id, vector_type, original_filename, style, table_name FROM vector_martin_services
+            WHERE id = %s AND status = 'active'
+            """
+            result = execute_query(check_sql, (service_id,))
+            
+            if not result:
+                return {
+                    'success': False,
+                    'error': f'Martin服务ID {service_id} 不存在'
+                }
+            
+            service = result[0]
+            logger.info(f"开始应用Martin服务 {service_id} 的样式，类型: {service['vector_type']}")
+            
+            # 1. 保存样式配置到数据库
+            update_sql = """
+            UPDATE vector_martin_services 
+            SET style = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+            """
+            
+            # 转换为JSON字符串格式保存
+            style_json = json.dumps(style_config, ensure_ascii=False)
+            execute_query(update_sql, (style_json, service_id), fetch=False)
+            
+            logger.info(f"✅ Martin服务样式配置已保存: {service_id}")
+            
+            # 2. 对于DXF图层，样式是在前端VectorGrid中应用的，不需要重新发布Martin服务
+            # 但我们可以在这里做一些额外的处理，比如更新缓存等
+            
+            # 3. 返回成功响应
+            return {
+                'success': True,
+                'data': {
+                    'service_id': str(service_id),
+                    'service_type': service['vector_type'],
+                    'original_filename': service['original_filename'],
+                    'table_name': service['table_name'],
+                    'style_config': style_config,
+                    'applied_at': 'now'
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"应用Martin服务样式失败: {str(e)}")
+            return {
+                'success': False,
+                'error': f'应用样式失败: {str(e)}'
+            }
+
+
+# 创建全局实例
+martin_service = MartinService() 

@@ -73,8 +73,8 @@
     
     <!-- 图层样式设置对话框 -->
     <el-dialog title="图层样式设置" v-model="styleDialogVisible" width="800px" :close-on-click-modal="false">
-      <div class="style-dialog-content" v-if="currentStyleLayer">
-        <el-tabs v-model="activeStyleTab">
+      <div class="style-dialog-content" v-if="styleDialogVisible && currentStyleLayer && activeStyleTab">
+        <el-tabs v-model="activeStyleTab" :key="`style-tabs-${currentStyleLayer.id || 'unknown'}-${activeStyleTab}`">
           <el-tab-pane label="基础样式" name="basic">
             <el-form :model="styleForm" label-width="100px">
               <template v-if="isVectorLayer">
@@ -119,23 +119,46 @@
             </el-form>
           </el-tab-pane>
 
-          <el-tab-pane v-if="isDxfMartinLayer" label="Martin(DXF)" name="dxf">
-            <DxfStyleEditor 
-              v-if="currentStyleLayer?.martin_service_id"
-              :layer-data="currentStyleLayer" 
-              :martin-service-id="currentStyleLayer.martin_service_id"
-              @styles-updated="onDxfStylesUpdated"
-              @popup-control-changed="onPopupControlChanged"
-              ref="dxfStyleEditorRef"
-            />
+          <el-tab-pane v-if="isDxfMartinLayer === true" label="Martin(DXF)" name="dxf">
+            <div v-if="currentStyleLayer && currentStyleLayer.martin_service_id && typeof currentStyleLayer.martin_service_id === 'string'">
+              <DxfStyleEditor 
+                :key="`dxf-editor-${currentStyleLayer.martin_service_id}`"
+                :layer-data="currentStyleLayer" 
+                :martin-service-id="parseInt(currentStyleLayer.martin_service_id)"
+                @styles-updated="onDxfStylesUpdated"
+                @popup-control-changed="onPopupControlChanged"
+                ref="dxfStyleEditorRef"
+              />
+            </div>
+            <div v-else-if="currentStyleLayer && currentStyleLayer.martin_service_id && typeof currentStyleLayer.martin_service_id === 'number'">
+              <DxfStyleEditor 
+                :key="`dxf-editor-${currentStyleLayer.martin_service_id}`"
+                :layer-data="currentStyleLayer" 
+                :martin-service-id="currentStyleLayer.martin_service_id"
+                @styles-updated="onDxfStylesUpdated"
+                @popup-control-changed="onPopupControlChanged"
+                ref="dxfStyleEditorRef"
+              />
+            </div>
+            <div v-else class="loading-placeholder">
+              <el-icon class="is-loading"><Loading /></el-icon>
+              <span>正在加载样式编辑器...</span>
+              <div style="margin-top: 10px; font-size: 12px; color: #999;">
+                调试信息: martin_service_id = {{ currentStyleLayer?.martin_service_id }} ({{ typeof currentStyleLayer?.martin_service_id }})
+              </div>
+            </div>
           </el-tab-pane>
         </el-tabs>
+      </div>
+      <div v-else class="dialog-loading">
+        <el-icon class="is-loading"><Loading /></el-icon>
+        <span>正在初始化对话框...</span>
       </div>
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="styleDialogVisible = false">取消</el-button>
           <el-button v-if="activeStyleTab === 'basic'" type="primary" @click="applyStyle">应用样式</el-button>
-          <el-button v-if="activeStyleTab === 'dxf' && isDxfMartinLayer" type="primary" @click="applyAndSaveDxfStyles" :loading="savingDxfStyles">保存样式到数据库</el-button>
+          <el-button v-if="activeStyleTab === 'dxf' && isDxfMartinLayer === true" type="primary" @click="applyAndSaveDxfStyles" :loading="savingDxfStyles">保存样式到数据库</el-button>
         </span>
       </template>
     </el-dialog>
@@ -147,6 +170,7 @@
 import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick, toRaw } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Loading } from '@element-plus/icons-vue'
 import gisApi from '@/api/gis'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -167,7 +191,7 @@ L.Icon.Default.mergeOptions({
 
 export default {
   name: 'MapViewer',
-  components: { BaseMapSwitcher, DxfStyleEditor },
+  components: { BaseMapSwitcher, DxfStyleEditor, Loading },
   props: {
     sceneId: { type: [Number, String], default: null },
     readonly: { type: Boolean, default: false }
@@ -213,7 +237,11 @@ export default {
     const hasPointGeometry = computed(() => isVectorLayer.value)
     const hasLineGeometry = computed(() => isVectorLayer.value)
     const hasPolygonGeometry = computed(() => isVectorLayer.value)
-    const isDxfMartinLayer = computed(() => currentStyleLayer.value?.service_type === 'martin' && currentStyleLayer.value?.file_type === 'dxf' && currentStyleLayer.value?.martin_service_id)
+    const isDxfMartinLayer = computed(() => {
+      return currentStyleLayer.value?.service_type === 'martin' && 
+             currentStyleLayer.value?.file_type === 'dxf' && 
+             Boolean(currentStyleLayer.value?.martin_service_id)
+    })
     
     // 全局变量，用于跟踪地图状态
     const mapState = reactive({
@@ -485,7 +513,7 @@ export default {
             return feature.properties?.gid || feature.id;
           }
         });
-        console.log('创建矢量MBTiles图层:', layer.layer_name);
+        //console.log('创建矢量MBTiles图层:', layer.layer_name);
       }
       
       // 简化事件监听，只保留必要的
@@ -686,9 +714,18 @@ export default {
     
     // 显示样式设置对话框
     const showStyleDialog = async (layer) => {
+      // console.log('=== showStyleDialog 被调用 ===')
+      // console.log('传入的 layer 参数:', layer)
+      // console.log('layer 完整对象:', JSON.stringify(layer, null, 2))
+      
       emit('layer-selected', layer)
       currentStyleLayer.value = layer
       activeStyleTab.value = isDxfMartinLayer.value ? 'dxf' : 'basic'
+      
+      // console.log('设置后的状态:')
+      // console.log('currentStyleLayer.value:', currentStyleLayer.value)
+      // console.log('activeStyleTab.value:', activeStyleTab.value)
+      // console.log('isDxfMartinLayer.value:', isDxfMartinLayer.value)
       
       // 重置样式表单
       styleForm.point = { color: '#FF0000', size: 6 }
@@ -697,6 +734,8 @@ export default {
       styleForm.raster = { opacity: 1 }
       
       styleDialogVisible.value = true
+      // console.log('styleDialogVisible 设置为 true')
+      // console.log('================================')
     }
     
     // 应用样式
@@ -820,7 +859,7 @@ export default {
             ...layerData,
             // 对于Martin服务，使用martin_service_id作为layer_id
             layer_id: martinService.database_record_id || martinService.id,
-            martin_service_id: martinService.database_record_id || martinService.id,
+            martin_service_id: String(martinService.database_record_id || martinService.id),  // 确保为字符串
             mvt_url: serviceInfo.mvt_url,
             tilejson_url: serviceInfo.tilejson_url
           }
@@ -1244,6 +1283,32 @@ export default {
       }
     })
     
+    // 添加调试代码 - 监听相关数据变化
+    // watch(() => styleDialogVisible.value, (newVal) => {
+    //   console.log('=== MapViewerLF 调试信息 ===')
+    //   console.log('styleDialogVisible:', newVal)
+    //   console.log('currentStyleLayer:', currentStyleLayer.value)
+    //   console.log('activeStyleTab:', activeStyleTab.value)
+    //   console.log('isDxfMartinLayer:', isDxfMartinLayer.value)
+    //   console.log('isVectorLayer:', isVectorLayer.value)
+    //   console.log('hasPointGeometry:', hasPointGeometry.value)
+    //   console.log('hasLineGeometry:', hasLineGeometry.value)
+    //   console.log('hasPolygonGeometry:', hasPolygonGeometry.value)
+    //   console.log('========================')
+    // })
+    
+    // watch(() => currentStyleLayer.value, (newVal) => {
+    //   console.log('=== currentStyleLayer 变化 ===')
+    //   console.log('新值:', newVal)
+    //   if (newVal) {
+    //     console.log('service_type:', newVal.service_type)
+    //     console.log('file_type:', newVal.file_type)
+    //     console.log('martin_service_id:', newVal.martin_service_id)
+    //     console.log('完整对象:', JSON.stringify(newVal, null, 2))
+    //   }
+    //   console.log('===========================')
+    // })
+    
     onMounted(() => {
       nextTick(() => {
         // 初始化地图
@@ -1395,5 +1460,32 @@ export default {
   height: 20px;
   position: relative;
   overflow: hidden;
+}
+
+.loading-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: #909399;
+}
+
+.loading-placeholder .el-icon {
+  margin-bottom: 10px;
+}
+
+.dialog-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: #909399;
+}
+
+.dialog-loading .el-icon {
+  margin-bottom: 10px;
+  font-size: 24px;
 }
 </style>
