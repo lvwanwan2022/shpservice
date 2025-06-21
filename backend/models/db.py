@@ -350,7 +350,7 @@ def init_database():
         check_user_user = "SELECT COUNT(*) FROM users WHERE username = 'user'"
         user_count = execute_query(check_user_user)[0]['count']
         
-        if admin_count == 0:
+        if user_count == 0:
             # 创建默认普通用户，使用雪花算法生成ID
             import hashlib
             from utils.snowflake import get_snowflake_id
