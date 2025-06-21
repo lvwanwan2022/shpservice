@@ -57,7 +57,7 @@
       </form>
       
       <div class="login-footer">
-        <p>测试账号: admin/admin123 或 user/user123</p>
+        <p>测试账号: admin/admin123 </p>
       </div>
     </div>
   </div>

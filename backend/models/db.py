@@ -346,7 +346,29 @@ def init_database():
             """
             execute_query(insert_admin_sql, (admin_id, "admin", password_hash, "admin@example.com"), fetch=False)
             print("✅ 已创建默认管理员用户 (用户名: admin, 密码: admin123)")
+        # 检查是否需要创建默认普通用户
+        check_user_user = "SELECT COUNT(*) FROM users WHERE username = 'user'"
+        user_count = execute_query(check_user_user)[0]['count']
         
+        if admin_count == 0:
+            # 创建默认普通用户，使用雪花算法生成ID
+            import hashlib
+            from utils.snowflake import get_snowflake_id
+            
+            # 生成密码哈希
+            default_password = "user123"
+            password_hash = hashlib.sha256(default_password.encode()).hexdigest()
+            
+            # 使用雪花算法生成ID
+            user_id = get_snowflake_id()
+            
+            # 插入管理员用户
+            insert_user_sql = """
+            INSERT INTO users (id, username, password, email    ) 
+            VALUES (%s, %s, %s, %s)
+            """
+            execute_query(insert_user_sql, (user_id, "user", password_hash, "user@example.com"), fetch=False)
+            print("✅ 已创建默认普通用户 (用户名: user, 密码: user123)")
         # 创建文件表 - 更新以匹配新的数据库结构
         create_files_table = """
         CREATE TABLE IF NOT EXISTS files (
