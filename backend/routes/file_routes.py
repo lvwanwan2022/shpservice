@@ -319,12 +319,14 @@ def abort_chunked_upload():
     return jsonify({'message': '分片上传已取消'})
 
 @file_bp.route('/files/list', methods=['GET'])
+@require_auth  # 添加用户认证装饰器
 def get_files_list():
     """获取文件列表 - /files/list 端点
     """
     return get_file_list()
 
 @file_bp.route('/list', methods=['GET'])
+@require_auth  # 添加用户认证装饰器
 def get_file_list():
     """获取文件列表
     ---
@@ -395,6 +397,13 @@ def get_file_list():
         description: 文件列表
     """
     try:
+        # 获取当前用户信息
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({'error': '用户未认证'}), 401
+        
+        current_user_id = current_user.get('id')
+        #current_app.logger.info(f"当前用户ID: {current_user_id}")
         # 获取查询参数
         page = int(request.args.get('page', 1))
         page_size = int(request.args.get('page_size', 20))
@@ -433,6 +442,10 @@ def get_file_list():
         # 构建WHERE条件
         where_conditions = []
         params = []
+        
+        # 🔥 关键修改：添加权限过滤条件 - 只显示当前用户的文件或公开的文件
+        where_conditions.append("(f.user_id = %s OR f.is_public = true)")
+        params.append(current_user_id)
         
         if user_id:
             where_conditions.append("f.user_id = %s")
@@ -483,7 +496,7 @@ def get_file_list():
         
         # 执行查询
         files = execute_query(query, params)
-        
+        #current_app.logger.info(f"查询结果: {files}")
         # 获取总数
         count_query = """
         SELECT COUNT(DISTINCT f.id)
@@ -583,7 +596,7 @@ def get_file_list():
                        'martin_service_id', 'martin_file_id', 'martin_table_name', 'martin_mvt_url', 'martin_tilejson_url',
                        'martin_style', 'martin_status', 'is_published', 'service_type']:
                 file.pop(key, None)
-        
+        #current_app.logger.info(f"查询结果: {files}")
         return jsonify({
             'files': files,
             'total': total,
@@ -717,11 +730,26 @@ def get_file_statistics():
         return jsonify({'error': '服务器内部错误'}), 500
 
 @file_bp.route('/disciplines', methods=['GET'])
+@require_auth  # 添加用户认证装饰器
 def get_disciplines():
     """获取学科列表"""
     try:
-        sql = "SELECT DISTINCT discipline FROM files WHERE discipline IS NOT NULL ORDER BY discipline"
-        result = execute_query(sql)
+        # 获取当前用户信息
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({'error': '用户未认证'}), 401
+        
+        current_user_id = current_user.get('id')
+        
+        # 🔥 关键修改：只返回当前用户的文件或公开文件的学科
+        sql = """
+        SELECT DISTINCT discipline 
+        FROM files 
+        WHERE discipline IS NOT NULL 
+        AND (user_id = %s OR is_public = true)
+        ORDER BY discipline
+        """
+        result = execute_query(sql, (current_user_id,))
         disciplines = [row['discipline'] for row in result]
         
         return jsonify({
@@ -733,11 +761,26 @@ def get_disciplines():
         return jsonify({'error': '服务器内部错误'}), 500
 
 @file_bp.route('/file-types', methods=['GET'])
+@require_auth  # 添加用户认证装饰器
 def get_file_types():
     """获取文件类型列表"""
     try:
-        sql = "SELECT DISTINCT file_type FROM files WHERE file_type IS NOT NULL ORDER BY file_type"
-        result = execute_query(sql)
+        # 获取当前用户信息
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({'error': '用户未认证'}), 401
+        
+        current_user_id = current_user.get('id')
+        
+        # 🔥 关键修改：只返回当前用户的文件或公开文件的文件类型
+        sql = """
+        SELECT DISTINCT file_type 
+        FROM files 
+        WHERE file_type IS NOT NULL 
+        AND (user_id = %s OR is_public = true)
+        ORDER BY file_type
+        """
+        result = execute_query(sql, (current_user_id,))
         file_types = [row['file_type'] for row in result]
         
         return jsonify({
@@ -1005,7 +1048,7 @@ def publish_geoserver_service(file_id):
             print(f"发布矢量数据: {file_type}")
             # 矢量数据发布
             if file_type == 'shp':
-                result = geoserver_service.publish_shapefile(file_path, store_name, file_id)
+                result = geoserver_service.publish_shapefile(file_path, store_name, file_id, coordinate_system)
             elif file_type == 'geojson':
                 result = geoserver_service.publish_geojson(file_path, store_name, file_id)
         else:

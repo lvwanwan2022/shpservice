@@ -597,7 +597,8 @@ export default {
         
         const response = await gisApi.getFiles(params)
         
-        fileList.value = response.files
+        fileList.value = response.data.files
+        //console.log('文件列表:', response)
         total.value = response.total
       } catch (error) {
         ElMessage.error('获取文件列表失败')
@@ -960,7 +961,7 @@ export default {
         
         // 检查需要坐标系的文件类型是否需要坐标系选择
         let publishParams = {}
-        const needsCoordinateSystem = ['dxf', 'dom.tif', 'dem.tif', 'tif', 'tiff', 'dom', 'dem'].includes(file.file_type.toLowerCase())
+        const needsCoordinateSystem = ['shp', 'dxf', 'dom.tif', 'dem.tif', 'tif', 'tiff', 'dom', 'dem'].includes(file.file_type.toLowerCase())
         
         if (needsCoordinateSystem) {
           const coordinate_system = file.coordinate_system || await selectCoordinateSystemForPublish(file)
@@ -1208,7 +1209,7 @@ export default {
     // 判断文件是否需要坐标系
     const needsCoordinateSystem = (file) => {
       const fileType = file.file_type?.toLowerCase()
-      const needs = ['dxf', 'dom.tif', 'dem.tif'].includes(fileType)
+      const needs = ['shp','dxf', 'dom.tif', 'dem.tif'].includes(fileType)
       return needs
     }
 

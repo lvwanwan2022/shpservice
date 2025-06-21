@@ -773,7 +773,7 @@ export default {
       Object.keys(params).forEach(key => params[key] === '' && delete params[key])
 
       const response = await gisApi.getFiles(params)
-      let filteredFiles = response.files || []
+      let filteredFiles = response.data.files || []
 
       if (layerSearchForm.service_type) {
         filteredFiles = filteredFiles.filter(file => {

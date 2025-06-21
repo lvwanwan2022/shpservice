@@ -171,7 +171,7 @@ class GeoServerService:
             print(f"❌ 其他异常: {str(e)}")
             raise
     
-    def publish_shapefile(self, shp_zip_path, store_name, file_id):
+    def publish_shapefile(self, shp_zip_path, store_name, file_id, coordinate_system=None):
         """发布Shapefile服务 - 解压验证版本
         
         发布流程：
@@ -186,6 +186,7 @@ class GeoServerService:
             shp_zip_path: Shapefile ZIP包路径
             store_name: 数据存储名称（将被重新生成为"文件名_store"格式）
             file_id: 文件ID
+            coordinate_system: 指定的坐标系，如'EPSG:4326'，如果为None则使用文件自带的坐标系
             
         Returns:
             发布结果信息
@@ -193,6 +194,8 @@ class GeoServerService:
         extracted_folder = None
         try:
             print(f"开始发布Shapefile（解压验证版本）: {shp_zip_path}")
+            if coordinate_system:
+                print(f"指定坐标系: {coordinate_system}")
             
             # 1. 修复文件路径问题
             corrected_path = self._correct_path(shp_zip_path)
@@ -275,15 +278,47 @@ class GeoServerService:
             featuretype_info = self._get_featuretype_info(generated_store_name)
             print(f"✅ 获取要素类型信息成功")
             
-            # 13. 在数据库中创建要素类型记录
+            # 🔥 13. 如果指定了坐标系，覆盖要素类型的坐标系信息
+            if coordinate_system:
+                if 'featureType' in featuretype_info:
+                    featuretype_info['featureType']['srs'] = coordinate_system
+                else:
+                    featuretype_info['srs'] = coordinate_system
+                print(f"✅ 应用指定坐标系: {coordinate_system}")
+            
+            # 14. 在数据库中创建要素类型记录
             featuretype_id = self._create_featuretype_in_db(featuretype_info, store_id)
             print(f"✅ 要素类型记录创建成功，featuretype_id={featuretype_id}")
             
-            # 14. 在数据库中创建图层记录
+            # 14.1. 如果指定了坐标系，通过REST API更新GeoServer中的feature type
+            if coordinate_system:
+                try:
+                    feature_name = featuretype_info['featureType']['name']
+                    update_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{generated_store_name}/featuretypes/{feature_name}"
+                    
+                    update_data = {
+                        "featureType": {
+                            "srs": coordinate_system,
+                            "nativeCRS": coordinate_system
+                        }
+                    }
+                    
+                    response = requests.put(update_url, json=update_data, auth=self.auth, 
+                                          headers={'Content-Type': 'application/json'})
+                    
+                    if response.status_code == 200:
+                        print(f"✅ GeoServer中feature type坐标系更新成功: {coordinate_system}")
+                    else:
+                        print(f"⚠️ GeoServer中feature type坐标系更新失败: {response.text}")
+                        
+                except Exception as e:
+                    print(f"⚠️ 更新GeoServer feature type坐标系时出错: {str(e)}")
+            
+            # 15. 在数据库中创建图层记录
             layer_info = self._create_layer_in_db(featuretype_info, workspace_id, featuretype_id, coverage_id=None, file_id=file_id,  store_type='datastore')
             print(f"✅ 图层记录创建成功，layer_id={layer_info['id']}")
             
-            # 15. 返回服务信息
+            # 16. 返回服务信息
             result = {
                 "success": True,
                 "store_name": generated_store_name,
@@ -291,7 +326,8 @@ class GeoServerService:
                 "wms_url": layer_info['wms_url'],
                 "wfs_url": layer_info['wfs_url'],
                 "layer_info": layer_info,
-                "filename": filename
+                "filename": filename,
+                "coordinate_system": coordinate_system  # 返回使用的坐标系
             }
             
             print(f"✅ Shapefile服务发布成功: {result['layer_name']}")

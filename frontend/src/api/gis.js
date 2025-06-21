@@ -336,7 +336,7 @@ export default {
   
   // 获取文件列表
   getFiles(params = {}) {
-    return service({
+    return authHttp({  // 🔥 使用带认证的请求
       url: '/files/list',
       method: 'get',
       params
@@ -345,7 +345,7 @@ export default {
   
   // 获取文件详情
   getFile(fileId) {
-    return service({
+    return authHttp({  // 🔥 使用带认证的请求
       url: `/files/${fileId}`,
       method: 'get'
     })
@@ -353,7 +353,7 @@ export default {
   
   // 删除文件
   deleteFile(fileId) {
-    return service({
+    return authHttp({  // 🔥 使用带认证的请求
       url: `/files/${fileId}`,
       method: 'delete'
     })
@@ -361,7 +361,7 @@ export default {
   
   // 获取用户列表
   getUsers() {
-    return service({
+    return authHttp({  // 🔥 使用带认证的请求
       url: '/files/users',
       method: 'get'
     })
@@ -369,7 +369,7 @@ export default {
   
   // 更新文件
   updateFile(fileId, data) {
-    return service({
+    return authHttp({  // 🔥 使用带认证的请求
       url: `/files/${fileId}`,
       method: 'put',
       data
@@ -378,7 +378,7 @@ export default {
   
   // 获取文件统计信息
   getFileStatistics() {
-    return service({
+    return authHttp({  // 🔥 使用带认证的请求
       url: '/files/statistics',
       method: 'get'
     })
@@ -386,7 +386,7 @@ export default {
   
   // 获取学科列表
   getDisciplines() {
-    return service({
+    return authHttp({  // 🔥 使用带认证的请求
       url: '/files/disciplines',
       method: 'get'
     })
@@ -394,7 +394,7 @@ export default {
   
   // 获取文件类型列表
   getFileTypes() {
-    return service({
+    return authHttp({  // 🔥 使用带认证的请求
       url: '/files/file-types',
       method: 'get'
     })
