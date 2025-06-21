@@ -161,6 +161,7 @@
       title="场景详情" 
       v-model="showDetailDialog" 
       width="800px"
+      @close="handleDetailDialogClose"
     >
       <div v-if="currentScene" class="scene-detail">
         <div class="detail-header">
@@ -174,24 +175,15 @@
             <el-table-column prop="layer_name" label="图层名称" />
             <el-table-column prop="file_type" label="数据类型" width="100" />
             <el-table-column prop="service_type" label="服务类型" width="120" />
-            <el-table-column label="状态" width="100">
+            <el-table-column label="状态" width="120">
               <template #default="scope">
-                <!-- 调试信息 -->
-                <div style="font-size: 10px; color: #999; margin-bottom: 2px;">
-                  {{ JSON.stringify({
-                    is_visible: scope.row.is_visible,
-                    visible: scope.row.visible,
-                    status: scope.row.status
-                  }) }}
-                </div>
-                <!-- 状态显示 -->
-                <el-tag 
-                  v-if="scope.row.visiblity === true" 
-                  type="success" 
-                  size="small">
-                  可见
-                </el-tag>
-                <el-tag v-else type="info" size="small">隐藏</el-tag>
+                <el-switch
+                  v-model="scope.row.visibility"
+                  active-text="显"
+                  inactive-text="隐"
+                  :loading="scope.row.updating || false"
+                  @change="toggleLayerVisibility(scope.row)"
+                />
               </template>
             </el-table-column>
             <el-table-column label="操作" width="150">
@@ -216,7 +208,7 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
@@ -397,19 +389,38 @@ export default {
       try {
         currentScene.value = scene
         
+        // 先关闭对话框，确保状态重置
+        showDetailDialog.value = false
+        
+        // 清空之前的图层数据
+        sceneLayers.value = []
+        
+        // 使用 nextTick 确保 DOM 更新完成
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
         // 加载场景的图层信息
         const response = await gisApi.getScene(scene.id)
         
+        if (response && response.data && response.data.layers) {
+          sceneLayers.value = response.data.layers.map(layer => ({
+            ...layer,
+            // 确保 visibility 是布尔值
+            visibility: Boolean(layer.visibility || layer.visible),
+            // 初始化updating状态
+            updating: false
+          }))
+        } else {
+          sceneLayers.value = []
+        }
         
-        sceneLayers.value = response.data.layers || []
-        
-
-        
+        // 延迟显示对话框，避免 ResizeObserver 错误
+        await new Promise(resolve => setTimeout(resolve, 50))
         showDetailDialog.value = true
         
       } catch (error) {
         console.error('加载场景详情失败:', error)
         ElMessage.error('加载场景详情失败')
+        showDetailDialog.value = false
       }
     }
     
@@ -436,6 +447,42 @@ export default {
           console.error('移除图层失败:', error)
           ElMessage.error('移除图层失败')
         }
+      }
+    }
+    
+    const toggleLayerVisibility = async (layer) => {
+      const originalVisibility = layer.visibility
+      
+      // 设置loading状态
+      layer.updating = true
+      
+      try {
+        // 调用API更新图层可见性
+        await gisApi.updateSceneLayer(currentScene.value.id, layer.id, { 
+          visible: layer.visibility 
+        })
+        
+        const statusText = layer.visibility ? '可见' : '隐藏'
+        ElMessage({
+          message: `图层 "${layer.layer_name}" 已设置为${statusText}`,
+          type: 'success',
+          duration: 2000
+        })
+        
+      } catch (error) {
+        console.error('更新图层可见性失败:', error)
+        
+        // 如果更新失败，恢复开关状态
+        layer.visibility = originalVisibility
+        
+        ElMessage({
+          message: `更新图层可见性失败: ${error.response?.data?.error || error.message}`,
+          type: 'error',
+          duration: 3000
+        })
+      } finally {
+        // 清除loading状态
+        layer.updating = false
       }
     }
     
@@ -474,9 +521,34 @@ export default {
       }
     }
     
+    const handleDetailDialogClose = () => {
+      currentScene.value = null
+      sceneLayers.value = []
+    }
+    
     // 生命周期
     onMounted(() => {
       loadScenes()
+      
+      // 抑制 ResizeObserver 错误（这是一个无害的警告）
+      const resizeObserverError = (e) => {
+        if (e.message === 'ResizeObserver loop completed with undelivered notifications.') {
+          e.stopImmediatePropagation()
+          return false
+        }
+      }
+      window.addEventListener('error', resizeObserverError)
+      
+      // 存储清理函数的引用
+      window.resizeObserverErrorHandler = resizeObserverError
+    })
+    
+    onUnmounted(() => {
+      // 组件卸载时清理事件监听器
+      if (window.resizeObserverErrorHandler) {
+        window.removeEventListener('error', window.resizeObserverErrorHandler)
+        delete window.resizeObserverErrorHandler
+      }
     })
     
     return {
@@ -505,9 +577,11 @@ export default {
       deleteScene,
       viewScene,
       removeLayerFromScene,
+      toggleLayerVisibility,
       openMapWithScene,
       formatDate,
-      formatDateShort
+      formatDateShort,
+      handleDetailDialogClose
     }
   }
 }
@@ -717,5 +791,32 @@ export default {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+/* 防止 ResizeObserver 错误 */
+.el-dialog {
+  contain: layout;
+}
+
+.el-dialog__body {
+  overflow: hidden;
+}
+
+.scene-detail {
+  min-height: 200px;
+}
+
+.el-table {
+  contain: layout;
+}
+
+/* 开关样式优化 */
+.el-switch {
+  --el-switch-on-color: #13ce66;
+  --el-switch-off-color: #ff4949;
+}
+
+.el-switch .el-switch__label {
+  font-size: 12px;
 }
 </style> 

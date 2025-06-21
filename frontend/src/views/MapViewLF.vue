@@ -232,12 +232,12 @@ export default {
     const fetchSceneList = async () => {
       try {
         const response = await gisApi.getScenes()
-        sceneList.value = response.scenes
+        sceneList.value = response.data.scenes
         
         // 如果URL中有scene_id参数，设置为当前选中的场景
         const sceneIdFromQuery = route.query.scene_id
         if (sceneIdFromQuery) {
-          selectedSceneId.value = parseInt(sceneIdFromQuery)
+          selectedSceneId.value = sceneIdFromQuery
         } else if (sceneList.value.length > 0) {
           // 如果没有指定场景，选择第一个场景
           selectedSceneId.value = sceneList.value[0].id
@@ -259,7 +259,7 @@ export default {
       try {
         loading.value = true
         const response = await gisApi.getScene(sceneId)
-        layersList.value = response.layers
+        layersList.value = response.data.layers
         // 清除选中状态
         currentActiveLayer.value = null
       } catch (error) {

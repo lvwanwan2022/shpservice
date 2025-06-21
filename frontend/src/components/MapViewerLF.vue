@@ -170,6 +170,7 @@ import { checkMVTSupport } from '@/utils/mvtLayerUtils'
 import BaseMapSwitcher from './BaseMapSwitcher.vue'
 import DxfStyleEditor from './DxfStyleEditor.vue'
 import defaultDxfStylesConfig from '@/config/defaultDxfStyles.json'
+import { MARTIN_BASE_URL } from '@/config/index'
 
 // 修复Leaflet图标问题
 delete L.Icon.Default.prototype._getIconUrl
@@ -378,13 +379,14 @@ export default {
         const response = await gisApi.getScene(sceneId)
         console.log('Leaflet场景API响应:', response)
         
-        currentScene.value = response.scene
+        currentScene.value = response.data.scene
         
         // 🔥 确保layers是数组
-        if (response.layers && Array.isArray(response.layers)) {
-          layersList.value = response.layers
+        if (response.data.layers && Array.isArray(response.data.layers)) {
+          layersList.value = response.data.layers
         } else {
-          console.warn('场景图层数据不是数组，使用空数组:', response.layers)
+          //console.log('场景图层数据:', response.data.layers)
+          console.warn('场景图层数据不是数组，使用空数组:', response.data.layers)
           layersList.value = []
         }
         
@@ -393,7 +395,7 @@ export default {
         // 确保layersList是数组再进行迭代
         if (layersList.value && Array.isArray(layersList.value)) {
           for (const layer of layersList.value) {
-            console.log('Leaflet处理图层:', layer.layer_name, '服务类型:', layer.service_type)
+            //console.log('Leaflet处理图层:', layer.layer_name, '服务类型:', layer.service_type)
             if (layer.service_type === 'martin') {
               await addMartinLayer(layer)
             } else {
