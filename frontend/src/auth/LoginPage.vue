@@ -58,6 +58,10 @@
       
       <div class="login-footer">
         <p>测试账号: admin/admin123 </p>
+        <p>
+          还没有账户？
+          <router-link to="/register" class="register-link">立即注册</router-link>
+        </p>
       </div>
     </div>
   </div>
@@ -84,6 +88,11 @@ export default {
     // 如果已经登录，重定向到首页
     if (authService.isAuthenticated()) {
       this.redirectAfterLogin()
+    }
+    
+    // 检查是否有来自注册页面的消息
+    if (this.$route.query.message) {
+      this.$message?.success?.(this.$route.query.message)
     }
   },
   
@@ -263,6 +272,16 @@ export default {
   color: #888;
   font-size: 12px;
   margin: 0;
+}
+
+.register-link {
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.register-link:hover {
+  text-decoration: underline;
 }
 
 /* 响应式设计 */

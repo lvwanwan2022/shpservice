@@ -1,4 +1,3 @@
-
 CREATE TABLE IF NOT EXISTS public.files
 (
     id integer NOT NULL DEFAULT nextval('files_id_seq'::regclass),
@@ -68,12 +67,14 @@ CREATE TABLE IF NOT EXISTS public.scenes
 )
 CREATE TABLE IF NOT EXISTS public.users
 (
-    id integer NOT NULL DEFAULT nextval('users_id_seq'::regclass),
+    id bigint NOT NULL,
     username character varying(50) COLLATE pg_catalog."default" NOT NULL,
     password character varying(100) COLLATE pg_catalog."default" NOT NULL,
+    email character varying(100) COLLATE pg_catalog."default",
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT users_pkey PRIMARY KEY (id),
-    CONSTRAINT users_username_key UNIQUE (username)
+    CONSTRAINT users_username_key UNIQUE (username),
+    CONSTRAINT users_email_key UNIQUE (email)
 )
 CREATE TABLE IF NOT EXISTS public.geoserver_coverages
 (

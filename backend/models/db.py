@@ -786,9 +786,23 @@ def insert_with_snowflake_id(table_name, data):
         # 添加ID到数据中
         data['id'] = snowflake_id
         
+        # 处理特殊值（如NOW()函数）
+        processed_data = {}
+        for key, value in data.items():
+            if value == 'NOW()':
+                # 跳过NOW()函数，让SQL直接处理
+                continue
+            processed_data[key] = value
+        
         # 构建SQL语句
-        columns = list(data.keys())
-        placeholders = [f'%({col})s' for col in columns]
+        columns = list(processed_data.keys())
+        values = list(processed_data.values())
+        placeholders = ['%s'] * len(columns)
+        
+        # 处理NOW()函数
+        if 'created_at' in data and data['created_at'] == 'NOW()':
+            columns.append('created_at')
+            placeholders.append('NOW()')
         
         query = f"""
         INSERT INTO {table_name} ({', '.join(columns)})
@@ -797,7 +811,7 @@ def insert_with_snowflake_id(table_name, data):
         """
         
         # 执行插入
-        result = execute_query(query, data)
+        result = execute_query(query, values)
         
         # 返回插入的ID
         if result and len(result) > 0:

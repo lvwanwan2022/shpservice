@@ -26,6 +26,12 @@ const routes = [
     meta: { requiresAuth: false }
   },
   {
+    path: '/register',
+    name: 'Register',
+    component: () => import('@/auth/RegisterPage.vue'),
+    meta: { requiresAuth: false }
+  },
+  {
     path: '/map-lf',
     name: 'MapLF',
     component: () => import('@/views/MapViewLF.vue')

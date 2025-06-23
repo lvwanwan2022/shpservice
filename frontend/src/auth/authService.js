@@ -80,6 +80,32 @@ class AuthService {
   }
   
   /**
+   * 用户注册
+   * @param {string} username 用户名
+   * @param {string} password 密码
+   * @param {string} email 邮箱
+   * @returns {Promise} 注册结果
+   */
+  async register(username, password, email) {
+    try {
+      const response = await this.http.post('/auth/register', {
+        username,
+        password,
+        email
+      })
+      
+      if (response.data.code === 200) {
+        return { success: true, data: response.data.data, message: response.data.message }
+      } else {
+        return { success: false, message: response.data.message }
+      }
+    } catch (error) {
+      const message = error.response?.data?.message || '注册失败，请检查网络连接'
+      return { success: false, message }
+    }
+  }
+  
+  /**
    * 用户登出
    */
   async logout() {

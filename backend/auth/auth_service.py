@@ -103,6 +103,100 @@ class AuthService:
             
             return True, user_info, "登录成功"
     
+    def register(self, username, password, email):
+        """
+        注册新用户
+        :param username: 用户名
+        :param password: 密码
+        :param email: 邮箱
+        :return: 注册结果和用户信息
+        """
+        try:
+            # 先检查用户是否已存在
+            from models.db import execute_query, insert_with_snowflake_id
+            
+            # 检查用户名是否已存在
+            sql = "SELECT id FROM users WHERE username = %s"
+            result = execute_query(sql, (username,))
+            if result:
+                return False, None, "用户名已存在"
+            
+            # 检查邮箱是否已存在
+            sql = "SELECT id FROM users WHERE email = %s"
+            result = execute_query(sql, (email,))
+            if result:
+                return False, None, "邮箱已被注册"
+            
+            # 使用雪花算法插入新用户
+            user_data = {
+                'username': username,
+                'password': self._hash_password(password),
+                'email': email,
+                'created_at': 'NOW()'
+            }
+            
+            # 使用雪花算法生成ID并插入
+            user_id = insert_with_snowflake_id('users', user_data)
+            
+            # 获取新插入的用户信息
+            sql = "SELECT id, username, email FROM users WHERE id = %s"
+            result = execute_query(sql, (user_id,))
+            
+            if result:
+                user = result[0]
+                user_info = {
+                    'id': user['id'],
+                    'username': user['username'],
+                    'email': user['email'],
+                    'name': user['username'],
+                    'role': 'user'
+                }
+                return True, user_info, "注册成功"
+            else:
+                return False, None, "注册失败，请稍后重试"
+                
+        except Exception as e:
+            print(f"数据库注册用户失败: {e}")
+            
+            # 检查是否是整数范围错误
+            if "integer out of range" in str(e).lower():
+                return False, None, "系统错误：数据库ID字段类型需要升级，请联系管理员"
+            
+            # 检查是否是约束违反错误
+            if "violates not-null constraint" in str(e).lower():
+                return False, None, "系统错误：数据库字段约束错误，请联系管理员"
+            
+            # 回退到内存存储
+            try:
+                if username in self.users:
+                    return False, None, "用户名已存在"
+                
+                # 检查邮箱是否重复
+                for user in self.users.values():
+                    if user.get('email') == email:
+                        return False, None, "邮箱已被注册"
+                
+                # 添加到内存存储
+                self.users[username] = {
+                    'password': self._hash_password(password),
+                    'name': username,
+                    'role': 'user',
+                    'email': email
+                }
+                
+                user_info = {
+                    'id': username,
+                    'username': username,
+                    'email': email,
+                    'name': username,
+                    'role': 'user'
+                }
+                
+                return True, user_info, "注册成功"
+            except Exception as fallback_error:
+                print(f"内存存储注册也失败: {fallback_error}")
+                return False, None, "注册失败，请稍后重试"
+    
     def generate_token(self, user_info):
         """
         生成JWT token

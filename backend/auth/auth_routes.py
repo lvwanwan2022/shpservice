@@ -50,6 +50,51 @@ def login():
     except Exception as e:
         return jsonify({'code': 500, 'message': f'服务器错误: {str(e)}'}), 500
 
+@auth_bp.route('/register', methods=['POST'])
+def register():
+    """
+    用户注册接口
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'code': 400, 'message': '请求数据不能为空'}), 400
+        
+        username = data.get('username')
+        password = data.get('password')
+        email = data.get('email')
+        
+        if not username or not password:
+            return jsonify({'code': 400, 'message': '用户名和密码不能为空'}), 400
+        
+        if not email:
+            return jsonify({'code': 400, 'message': '邮箱不能为空'}), 400
+        
+        # 验证用户名格式
+        if len(username) < 3:
+            return jsonify({'code': 400, 'message': '用户名长度不能少于3位'}), 400
+        
+        # 验证密码强度
+        if len(password) < 6:
+            return jsonify({'code': 400, 'message': '密码长度不能少于6位'}), 400
+        
+        # 注册用户
+        success, user_info, message = auth_service.register(username, password, email)
+        
+        if not success:
+            return jsonify({'code': 400, 'message': message}), 400
+        
+        return jsonify({
+            'code': 200,
+            'message': '注册成功',
+            'data': {
+                'user': user_info
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'code': 500, 'message': f'服务器错误: {str(e)}'}), 500
+
 @auth_bp.route('/logout', methods=['POST'])
 def logout():
     """
