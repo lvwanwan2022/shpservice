@@ -70,7 +70,13 @@
 
           <el-col :span="8">
             <el-form-item label="相关模块" prop="module">
-              <el-select v-model="form.module" placeholder="请选择">
+              <el-select 
+                v-model="form.module" 
+                placeholder="请选择或输入模块"
+                filterable
+                allow-create
+                default-first-option
+              >
                 <el-option
                   label="前端"
                   value="frontend"
@@ -89,13 +95,55 @@
                     <div class="option-desc">服务器、数据处理相关</div>
                   </div>
                 </el-option>
+                <el-option
+                  label="数据库"
+                  value="database"
+                >
+                  <div class="option-detail">
+                    <div class="option-title">数据库</div>
+                    <div class="option-desc">数据存储、查询相关</div>
+                  </div>
+                </el-option>
+                <el-option
+                  label="API"
+                  value="api"
+                >
+                  <div class="option-detail">
+                    <div class="option-title">API</div>
+                    <div class="option-desc">接口设计、调用相关</div>
+                  </div>
+                </el-option>
+                <el-option
+                  label="部署"
+                  value="deployment"
+                >
+                  <div class="option-detail">
+                    <div class="option-title">部署</div>
+                    <div class="option-desc">发布、运维相关</div>
+                  </div>
+                </el-option>
+                <el-option
+                  label="文档"
+                  value="documentation"
+                >
+                  <div class="option-detail">
+                    <div class="option-title">文档</div>
+                    <div class="option-desc">说明文档、帮助相关</div>
+                  </div>
+                </el-option>
               </el-select>
             </el-form-item>
           </el-col>
 
           <el-col :span="8">
             <el-form-item label="修改类型" prop="type">
-              <el-select v-model="form.type" placeholder="请选择">
+              <el-select 
+                v-model="form.type" 
+                placeholder="请选择或输入类型"
+                filterable
+                allow-create
+                default-first-option
+              >
                 <el-option
                   label="界面优化"
                   value="ui"
@@ -112,6 +160,42 @@
                   <div class="option-detail">
                     <div class="option-title">代码修改</div>
                     <div class="option-desc">功能逻辑、性能优化相关</div>
+                  </div>
+                </el-option>
+                <el-option
+                  label="性能优化"
+                  value="performance"
+                >
+                  <div class="option-detail">
+                    <div class="option-title">性能优化</div>
+                    <div class="option-desc">响应速度、资源占用相关</div>
+                  </div>
+                </el-option>
+                <el-option
+                  label="功能新增"
+                  value="feature"
+                >
+                  <div class="option-detail">
+                    <div class="option-title">功能新增</div>
+                    <div class="option-desc">新特性、新模块相关</div>
+                  </div>
+                </el-option>
+                <el-option
+                  label="架构调整"
+                  value="architecture"
+                >
+                  <div class="option-detail">
+                    <div class="option-title">架构调整</div>
+                    <div class="option-desc">系统结构、技术栈相关</div>
+                  </div>
+                </el-option>
+                <el-option
+                  label="安全修复"
+                  value="security"
+                >
+                  <div class="option-detail">
+                    <div class="option-title">安全修复</div>
+                    <div class="option-desc">安全漏洞、权限控制相关</div>
                   </div>
                 </el-option>
               </el-select>
@@ -571,6 +655,31 @@ export default {
   font-size: 12px;
   color: #909399;
   margin-top: 2px;
+}
+
+/* 支持自定义输入的选择框样式 */
+.feedback-form .el-select.is-filterable .el-input .el-input__wrapper {
+  border-color: #dcdfe6;
+  transition: border-color 0.2s ease;
+}
+
+.feedback-form .el-select.is-filterable:hover .el-input .el-input__wrapper {
+  border-color: #c0c4cc;
+}
+
+.feedback-form .el-select.is-filterable.is-focus .el-input .el-input__wrapper {
+  border-color: #409eff;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+}
+
+/* 选择框的自定义提示样式 */
+.el-select-dropdown .el-select-dropdown__empty {
+  color: #909399;
+  font-size: 13px;
+}
+
+.el-select-dropdown .el-select-dropdown__empty::before {
+  content: "💡 ";
 }
 
 .upload-area {

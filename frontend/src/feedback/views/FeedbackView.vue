@@ -33,16 +33,38 @@
         </el-form-item>
 
         <el-form-item label="模块">
-          <el-select v-model="filters.module" placeholder="全部模块" clearable>
+          <el-select 
+            v-model="filters.module" 
+            placeholder="全部模块" 
+            clearable
+            filterable
+            allow-create
+            default-first-option
+          >
             <el-option label="前端" value="frontend" />
             <el-option label="后端" value="backend" />
+            <el-option label="数据库" value="database" />
+            <el-option label="API" value="api" />
+            <el-option label="部署" value="deployment" />
+            <el-option label="文档" value="documentation" />
           </el-select>
         </el-form-item>
 
         <el-form-item label="类型">
-          <el-select v-model="filters.type" placeholder="全部类型" clearable>
+          <el-select 
+            v-model="filters.type" 
+            placeholder="全部类型" 
+            clearable
+            filterable
+            allow-create
+            default-first-option
+          >
             <el-option label="界面优化" value="ui" />
             <el-option label="代码修改" value="code" />
+            <el-option label="性能优化" value="performance" />
+            <el-option label="功能新增" value="feature" />
+            <el-option label="架构调整" value="architecture" />
+            <el-option label="安全修复" value="security" />
           </el-select>
         </el-form-item>
 
@@ -410,12 +432,26 @@ export default {
     }
 
     const getModuleTagType = (module) => {
-      const types = { frontend: 'primary', backend: 'warning' }
+      const types = { 
+        frontend: 'primary', 
+        backend: 'warning', 
+        database: 'success',
+        api: 'info',
+        deployment: 'danger',
+        documentation: 'info'
+      }
       return types[module] || 'info'
     }
 
     const getTypeTagType = (type) => {
-      const types = { ui: 'primary', code: 'warning' }
+      const types = { 
+        ui: 'primary', 
+        code: 'warning',
+        performance: 'success',
+        feature: 'primary',
+        architecture: 'info',
+        security: 'danger'
+      }
       return types[type] || 'info'
     }
 
@@ -446,12 +482,26 @@ export default {
     }
 
     const getModuleLabel = (module) => {
-      const labels = { frontend: '前端', backend: '后端' }
+      const labels = { 
+        frontend: '前端', 
+        backend: '后端',
+        database: '数据库',
+        api: 'API',
+        deployment: '部署',
+        documentation: '文档'
+      }
       return labels[module] || module
     }
 
     const getTypeLabel = (type) => {
-      const labels = { ui: '界面', code: '代码' }
+      const labels = { 
+        ui: '界面优化', 
+        code: '代码修改',
+        performance: '性能优化',
+        feature: '功能新增',
+        architecture: '架构调整',
+        security: '安全修复'
+      }
       return labels[type] || type
     }
 
@@ -606,6 +656,21 @@ export default {
 .filter-form .el-input {
   width: 200px;
   min-width: 160px;
+}
+
+/* 支持自定义输入的选择框样式 */
+.filter-form .el-select.is-filterable .el-input .el-input__wrapper {
+  border-color: #dcdfe6;
+  transition: border-color 0.2s ease;
+}
+
+.filter-form .el-select.is-filterable:hover .el-input .el-input__wrapper {
+  border-color: #c0c4cc;
+}
+
+.filter-form .el-select.is-filterable.is-focus .el-input .el-input__wrapper {
+  border-color: #409eff;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
 }
 
 /* 排序选择框需要更宽一点 */
