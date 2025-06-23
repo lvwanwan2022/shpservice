@@ -224,6 +224,23 @@ except ImportError:
 except Exception as e:
     logger.warning(f"⚠️ 登录认证路由注册失败: {str(e)}")
 
+# 用户反馈路由 - 独立模块，方便移植
+try:
+    from feedback.feedback_routes import feedback_bp
+    app.register_blueprint(feedback_bp)
+    logger.info("✅ 用户反馈路由注册成功")
+    
+    # 确保反馈系统上传目录存在
+    feedback_upload_dir = os.path.join(os.path.dirname(__file__), 'feedback_uploads')
+    if not os.path.exists(feedback_upload_dir):
+        os.makedirs(feedback_upload_dir)
+        logger.info(f"✅ 反馈上传目录创建成功: {feedback_upload_dir}")
+        
+except ImportError:
+    logger.info("用户反馈路由不存在，跳过")
+except Exception as e:
+    logger.warning(f"⚠️ 用户反馈路由注册失败: {str(e)}")
+
 # 导入Martin服务
 try:
     from services.martin_service import MartinService

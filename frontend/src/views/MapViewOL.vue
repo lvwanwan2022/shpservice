@@ -222,6 +222,18 @@
             placeholder="请输入场景描述（可选）" 
           />
         </el-form-item>
+        <el-form-item label="访问权限">
+          <el-switch 
+            v-model="sceneForm.is_public" 
+            active-text="公开"
+            inactive-text="私有"
+            :active-value="true"
+            :inactive-value="false"
+          />
+          <div style="font-size: 12px; color: #909399; margin-top: 5px;">
+            公开场景所有用户可见，私有场景仅创建者可见
+          </div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="sceneDialogVisible = false">取消</el-button>
@@ -257,7 +269,8 @@ export default {
     const editingScene = ref(null)
     const sceneForm = reactive({
       name: '',
-      description: ''
+      description: '',
+      is_public: true
     })
     
     // 响应式数据
@@ -310,6 +323,7 @@ export default {
       editingScene.value = null
       sceneForm.name = ''
       sceneForm.description = ''
+      sceneForm.is_public = true
       sceneDialogVisible.value = true
     }
     
@@ -318,6 +332,7 @@ export default {
       editingScene.value = scene
       sceneForm.name = scene.name
       sceneForm.description = scene.description || ''
+      sceneForm.is_public = scene.is_public
       sceneDialogVisible.value = true
     }
     
@@ -333,9 +348,10 @@ export default {
           await gisApi.updateScene(editingScene.value.id, sceneForm)
           ElMessage.success('场景更新成功')
         } else {
-          //const response = await gisApi.createScene(sceneForm)
+          const response = await gisApi.createScene(sceneForm)
           ElMessage.success('场景创建成功')
-          //currentSceneId.value = response.scene.id
+          // 如果需要，可以自动选择新创建的场景
+          // selectedSceneId.value = response.data.id
         }
         
         sceneDialogVisible.value = false

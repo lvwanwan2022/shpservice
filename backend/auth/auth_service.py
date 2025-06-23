@@ -59,9 +59,9 @@ class AuthService:
             if result:
                 user = result[0]
                 if user['password'] == self._hash_password(password):
-                    # 返回用户信息（去掉密码）
+                    # 🔥 返回用户信息（ID作为字符串，防止JavaScript精度丢失）
                     user_info = {
-                        'id': user['id'],
+                        'id': str(user['id']),  # 🔥 强制转换为字符串
                         'username': user['username'],
                         'email': user['email'],
                         'name': user['username'],  # 使用用户名作为显示名称
@@ -145,7 +145,7 @@ class AuthService:
             if result:
                 user = result[0]
                 user_info = {
-                    'id': user['id'],
+                    'id': str(user['id']),  # 🔥 强制转换为字符串
                     'username': user['username'],
                     'email': user['email'],
                     'name': user['username'],

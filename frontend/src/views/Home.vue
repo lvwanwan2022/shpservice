@@ -39,6 +39,13 @@
         <div class="card-title">场景管理</div>
         <div class="card-desc">创建和管理地图场景配置</div>
       </el-card>
+      <el-card class="home-card" @click="goToFeedback">
+        <div class="card-icon">
+          <i class="el-icon-chat-line-square"></i>
+        </div>
+        <div class="card-title">用户反馈</div>
+        <div class="card-desc">提交反馈建议，参与产品改进</div>
+      </el-card>
       
       
     </div>
@@ -60,6 +67,9 @@ export default {
     },
     goToScene() {
       this.$router.push('/scene')
+    },
+    goToFeedback() {
+      this.$router.push('/feedback')
     }
   }
 }

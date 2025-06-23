@@ -1405,6 +1405,33 @@ export default {
   border-radius: 4px;
 }
 
+/* 搜索表单控件宽度设置 */
+.search-form .el-form-item {
+  margin-bottom: 0;
+  margin-right: 20px;
+}
+
+.search-form .el-form-item:last-child {
+  margin-right: 0;
+}
+
+.search-form .el-form-item .el-form-item__label {
+  font-weight: 500;
+  color: #606266;
+  width: auto !important;
+  margin-right: 8px;
+}
+
+.search-form .el-select {
+  width: 160px;
+  min-width: 140px;
+}
+
+/* 服务类型选择框稍微宽一点 */
+.search-form .el-form-item:first-child .el-select {
+  width: 180px;
+}
+
 .service-status {
   display: flex;
   flex-direction: column;
@@ -1479,5 +1506,27 @@ export default {
 .dialog-loading .el-icon {
   margin-bottom: 10px;
   font-size: 24px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .search-form {
+    padding: 12px;
+  }
+  
+  .search-form .el-form-item {
+    margin-right: 0;
+    margin-bottom: 12px;
+    width: 100%;
+  }
+  
+  .search-form .el-form-item:last-child {
+    margin-bottom: 0;
+  }
+  
+  .search-form .el-select {
+    width: 100% !important;
+    max-width: 300px;
+  }
 }
 </style>

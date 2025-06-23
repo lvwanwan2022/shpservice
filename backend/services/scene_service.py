@@ -70,12 +70,14 @@ class SceneService:
         """获取场景列表
         
         Args:
-            user_id: 用户ID（可选，仅查询特定用户的场景）
+            user_id: 用户ID（可选，优先显示该用户的场景，同时包含其他公开场景）
             public_only: 是否只查询公共场景
             
         Returns:
             场景列表
         """
+        print(f"[DEBUG] get_scenes called with user_id={user_id}, public_only={public_only}")
+        
         sql = """
         SELECT s.*, u.username as creator,
                (SELECT COUNT(*) FROM scene_layers sl WHERE sl.scene_id = s.id) as layer_count
@@ -86,18 +88,40 @@ class SceneService:
         
         params = {}
         
-        if user_id:
-            sql += " AND (s.user_id = %(user_id)s"
-            if public_only:
-                sql += " OR s.is_public = true"
-            sql += ")"
-            params['user_id'] = user_id
-        elif public_only:
+        if public_only:
+            # 只获取公开场景
             sql += " AND s.is_public = true"
+            print("[DEBUG] 查询条件: 只获取公开场景")
+        elif user_id:
+            # 获取指定用户的所有场景（包括私有的）+ 其他用户的公开场景
+            sql += " AND (s.user_id = %(user_id)s OR s.is_public = true)"
+            params['user_id'] = user_id
+            print(f"[DEBUG] 查询条件: 用户{user_id}的场景 + 其他公开场景")
+        # 如果既没有user_id也没有public_only，则返回所有公开场景
+        else:
+            sql += " AND s.is_public = true"
+            print("[DEBUG] 查询条件: 所有公开场景")
         
-        sql += " ORDER BY s.updated_at DESC"
+        # 排序：如果指定了用户ID，则该用户的场景排在前面
+        if user_id and not public_only:
+            sql += """
+            ORDER BY 
+                CASE WHEN s.user_id = %(user_id)s THEN 0 ELSE 1 END,
+                s.updated_at DESC
+            """
+            print(f"[DEBUG] 排序: 用户{user_id}的场景优先")
+        else:
+            sql += " ORDER BY s.updated_at DESC"
+            print("[DEBUG] 排序: 按更新时间降序")
+        
+        print(f"[DEBUG] 执行SQL: {sql}")
+        print(f"[DEBUG] 参数: {params}")
         
         scenes = execute_query(sql, params)
+        
+        print(f"[DEBUG] 查询结果数量: {len(scenes)}")
+        for scene in scenes:
+            print(f"[DEBUG] 场景: ID={scene.get('id')}, 名称={scene.get('name')}, 公开={scene.get('is_public')}, 创建者={scene.get('creator')}")
         
         # 🔥 关键修复：将所有ID字段转换为字符串，避免JavaScript大整数精度丢失
         for scene in scenes:

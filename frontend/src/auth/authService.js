@@ -67,7 +67,9 @@ class AuthService {
       
       if (response.data.code === 200) {
         const { token, user } = response.data.data
-        this.setUser(user)  // 先设置用户信息
+        // 🔥 确保用户信息中的ID字段为字符串
+        const safeUser = this._ensureIdAsString(user)
+        this.setUser(safeUser)  // 先设置用户信息
         this.setToken(token)  // 后设置token，这会触发监听器
         return { success: true, data: response.data }
       } else {
@@ -142,8 +144,10 @@ class AuthService {
     try {
       const response = await this.http.get('/auth/userinfo')
       if (response.data.code === 200) {
-        this.setUser(response.data.data)
-        return response.data.data
+        // 🔥 确保ID字段为字符串
+        const userData = this._ensureIdAsString(response.data.data)
+        this.setUser(userData)
+        return userData
       }
     } catch (error) {
       console.error('获取用户信息失败:', error)
@@ -181,8 +185,18 @@ class AuthService {
    * @param {object} user 用户信息
    */
   setUser(user) {
-    localStorage.setItem(this.userKey, JSON.stringify(user))
-    console.log('设置用户信息:', user)
+    // 🔥 深度拷贝用户信息，确保ID字段为字符串
+    const safeUser = this._ensureIdAsString(user)
+    const userString = JSON.stringify(safeUser, (key, value) => {
+      // 特殊处理ID字段，确保它们保持为字符串
+      if (key === 'id' || key.endsWith('_id')) {
+        return String(value)
+      }
+      return value
+    })
+    console.log('lv设置用户信息:', userString)
+    localStorage.setItem(this.userKey, userString)
+    console.log('设置用户信息:', safeUser)
   }
   
   /**
@@ -190,8 +204,35 @@ class AuthService {
    * @returns {object|null} 用户信息
    */
   getUser() {
-    const user = localStorage.getItem(this.userKey)
-    return user ? JSON.parse(user) : null
+    const userStr = localStorage.getItem(this.userKey)
+    if (!userStr) return null
+    
+    try {
+      const user = JSON.parse(userStr)
+      // 🔥 确保所有ID字段为字符串
+      return this._ensureIdAsString(user)
+    } catch (error) {
+      console.error('解析用户信息失败:', error)
+      return null
+    }
+  }
+  
+  /**
+   * 确保对象中的ID字段为字符串
+   * @private
+   * @param {object} obj 需要处理的对象
+   * @returns {object} 处理后的对象
+   */
+  _ensureIdAsString(obj) {
+    if (!obj || typeof obj !== 'object') return obj
+    
+    const result = { ...obj }
+    for (const key in result) {
+      if (key === 'id' || key.endsWith('_id')) {
+        result[key] = String(result[key])
+      }
+    }
+    return result
   }
   
   /**

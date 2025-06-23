@@ -50,6 +50,12 @@ const routes = [
     path: '/scene',
     name: 'Scene',
     component: () => import('@/views/SceneView.vue')
+  },
+  {
+    path: '/feedback',
+    name: 'Feedback',
+    component: () => import('@/feedback/views/FeedbackView.vue'),
+    meta: { requiresAuth: true } // 反馈系统需要登录
   }
   
 ]

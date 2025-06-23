@@ -8,6 +8,48 @@ from auth.auth_service import require_auth, get_current_user  # 🔥 添加认�
 scene_bp = Blueprint('scene', __name__)
 scene_service = SceneService()
 
+def verify_scene_permission(scene_id, operation="操作"):
+    """
+    验证用户对场景的操作权限
+    
+    Args:
+        scene_id: 场景ID
+        operation: 操作类型（用于日志记录）
+        
+    Returns:
+        tuple: (success, scene, error_response)
+        - success: 是否有权限
+        - scene: 场景信息（如果存在）
+        - error_response: 错误响应（如果有错误）
+    """
+    try:
+        # 检查场景是否存在
+        scene = scene_service.get_scene_by_id(scene_id)
+        if not scene:
+            return False, None, (jsonify({'error': '场景不存在'}), 404)
+        
+        # 获取当前用户
+        current_user = get_current_user()
+        from models.db import execute_query
+        user_query = execute_query("SELECT id FROM users WHERE username = %s", (current_user.get('username'),))
+        if not user_query:
+            return False, None, (jsonify({'error': '用户不存在'}), 400)
+        
+        current_user_id = user_query[0]['id']
+        scene_user_id = int(scene['user_id']) if isinstance(scene['user_id'], str) else scene['user_id']
+        
+        current_app.logger.info(f"{operation}权限检查: 当前用户ID={current_user_id}, 场景创建者ID={scene_user_id}")
+        
+        if current_user_id != scene_user_id:
+            current_app.logger.warning(f"用户 {current_user.get('username')} 尝试{operation}不属于自己的场景 {scene_id}")
+            return False, scene, (jsonify({'error': f'权限不足：只有场景创建者可以{operation}场景'}), 403)
+        
+        return True, scene, None
+        
+    except Exception as e:
+        current_app.logger.error(f"权限验证错误: {str(e)}")
+        return False, None, (jsonify({'error': '服务器内部错误'}), 500)
+
 @scene_bp.route('', methods=['POST'])
 @require_auth  # 🔥 添加认证装饰器
 def create_scene():
@@ -108,16 +150,18 @@ def update_scene(scene_id):
     responses:
       200:
         description: 场景更新成功
+      403:
+        description: 权限不足
       404:
         description: 场景不存在
     """
     try:
         data = request.json
         
-        # 检查场景是否存在
-        scene = scene_service.get_scene_by_id(scene_id)
-        if not scene:
-            return jsonify({'error': '场景不存在'}), 404
+        # 🔥 使用统一权限验证函数
+        has_permission, scene, error_response = verify_scene_permission(scene_id, "编辑")
+        if not has_permission:
+            return error_response
         
         # 准备场景数据
         scene_data = {
@@ -153,14 +197,16 @@ def delete_scene(scene_id):
     responses:
       200:
         description: 场景删除成功
+      403:
+        description: 权限不足
       404:
         description: 场景不存在
     """
     try:
-        # 检查场景是否存在
-        scene = scene_service.get_scene_by_id(scene_id)
-        if not scene:
-            return jsonify({'error': '场景不存在'}), 404
+        # 🔥 使用统一权限验证函数
+        has_permission, scene, error_response = verify_scene_permission(scene_id, "删除")
+        if not has_permission:
+            return error_response
         
         # 删除场景
         scene_service.delete_scene(scene_id)
@@ -185,13 +231,19 @@ def list_scenes():
         in: query
         type: integer
         required: false
-        description: 用户ID(不传则获取所有公开场景)
+        description: 用户ID(指定时优先显示该用户场景，同时包含其他公开场景)
       - name: public_only
         in: query
         type: boolean
         required: false
         default: false
         description: 是否只获取公开场景
+      - name: include_public
+        in: query
+        type: boolean
+        required: false
+        default: true
+        description: 是否包含其他用户的公开场景
     responses:
       200:
         description: 场景列表
@@ -204,14 +256,21 @@ def list_scenes():
         # 获取查询参数
         user_id = request.args.get('user_id')
         public_only = request.args.get('public_only', 'false').lower() == 'true'
+        include_public = request.args.get('include_public', 'true').lower() == 'true'
         
-        # 🔥 如果没有指定user_id，使用当前登录用户的ID
-        if not user_id and current_user:
+        # 🔥 获取当前登录用户的ID（用于优先排序）
+        current_user_id = None
+        if current_user:
             from models.db import execute_query
             user_query = execute_query("SELECT id FROM users WHERE username = %s", (current_user.get('username'),))
             if user_query:
-                user_id = user_query[0]['id']
-                current_app.logger.info(f"使用当前用户ID: {user_id}")
+                current_user_id = user_query[0]['id']
+                current_app.logger.info(f"当前登录用户ID: {current_user_id}")
+        
+        # 如果没有指定user_id，且不是只获取公开场景，则使用当前用户ID
+        if not user_id and not public_only and current_user_id:
+            user_id = current_user_id
+            current_app.logger.info(f"使用当前用户ID: {user_id}")
         
         if user_id:
             user_id = int(user_id)
@@ -341,6 +400,8 @@ def add_layer(scene_id):
         description: 图层添加成功
       400:
         description: 参数错误
+      403:
+        description: 权限不足
       404:
         description: 场景不存在
     """
@@ -356,12 +417,10 @@ def add_layer(scene_id):
             current_app.logger.error("请求数据为空")
             return jsonify({'error': '请求数据不能为空'}), 400
         
-        # 检查场景是否存在
-        current_app.logger.info(f"检查场景是否存在: scene_id={scene_id}")
-        scene = scene_service.get_scene_by_id(scene_id)
-        if not scene:
-            current_app.logger.error(f"场景不存在: scene_id={scene_id}")
-            return jsonify({'error': '场景不存在'}), 404
+        # 🔥 使用统一权限验证函数
+        has_permission, scene, error_response = verify_scene_permission(scene_id, "添加图层")
+        if not has_permission:
+            return error_response
         
         current_app.logger.info(f"场景存在: {scene['name']}")
         
@@ -537,7 +596,7 @@ def update_layer(scene_id, layer_id):
         in: path
         type: string
         required: true
-        description: 图层ID（可以是正数或负数）
+        description: 图层ID
       - name: body
         in: body
         required: true
@@ -568,6 +627,8 @@ def update_layer(scene_id, layer_id):
     responses:
       200:
         description: 图层更新成功
+      403:
+        description: 权限不足
       404:
         description: 场景或图层不存在
     """
@@ -580,10 +641,10 @@ def update_layer(scene_id, layer_id):
         
         data = request.json
         
-        # 检查场景是否存在
-        scene = scene_service.get_scene_by_id(scene_id)
-        if not scene:
-            return jsonify({'error': '场景不存在'}), 404
+        # 🔥 使用统一权限验证函数
+        has_permission, scene, error_response = verify_scene_permission(scene_id, "更新图层")
+        if not has_permission:
+            return error_response
         
         # 检查场景图层是否存在
         from models.db import execute_query
@@ -637,6 +698,8 @@ def delete_layer(scene_id, layer_id):
     responses:
       200:
         description: 图层删除成功
+      403:
+        description: 权限不足
       404:
         description: 场景或图层不存在
     """
@@ -649,11 +712,10 @@ def delete_layer(scene_id, layer_id):
         
         current_app.logger.info(f"删除图层请求: scene_id={scene_id}, layer_id={layer_id}")
         
-        # 检查场景是否存在
-        scene = scene_service.get_scene_by_id(scene_id)
-        if not scene:
-            current_app.logger.error(f"场景不存在: scene_id={scene_id}")
-            return jsonify({'error': '场景不存在'}), 404
+        # 🔥 使用统一权限验证函数
+        has_permission, scene, error_response = verify_scene_permission(scene_id, "删除图层")
+        if not has_permission:
+            return error_response
         
         # 直接检查scene_layers表中是否存在该图层
         from models.db import execute_query

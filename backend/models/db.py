@@ -617,6 +617,102 @@ def init_database():
         )
         """
         
+        # ===== 用户反馈系统表 =====
+        # 创建反馈表
+        create_feedback_items_table = """
+        CREATE TABLE IF NOT EXISTS feedback_items (
+            id BIGINT PRIMARY KEY,
+            title VARCHAR(200) NOT NULL,
+            description TEXT,
+            category VARCHAR(50) NOT NULL, -- 'feature' 或 'bug'
+            module VARCHAR(50) NOT NULL,   -- 'frontend' 或 'backend'
+            type VARCHAR(50) NOT NULL,     -- 'ui' 或 'code'
+            priority VARCHAR(20) DEFAULT 'medium', -- 'low', 'medium', 'high', 'urgent'
+            status VARCHAR(20) DEFAULT 'open',     -- 'open', 'in_progress', 'resolved', 'closed'
+            
+            -- 用户信息（可以根据实际系统调整）
+            user_id VARCHAR(100),          -- 支持字符串ID，兼容雪花算法
+            username VARCHAR(100),
+            user_email VARCHAR(200),
+            
+            -- 统计信息
+            support_count INTEGER DEFAULT 0,
+            oppose_count INTEGER DEFAULT 0,
+            comment_count INTEGER DEFAULT 0,
+            view_count INTEGER DEFAULT 0,
+            
+            -- 附件信息
+            has_attachments BOOLEAN DEFAULT FALSE,
+            
+            -- 时间戳
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+        
+        # 创建反馈附件表
+        create_feedback_attachments_table = """
+        CREATE TABLE IF NOT EXISTS feedback_attachments (
+            id BIGINT PRIMARY KEY,
+            feedback_id BIGINT NOT NULL,
+            filename VARCHAR(255) NOT NULL,
+            original_name VARCHAR(255) NOT NULL,
+            file_type VARCHAR(50),          -- 'image', 'document', 'archive'
+            file_size BIGINT,
+            file_path VARCHAR(500),
+            mime_type VARCHAR(100),
+            
+            -- 图片特殊信息
+            is_screenshot BOOLEAN DEFAULT FALSE,
+            image_width INTEGER,
+            image_height INTEGER,
+            
+            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            
+            FOREIGN KEY (feedback_id) REFERENCES feedback_items(id) ON DELETE CASCADE
+        )
+        """
+        
+        # 创建用户投票表
+        create_feedback_votes_table = """
+        CREATE TABLE IF NOT EXISTS feedback_votes (
+            id BIGINT PRIMARY KEY,
+            feedback_id BIGINT NOT NULL,
+            user_id VARCHAR(100) NOT NULL,
+            username VARCHAR(100),
+            vote_type VARCHAR(10) NOT NULL,  -- 'support' 或 'oppose'
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            
+            FOREIGN KEY (feedback_id) REFERENCES feedback_items(id) ON DELETE CASCADE,
+            UNIQUE (feedback_id, user_id)
+        )
+        """
+        
+        # 创建评论表
+        create_feedback_comments_table = """
+        CREATE TABLE IF NOT EXISTS feedback_comments (
+            id BIGINT PRIMARY KEY,
+            feedback_id BIGINT NOT NULL,
+            parent_id BIGINT,               -- 支持回复评论
+            
+            content TEXT NOT NULL,
+            
+            -- 用户信息
+            user_id VARCHAR(100) NOT NULL,
+            username VARCHAR(100),
+            user_email VARCHAR(200),
+            
+            -- 状态
+            is_deleted BOOLEAN DEFAULT FALSE,
+            
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            
+            FOREIGN KEY (feedback_id) REFERENCES feedback_items(id) ON DELETE CASCADE,
+            FOREIGN KEY (parent_id) REFERENCES feedback_comments(id) ON DELETE CASCADE
+        )
+        """
+        
         # 创建矢量Martin服务表的索引
         create_vector_martin_services_indexes = [
             "CREATE INDEX IF NOT EXISTS idx_vector_martin_services_file_id ON vector_martin_services(file_id)",
@@ -633,6 +729,37 @@ def init_database():
             "CREATE INDEX IF NOT EXISTS idx_geojson_files_status ON geojson_files(status)",
             "CREATE INDEX IF NOT EXISTS idx_geojson_files_user_id ON geojson_files(user_id)",
             "CREATE INDEX IF NOT EXISTS idx_geojson_files_upload_date ON geojson_files(upload_date)"
+        ]
+        
+        # 创建反馈系统的索引
+        create_feedback_items_indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_feedback_items_category ON feedback_items(category)",
+            "CREATE INDEX IF NOT EXISTS idx_feedback_items_module ON feedback_items(module)",
+            "CREATE INDEX IF NOT EXISTS idx_feedback_items_type ON feedback_items(type)",
+            "CREATE INDEX IF NOT EXISTS idx_feedback_items_status ON feedback_items(status)",
+            "CREATE INDEX IF NOT EXISTS idx_feedback_items_user_id ON feedback_items(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_feedback_items_created_at ON feedback_items(created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_feedback_items_support_count ON feedback_items(support_count)",
+            "CREATE INDEX IF NOT EXISTS idx_feedback_items_oppose_count ON feedback_items(oppose_count)",
+            "CREATE INDEX IF NOT EXISTS idx_feedback_items_comment_count ON feedback_items(comment_count)"
+        ]
+        
+        create_feedback_attachments_indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_feedback_attachments_feedback_id ON feedback_attachments(feedback_id)",
+            "CREATE INDEX IF NOT EXISTS idx_feedback_attachments_file_type ON feedback_attachments(file_type)"
+        ]
+        
+        create_feedback_votes_indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_feedback_votes_feedback_id ON feedback_votes(feedback_id)",
+            "CREATE INDEX IF NOT EXISTS idx_feedback_votes_user_id ON feedback_votes(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_feedback_votes_vote_type ON feedback_votes(vote_type)"
+        ]
+        
+        create_feedback_comments_indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_feedback_comments_feedback_id ON feedback_comments(feedback_id)",
+            "CREATE INDEX IF NOT EXISTS idx_feedback_comments_parent_id ON feedback_comments(parent_id)",
+            "CREATE INDEX IF NOT EXISTS idx_feedback_comments_user_id ON feedback_comments(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_feedback_comments_created_at ON feedback_comments(created_at)"
         ]
         
         # 创建场景图层表的索引
@@ -670,7 +797,12 @@ def init_database():
             create_scenes_table,
             create_scene_layers_table,
             create_vector_martin_services_table,
-            create_geojson_files_table
+            create_geojson_files_table,
+            # 反馈系统表
+            create_feedback_items_table,
+            create_feedback_attachments_table,
+            create_feedback_votes_table,
+            create_feedback_comments_table
         ]
         
         for table_sql in tables:
@@ -690,11 +822,97 @@ def init_database():
             create_scenes_indexes +
             create_vector_martin_services_indexes +
             create_scene_layers_indexes +
-            create_geojson_files_indexes
+            create_geojson_files_indexes +
+            # 反馈系统索引
+            create_feedback_items_indexes +
+            create_feedback_attachments_indexes +
+            create_feedback_votes_indexes +
+            create_feedback_comments_indexes
         )
         
         for index_sql in all_indexes:
             execute_query(index_sql, fetch=False)
+        
+        # 创建反馈系统的触发器函数
+        try:
+            # 触发器函数：更新投票统计
+            create_update_vote_counts_function = """
+            CREATE OR REPLACE FUNCTION update_vote_counts() RETURNS TRIGGER AS $$
+            BEGIN
+                UPDATE feedback_items 
+                SET 
+                    support_count = (SELECT COUNT(*) FROM feedback_votes WHERE feedback_id = COALESCE(NEW.feedback_id, OLD.feedback_id) AND vote_type = 'support'),
+                    oppose_count = (SELECT COUNT(*) FROM feedback_votes WHERE feedback_id = COALESCE(NEW.feedback_id, OLD.feedback_id) AND vote_type = 'oppose'),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = COALESCE(NEW.feedback_id, OLD.feedback_id);
+                RETURN COALESCE(NEW, OLD);
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+            execute_query(create_update_vote_counts_function, fetch=False)
+            
+            # 触发器函数：更新评论统计
+            create_update_comment_count_function = """
+            CREATE OR REPLACE FUNCTION update_comment_count() RETURNS TRIGGER AS $$
+            BEGIN
+                UPDATE feedback_items 
+                SET 
+                    comment_count = (SELECT COUNT(*) FROM feedback_comments WHERE feedback_id = COALESCE(NEW.feedback_id, OLD.feedback_id) AND is_deleted = FALSE),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = COALESCE(NEW.feedback_id, OLD.feedback_id);
+                RETURN COALESCE(NEW, OLD);
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+            execute_query(create_update_comment_count_function, fetch=False)
+            
+            # 触发器函数：更新附件标记
+            create_update_attachments_flag_function = """
+            CREATE OR REPLACE FUNCTION update_attachments_flag() RETURNS TRIGGER AS $$
+            BEGIN
+                UPDATE feedback_items 
+                SET 
+                    has_attachments = (SELECT COUNT(*) > 0 FROM feedback_attachments WHERE feedback_id = COALESCE(NEW.feedback_id, OLD.feedback_id)),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = COALESCE(NEW.feedback_id, OLD.feedback_id);
+                RETURN COALESCE(NEW, OLD);
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+            execute_query(create_update_attachments_flag_function, fetch=False)
+            
+            # 创建触发器
+            feedback_triggers = [
+                # 投票统计触发器
+                "DROP TRIGGER IF EXISTS trigger_update_vote_counts_insert ON feedback_votes",
+                "CREATE TRIGGER trigger_update_vote_counts_insert AFTER INSERT ON feedback_votes FOR EACH ROW EXECUTE FUNCTION update_vote_counts()",
+                "DROP TRIGGER IF EXISTS trigger_update_vote_counts_update ON feedback_votes",
+                "CREATE TRIGGER trigger_update_vote_counts_update AFTER UPDATE ON feedback_votes FOR EACH ROW EXECUTE FUNCTION update_vote_counts()",
+                "DROP TRIGGER IF EXISTS trigger_update_vote_counts_delete ON feedback_votes",
+                "CREATE TRIGGER trigger_update_vote_counts_delete AFTER DELETE ON feedback_votes FOR EACH ROW EXECUTE FUNCTION update_vote_counts()",
+                
+                # 评论统计触发器
+                "DROP TRIGGER IF EXISTS trigger_update_comment_count_insert ON feedback_comments",
+                "CREATE TRIGGER trigger_update_comment_count_insert AFTER INSERT ON feedback_comments FOR EACH ROW EXECUTE FUNCTION update_comment_count()",
+                "DROP TRIGGER IF EXISTS trigger_update_comment_count_update ON feedback_comments",
+                "CREATE TRIGGER trigger_update_comment_count_update AFTER UPDATE ON feedback_comments FOR EACH ROW EXECUTE FUNCTION update_comment_count()",
+                "DROP TRIGGER IF EXISTS trigger_update_comment_count_delete ON feedback_comments",
+                "CREATE TRIGGER trigger_update_comment_count_delete AFTER DELETE ON feedback_comments FOR EACH ROW EXECUTE FUNCTION update_comment_count()",
+                
+                # 附件统计触发器
+                "DROP TRIGGER IF EXISTS trigger_update_attachments_flag_insert ON feedback_attachments",
+                "CREATE TRIGGER trigger_update_attachments_flag_insert AFTER INSERT ON feedback_attachments FOR EACH ROW EXECUTE FUNCTION update_attachments_flag()",
+                "DROP TRIGGER IF EXISTS trigger_update_attachments_flag_delete ON feedback_attachments",
+                "CREATE TRIGGER trigger_update_attachments_flag_delete AFTER DELETE ON feedback_attachments FOR EACH ROW EXECUTE FUNCTION update_attachments_flag()"
+            ]
+            
+            for trigger_sql in feedback_triggers:
+                execute_query(trigger_sql, fetch=False)
+            
+            print("✅ 反馈系统触发器创建成功")
+            
+        except Exception as e:
+            print(f"⚠️ 反馈系统触发器创建失败: {str(e)}")
         
         print("数据库表创建成功")
         

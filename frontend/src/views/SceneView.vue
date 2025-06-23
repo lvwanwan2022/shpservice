@@ -2,7 +2,11 @@
   <div class="scene-view">
     <div class="scene-header">
       <h1>场景管理</h1>
-      <div class="header-actions">
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <!-- 🔥 临时测试按钮 -->
+        <el-button size="small" type="warning" @click="clearUserCache">清除缓存</el-button>
+        <el-button size="small" type="info" @click="testPermissionCheck">测试权限</el-button>
+        
         <el-button type="primary" @click="showCreateDialog = true">
           <el-icon><Plus /></el-icon>
           创建场景
@@ -59,7 +63,9 @@
               <el-button 
                 size="small" 
                 type="primary" 
+                :disabled="!canEditScene(scene)"
                 @click.stop="editScene(scene)"
+                :title="canEditScene(scene) ? '编辑场景' : '只有创建者可以编辑'"
               >
                 编辑
               </el-button>
@@ -73,7 +79,9 @@
               <el-button 
                 size="small" 
                 type="danger" 
+                :disabled="!canDeleteScene(scene)"
                 @click.stop="deleteScene(scene)"
+                :title="canDeleteScene(scene) ? '删除场景' : '只有创建者可以删除'"
               >
                 删除
               </el-button>
@@ -104,8 +112,9 @@
           </div>
 
           <div class="scene-card-footer">
-            <el-tag v-if="scene.is_default" type="warning" size="small">默认场景</el-tag>
-            <el-tag v-if="scene.layer_count > 0" type="success" size="small">
+            <el-tag v-if="scene.is_public" type="success" size="small">公开</el-tag>
+            <el-tag v-else type="warning" size="small">私有</el-tag>
+            <el-tag v-if="scene.layer_count > 0" type="info" size="small">
               {{ scene.layer_count }} 个图层
             </el-tag>
             <el-tag v-else type="info" size="small">空场景</el-tag>
@@ -141,8 +150,19 @@
             placeholder="请输入场景描述" 
           />
         </el-form-item>
-        <el-form-item label="设为默认">
-          <el-switch v-model="sceneForm.is_default" />
+        <el-form-item label="访问权限">
+          <el-switch 
+            v-model="sceneForm.is_public" 
+            active-text="公开"
+            inactive-text="私有"
+            :active-value="true"
+            :inactive-value="false"
+          />
+          <div class="form-hint">
+            <span style="font-size: 12px; color: #909399;">
+              公开场景所有用户可见，私有场景仅创建者可见
+            </span>
+          </div>
         </el-form-item>
       </el-form>
       
@@ -188,7 +208,12 @@
             </el-table-column>
             <el-table-column label="操作" width="150">
               <template #default="scope">
-                <el-button size="small" @click="removeLayerFromScene(scope.row)">
+                <el-button 
+                  size="small" 
+                  :disabled="!canEditScene(currentScene)"
+                  @click="removeLayerFromScene(scope.row)"
+                  :title="canEditScene(currentScene) ? '移除图层' : '只有创建者可以移除图层'"
+                >
                   移除
                 </el-button>
               </template>
@@ -213,6 +238,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
 import gisApi from '@/api/gis'
+import authService from '@/auth/authService'
 
 export default {
   name: 'SceneView',
@@ -233,6 +259,9 @@ export default {
     const sceneLayers = ref([])
     const sceneFormRef = ref(null)
     
+    // 获取当前用户信息
+    const currentUser = ref(null)
+    
     // 搜索表单
     const searchForm = reactive({
       name: '',
@@ -244,7 +273,7 @@ export default {
       id: null,
       name: '',
       description: '',
-      is_default: false
+      is_public: true
     })
     
     // 表单验证规则
@@ -278,27 +307,84 @@ export default {
       return result
     })
     
+    // 检查用户是否有场景操作权限
+    const canEditScene = (scene) => {
+      if (!currentUser.value) {
+        console.log('权限检查失败: 用户未登录')
+        return false
+      }
+      
+      if (!scene) {
+        console.log('权限检查失败: 场景信息为空')
+        return false
+      }
+      
+      // 转换为字符串进行比较
+      const currentUserIdStr = String(currentUser.value.id)
+      const sceneUserIdStr = String(scene.user_id)
+      
+      const hasPermission = currentUserIdStr === sceneUserIdStr
+      console.log(`权限检查: 用户ID=${currentUserIdStr}, 场景创建者ID=${sceneUserIdStr}, 结果=${hasPermission ? '有权限' : '无权限'}`)
+      
+      return hasPermission
+    }
+    
+    const canDeleteScene = (scene) => {
+      return canEditScene(scene)
+    }
+    
+    // 🔥 临时方法：清除用户信息缓存
+    const clearUserCache = () => {
+      console.log('清除用户信息缓存...')
+      localStorage.removeItem('user_info')
+      localStorage.removeItem('auth_token')
+      ElMessage.success('缓存已清除，请重新登录')
+      window.location.href = '/login'
+    }
+    
+    // 🔥 临时方法：测试权限检查
+    const testPermissionCheck = () => {
+      console.log('=== 权限检查测试 ===')
+      console.log('当前用户:', currentUser.value)
+      console.log('场景列表:', scenes.value.map(s => ({
+        id: s.id,
+        name: s.name,
+        user_id: s.user_id,
+        creator: s.creator
+      })))
+      
+      if (scenes.value.length > 0) {
+        const firstScene = scenes.value[0]
+        console.log('测试第一个场景的权限:', canEditScene(firstScene))
+      }
+    }
+    
     // 方法
     const loadScenes = async () => {
       try {
-        
+        console.log('开始加载场景列表...')
         
         const response = await gisApi.getScenes()
-       
+        
+        console.log('API响应:', response)
         
         if (response && response.data.scenes) {
           scenes.value = response.data.scenes
-
+          console.log('加载的场景数量:', scenes.value.length)
+          console.log('场景详情:', scenes.value.map(s => ({
+            id: s.id,
+            name: s.name,
+            is_public: s.is_public,
+            creator: s.creator,
+            user_id: s.user_id
+          })))
         } else {
           console.warn('API响应格式异常，使用空数组')
           scenes.value = []
         }
         
-        
-        
       } catch (error) {
-        
-        
+        console.error('加载场景列表失败:', error)
         scenes.value = []
         ElMessage.error('加载场景列表失败: ' + (error.response?.data?.error || error.message))
       }
@@ -322,15 +408,21 @@ export default {
       sceneForm.id = null
       sceneForm.name = ''
       sceneForm.description = ''
-      sceneForm.is_default = false
+      sceneForm.is_public = true
     }
     
     const editScene = (scene) => {
+      // 权限检查
+      if (!canEditScene(scene)) {
+        ElMessage.warning('只有场景创建者可以编辑场景')
+        return
+      }
+      
       dialogMode.value = 'edit'
       sceneForm.id = scene.id
       sceneForm.name = scene.name
       sceneForm.description = scene.description || ''
-      sceneForm.is_default = scene.is_default || false
+      sceneForm.is_public = scene.is_public || false
       showCreateDialog.value = true
     }
     
@@ -340,6 +432,9 @@ export default {
       try {
         await sceneFormRef.value.validate()
         saving.value = true
+        
+        // 调试日志
+        console.log('保存场景数据:', sceneForm)
         
         if (dialogMode.value === 'create') {
           await gisApi.createScene(sceneForm)
@@ -362,6 +457,12 @@ export default {
     }
     
     const deleteScene = async (scene) => {
+      // 权限检查
+      if (!canDeleteScene(scene)) {
+        ElMessage.warning('只有场景创建者可以删除场景')
+        return
+      }
+      
       try {
         await ElMessageBox.confirm(
           `确定要删除场景 "${scene.name}" 吗？此操作不可恢复。`,
@@ -380,7 +481,11 @@ export default {
       } catch (error) {
         if (error !== 'cancel') {
           console.error('删除场景失败:', error)
-          ElMessage.error('删除场景失败')
+          if (error.response?.status === 403) {
+            ElMessage.error('权限不足：只有场景创建者可以删除场景')
+          } else {
+            ElMessage.error('删除场景失败')
+          }
         }
       }
     }
@@ -425,6 +530,12 @@ export default {
     }
     
     const removeLayerFromScene = async (layer) => {
+      // 权限检查
+      if (!canEditScene(currentScene.value)) {
+        ElMessage.warning('只有场景创建者可以移除图层')
+        return
+      }
+      
       try {
         await ElMessageBox.confirm(
           `确定要从场景中移除图层 "${layer.layer_name}" 吗？`,
@@ -436,16 +547,20 @@ export default {
           }
         )
         
-        await gisApi.removeLayerFromScene(currentScene.value.id, layer.id)
+        await gisApi.removeLayerFromScene(currentScene.value.id, layer.layer_id)
         ElMessage.success('图层移除成功')
         
-        // 重新加载场景详情
+        // 重新加载场景详情，使用现有的viewScene方法
         await viewScene(currentScene.value)
         
       } catch (error) {
         if (error !== 'cancel') {
           console.error('移除图层失败:', error)
-          ElMessage.error('移除图层失败')
+          if (error.response?.status === 403) {
+            ElMessage.error('权限不足：只有场景创建者可以移除图层')
+          } else {
+            ElMessage.error('移除图层失败')
+          }
         }
       }
     }
@@ -527,7 +642,29 @@ export default {
     }
     
     // 生命周期
-    onMounted(() => {
+    onMounted(async () => {
+      // 🔥 清除可能被截断的用户信息缓存，重新获取最新的用户信息
+      try {
+        console.log('重新获取用户信息以确保ID字段正确...')
+        const freshUser = await authService.getCurrentUser()
+        if (freshUser) {
+          currentUser.value = freshUser
+          console.log('最新用户信息:', freshUser)
+        } else {
+          // 如果无法获取最新信息，使用本地缓存但确保ID为字符串
+          const cachedUser = authService.getUser()
+          if (cachedUser) {
+            currentUser.value = cachedUser
+            console.log('使用缓存用户信息:', cachedUser)
+          }
+        }
+      } catch (error) {
+        console.error('获取用户信息失败:', error)
+        // 回退到本地缓存
+        currentUser.value = authService.getUser()
+      }
+      
+      // 加载场景列表
       loadScenes()
       
       // 抑制 ResizeObserver 错误（这是一个无害的警告）
@@ -581,7 +718,11 @@ export default {
       openMapWithScene,
       formatDate,
       formatDateShort,
-      handleDetailDialogClose
+      handleDetailDialogClose,
+      canEditScene,
+      canDeleteScene,
+      clearUserCache,
+      testPermissionCheck
     }
   }
 }
@@ -788,9 +929,16 @@ export default {
 }
 
 .dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+  text-align: right;
+}
+
+.form-hint {
+  margin-top: 5px;
+}
+
+.form-hint span {
+  display: block;
+  line-height: 1.2;
 }
 
 /* 防止 ResizeObserver 错误 */
@@ -818,5 +966,65 @@ export default {
 
 .el-switch .el-switch__label {
   font-size: 12px;
+}
+
+/* 🔥 权限受限按钮的特殊样式 */
+.scene-actions .el-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: #f5f7fa !important;
+  border-color: #dcdfe6 !important;
+  color: #c0c4cc !important;
+}
+
+.scene-actions .el-button:disabled:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* 鼠标悬停提示样式优化 */
+.scene-actions .el-button[title] {
+  position: relative;
+}
+
+.scene-actions .el-button:disabled[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 1000;
+  margin-bottom: 5px;
+}
+
+.scene-actions .el-button:disabled[title]:hover::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.8);
+  z-index: 1000;
+}
+
+/* 权限受限状态的图层操作按钮 */
+.el-table .el-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: #f5f7fa !important;
+  border-color: #dcdfe6 !important;
+  color: #c0c4cc !important;
+}
+
+.el-table .el-button:disabled:hover {
+  transform: none !important;
+  box-shadow: none !important;
 }
 </style> 
