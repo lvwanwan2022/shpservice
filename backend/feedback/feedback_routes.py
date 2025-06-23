@@ -10,6 +10,7 @@ import os
 from flask import Blueprint, request, jsonify, send_file, current_app
 from werkzeug.utils import secure_filename
 from .feedback_service import FeedbackService
+from auth.auth_service import require_auth, get_current_user
 
 # 创建蓝图
 feedback_bp = Blueprint('feedback', __name__, url_prefix='/api/feedback')
@@ -32,6 +33,7 @@ def get_current_user():
         }
 
 @feedback_bp.route('/items', methods=['GET'])
+@require_auth
 def get_feedback_list():
     """
     获取反馈列表
@@ -138,6 +140,7 @@ def get_feedback_list():
         return jsonify({'code': 500, 'message': '服务器内部错误'}), 500
 
 @feedback_bp.route('/items', methods=['POST'])
+@require_auth
 def create_feedback():
     """
     创建反馈
@@ -187,10 +190,8 @@ def create_feedback():
         description: 未登录
     """
     try:
-        # 获取当前用户
+        # 获取当前用户（由于有@require_auth装饰器，这里一定有用户）
         current_user = get_current_user()
-        if not current_user:
-            return jsonify({'code': 401, 'message': '请先登录'}), 401
         
         # 获取请求数据
         data = request.get_json()
@@ -214,6 +215,7 @@ def create_feedback():
         return jsonify({'code': 500, 'message': '服务器内部错误'}), 500
 
 @feedback_bp.route('/items/<feedback_id>', methods=['GET'])
+@require_auth
 def get_feedback_detail(feedback_id):
     """
     获取反馈详情
@@ -254,6 +256,7 @@ def get_feedback_detail(feedback_id):
         return jsonify({'code': 500, 'message': '服务器内部错误'}), 500
 
 @feedback_bp.route('/items/<feedback_id>', methods=['DELETE'])
+@require_auth
 def delete_feedback(feedback_id):
     """
     删除反馈
@@ -305,6 +308,7 @@ def delete_feedback(feedback_id):
         return jsonify({'code': 500, 'message': '服务器内部错误'}), 500
 
 @feedback_bp.route('/items/<feedback_id>/attachments', methods=['POST'])
+@require_auth
 def upload_attachment(feedback_id):
     """
     上传附件
@@ -366,6 +370,7 @@ def upload_attachment(feedback_id):
         return jsonify({'code': 500, 'message': '服务器内部错误'}), 500
 
 @feedback_bp.route('/items/<feedback_id>/comments', methods=['POST'])
+@require_auth
 def add_comment(feedback_id):
     """
     添加评论
@@ -433,6 +438,7 @@ def add_comment(feedback_id):
         return jsonify({'code': 500, 'message': '服务器内部错误'}), 500
 
 @feedback_bp.route('/items/<feedback_id>/vote', methods=['POST'])
+@require_auth
 def vote_feedback(feedback_id):
     """
     投票支持或反对
@@ -499,6 +505,7 @@ def vote_feedback(feedback_id):
         return jsonify({'code': 500, 'message': '服务器内部错误'}), 500
 
 @feedback_bp.route('/items/<feedback_id>/status', methods=['PUT'])
+@require_auth
 def update_feedback_status(feedback_id):
     """
     更新反馈状态（管理员功能）
@@ -567,6 +574,7 @@ def update_feedback_status(feedback_id):
         return jsonify({'code': 500, 'message': '服务器内部错误'}), 500
 
 @feedback_bp.route('/attachments/<filename>')
+@require_auth
 def download_attachment(filename):
     """
     下载附件
@@ -598,6 +606,7 @@ def download_attachment(filename):
         return jsonify({'code': 500, 'message': '服务器内部错误'}), 500
 
 @feedback_bp.route('/stats', methods=['GET'])
+@require_auth
 def get_feedback_stats():
     """
     获取反馈统计信息

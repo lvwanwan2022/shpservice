@@ -310,7 +310,8 @@
 
 <script>
 import { ref, reactive, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRouter } from 'vue-router'
 import {
   UploadFilled,
   Picture,
@@ -335,6 +336,7 @@ export default {
   },
   emits: ['update:modelValue', 'success'],
   setup(props, { emit }) {
+    const router = useRouter()
     const formRef = ref()
     const uploadRef = ref()
     const submitting = ref(false)
@@ -567,7 +569,41 @@ export default {
         
       } catch (error) {
         console.error('提交反馈失败:', error)
-        ElMessage.error(error.message || '提交失败')
+        
+        // 🔥 添加更详细的错误信息
+        if (error.response?.status === 401) {
+          console.error('认证失败详情:', {
+            status: error.response.status,
+            statusText: error.response.statusText,
+            data: error.response.data,
+            headers: error.response.headers
+          })
+          
+          // 显示重新登录的提示
+          ElMessageBox.confirm(
+            '用户认证已失效，是否重新登录？',
+            '认证失效',
+            {
+              confirmButtonText: '重新登录',
+              cancelButtonText: '取消',
+              type: 'warning'
+            }
+          ).then(() => {
+            // 跳转到登录页
+            router.push('/login')
+          }).catch(() => {
+            // 用户取消，关闭对话框
+            handleClose()
+          })
+        } else if (error.message?.includes('未找到认证token')) {
+          ElMessage.error('登录状态已失效，请重新登录')
+          // 延迟跳转到登录页
+          setTimeout(() => {
+            router.push('/login')
+          }, 1500)
+        } else {
+          ElMessage.error(error.message || '提交失败')
+        }
       } finally {
         submitting.value = false
       }

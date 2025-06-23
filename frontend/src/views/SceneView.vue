@@ -324,7 +324,7 @@ export default {
       const sceneUserIdStr = String(scene.user_id)
       
       const hasPermission = currentUserIdStr === sceneUserIdStr
-      console.log(`权限检查: 用户ID=${currentUserIdStr}, 场景创建者ID=${sceneUserIdStr}, 结果=${hasPermission ? '有权限' : '无权限'}`)
+      //console.log(`权限检查: 用户ID=${currentUserIdStr}, 场景创建者ID=${sceneUserIdStr}, 结果=${hasPermission ? '有权限' : '无权限'}`)
       
       return hasPermission
     }

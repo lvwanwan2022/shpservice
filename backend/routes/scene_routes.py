@@ -38,7 +38,7 @@ def verify_scene_permission(scene_id, operation="操作"):
         current_user_id = user_query[0]['id']
         scene_user_id = int(scene['user_id']) if isinstance(scene['user_id'], str) else scene['user_id']
         
-        current_app.logger.info(f"{operation}权限检查: 当前用户ID={current_user_id}, 场景创建者ID={scene_user_id}")
+        #current_app.logger.info(f"{operation}权限检查: 当前用户ID={current_user_id}, 场景创建者ID={scene_user_id}")
         
         if current_user_id != scene_user_id:
             current_app.logger.warning(f"用户 {current_user.get('username')} 尝试{operation}不属于自己的场景 {scene_id}")

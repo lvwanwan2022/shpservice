@@ -1,5 +1,5 @@
 <template>
-  <div class="feedback-view">
+  <div class="feedback-view" v-loading="loading">
     <!-- 页面头部 -->
     <div class="feedback-header">
       <div class="header-title">
@@ -262,8 +262,6 @@
       v-model="showStatsDialog"
     />
 
-    <!-- 加载状态 -->
-    <el-loading-service v-if="loading" />
   </div>
 </template>
 
@@ -285,10 +283,7 @@ export default {
   components: {
     CreateFeedbackDialog,
     FeedbackDetailDialog,
-    FeedbackStatsDialog,
-    Search, Refresh,
-    User, Clock, Paperclip, Like, DisLike,
-    ChatDotRound, View
+    FeedbackStatsDialog
   },
   setup() {
     // 响应式数据
@@ -577,7 +572,12 @@ export default {
       getTypeLabel,
       getStatusLabel,
       getPriorityLabel,
-      formatTime
+      formatTime,
+
+      // 图标组件
+      Search, Refresh,
+      User, Clock, Paperclip, Like, DisLike,
+      ChatDotRound, View
     }
   }
 }
