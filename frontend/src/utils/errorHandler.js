@@ -55,10 +55,27 @@ export function installGlobalErrorHandlers() {
   if (process.env.NODE_ENV === 'development') {
     const originalWarn = console.warn
     console.warn = function(...args) {
-      const message = args.join(' ')
-      if (isHarmlessError(message)) {
-        return
+      try {
+        // 安全地将参数转换为字符串
+        const message = args.map(arg => {
+          if (typeof arg === 'string') return arg
+          if (typeof arg === 'object' && arg !== null) {
+            try {
+              return JSON.stringify(arg)
+            } catch {
+              return String(arg)
+            }
+          }
+          return String(arg)
+        }).join(' ')
+        
+        if (isHarmlessError(message)) {
+          return
+        }
+      } catch (error) {
+        // 如果处理参数时出错，直接跳过过滤
       }
+      
       originalWarn.apply(console, args)
     }
   }

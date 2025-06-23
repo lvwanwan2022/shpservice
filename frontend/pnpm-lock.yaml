@@ -9,17 +9,20 @@ importers:
   .:
     dependencies:
       '@element-plus/icons-vue':
-        specifier: ^2.3.1
-        version: 2.3.1(vue@3.5.13)
+        specifier: 2.1.0
+        version: 2.1.0(vue@3.5.13)
       axios:
         specifier: ^1.9.0
         version: 1.9.0
       core-js:
         specifier: ^3.8.3
         version: 3.42.0
+      echarts:
+        specifier: ^5.6.0
+        version: 5.6.0
       element-plus:
-        specifier: ^2.9.11
-        version: 2.9.11(vue@3.5.13)
+        specifier: 2.7.8
+        version: 2.7.8(vue@3.5.13)
       json-bigint:
         specifier: ^1.0.0
         version: 1.0.0
@@ -41,6 +44,9 @@ importers:
       vue:
         specifier: ^3.2.13
         version: 3.5.13
+      vue-echarts:
+        specifier: ^7.0.3
+        version: 7.0.3(@vue/runtime-core@3.5.13)(echarts@5.6.0)(vue@3.5.13)
       vue-router:
         specifier: '4'
         version: 4.5.1(vue@3.5.13)
@@ -622,6 +628,11 @@ packages:
   '@discoveryjs/json-ext@0.5.7':
     resolution: {integrity: sha512-dBVuXR082gk3jsFp7Rd/JI4kytwGHecnCoTtXFb7DB6CNHp4rg5k1bhg0nWdLGLnOV71lmDzGQaLMy8iPLY0pw==}
     engines: {node: '>=10.0.0'}
+
+  '@element-plus/icons-vue@2.1.0':
+    resolution: {integrity: sha512-PSBn3elNoanENc1vnCfh+3WA9fimRC7n+fWkf3rE5jvv+aBohNHABC/KAR5KWPecxWxDTVT1ERpRbOMRcOV/vA==}
+    peerDependencies:
+      vue: ^3.2.0
 
   '@element-plus/icons-vue@2.3.1':
     resolution: {integrity: sha512-XxVUZv48RZAd87ucGS48jPf6pKu0yV5UCg9f4FFwtrYxXOwWuVJo6wOvSLKEoMQKjv8GsX/mhP6UsC1lRwbUWg==}
@@ -1825,14 +1836,17 @@ packages:
     resolution: {integrity: sha512-wK2sCs4feiiJeFXn3zvY0p41mdU5VUgbgs1rNsc/y5ngFUijdWd+iIN8eoyuZHKB8xN6BL4PdWmzqFmxNg6V2w==}
     engines: {node: '>=6.0.0'}
 
+  echarts@5.6.0:
+    resolution: {integrity: sha512-oTbVTsXfKuEhxftHqL5xprgLoc0k7uScAwtryCgWF6hPYFLRwOUHiFmHGCBKP5NPFNkDVopOieyUqYGH8Fa3kA==}
+
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
 
   electron-to-chromium@1.5.151:
     resolution: {integrity: sha512-Rl6uugut2l9sLojjS4H4SAr3A4IgACMLgpuEMPYCVcKydzfyPrn5absNRju38IhQOf/NwjJY8OGWjlteqYeBCA==}
 
-  element-plus@2.9.11:
-    resolution: {integrity: sha512-x4L/6YC8de4JtuE3vpaEugJdQIeHQaHtIYKyk67IeF6dTIiVax45aX4nWOygnh+xX+0gTvL6xO+9BZhPA3G82w==}
+  element-plus@2.7.8:
+    resolution: {integrity: sha512-h6dx2XihAbQaud0v+6O7Fy0b0G3YNplNVH7QnK3csTcvQd4y4raiyMRQpf9EKbRbTMdNrFsqAZrs9ok9DMcJHg==}
     peerDependencies:
       vue: ^3.2.0
 
@@ -3665,6 +3679,9 @@ packages:
   tr46@0.0.3:
     resolution: {integrity: sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==}
 
+  tslib@2.3.0:
+    resolution: {integrity: sha512-N82ooyxVNm6h1riLCoyS9e3fuJ3AMG2zIZs2Gd1ATcSFjSA23Q0fzjjZeh0jbJvWVDZ0cJT8yaNNaaXHzueNjg==}
+
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
@@ -3752,6 +3769,17 @@ packages:
     resolution: {integrity: sha512-ECpYpDhbgTSGIRwaf4bLbiDHcUHDM+LGrBOmV1tdG+Lde8vajJtywP5vGFmMj0Z3cApTV0+9sLWgBCVsRuoAKQ==}
     deprecated: 'This module has moved: please install @mapbox/vector-tile instead'
 
+  vue-demi@0.13.11:
+    resolution: {integrity: sha512-IR8HoEEGM65YY3ZJYAjMlKygDQn25D5ajNFNoKh9RSDMQtlzCxtfQjdQgv9jjK+m3377SsJXY8ysq8kLCZL25A==}
+    engines: {node: '>=12'}
+    hasBin: true
+    peerDependencies:
+      '@vue/composition-api': ^1.0.0-rc.1
+      vue: ^3.0.0-0 || ^2.6.0
+    peerDependenciesMeta:
+      '@vue/composition-api':
+        optional: true
+
   vue-demi@0.14.10:
     resolution: {integrity: sha512-nMZBOwuzabUO0nLgIcc6rycZEebF6eeUfaiQx9+WSk8e29IbLvPU9feI6tqW4kTo3hvoYAJkMh8n8D0fuISphg==}
     engines: {node: '>=12'}
@@ -3761,6 +3789,16 @@ packages:
       vue: ^3.0.0-0 || ^2.6.0
     peerDependenciesMeta:
       '@vue/composition-api':
+        optional: true
+
+  vue-echarts@7.0.3:
+    resolution: {integrity: sha512-/jSxNwOsw5+dYAUcwSfkLwKPuzTQ0Cepz1LxCOpj2QcHrrmUa/Ql0eQqMmc1rTPQVrh2JQ29n2dhq75ZcHvRDw==}
+    peerDependencies:
+      '@vue/runtime-core': ^3.0.0
+      echarts: ^5.5.1
+      vue: ^2.7.0 || ^3.1.1
+    peerDependenciesMeta:
+      '@vue/runtime-core':
         optional: true
 
   vue-eslint-parser@8.3.0:
@@ -3995,6 +4033,9 @@ packages:
   yorkie@2.0.0:
     resolution: {integrity: sha512-jcKpkthap6x63MB4TxwCyuIGkV0oYP/YRyuQU5UO0Yz/E/ZAu+653/uov+phdmO54n6BcvFRyyt0RRrWdN2mpw==}
     engines: {node: '>=4'}
+
+  zrender@5.6.1:
+    resolution: {integrity: sha512-OFXkDJKcrlx5su2XbzJvj/34Q3m6PvyCZkVPHGYpcCJ52ek4U/ymZyfuV1nKE23AyBJ51E/6Yr0mhZ7xGTO4ag==}
 
   zstddec@0.1.0:
     resolution: {integrity: sha512-w2NTI8+3l3eeltKAdK8QpiLo/flRAr2p8AGeakfMZOXBxOg9HIu4LVDxBi81sYgVhFhdJjv1OrB5ssI8uFPoLg==}
@@ -4715,6 +4756,10 @@ snapshots:
   '@ctrl/tinycolor@3.6.1': {}
 
   '@discoveryjs/json-ext@0.5.7': {}
+
+  '@element-plus/icons-vue@2.1.0(vue@3.5.13)':
+    dependencies:
+      vue: 3.5.13
 
   '@element-plus/icons-vue@2.3.1(vue@3.5.13)':
     dependencies:
@@ -6133,11 +6178,16 @@ snapshots:
 
   easy-stack@1.0.1: {}
 
+  echarts@5.6.0:
+    dependencies:
+      tslib: 2.3.0
+      zrender: 5.6.1
+
   ee-first@1.1.1: {}
 
   electron-to-chromium@1.5.151: {}
 
-  element-plus@2.9.11(vue@3.5.13):
+  element-plus@2.7.8(vue@3.5.13):
     dependencies:
       '@ctrl/tinycolor': 3.6.1
       '@element-plus/icons-vue': 2.3.1(vue@3.5.13)
@@ -8016,6 +8066,8 @@ snapshots:
 
   tr46@0.0.3: {}
 
+  tslib@2.3.0: {}
+
   tslib@2.8.1: {}
 
   type-check@0.4.0:
@@ -8081,9 +8133,23 @@ snapshots:
     dependencies:
       point-geometry: 0.0.0
 
+  vue-demi@0.13.11(vue@3.5.13):
+    dependencies:
+      vue: 3.5.13
+
   vue-demi@0.14.10(vue@3.5.13):
     dependencies:
       vue: 3.5.13
+
+  vue-echarts@7.0.3(@vue/runtime-core@3.5.13)(echarts@5.6.0)(vue@3.5.13):
+    dependencies:
+      echarts: 5.6.0
+      vue: 3.5.13
+      vue-demi: 0.13.11(vue@3.5.13)
+    optionalDependencies:
+      '@vue/runtime-core': 3.5.13
+    transitivePeerDependencies:
+      - '@vue/composition-api'
 
   vue-eslint-parser@8.3.0(eslint@7.32.0):
     dependencies:
@@ -8409,5 +8475,9 @@ snapshots:
       is-ci: 1.2.1
       normalize-path: 1.0.0
       strip-indent: 2.0.0
+
+  zrender@5.6.1:
+    dependencies:
+      tslib: 2.3.0
 
   zstddec@0.1.0: {}

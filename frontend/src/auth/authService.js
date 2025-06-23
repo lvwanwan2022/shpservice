@@ -194,9 +194,9 @@ class AuthService {
       }
       return value
     })
-    console.log('lv设置用户信息:', userString)
+    //console.log('lv设置用户信息:', userString)
     localStorage.setItem(this.userKey, userString)
-    console.log('设置用户信息:', safeUser)
+    //console.log('设置用户信息:', safeUser)
   }
   
   /**

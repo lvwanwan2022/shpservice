@@ -35,6 +35,32 @@
         </div>
         
         <div class="header-actions">
+          <!-- Admin状态管理 -->
+          <div v-if="isAdmin" class="admin-status-control">
+            <span class="admin-label">状态管理：</span>
+            <el-select 
+              v-model="selectedStatus" 
+              size="small" 
+              style="width: 120px; margin: 0 8px;"
+              placeholder="选择状态"
+            >
+              <el-option label="待处理" value="open" />
+              <el-option label="处理中" value="in_progress" />
+              <el-option label="已解决" value="resolved" />
+              <el-option label="已关闭" value="closed" />
+            </el-select>
+            <el-button 
+              type="primary" 
+              size="small"
+              :loading="statusUpdating"
+              @click="updateFeedbackStatus"
+              :disabled="selectedStatus === feedback.status"
+            >
+              更新状态
+            </el-button>
+          </div>
+          
+          <!-- 投票按钮 -->
           <el-button-group>
             <el-button
               :type="feedback.user_vote === 'support' ? 'success' : 'default'"
@@ -222,6 +248,8 @@ export default {
     const showCommentForm = ref(false)
     const newComment = ref('')
     const commentSubmitting = ref(false)
+    const selectedStatus = ref('')
+    const statusUpdating = ref(false)
 
     // 对话框可见性
     const visible = computed({
@@ -232,11 +260,29 @@ export default {
     // 当前用户信息
     const currentUser = computed(() => {
       try {
-        const userStr = localStorage.getItem('user')
+        const userStr = localStorage.getItem('user_info') ||
+                       localStorage.getItem('user') ||
+                       localStorage.getItem('currentUser')
         return userStr ? JSON.parse(userStr) : null
       } catch {
         return null
       }
+    })
+
+    // 判断是否为管理员
+    const isAdmin = computed(() => {
+      if (!currentUser.value) {
+        return false
+      }
+      
+      const user = currentUser.value
+      return (
+        user.username === 'admin' || 
+        user.role === 'admin' ||
+        user.is_admin === true ||
+        user.is_admin === 'true' ||
+        String(user.username).toLowerCase() === 'admin'
+      )
     })
 
     // 判断是否可以删除反馈
@@ -272,6 +318,7 @@ export default {
         
         if (response.code === 200) {
           feedback.value = response.data
+          selectedStatus.value = response.data.status // 初始化状态选择
         } else {
           throw new Error(response.message || '获取详情失败')
         }
@@ -385,11 +432,48 @@ export default {
       }
     }
 
+    // 更新反馈状态
+    const updateFeedbackStatus = async () => {
+      if (!isAdmin.value) {
+        ElMessage.warning('权限不足')
+        return
+      }
+
+      if (selectedStatus.value === feedback.value.status) {
+        return
+      }
+
+      try {
+        statusUpdating.value = true
+        
+        const response = await feedbackApi.updateFeedbackStatus(props.feedbackId, selectedStatus.value)
+        
+        if (response.code === 200) {
+          ElMessage.success(response.message || '状态更新成功')
+          // 更新本地状态
+          feedback.value.status = selectedStatus.value
+          // 触发刷新事件
+          emit('refresh')
+        } else {
+          throw new Error(response.message || '状态更新失败')
+        }
+      } catch (error) {
+        console.error('状态更新失败:', error)
+        ElMessage.error(error.message || '状态更新失败')
+        // 重置状态选择
+        selectedStatus.value = feedback.value.status
+      } finally {
+        statusUpdating.value = false
+      }
+    }
+
     // 重置状态
     const resetState = () => {
       feedback.value = null
       showCommentForm.value = false
       newComment.value = ''
+      selectedStatus.value = ''
+      statusUpdating.value = false
     }
 
     // 关闭对话框
@@ -399,17 +483,33 @@ export default {
 
     // 标签样式辅助函数
     const getCategoryTagType = (category) => {
-      const types = { feature: 'success', bug: 'danger' }
+      const types = { feature: 'success', bug: 'danger', othercategory: 'info' }
       return types[category] || 'info'
     }
 
     const getModuleTagType = (module) => {
-      const types = { frontend: 'primary', backend: 'warning' }
+      const types = { 
+        frontend: 'primary', 
+        backend: 'warning',
+        database: 'success',
+        api: 'info',
+        deployment: 'danger',
+        documentation: 'purple',
+        othermodule: 'info'
+      }
       return types[module] || 'info'
     }
 
     const getTypeTagType = (type) => {
-      const types = { ui: 'primary', code: 'warning' }
+      const types = { 
+        ui: 'primary', 
+        code: 'warning',
+        performance: 'success',
+        feature: 'primary',
+        architecture: 'info',
+        security: 'danger',
+        othertype: 'info'
+      }
       return types[type] || 'info'
     }
 
@@ -435,17 +535,33 @@ export default {
 
     // 标签文本辅助函数
     const getCategoryLabel = (category) => {
-      const labels = { feature: '功能建议', bug: '问题反馈' }
+      const labels = { feature: '功能建议', bug: '问题反馈', othercategory: '其他' }
       return labels[category] || category
     }
 
     const getModuleLabel = (module) => {
-      const labels = { frontend: '前端', backend: '后端' }
+      const labels = { 
+        frontend: '前端', 
+        backend: '后端',
+        database: '数据库',
+        api: 'API',
+        deployment: '部署',
+        documentation: '文档',
+        othermodule: '其他'
+      }
       return labels[module] || module
     }
 
     const getTypeLabel = (type) => {
-      const labels = { ui: '界面', code: '代码' }
+      const labels = { 
+        ui: '界面优化', 
+        code: '代码修改',
+        performance: '性能优化',
+        feature: '功能新增',
+        architecture: '架构调整',
+        security: '安全修复',
+        othertype: '其他'
+      }
       return labels[type] || type
     }
 
@@ -503,7 +619,10 @@ export default {
       showCommentForm,
       newComment,
       commentSubmitting,
+      selectedStatus,
+      statusUpdating,
       currentUser,
+      isAdmin,
       canDeleteFeedback,
 
       // 方法
@@ -513,6 +632,7 @@ export default {
       cancelComment,
       downloadAttachment,
       deleteFeedback,
+      updateFeedbackStatus,
       handleClose,
 
       // 辅助函数
@@ -583,6 +703,26 @@ export default {
 
 .header-actions {
   margin-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.admin-status-control {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #e8f5e8 0%, #f0f9ff 100%);
+  border: 1px solid #67c23a;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.admin-label {
+  font-weight: 600;
+  color: #67c23a;
+  margin-right: 8px;
 }
 
 .feedback-meta {

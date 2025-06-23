@@ -67,9 +67,9 @@ class FeedbackService:
                     return False, f'缺少必填字段: {field}', None
             
             # 验证字段值
-            valid_categories = ['feature', 'bug']
-            valid_modules = ['frontend', 'backend']
-            valid_types = ['ui', 'code']
+            valid_categories = ['feature', 'bug','othercategory']
+            valid_modules = ['frontend', 'backend','database','api','deployment','documentation','othermodule']
+            valid_types = ['ui', 'code','performance','feature','architecture','security','othertype']
             valid_priorities = ['low', 'medium', 'high', 'urgent']
             
             if data['category'] not in valid_categories:
@@ -290,12 +290,23 @@ class FeedbackService:
             
             feedback_items = execute_query(data_sql, params)
             
-            # 转换ID为字符串
+                        # 转换ID为字符串并获取用户投票状态
             for item in feedback_items:
                 item['id'] = str(item['id'])
                 if item.get('user_id'):
                     item['user_id'] = str(item['user_id'])
-            
+                
+                # 获取当前用户对此反馈的投票状态
+                item['user_vote'] = None
+                if user_id:
+                    vote_sql = """
+                    SELECT vote_type FROM feedback_votes
+                    WHERE feedback_id = %s AND user_id = %s
+                    """
+                    vote_result = execute_query(vote_sql, (item['id'], user_id))
+                    if vote_result:
+                        item['user_vote'] = vote_result[0]['vote_type']
+
             return {
                 'items': feedback_items,
                 'pagination': {

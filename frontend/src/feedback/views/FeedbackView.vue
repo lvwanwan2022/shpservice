@@ -6,7 +6,8 @@
         <h1>用户反馈中心</h1>
         <p>帮助我们创造更好的产品体验</p>
       </div>
-      <div class="header-actions">
+      <div class="header-actions">        
+        
         <el-button 
           type="primary" 
           @click="showCreateDialog = true"
@@ -29,6 +30,7 @@
           <el-select v-model="filters.category" placeholder="全部分类" clearable>
             <el-option label="功能建议" value="feature" />
             <el-option label="问题反馈" value="bug" />
+            <el-option label="其他" value="othercategory" />
           </el-select>
         </el-form-item>
 
@@ -47,6 +49,7 @@
             <el-option label="API" value="api" />
             <el-option label="部署" value="deployment" />
             <el-option label="文档" value="documentation" />
+            <el-option label="其他" value="othermodule" />
           </el-select>
         </el-form-item>
 
@@ -65,6 +68,7 @@
             <el-option label="功能新增" value="feature" />
             <el-option label="架构调整" value="architecture" />
             <el-option label="安全修复" value="security" />
+            <el-option label="其他" value="othertype" />
           </el-select>
         </el-form-item>
 
@@ -91,15 +95,11 @@
         <el-form-item>
           <el-input 
             v-model="filters.keyword" 
-            placeholder="搜索关键词..."
+            placeholder="🔍 搜索关键词..."
             clearable
             style="width: 200px"
             @keyup.enter="loadFeedbackList"
-          >
-            <template #prefix>
-              <el-icon><Search /></el-icon>
-            </template>
-          </el-input>
+          />
         </el-form-item>
 
         <el-form-item>
@@ -108,12 +108,10 @@
 
         <el-form-item>
           <el-button type="primary" @click="loadFeedbackList">
-            <el-icon><Search /></el-icon>
-            搜索
+            🔍 搜索
           </el-button>
           <el-button @click="resetFilters">
-            <el-icon><Refresh /></el-icon>
-            重置
+            🔄 重置
           </el-button>
         </el-form-item>
       </el-form>
@@ -126,96 +124,106 @@
         :key="item.id" 
         class="feedback-card"
         shadow="hover"
-        @click="openFeedbackDetail(item)"
       >
         <div class="feedback-item">
-          <div class="feedback-main">
-            <div class="feedback-title-row">
-              <h3 class="feedback-title">{{ item.title }}</h3>
-              <div class="feedback-badges">
-                <el-tag 
-                  :type="getCategoryTagType(item.category)" 
-                  size="small"
-                >
-                  {{ getCategoryLabel(item.category) }}
-                </el-tag>
-                <el-tag 
-                  :type="getModuleTagType(item.module)" 
-                  size="small"
-                >
-                  {{ getModuleLabel(item.module) }}
-                </el-tag>
-                <el-tag 
-                  :type="getTypeTagType(item.type)" 
-                  size="small"
-                >
-                  {{ getTypeLabel(item.type) }}
-                </el-tag>
-                <el-tag 
-                  :type="getStatusTagType(item.status)" 
-                  size="small"
-                >
-                  {{ getStatusLabel(item.status) }}
-                </el-tag>
-                <el-tag 
-                  :type="getPriorityTagType(item.priority)" 
-                  size="small"
-                >
-                  {{ getPriorityLabel(item.priority) }}
-                </el-tag>
-              </div>
-            </div>
-
-            <div class="feedback-description">
-              {{ item.description || '暂无详细描述' }}
-            </div>
-
-            <div class="feedback-meta">
-              <div class="meta-left">
-                <span class="meta-item">
-                  <el-icon><User /></el-icon>
-                  {{ item.username || '匿名用户' }}
-                </span>
-                <span class="meta-item">
-                  <el-icon><Clock /></el-icon>
-                  {{ formatTime(item.created_at) }}
-                </span>
-                <span v-if="item.has_attachments" class="meta-item">
-                  <el-icon><Paperclip /></el-icon>
-                  有附件
-                </span>
-              </div>
-              
-              <div class="meta-right">
-                <span class="meta-item support">
-                  <el-icon><Like /></el-icon>
-                  {{ item.support_count || 0 }}
-                </span>
-                <span class="meta-item oppose">
-                  <el-icon><DisLike /></el-icon>
-                  {{ item.oppose_count || 0 }}
-                </span>
-                <span class="meta-item comment">
-                  <el-icon><ChatDotRound /></el-icon>
-                  {{ item.comment_count || 0 }}
-                </span>
-                <span class="meta-item view">
-                  <el-icon><View /></el-icon>
-                  {{ item.view_count || 0 }}
-                </span>
-              </div>
+          <div class="feedback-title-row">
+            <h3 class="feedback-title">
+              <a 
+                href="javascript:void(0)" 
+                class="title-link"
+                @click="openFeedbackDetail(item)"
+              >
+                {{ item.title }}
+              </a>
+            </h3>
+            <div class="feedback-badges">
+              <el-tag 
+                :type="getCategoryTagType(item.category)" 
+                size="small"
+              >
+                {{ getCategoryLabel(item.category) }}
+              </el-tag>
+              <el-tag 
+                :type="getModuleTagType(item.module)" 
+                size="small"
+              >
+                {{ getModuleLabel(item.module) }}
+              </el-tag>
+              <el-tag 
+                :type="getTypeTagType(item.type)" 
+                size="small"
+              >
+                {{ getTypeLabel(item.type) }}
+              </el-tag>
+              <el-tag 
+                :type="getStatusTagType(item.status)" 
+                size="small"
+              >
+                {{ getStatusLabel(item.status) }}
+              </el-tag>
+              <el-tag 
+                :type="getPriorityTagType(item.priority)" 
+                size="small"
+              >
+                {{ getPriorityLabel(item.priority) }}
+              </el-tag>
             </div>
           </div>
 
-          <div class="feedback-actions">
-            <el-button 
-              v-if="canDeleteFeedback(item)"
-              type="danger" 
-              size="small" 
-              @click.stop="deleteFeedback(item)"
-            >
-              删除
-            </el-button>
+          <div class="feedback-description">
+            {{ item.description || '暂无详细描述' }}
+          </div>
+
+          <div class="feedback-meta">
+            <div class="meta-left">
+              <span class="meta-item">
+                👤 {{ item.username || '匿名用户' }}
+              </span>
+              <span class="meta-item">
+                🕒 {{ formatTime(item.created_at) }}
+              </span>
+              <span v-if="item.has_attachments" class="meta-item">
+                📎 有附件
+              </span>
+            </div>
+            
+            <div class="meta-right">
+              <!-- 可点击的点赞/反对按钮 -->
+              <el-button 
+                v-if="currentUser"
+                text 
+                size="small"
+                :type="item.user_vote === 'support' ? 'success' : 'info'"
+                @click.stop="voteFeedback(item, 'support')"
+                class="vote-btn"
+              >
+                👍 {{ item.support_count || 0 }}
+              </el-button>
+              <span v-else class="meta-item support">
+                👍 {{ item.support_count || 0 }}
+              </span>
+              
+              <el-button 
+                v-if="currentUser"
+                text 
+                size="small"
+                :type="item.user_vote === 'oppose' ? 'danger' : 'info'"
+                @click.stop="voteFeedback(item, 'oppose')"
+                class="vote-btn"
+              >
+                👎 {{ item.oppose_count || 0 }}
+              </el-button>
+              <span v-else class="meta-item oppose">
+                👎 {{ item.oppose_count || 0 }}
+              </span>
+              
+              <span class="meta-item comment">
+                💬 {{ item.comment_count || 0 }}
+              </span>
+              <span class="meta-item view">
+                👁️ {{ item.view_count || 0 }}
+              </span>
+            </div>
           </div>
         </div>
       </el-card>
@@ -267,12 +275,7 @@
 
 <script>
 import { ref, reactive, onMounted, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  Search, Refresh,
-  User, Clock, Paperclip, Like, DisLike,
-  ChatDotRound, View
-} from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import feedbackApi from '../api/feedbackApi'
 import CreateFeedbackDialog from '../components/CreateFeedbackDialog.vue'
 import FeedbackDetailDialog from '../components/FeedbackDetailDialog.vue'
@@ -316,11 +319,33 @@ export default {
     // 当前用户信息
     const currentUser = computed(() => {
       try {
-        const userStr = localStorage.getItem('user')
+        // 按优先级尝试不同的key，user_info是authService中使用的key
+        const userStr = localStorage.getItem('user_info') ||
+                       localStorage.getItem('user') ||
+                       localStorage.getItem('currentUser') ||
+                       localStorage.getItem('userInfo')
+        
         return userStr ? JSON.parse(userStr) : null
-      } catch {
+      } catch (error) {
+        console.error('解析用户信息失败:', error)
         return null
       }
+    })
+
+    // 判断是否为管理员
+    const isAdmin = computed(() => {
+      if (!currentUser.value) {
+        return false
+      }
+      
+      const user = currentUser.value
+      return (
+        user.username === 'admin' || 
+        user.role === 'admin' ||
+        user.is_admin === true ||
+        user.is_admin === 'true' ||
+        String(user.username).toLowerCase() === 'admin'
+      )
     })
 
     // 加载反馈列表
@@ -346,7 +371,12 @@ export default {
         const response = await feedbackApi.getFeedbackList(params)
         
         if (response.code === 200) {
-          feedbackList.value = response.data.items || []
+          const items = response.data.items || []
+          // 为每个反馈项初始化投票状态
+          feedbackList.value = items.map(item => ({
+            ...item,
+            user_vote: item.user_vote || null // 用户投票状态
+          }))
           pagination.total = response.data.pagination?.total || 0
         } else {
           throw new Error(response.message || '获取数据失败')
@@ -380,39 +410,31 @@ export default {
       showDetailDialog.value = true
     }
 
-    // 删除反馈
-    const deleteFeedback = async (item) => {
-      try {
-        await ElMessageBox.confirm(
-          `确定要删除反馈"${item.title}"吗？此操作不可恢复。`,
-          '确认删除',
-          {
-            type: 'warning',
-            confirmButtonText: '确定删除',
-            cancelButtonText: '取消'
-          }
-        )
 
-        const response = await feedbackApi.deleteFeedback(item.id)
+
+
+
+    // 投票功能
+    const voteFeedback = async (item, voteType) => {
+      if (!currentUser.value) {
+        ElMessage.warning('请先登录')
+        return
+      }
+
+      try {
+        const response = await feedbackApi.voteFeedback(item.id, voteType)
         
         if (response.code === 200) {
-          ElMessage.success('删除成功')
+          ElMessage.success(response.message)
+          // 重新加载列表以更新投票数据
           loadFeedbackList()
         } else {
-          throw new Error(response.message || '删除失败')
+          throw new Error(response.message || '投票失败')
         }
       } catch (error) {
-        if (error.message !== 'cancel') {
-          console.error('删除反馈失败:', error)
-          ElMessage.error(error.message || '删除失败')
-        }
+        console.error('投票失败:', error)
+        ElMessage.error(error.message || '投票失败')
       }
-    }
-
-    // 判断是否可以删除反馈
-    const canDeleteFeedback = (item) => {
-      return currentUser.value && 
-             String(currentUser.value.id) === String(item.user_id)
     }
 
     // 创建成功回调
@@ -420,9 +442,11 @@ export default {
       loadFeedbackList()
     }
 
+
+
     // 标签样式辅助函数
     const getCategoryTagType = (category) => {
-      const types = { feature: 'success', bug: 'danger' }
+      const types = { feature: 'success', bug: 'danger', othercategory: 'info' }
       return types[category] || 'info'
     }
 
@@ -433,7 +457,8 @@ export default {
         database: 'success',
         api: 'info',
         deployment: 'danger',
-        documentation: 'info'
+        documentation: 'purple',
+        othermodule: 'info'
       }
       return types[module] || 'info'
     }
@@ -445,7 +470,8 @@ export default {
         performance: 'success',
         feature: 'primary',
         architecture: 'info',
-        security: 'danger'
+        security: 'danger',
+        othertype: 'info'
       }
       return types[type] || 'info'
     }
@@ -472,7 +498,7 @@ export default {
 
     // 标签文本辅助函数
     const getCategoryLabel = (category) => {
-      const labels = { feature: '功能建议', bug: '问题反馈' }
+      const labels = { feature: '功能建议', bug: '问题反馈', othercategory: '其他' }
       return labels[category] || category
     }
 
@@ -483,7 +509,8 @@ export default {
         database: '数据库',
         api: 'API',
         deployment: '部署',
-        documentation: '文档'
+        documentation: '文档',
+        othermodule: '其他'
       }
       return labels[module] || module
     }
@@ -495,7 +522,8 @@ export default {
         performance: '性能优化',
         feature: '功能新增',
         architecture: '架构调整',
-        security: '安全修复'
+        security: '安全修复',
+        othertype: '其他'
       }
       return labels[type] || type
     }
@@ -552,13 +580,13 @@ export default {
       pagination,
       sortBy,
       currentUser,
+      isAdmin,
 
       // 方法
       loadFeedbackList,
       resetFilters,
       openFeedbackDetail,
-      deleteFeedback,
-      canDeleteFeedback,
+      voteFeedback,
       onCreateSuccess,
 
       // 辅助函数
@@ -572,12 +600,7 @@ export default {
       getTypeLabel,
       getStatusLabel,
       getPriorityLabel,
-      formatTime,
-
-      // 图标组件
-      Search, Refresh,
-      User, Clock, Paperclip, Like, DisLike,
-      ChatDotRound, View
+      formatTime
     }
   }
 }
@@ -615,6 +638,11 @@ export default {
 .header-actions {
   display: flex;
   gap: 12px;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
 }
 
 .feedback-filters {
@@ -692,7 +720,7 @@ export default {
 
 .feedback-card {
   margin-bottom: 16px;
-  cursor: pointer;
+  cursor: default;
   transition: all 0.3s ease;
 }
 
@@ -702,13 +730,8 @@ export default {
 }
 
 .feedback-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-
-.feedback-main {
-  flex: 1;
+  display: block;
+  width: 100%;
 }
 
 .feedback-title-row {
@@ -726,6 +749,17 @@ export default {
   line-height: 1.4;
   flex: 1;
   margin-right: 16px;
+}
+
+.title-link {
+  color: #303133;
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.title-link:hover {
+  color: #409eff;
+  text-decoration: underline;
 }
 
 .feedback-badges {
@@ -781,8 +815,26 @@ export default {
   color: #909399;
 }
 
-.feedback-actions {
-  margin-left: 16px;
+
+
+.vote-btn {
+  font-size: 12px;
+  padding: 0 4px;
+  height: auto;
+  margin: 0 2px;
+}
+
+.vote-btn:hover {
+  transform: scale(1.1);
+  transition: transform 0.2s ease;
+}
+
+.vote-btn.is-type-success {
+  color: #67c23a;
+}
+
+.vote-btn.is-type-danger {
+  color: #f56c6c;
 }
 
 .feedback-pagination {
@@ -830,13 +882,7 @@ export default {
   }
   
   .feedback-item {
-    flex-direction: column;
-    gap: 16px;
-  }
-  
-  .feedback-actions {
-    margin-left: 0;
-    align-self: flex-end;
+    display: block;
   }
 }
 </style> 

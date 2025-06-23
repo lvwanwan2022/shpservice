@@ -11,6 +11,11 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
+// 只引入我们需要的图标
+import { 
+  Search, Refresh, User, Clock, Paperclip, 
+  Like, DisLike, ChatDotRound, View 
+} from '@element-plus/icons-vue'
 import router from './router'
 import store from './store'
 import 'leaflet/dist/leaflet.css'
@@ -99,6 +104,18 @@ const app = createApp(App)
 //fixVectorGridCompatibility()
 
 app.use(ElementPlus)
+
+// 注册Element Plus图标（使用符合命名规范的名称）
+app.component('ElSearch', Search)
+app.component('ElRefresh', Refresh)
+app.component('ElUser', User)
+app.component('ElClock', Clock)
+app.component('ElPaperclip', Paperclip)
+app.component('ElLike', Like)
+app.component('ElDisLike', DisLike)
+app.component('ElChatDotRound', ChatDotRound)
+app.component('ElView', View)
+
 app.use(router)
 app.use(store)
 app.mount('#app')

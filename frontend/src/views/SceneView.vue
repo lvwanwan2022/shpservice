@@ -3,9 +3,8 @@
     <div class="scene-header">
       <h1>场景管理</h1>
       <div style="display: flex; gap: 10px; align-items: center;">
-        <!-- 🔥 临时测试按钮 -->
-        <el-button size="small" type="warning" @click="clearUserCache">清除缓存</el-button>
-        <el-button size="small" type="info" @click="testPermissionCheck">测试权限</el-button>
+       
+       
         
         <el-button type="primary" @click="showCreateDialog = true">
           <el-icon><Plus /></el-icon>
@@ -333,31 +332,7 @@ export default {
       return canEditScene(scene)
     }
     
-    // 🔥 临时方法：清除用户信息缓存
-    const clearUserCache = () => {
-      console.log('清除用户信息缓存...')
-      localStorage.removeItem('user_info')
-      localStorage.removeItem('auth_token')
-      ElMessage.success('缓存已清除，请重新登录')
-      window.location.href = '/login'
-    }
     
-    // 🔥 临时方法：测试权限检查
-    const testPermissionCheck = () => {
-      console.log('=== 权限检查测试 ===')
-      console.log('当前用户:', currentUser.value)
-      console.log('场景列表:', scenes.value.map(s => ({
-        id: s.id,
-        name: s.name,
-        user_id: s.user_id,
-        creator: s.creator
-      })))
-      
-      if (scenes.value.length > 0) {
-        const firstScene = scenes.value[0]
-        console.log('测试第一个场景的权限:', canEditScene(firstScene))
-      }
-    }
     
     // 方法
     const loadScenes = async () => {
@@ -720,9 +695,8 @@ export default {
       formatDateShort,
       handleDetailDialogClose,
       canEditScene,
-      canDeleteScene,
-      clearUserCache,
-      testPermissionCheck
+      canDeleteScene
+     
     }
   }
 }

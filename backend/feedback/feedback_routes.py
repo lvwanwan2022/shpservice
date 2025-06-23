@@ -655,6 +655,15 @@ def get_feedback_stats():
         module_result = execute_query(module_sql)
         stats['by_module'] = {item['module']: item['count'] for item in module_result}
         
+        # 按类型统计
+        type_sql = """
+        SELECT type, COUNT(*) as count 
+        FROM feedback_items 
+        GROUP BY type
+        """
+        type_result = execute_query(type_sql)
+        stats['by_type'] = {item['type']: item['count'] for item in type_result}
+        
         return jsonify({
             'code': 200,
             'message': '获取成功',

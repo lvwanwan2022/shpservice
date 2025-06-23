@@ -2,7 +2,7 @@
   <el-dialog
     v-model="visible"
     title="反馈统计信息"
-    width="600px"
+    width="800px"
     class="feedback-stats-dialog"
   >
     <div v-if="loading" class="loading-container">
@@ -27,6 +27,10 @@
             <div class="stat-label">问题反馈</div>
           </div>
           <div class="stat-item">
+            <div class="stat-number">{{ getOtherCategoryCount() }}</div>
+            <div class="stat-label">其他分类</div>
+          </div>
+          <div class="stat-item">
             <div class="stat-number">{{ getResolvedCount() }}</div>
             <div class="stat-label">已解决</div>
           </div>
@@ -36,109 +40,48 @@
       <!-- 按分类统计 -->
       <div class="stats-section">
         <h3>按分类统计</h3>
-        <div class="category-stats">
-          <div class="progress-item">
-            <div class="progress-header">
-              <span>功能建议</span>
-              <span>{{ getFeatureCount() }}</span>
-            </div>
-            <el-progress 
-              :percentage="getFeaturePercentage()" 
-              :color="'#67c23a'"
-              :show-text="false"
-            />
-          </div>
-          <div class="progress-item">
-            <div class="progress-header">
-              <span>问题反馈</span>
-              <span>{{ getBugCount() }}</span>
-            </div>
-            <el-progress 
-              :percentage="getBugPercentage()" 
-              :color="'#f56c6c'"
-              :show-text="false"
-            />
-          </div>
+        <div class="chart-container">
+          <v-chart 
+            class="chart" 
+            :option="categoryChartOption" 
+            autoresize
+          />
         </div>
       </div>
 
       <!-- 按模块统计 -->
       <div class="stats-section">
         <h3>按模块统计</h3>
-        <div class="module-stats">
-          <div class="progress-item">
-            <div class="progress-header">
-              <span>前端</span>
-              <span>{{ getFrontendCount() }}</span>
-            </div>
-            <el-progress 
-              :percentage="getFrontendPercentage()" 
-              :color="'#409eff'"
-              :show-text="false"
-            />
-          </div>
-          <div class="progress-item">
-            <div class="progress-header">
-              <span>后端</span>
-              <span>{{ getBackendCount() }}</span>
-            </div>
-            <el-progress 
-              :percentage="getBackendPercentage()" 
-              :color="'#e6a23c'"
-              :show-text="false"
-            />
-          </div>
+        <div class="chart-container">
+          <v-chart 
+            class="chart" 
+            :option="moduleChartOption" 
+            autoresize
+          />
+        </div>
+      </div>
+
+      <!-- 按修改类型统计 -->
+      <div class="stats-section">
+        <h3>按修改类型统计</h3>
+        <div class="chart-container">
+          <v-chart 
+            class="chart" 
+            :option="typeChartOption" 
+            autoresize
+          />
         </div>
       </div>
 
       <!-- 按状态统计 -->
       <div class="stats-section">
         <h3>按状态统计</h3>
-        <div class="status-stats">
-          <div class="progress-item">
-            <div class="progress-header">
-              <span>待处理</span>
-              <span>{{ getOpenCount() }}</span>
-            </div>
-            <el-progress 
-              :percentage="getOpenPercentage()" 
-              :color="'#909399'"
-              :show-text="false"
-            />
-          </div>
-          <div class="progress-item">
-            <div class="progress-header">
-              <span>处理中</span>
-              <span>{{ getInProgressCount() }}</span>
-            </div>
-            <el-progress 
-              :percentage="getInProgressPercentage()" 
-              :color="'#e6a23c'"
-              :show-text="false"
-            />
-          </div>
-          <div class="progress-item">
-            <div class="progress-header">
-              <span>已解决</span>
-              <span>{{ getResolvedCount() }}</span>
-            </div>
-            <el-progress 
-              :percentage="getResolvedPercentage()" 
-              :color="'#67c23a'"
-              :show-text="false"
-            />
-          </div>
-          <div class="progress-item">
-            <div class="progress-header">
-              <span>已关闭</span>
-              <span>{{ getClosedCount() }}</span>
-            </div>
-            <el-progress 
-              :percentage="getClosedPercentage()" 
-              :color="'#c0c4cc'"
-              :show-text="false"
-            />
-          </div>
+        <div class="chart-container">
+          <v-chart 
+            class="chart" 
+            :option="statusChartOption" 
+            autoresize
+          />
         </div>
       </div>
 
@@ -147,7 +90,7 @@
         <h3>趋势分析</h3>
         <div class="trend-analysis">
           <div class="trend-item">
-            <el-icon><TrendCharts /></el-icon>
+            <div class="trend-icon">📈</div>
             <div class="trend-content">
               <div class="trend-title">解决率</div>
               <div class="trend-value">
@@ -156,7 +99,7 @@
             </div>
           </div>
           <div class="trend-item">
-            <el-icon><DataBoard /></el-icon>
+            <div class="trend-icon">📊</div>
             <div class="trend-content">
               <div class="trend-title">功能vs问题比例</div>
               <div class="trend-value">
@@ -165,11 +108,29 @@
             </div>
           </div>
           <div class="trend-item">
-            <el-icon><Monitor /></el-icon>
+            <div class="trend-icon">💻</div>
             <div class="trend-content">
               <div class="trend-title">前端vs后端比例</div>
               <div class="trend-value">
                 {{ getFrontendBackendRatio() }}
+              </div>
+            </div>
+          </div>
+          <div class="trend-item">
+            <div class="trend-icon">⚙️</div>
+            <div class="trend-content">
+              <div class="trend-title">最活跃模块</div>
+              <div class="trend-value">
+                {{ getMostActiveModule() }}
+              </div>
+            </div>
+          </div>
+          <div class="trend-item">
+            <div class="trend-icon">🔧</div>
+            <div class="trend-content">
+              <div class="trend-title">最常见类型</div>
+              <div class="trend-value">
+                {{ getMostCommonType() }}
               </div>
             </div>
           </div>
@@ -185,8 +146,7 @@
       <div class="dialog-footer">
         <el-button @click="visible = false">关闭</el-button>
         <el-button type="primary" @click="refreshStats">
-          <el-icon><Refresh /></el-icon>
-          刷新数据
+          🔄 刷新数据
         </el-button>
       </div>
     </template>
@@ -196,21 +156,32 @@
 <script>
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+// 移除不需要的图标导入
+import { use } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import { PieChart } from 'echarts/charts'
 import {
-  TrendCharts,
-  DataBoard,
-  Monitor,
-  Refresh
-} from '@element-plus/icons-vue'
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  GridComponent
+} from 'echarts/components'
+import VChart from 'vue-echarts'
 import feedbackApi from '../api/feedbackApi'
+
+use([
+  CanvasRenderer,
+  PieChart,
+  TitleComponent,
+  TooltipComponent,
+  LegendComponent,
+  GridComponent
+])
 
 export default {
   name: 'FeedbackStatsDialog',
   components: {
-    TrendCharts,
-    DataBoard,
-    Monitor,
-    Refresh
+    VChart
   },
   props: {
     modelValue: {
@@ -270,6 +241,10 @@ export default {
       return stats.value?.by_category?.bug || 0
     }
 
+    const getOtherCategoryCount = () => {
+      return stats.value?.by_category?.othercategory || 0
+    }
+
     const getFeaturePercentage = () => {
       const total = stats.value?.total || 0
       if (total === 0) return 0
@@ -282,6 +257,12 @@ export default {
       return Math.round((getBugCount() / total) * 100)
     }
 
+    const getOtherCategoryPercentage = () => {
+      const total = stats.value?.total || 0
+      if (total === 0) return 0
+      return Math.round((getOtherCategoryCount() / total) * 100)
+    }
+
     // 模块统计计算
     const getFrontendCount = () => {
       return stats.value?.by_module?.frontend || 0
@@ -289,6 +270,26 @@ export default {
 
     const getBackendCount = () => {
       return stats.value?.by_module?.backend || 0
+    }
+
+    const getDatabaseCount = () => {
+      return stats.value?.by_module?.database || 0
+    }
+
+    const getApiCount = () => {
+      return stats.value?.by_module?.api || 0
+    }
+
+    const getDeploymentCount = () => {
+      return stats.value?.by_module?.deployment || 0
+    }
+
+    const getDocumentationCount = () => {
+      return stats.value?.by_module?.documentation || 0
+    }
+
+    const getOtherModuleCount = () => {
+      return stats.value?.by_module?.othermodule || 0
     }
 
     const getFrontendPercentage = () => {
@@ -301,6 +302,107 @@ export default {
       const total = stats.value?.total || 0
       if (total === 0) return 0
       return Math.round((getBackendCount() / total) * 100)
+    }
+
+    const getDatabasePercentage = () => {
+      const total = stats.value?.total || 0
+      if (total === 0) return 0
+      return Math.round((getDatabaseCount() / total) * 100)
+    }
+
+    const getApiPercentage = () => {
+      const total = stats.value?.total || 0
+      if (total === 0) return 0
+      return Math.round((getApiCount() / total) * 100)
+    }
+
+    const getDeploymentPercentage = () => {
+      const total = stats.value?.total || 0
+      if (total === 0) return 0
+      return Math.round((getDeploymentCount() / total) * 100)
+    }
+
+    const getDocumentationPercentage = () => {
+      const total = stats.value?.total || 0
+      if (total === 0) return 0
+      return Math.round((getDocumentationCount() / total) * 100)
+    }
+
+    const getOtherModulePercentage = () => {
+      const total = stats.value?.total || 0
+      if (total === 0) return 0
+      return Math.round((getOtherModuleCount() / total) * 100)
+    }
+
+    // 修改类型统计计算
+    const getUiCount = () => {
+      return stats.value?.by_type?.ui || 0
+    }
+
+    const getCodeCount = () => {
+      return stats.value?.by_type?.code || 0
+    }
+
+    const getPerformanceCount = () => {
+      return stats.value?.by_type?.performance || 0
+    }
+
+    const getFeatureTypeCount = () => {
+      return stats.value?.by_type?.feature || 0
+    }
+
+    const getArchitectureCount = () => {
+      return stats.value?.by_type?.architecture || 0
+    }
+
+    const getSecurityCount = () => {
+      return stats.value?.by_type?.security || 0
+    }
+
+    const getOtherTypeCount = () => {
+      return stats.value?.by_type?.othertype || 0
+    }
+
+    const getUiPercentage = () => {
+      const total = stats.value?.total || 0
+      if (total === 0) return 0
+      return Math.round((getUiCount() / total) * 100)
+    }
+
+    const getCodePercentage = () => {
+      const total = stats.value?.total || 0
+      if (total === 0) return 0
+      return Math.round((getCodeCount() / total) * 100)
+    }
+
+    const getPerformancePercentage = () => {
+      const total = stats.value?.total || 0
+      if (total === 0) return 0
+      return Math.round((getPerformanceCount() / total) * 100)
+    }
+
+    const getFeatureTypePercentage = () => {
+      const total = stats.value?.total || 0
+      if (total === 0) return 0
+      return Math.round((getFeatureTypeCount() / total) * 100)
+    }
+
+    const getArchitecturePercentage = () => {
+      const total = stats.value?.total || 0
+      if (total === 0) return 0
+      return Math.round((getArchitectureCount() / total) * 100)
+    }
+
+    const getSecurityPercentage = () => {
+      const total = stats.value?.total || 0
+      if (total === 0) return 0
+      return Math.round((getSecurityCount() / total) * 100)
+    }
+
+    const getOtherTypePercentage = () => {
+      const total = stats.value?.total || 0
+      if (total === 0) return 0
+      return Math.round((getOtherTypeCount() / total) * 100)
     }
 
     // 状态统计计算
@@ -390,6 +492,226 @@ export default {
       return `${frontendCount / divisor}:${backendCount / divisor}`
     }
 
+    const getMostActiveModule = () => {
+      const moduleStats = stats.value?.by_module || {}
+      const moduleLabels = {
+        frontend: '前端',
+        backend: '后端',
+        database: '数据库',
+        api: 'API',
+        deployment: '部署',
+        documentation: '文档',
+        othermodule: '其他'
+      }
+      
+      let maxCount = 0
+      let mostActiveModule = '暂无'
+      
+      Object.keys(moduleStats).forEach(module => {
+        if (moduleStats[module] > maxCount) {
+          maxCount = moduleStats[module]
+          mostActiveModule = moduleLabels[module] || module
+        }
+      })
+      
+      return mostActiveModule
+    }
+
+    const getMostCommonType = () => {
+      const typeStats = stats.value?.by_type || {}
+      const typeLabels = {
+        ui: '界面优化',
+        code: '代码修改',
+        performance: '性能优化',
+        feature: '功能新增',
+        architecture: '架构调整',
+        security: '安全修复',
+        othertype: '其他'
+      }
+      
+      let maxCount = 0
+      let mostCommonType = '暂无'
+      
+      Object.keys(typeStats).forEach(type => {
+        if (typeStats[type] > maxCount) {
+          maxCount = typeStats[type]
+          mostCommonType = typeLabels[type] || type
+        }
+      })
+      
+      return mostCommonType
+    }
+
+    // 图表选项计算属性
+    const categoryChartOption = computed(() => {
+      const data = [
+        { value: getFeatureCount(), name: '功能建议' },
+        { value: getBugCount(), name: '问题反馈' },
+        { value: getOtherCategoryCount(), name: '其他分类' }
+      ].filter(item => item.value > 0)
+
+      return {
+        title: {
+          text: '分类分布',
+          left: 'center',
+          textStyle: { fontSize: 14 }
+        },
+        tooltip: {
+          trigger: 'item',
+          formatter: '{a} <br/>{b}: {c} ({d}%)'
+        },
+        legend: {
+          orient: 'vertical',
+          left: 'left',
+          textStyle: { fontSize: 12 }
+        },
+        series: [
+          {
+            name: '分类统计',
+            type: 'pie',
+            radius: '50%',
+            data: data,
+            emphasis: {
+              itemStyle: {
+                shadowBlur: 10,
+                shadowOffsetX: 0,
+                shadowColor: 'rgba(0, 0, 0, 0.5)'
+              }
+            }
+          }
+        ]
+      }
+    })
+
+    const moduleChartOption = computed(() => {
+      const data = [
+        { value: getFrontendCount(), name: '前端' },
+        { value: getBackendCount(), name: '后端' },
+        { value: getDatabaseCount(), name: '数据库' },
+        { value: getApiCount(), name: 'API' },
+        { value: getDeploymentCount(), name: '部署' },
+        { value: getDocumentationCount(), name: '文档' },
+        { value: getOtherModuleCount(), name: '其他模块' }
+      ].filter(item => item.value > 0)
+
+      return {
+        title: {
+          text: '模块分布',
+          left: 'center',
+          textStyle: { fontSize: 14 }
+        },
+        tooltip: {
+          trigger: 'item',
+          formatter: '{a} <br/>{b}: {c} ({d}%)'
+        },
+        legend: {
+          orient: 'vertical',
+          left: 'left',
+          textStyle: { fontSize: 12 }
+        },
+        series: [
+          {
+            name: '模块统计',
+            type: 'pie',
+            radius: '50%',
+            data: data,
+            emphasis: {
+              itemStyle: {
+                shadowBlur: 10,
+                shadowOffsetX: 0,
+                shadowColor: 'rgba(0, 0, 0, 0.5)'
+              }
+            }
+          }
+        ]
+      }
+    })
+
+    const typeChartOption = computed(() => {
+      const data = [
+        { value: getUiCount(), name: '界面优化' },
+        { value: getCodeCount(), name: '代码修改' },
+        { value: getPerformanceCount(), name: '性能优化' },
+        { value: getFeatureTypeCount(), name: '功能新增' },
+        { value: getArchitectureCount(), name: '架构调整' },
+        { value: getSecurityCount(), name: '安全修复' },
+        { value: getOtherTypeCount(), name: '其他类型' }
+      ].filter(item => item.value > 0)
+
+      return {
+        title: {
+          text: '修改类型分布',
+          left: 'center',
+          textStyle: { fontSize: 14 }
+        },
+        tooltip: {
+          trigger: 'item',
+          formatter: '{a} <br/>{b}: {c} ({d}%)'
+        },
+        legend: {
+          orient: 'vertical',
+          left: 'left',
+          textStyle: { fontSize: 12 }
+        },
+        series: [
+          {
+            name: '类型统计',
+            type: 'pie',
+            radius: '50%',
+            data: data,
+            emphasis: {
+              itemStyle: {
+                shadowBlur: 10,
+                shadowOffsetX: 0,
+                shadowColor: 'rgba(0, 0, 0, 0.5)'
+              }
+            }
+          }
+        ]
+      }
+    })
+
+    const statusChartOption = computed(() => {
+      const data = [
+        { value: getOpenCount(), name: '待处理' },
+        { value: getInProgressCount(), name: '处理中' },
+        { value: getResolvedCount(), name: '已解决' },
+        { value: getClosedCount(), name: '已关闭' }
+      ].filter(item => item.value > 0)
+
+      return {
+        title: {
+          text: '状态分布',
+          left: 'center',
+          textStyle: { fontSize: 14 }
+        },
+        tooltip: {
+          trigger: 'item',
+          formatter: '{a} <br/>{b}: {c} ({d}%)'
+        },
+        legend: {
+          orient: 'vertical',
+          left: 'left',
+          textStyle: { fontSize: 12 }
+        },
+        series: [
+          {
+            name: '状态统计',
+            type: 'pie',
+            radius: '50%',
+            data: data,
+            emphasis: {
+              itemStyle: {
+                shadowBlur: 10,
+                shadowOffsetX: 0,
+                shadowColor: 'rgba(0, 0, 0, 0.5)'
+              }
+            }
+          }
+        ]
+      }
+    })
+
     return {
       loading,
       stats,
@@ -402,14 +724,42 @@ export default {
       // 分类统计
       getFeatureCount,
       getBugCount,
+      getOtherCategoryCount,
       getFeaturePercentage,
       getBugPercentage,
+      getOtherCategoryPercentage,
 
       // 模块统计
       getFrontendCount,
       getBackendCount,
+      getDatabaseCount,
+      getApiCount,
+      getDeploymentCount,
+      getDocumentationCount,
+      getOtherModuleCount,
       getFrontendPercentage,
       getBackendPercentage,
+      getDatabasePercentage,
+      getApiPercentage,
+      getDeploymentPercentage,
+      getDocumentationPercentage,
+      getOtherModulePercentage,
+
+      // 修改类型统计
+      getUiCount,
+      getCodeCount,
+      getPerformanceCount,
+      getFeatureTypeCount,
+      getArchitectureCount,
+      getSecurityCount,
+      getOtherTypeCount,
+      getUiPercentage,
+      getCodePercentage,
+      getPerformancePercentage,
+      getFeatureTypePercentage,
+      getArchitecturePercentage,
+      getSecurityPercentage,
+      getOtherTypePercentage,
 
       // 状态统计
       getOpenCount,
@@ -424,7 +774,15 @@ export default {
       // 趋势分析
       getResolveRate,
       getFeatureBugRatio,
-      getFrontendBackendRatio
+      getFrontendBackendRatio,
+      getMostActiveModule,
+      getMostCommonType,
+
+      // 图表选项
+      categoryChartOption,
+      moduleChartOption,
+      typeChartOption,
+      statusChartOption
     }
   }
 }
@@ -495,6 +853,7 @@ export default {
 
 .category-stats,
 .module-stats,
+.type-stats,
 .status-stats {
   display: flex;
   flex-direction: column;
@@ -540,9 +899,10 @@ export default {
   border-radius: 8px;
 }
 
-.trend-item .el-icon {
+.trend-icon {
   font-size: 24px;
-  color: #409eff;
+  min-width: 24px;
+  text-align: center;
 }
 
 .trend-content {
@@ -556,9 +916,22 @@ export default {
 }
 
 .trend-value {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: #303133;
+}
+
+.chart-container {
+  height: 300px;
+  width: 100%;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.chart {
+  height: 100%;
+  width: 100%;
 }
 
 .dialog-footer {
@@ -567,24 +940,10 @@ export default {
   gap: 12px;
 }
 
-/* 响应式设计 */
+/* 响应式布局 */
 @media (max-width: 768px) {
-  .feedback-stats-dialog :deep(.el-dialog) {
-    width: 95vw;
-    margin: 5vh auto;
-  }
-  
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
-  
-  .stat-item {
-    padding: 16px;
-  }
-  
-  .stat-number {
-    font-size: 24px;
   }
   
   .trend-analysis {

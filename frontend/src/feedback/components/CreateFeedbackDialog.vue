@@ -64,6 +64,15 @@
                     <div class="option-desc">发现的bug或异常问题</div>
                   </div>
                 </el-option>
+                <el-option
+                  label="其他"
+                  value="othercategory"
+                >
+                  <div class="option-detail">
+                    <div class="option-title">其他</div>
+                    <div class="option-desc">其他反馈</div>
+                  </div>
+                </el-option>
               </el-select>
             </el-form-item>
           </el-col>
@@ -129,6 +138,15 @@
                   <div class="option-detail">
                     <div class="option-title">文档</div>
                     <div class="option-desc">说明文档、帮助相关</div>
+                  </div>
+                </el-option>
+                <el-option
+                  label="其他"
+                  value="othermodule"
+                >
+                  <div class="option-detail">
+                    <div class="option-title">其他</div>
+                    <div class="option-desc">其他模块</div>
                   </div>
                 </el-option>
               </el-select>
@@ -198,6 +216,15 @@
                     <div class="option-desc">安全漏洞、权限控制相关</div>
                   </div>
                 </el-option>
+                <el-option
+                  label="其他"
+                  value="othertype"
+                >
+                  <div class="option-detail">
+                    <div class="option-title">其他</div>
+                    <div class="option-desc">其他类型</div>
+                  </div>
+                </el-option>
               </el-select>
             </el-form-item>
           </el-col>
@@ -243,23 +270,25 @@
               </template>
             </el-upload>
 
-            <!-- 截图工具 -->
-            <div class="screenshot-tools">
-              <el-button
-                type="primary"
-                icon="Camera"
-                @click="captureScreenshot"
-                :disabled="!isScreenCaptureSupported"
+            <!-- 图片上传工具 -->
+            <div class="image-upload-tools">
+              <el-upload
+                ref="imageUploadRef"
+                :file-list="[]"
+                :auto-upload="false"
+                :multiple="true"
+                :limit="3"
+                accept="image/*"
+                :before-upload="beforeImageUpload"
+                @change="onImageChange"
+                :show-file-list="false"
+                class="image-uploader"
               >
-                截图
-              </el-button>
-              <el-button
-                type="info"
-                icon="Picture"
-                @click="pasteFromClipboard"
-              >
-                从剪贴板粘贴
-              </el-button>
+                <el-button type="primary" icon="Picture">
+                  上传图片
+                </el-button>
+              </el-upload>
+              <span class="upload-tip">支持 jpg/png/gif 格式，最多3张</span>
             </div>
           </div>
         </el-form-item>
@@ -339,6 +368,7 @@ export default {
     const router = useRouter()
     const formRef = ref()
     const uploadRef = ref()
+    const imageUploadRef = ref()
     const submitting = ref(false)
     const fileList = ref([])
 
@@ -382,11 +412,6 @@ export default {
     // 支持的文件类型
     const acceptTypes = '.jpg,.jpeg,.png,.gif,.bmp,.webp,.pdf,.doc,.docx,.txt,.md,.zip,.rar,.7z'
 
-    // 检查是否支持屏幕截图
-    const isScreenCaptureSupported = computed(() => {
-      return navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia
-    })
-
     // 文件类型判断
     const isImage = (file) => {
       return file.type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(file.name)
@@ -428,9 +453,50 @@ export default {
       return true
     }
 
+    // 图片上传前检查
+    const beforeImageUpload = (file) => {
+      const isValidImage = file.type.startsWith('image/')
+      if (!isValidImage) {
+        ElMessage.error('只能上传图片文件')
+        return false
+      }
+
+      const isLt5M = file.size / 1024 / 1024 < 5
+      if (!isLt5M) {
+        ElMessage.error('图片大小不能超过 5MB')
+        return false
+      }
+
+      // 检查图片数量
+      const imageCount = fileList.value.filter(f => isImage(f)).length
+      if (imageCount >= 3) {
+        ElMessage.error('最多只能上传3张图片')
+        return false
+      }
+
+      return true
+    }
+
     // 文件变化处理
     const onFileChange = (file, files) => {
       fileList.value = files
+    }
+
+    // 图片变化处理
+    const onImageChange = (file) => {
+      if (file.raw && beforeImageUpload(file.raw)) {
+        const imageFile = {
+          uid: Date.now() + Math.random(),
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          raw: file.raw,
+          status: 'ready'
+        }
+        
+        fileList.value.push(imageFile)
+        ElMessage.success('图片添加成功')
+      }
     }
 
     // 移除文件
@@ -442,89 +508,6 @@ export default {
       const index = fileList.value.findIndex(f => f.uid === file.uid)
       if (index > -1) {
         fileList.value.splice(index, 1)
-      }
-    }
-
-    // 截图功能
-    const captureScreenshot = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: true
-        })
-        
-        const video = document.createElement('video')
-        video.srcObject = stream
-        video.play()
-
-        video.addEventListener('loadedmetadata', () => {
-          const canvas = document.createElement('canvas')
-          canvas.width = video.videoWidth
-          canvas.height = video.videoHeight
-          
-          const ctx = canvas.getContext('2d')
-          ctx.drawImage(video, 0, 0)
-          
-          canvas.toBlob((blob) => {
-            const file = new File([blob], `screenshot-${Date.now()}.png`, {
-              type: 'image/png'
-            })
-            
-            // 添加到文件列表
-            const fileObj = {
-              uid: Date.now(),
-              name: file.name,
-              size: file.size,
-              type: file.type,
-              raw: file,
-              status: 'ready'
-            }
-            
-            fileList.value.push(fileObj)
-            ElMessage.success('截图成功')
-          })
-          
-          // 停止屏幕共享
-          stream.getTracks().forEach(track => track.stop())
-        })
-      } catch (error) {
-        console.error('截图失败:', error)
-        ElMessage.error('截图失败，请检查浏览器权限')
-      }
-    }
-
-    // 从剪贴板粘贴
-    const pasteFromClipboard = async () => {
-      try {
-        const clipboardItems = await navigator.clipboard.read()
-        
-        for (const clipboardItem of clipboardItems) {
-          for (const type of clipboardItem.types) {
-            if (type.startsWith('image/')) {
-              const blob = await clipboardItem.getType(type)
-              const file = new File([blob], `clipboard-${Date.now()}.png`, {
-                type: blob.type
-              })
-              
-              const fileObj = {
-                uid: Date.now(),
-                name: file.name,
-                size: file.size,
-                type: file.type,
-                raw: file,
-                status: 'ready'
-              }
-              
-              fileList.value.push(fileObj)
-              ElMessage.success('粘贴成功')
-              return
-            }
-          }
-        }
-        
-        ElMessage.warning('剪贴板中没有图片')
-      } catch (error) {
-        console.error('粘贴失败:', error)
-        ElMessage.error('粘贴失败，请检查浏览器权限')
       }
     }
 
@@ -553,7 +536,7 @@ export default {
                 await feedbackApi.uploadAttachment(
                   feedbackId, 
                   file.raw, 
-                  file.name.includes('screenshot') || file.name.includes('clipboard')
+                  false // 不再需要判断是否为截图
                 )
               } catch (uploadError) {
                 console.error('文件上传失败:', uploadError)
@@ -628,21 +611,21 @@ export default {
     return {
       formRef,
       uploadRef,
+      imageUploadRef,
       submitting,
       form,
       rules,
       visible,
       fileList,
       acceptTypes,
-      isScreenCaptureSupported,
 
       // 方法
       beforeUpload,
+      beforeImageUpload,
       onFileChange,
+      onImageChange,
       onFileRemove,
       removeFile,
-      captureScreenshot,
-      pasteFromClipboard,
       submitFeedback,
       handleClose,
 
@@ -726,10 +709,21 @@ export default {
   width: 100%;
 }
 
-.screenshot-tools {
+.image-upload-tools {
   margin-top: 12px;
   display: flex;
+  align-items: center;
   gap: 12px;
+}
+
+.image-uploader {
+  display: inline-block;
+}
+
+.upload-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-left: 8px;
 }
 
 .file-preview {
@@ -791,8 +785,14 @@ export default {
     padding-bottom: 16px;
   }
   
-  .screenshot-tools {
+  .image-upload-tools {
     flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .upload-tip {
+    margin-left: 0;
+    margin-top: 8px;
   }
   
   .file-item {

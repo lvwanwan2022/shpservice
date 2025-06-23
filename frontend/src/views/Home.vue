@@ -11,20 +11,7 @@
   <div class="home-container">
     <h1>GIS服务管理系统</h1>
     <div class="home-card-container">
-      <el-card class="home-card" @click="goToMap">
-        <div class="card-icon">
-          <i class="el-icon-map-location"></i>
-        </div>
-        <div class="card-title">地图浏览(Leaflet)</div>
-        <div class="card-desc">使用Leaflet浏览地图服务和图层数据</div>
-      </el-card>
-      <el-card class="home-card" @click="goToMapOL">
-        <div class="card-icon">
-          <i class="el-icon-location"></i>
-        </div>
-        <div class="card-title">地图浏览(OpenLayers)</div>
-        <div class="card-desc">使用OpenLayers浏览地图服务和图层数据</div>
-      </el-card>
+
       <el-card class="home-card" @click="goToUpload">
         <div class="card-icon">
           <i class="el-icon-upload"></i>
@@ -39,6 +26,23 @@
         <div class="card-title">场景管理</div>
         <div class="card-desc">创建和管理地图场景配置</div>
       </el-card>
+      <el-card class="home-card" @click="goToMapOL">
+        <div class="card-icon">
+          <i class="el-icon-location"></i>
+        </div>
+        <div class="card-title">地图浏览(OpenLayers)</div>
+        <div class="card-desc">使用OpenLayers浏览地图服务和图层数据</div>
+      </el-card>
+      <el-card class="home-card" @click="goToMap">
+        <div class="card-icon">
+          <i class="el-icon-map-location"></i>
+        </div>
+        <div class="card-title">地图浏览(Leaflet-测试)</div>
+        <div class="card-desc">使用Leaflet浏览地图服务和图层数据</div>
+      </el-card>
+      
+     
+
       <el-card class="home-card" @click="goToFeedback">
         <div class="card-icon">
           <i class="el-icon-chat-line-square"></i>
