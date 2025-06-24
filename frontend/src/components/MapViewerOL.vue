@@ -19,6 +19,20 @@
         </el-button>
       </el-tooltip>
     </div>
+
+    <!-- 右下角信息面板 -->
+    <div class="map-info-panel">
+      <!-- 坐标信息 -->
+      <div class="coordinate-info" v-if="mouseCoordinates">
+        <span class="coordinate-text">{{ mouseCoordinates.lon }}°, {{ mouseCoordinates.lat }}°</span>
+      </div>
+      
+      <!-- 版权信息 -->
+      <div class="copyright-info">
+        <span v-if="currentBaseMapAttribution" v-html="currentBaseMapAttribution"></span>
+        <span v-else>© OpenLayers</span>
+      </div>
+    </div>
     
     <!-- 添加图层对话框 -->
     <el-dialog title="添加图层" v-model="addLayerDialogVisible" width="800px">
@@ -230,6 +244,12 @@ export default {
     // 刷新状态
     const refreshing = ref(false)
     
+    // 鼠标坐标信息
+    const mouseCoordinates = ref(null)
+    
+    // 当前底图版权信息
+    const currentBaseMapAttribution = ref('')
+    
     // 异步初始化坐标系
     const initializeProjections = async () => {
       if (!projectionsInitialized.value) {
@@ -401,9 +421,13 @@ export default {
           source: new XYZ({
             url: 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
             crossOrigin: 'anonymous',
-            projection:  gcj02Mecator // 使用GCJ02坐标系
+            projection: gcj02Mecator, // 使用GCJ02坐标系
+            maxZoom: 18,              // 高德地图原生最大缩放级别
+            minZoom: 3                // 最小缩放级别
           }),
-          visible: true
+          visible: true,
+          maxZoom: 23,                // 允许过采样到更高级别
+          minZoom: 3
         })
         
         // 高德卫星地图 - 使用GCJ02坐标系修正偏移
@@ -411,27 +435,39 @@ export default {
           source: new XYZ({
             url: 'https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
             crossOrigin: 'anonymous',
-            projection: gcj02Mecator // 使用GCJ02坐标系
+            projection: gcj02Mecator, // 使用GCJ02坐标系
+            maxZoom: 18,              // 高德卫星图原生最大缩放级别
+            minZoom: 3
           }),
-          visible: false
+          visible: false,
+          maxZoom: 23,                // 允许过采样到更高级别
+          minZoom: 3
         })
         
         // OpenStreetMap
         const osmLayer = new TileLayer({
           source: new XYZ({
             url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            crossOrigin: 'anonymous'
+            crossOrigin: 'anonymous',
+            maxZoom: 19,              // OSM原生最大缩放级别
+            minZoom: 1
           }),
-          visible: false
+          visible: false,
+          maxZoom: 23,                // 允许过采样到更高级别
+          minZoom: 1
         })
         
         // Esri 世界影像（卫星图）
         const esriSatelliteLayer = new TileLayer({
           source: new XYZ({
             url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-            crossOrigin: 'anonymous'
+            crossOrigin: 'anonymous',
+            maxZoom: 21,              // Esri影像最大缩放级别（原生支持21级）
+            minZoom: 1
           }),
-          visible: false
+          visible: false,
+          maxZoom: 23,                // 允许过采样到更高级别
+          minZoom: 1
         })
         
         //console.log('✅ 底图图层创建成功')
@@ -443,7 +479,9 @@ export default {
           layers: [gaodeLayer, gaodeSatelliteLayer, osmLayer, esriSatelliteLayer],
           view: new View({
             center: fromLonLat([104.0667, 30.6667]), // 成都坐标
-            zoom: 10
+            zoom: 10,
+            maxZoom: 23,  // 全局最大缩放级别（适配所有底图）
+            minZoom: 1    // 全局最小缩放级别
           })
         })
         
@@ -455,14 +493,93 @@ export default {
           esriSatellite: esriSatelliteLayer
         }
         
+        // 7. 添加瓦片加载错误处理
+        const addTileErrorHandling = (layer, layerName) => {
+          layer.getSource().on('tileloaderror', function(event) {
+            console.warn(`${layerName}底图瓦片加载失败:`, event)
+            // 可以在这里添加降级处理或显示用户友好的错误信息
+          })
+        }
+        
+        // 添加过采样监听和调试功能
+        const addOversamplingSupport = (layer, layerName, nativeMaxZoom) => {
+          const source = layer.getSource()
+          
+          // 监听瓦片加载开始
+          source.on('tileloadstart', function(event) {
+            const tileCoord = event.tile.getTileCoord()
+            const z = tileCoord[0]
+            
+            // 检查是否是过采样瓦片
+            if (z > nativeMaxZoom) {
+              console.log(`${layerName}: 正在过采样加载 Z${z} (原生最大Z${nativeMaxZoom})`)
+            }
+          })
+          
+          // 监听瓦片加载成功
+          source.on('tileloadend', function(event) {
+            const tileCoord = event.tile.getTileCoord()
+            const z = tileCoord[0]
+            
+            // 为过采样瓦片添加视觉标识（可选，用于调试）
+            if (z > nativeMaxZoom) {
+              const img = event.tile.getImage()
+              if (img && img.style) {
+                img.style.filter = 'contrast(0.9) brightness(0.95)'
+                img.title = `${layerName}过采样瓦片 (Z${z}/原生Z${nativeMaxZoom})`
+              }
+            }
+          })
+        }
+        
+        addTileErrorHandling(gaodeLayer, '高德地图')
+        addTileErrorHandling(gaodeSatelliteLayer, '高德卫星图')
+        addTileErrorHandling(osmLayer, 'OpenStreetMap')
+        addTileErrorHandling(esriSatelliteLayer, 'Esri影像')
+        
+        // 添加过采样支持
+        addOversamplingSupport(gaodeLayer, '高德地图', 18)
+        addOversamplingSupport(gaodeSatelliteLayer, '高德卫星图', 18)
+        addOversamplingSupport(osmLayer, 'OpenStreetMap', 19)
+        addOversamplingSupport(esriSatelliteLayer, 'Esri影像', 21) // Esri原生支持21级，不需要过采样
+        
+        // 8. 监听缩放级别变化，动态调整底图可见性
+        map.value.getView().on('change:resolution', function() {
+          const currentZoom = map.value.getView().getZoom()
+          const currentBaseLayer = getCurrentVisibleBaseLayer()
+          
+          if (currentBaseLayer) {
+            const layerMaxZoom = currentBaseLayer.getMaxZoom()
+            const layerMinZoom = currentBaseLayer.getMinZoom()
+            
+            // 如果当前缩放级别超出底图支持范围，显示警告
+            if (currentZoom > layerMaxZoom) {
+              console.warn(`当前缩放级别(${Math.floor(currentZoom)})超出底图最大级别(${layerMaxZoom})，可能无法显示瓦片`)
+            } else if (currentZoom < layerMinZoom) {
+              console.warn(`当前缩放级别(${Math.floor(currentZoom)})低于底图最小级别(${layerMinZoom})，可能无法显示瓦片`)
+            }
+          }
+        })
+        
+        // 9. 获取当前可见底图的辅助函数
+        const getCurrentVisibleBaseLayer = () => {
+          const baseLayers = map.value.baseLayers
+          for (const layer of Object.values(baseLayers)) {
+            if (layer.getVisible()) {
+              return layer
+            }
+          }
+          return null
+        }
+        
         //console.log('✅ 地图实例创建成功')
         
-        // 7. 监听地图渲染
+        // 10. 监听地图渲染
         map.value.once('rendercomplete', () => {
           //console.log('🎉 地图首次渲染完成！')
         })
         
-        // 8. 延迟强制更新尺寸
+        // 11. 延迟强制更新尺寸
         setTimeout(() => {
           if (map.value) {
             //console.log('强制更新地图尺寸...')
@@ -470,8 +587,14 @@ export default {
           }
         }, 200)
         
-        // 9. 初始化弹窗
+        // 12. 初始化弹窗
         initializePopup()
+        
+        // 13. 初始化坐标跟踪
+        initializeCoordinateTracking()
+        
+        // 14. 设置底图版权信息
+        updateBaseMapAttribution('gaode')
         
         //console.log('=== 地图初始化完成 ===')
         
@@ -1613,6 +1736,8 @@ export default {
     // 底图切换处理
     const onBaseMapChanged = (baseMapType) => {
       //console.log('切换底图到:', baseMapType)
+      // 更新版权信息
+      updateBaseMapAttribution(baseMapType)
     }
     
     // 设置当前活动图层
@@ -1818,6 +1943,47 @@ export default {
         return coordinates
       }
     }
+
+    // 初始化坐标跟踪功能
+    const initializeCoordinateTracking = () => {
+      if (!map.value) return
+      
+      // 监听鼠标移动事件，更新坐标信息
+      map.value.on('pointermove', function(evt) {
+        if (evt.dragging) return
+        
+        // 获取屏幕坐标对应的地理坐标
+        const coordinate = evt.coordinate
+        
+        // 转换为经纬度（WGS84）
+        const lonLatCoord = transform(coordinate, 'EPSG:3857', 'EPSG:4326')
+        
+        // 更新坐标显示（保留6位小数）
+        mouseCoordinates.value = {
+          lon: Number(lonLatCoord[0]).toFixed(6),
+          lat: Number(lonLatCoord[1]).toFixed(6)
+        }
+      })
+      
+      // 当鼠标离开地图区域时清除坐标显示
+      map.value.on('pointerleave', function() {
+        mouseCoordinates.value = null
+      })
+    }
+
+    // 更新底图版权信息
+    const updateBaseMapAttribution = (baseMapType) => {
+      const attributions = {
+        'gaode': '© 高德地图',
+        'gaodeSatellite': '© 高德地图',
+        'osm': '© OpenStreetMap contributors',
+        'esriSatellite': '© Esri, Maxar, Earthstar Geographics'
+      }
+      
+      currentBaseMapAttribution.value = attributions[baseMapType] || ''
+    }
+    
+    
     
     onMounted(() => {
       nextTick(async () => {
@@ -1941,7 +2107,11 @@ export default {
       applyDxfStylesToLayer,
       popup,
       refreshing,
-      refreshAllLayers
+      refreshAllLayers,
+      mouseCoordinates,
+      currentBaseMapAttribution,
+      initializeCoordinateTracking,
+      updateBaseMapAttribution
     }
   },
   expose: ['showStyleDialog', 'showAddLayerDialog', 'toggleLayerVisibility', 'map', 'bringLayerToTop', 'setActiveLayer', 'currentActiveLayer', 'getLayerCRSInfo', 'transformCoordinates', 'initializeProjections', 'registerProjection', 'projectionsInitialized', 'applyDxfStylesToLayer']
@@ -2145,6 +2315,92 @@ export default {
 .dialog-loading .el-icon {
   margin-bottom: 10px;
   font-size: 24px;
+}
+
+/* 右下角信息面板样式 */
+.map-info-panel {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 6px;
+  pointer-events: none; /* 允许鼠标事件穿透到地图 */
+}
+
+/* 坐标信息样式 */
+.coordinate-info {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 10px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+  color: #666;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.coordinate-text {
+  color: #666;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+/* 版权信息样式 */
+.copyright-info {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 10px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  color: #666;
+  font-weight: 500;
+  line-height: 1.2;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  text-align: right;
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.copyright-info a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.copyright-info a:hover {
+  text-decoration: underline;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .map-info-panel {
+    bottom: 0;
+    right: 0;
+    gap: 4px;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+  
+  .coordinate-info {
+    padding: 2px 4px;
+    font-size: 8px;
+  }
+  
+  .copyright-info {
+    padding: 2px 4px;
+    font-size: 8px;
+    max-width: 150px;
+  }
 }
 
 /* 响应式设计 */

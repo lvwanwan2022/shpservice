@@ -2,7 +2,28 @@
   <div class="map-viewer">
     <div class="map-container" ref="mapContainer"></div>
     
-    <BaseMapSwitcher v-if="map" :map="map" @base-map-changed="onBaseMapChanged" />
+    <!-- 右上角地图控件 -->
+    <div class="map-controls">
+      <BaseMapSwitcherLF v-if="map" :map="map" @base-map-changed="onBaseMapChanged" />
+      <el-tooltip content="刷新图层" placement="left" :show-after="500">
+        <el-button 
+          v-if="map" 
+          type="success" 
+          circle 
+          size="small" 
+          @click="refreshAllLayers"
+          :loading="refreshing"
+          class="refresh-button"
+        >
+          <i class="el-icon-refresh"></i>
+        </el-button>
+      </el-tooltip>
+    </div>
+    
+    <!-- 右下角坐标信息 -->
+    <div class="coordinate-info" v-if="mouseCoordinates">
+      <span class="coordinate-text">{{ mouseCoordinates }}</span>
+    </div>
     
     <!-- 添加图层对话框 -->
     <el-dialog title="添加图层" v-model="addLayerDialogVisible" width="800px">
@@ -167,7 +188,7 @@ import 'leaflet/dist/leaflet.css'
 import 'leaflet.vectorgrid'
 import { createMapLayerWithFallback } from '@/utils/mapServices'
 import { checkMVTSupport } from '@/utils/mvtLayerUtils'
-import BaseMapSwitcher from './BaseMapSwitcher.vue'
+import BaseMapSwitcherLF from './BaseMapSwitcherLF.vue'
 import DxfStyleEditor from './DxfStyleEditor.vue'
 import defaultDxfStylesConfig from '@/config/defaultDxfStyles.json'
 import { MARTIN_BASE_URL } from '@/config/index'
@@ -182,7 +203,7 @@ L.Icon.Default.mergeOptions({
 
 export default {
   name: 'MapViewer',
-  components: { BaseMapSwitcher, DxfStyleEditor, Loading },
+  components: { BaseMapSwitcherLF, DxfStyleEditor, Loading },
   props: {
     sceneId: { type: [Number, String], default: null },
     readonly: { type: Boolean, default: false }
@@ -241,6 +262,15 @@ export default {
       popupsEnabled: true
     })
     
+    // 鼠标坐标信息
+    const mouseCoordinates = ref(null)
+    
+    // 当前底图版权信息
+    const currentBaseMapAttribution = ref('')
+    
+    // 刷新状态
+    const refreshing = ref(false)
+    
     // 安全地显示弹窗的辅助函数
     const safeShowPopup = (latlng, content) => {
       if (!map.value || !latlng || mapState.isAnimating || mapState.isZooming || !mapState.popupsEnabled) {
@@ -284,13 +314,20 @@ export default {
       map.value = L.map(mapContainer.value, {
         center: [35.0, 105.0],
         zoom: 5,
-        crs: L.CRS.EPSG3857
+        crs: L.CRS.EPSG3857,
+        maxZoom: 23,  // 全局最大缩放级别（适配所有底图）
+        minZoom: 1    // 全局最小缩放级别
       })
       
-      const baseLayer = createMapLayerWithFallback()
-      if (baseLayer) baseLayer.addTo(map.value)
+      // 底图将由BaseMapSwitcherLF组件管理，不在这里添加默认底图
       
       L.control.scale({ imperial: false }).addTo(map.value)
+      
+      // 添加鼠标坐标跟踪
+      initializeCoordinateTracking()
+      
+      // 设置默认底图版权信息
+      updateBaseMapAttribution('gaode')
       
       // 添加地图事件监听器，在可能导致弹窗位置错误的操作前关闭所有弹窗
       map.value.on('zoomstart', () => {
@@ -508,8 +545,6 @@ export default {
         //console.log('创建矢量MBTiles图层:', layer.layer_name);
       }
       
-      // 简化事件监听，只保留必要的
-      
       // 根据图层类型添加不同的事件监听器
       if (layer.file_type === 'raster.mbtiles') {
         // 栅格图层事件
@@ -576,6 +611,13 @@ export default {
           // 获取原始地图对象和图层，避免 Vue 响应式代理
           const rawMap = toRaw(map.value)
           const rawLayer = toRaw(mvtLayer)
+          
+          // 设置业务图层的z-index确保在底图之上
+          if (rawLayer.setZIndex) {
+            const zIndex = 100 + Object.keys(mvtLayers.value).length
+            rawLayer.setZIndex(zIndex)
+          }
+          
           rawLayer.addTo(rawMap)
         } else {
           // 如果地图正在动画，等待动画完成
@@ -584,6 +626,13 @@ export default {
               // 获取原始地图对象和图层，避免 Vue 响应式代理
               const rawMap = toRaw(map.value)
               const rawLayer = toRaw(mvtLayer)
+              
+              // 设置业务图层的z-index确保在底图之上
+              if (rawLayer.setZIndex) {
+                const zIndex = 100 + Object.keys(mvtLayers.value).length
+                rawLayer.setZIndex(zIndex)
+              }
+              
               rawLayer.addTo(rawMap)
             } else {
               setTimeout(addWhenReady, 50)
@@ -628,6 +677,13 @@ export default {
         // 获取原始地图对象和图层，避免 Vue 响应式代理
         const rawMap = toRaw(map.value)
         const rawLayer = toRaw(wmsLayer)
+        
+        // 设置WMS图层的z-index确保在底图之上
+        if (rawLayer.setZIndex) {
+          const zIndex = 200 + Object.keys(mapLayers.value).length
+          rawLayer.setZIndex(zIndex)
+        }
+        
         rawLayer.addTo(rawMap)
       }
     }
@@ -690,7 +746,19 @@ export default {
       const rawLayer = toRaw(targetLayer)
       
       if (layer.visibility) {
-        if (!rawMap.hasLayer(rawLayer)) rawMap.addLayer(rawLayer)
+        if (!rawMap.hasLayer(rawLayer)) {
+          // 重新显示图层时设置正确的z-index
+          if (rawLayer.setZIndex) {
+            if (layer.service_type === 'martin') {
+              const zIndex = 100 + Object.keys(mvtLayers.value).length
+              rawLayer.setZIndex(zIndex)
+            } else {
+              const zIndex = 200 + Object.keys(mapLayers.value).length
+              rawLayer.setZIndex(zIndex)
+            }
+          }
+          rawMap.addLayer(rawLayer)
+        }
       } else {
         if (rawMap.hasLayer(rawLayer)) rawMap.removeLayer(rawLayer)
       }
@@ -918,7 +986,114 @@ export default {
     }
     
     // 底图切换事件处理
-    const onBaseMapChanged = () => {}
+    const onBaseMapChanged = (baseMapType) => {
+      console.log(`底图切换到: ${baseMapType}`)
+      updateBaseMapAttribution(baseMapType)
+      
+      // 修复图层显示顺序问题
+      setTimeout(() => {
+        refreshLayersOrder()
+      }, 100)
+    }
+    
+    // 刷新图层显示顺序
+    const refreshLayersOrder = () => {
+      if (!map.value) return
+      
+      console.log('刷新图层显示顺序...')
+      
+      try {
+        // 1. 重新设置所有图层的z-index
+        let mvtIndex = 0
+        let wmsIndex = 0
+        
+        // 设置MVT图层的z-index
+        Object.values(mvtLayers.value).forEach(mvtLayer => {
+          if (mvtLayer && map.value.hasLayer(mvtLayer) && mvtLayer.setZIndex) {
+            mvtLayer.setZIndex(100 + mvtIndex++)
+          }
+        })
+        
+        // 设置WMS图层的z-index
+        Object.values(mapLayers.value).forEach(wmsLayer => {
+          if (wmsLayer && map.value.hasLayer(wmsLayer) && wmsLayer.setZIndex) {
+            wmsLayer.setZIndex(200 + wmsIndex++)
+          }
+        })
+        
+        // 2. 强制重新渲染地图
+        setTimeout(() => {
+          if (map.value) {
+            map.value.invalidateSize()
+            // 触发地图重绘
+            map.value.fire('layerChange')
+          }
+        }, 50)
+        
+        console.log(`已刷新图层z-index: MVT图层${mvtIndex}个, WMS图层${wmsIndex}个`)
+        
+      } catch (error) {
+        console.error('刷新图层顺序失败:', error)
+      }
+    }
+    
+    // 初始化坐标跟踪
+    const initializeCoordinateTracking = () => {
+      if (!map.value) return
+      
+      map.value.on('mousemove', (e) => {
+        if (e.latlng) {
+          const lat = e.latlng.lat.toFixed(6)
+          const lng = e.latlng.lng.toFixed(6)
+          mouseCoordinates.value = `${lng}°, ${lat}°`
+        }
+      })
+      
+      map.value.on('mouseout', () => {
+        mouseCoordinates.value = null
+      })
+    }
+    
+    // 更新底图版权信息
+    const updateBaseMapAttribution = (baseMapType) => {
+      const attributions = {
+        'gaode': '© 高德',
+        'gaodeSatellite': '© 高德',
+        'osm': '© OpenStreetMap',
+        'esriSatellite': '© Esri',
+        'google': '© Google',
+        'tianditu': '© 天地图'
+      }
+      
+      currentBaseMapAttribution.value = attributions[baseMapType] || '© Leaflet'
+    }
+    
+    // 刷新所有图层
+    const refreshAllLayers = async () => {
+      if (!map.value || refreshing.value) return
+      
+      refreshing.value = true
+      
+      try {
+        console.log('开始刷新所有图层...')
+        
+        // 获取当前场景ID
+        const currentSceneId = props.sceneId || route.query.scene_id
+        
+        if (currentSceneId) {
+          // 重新加载场景图层
+          await loadScene(currentSceneId)
+          console.log('图层刷新完成')
+        } else {
+          console.warn('没有场景ID，无法刷新图层')
+        }
+        
+      } catch (error) {
+        console.error('刷新图层失败:', error)
+      } finally {
+        refreshing.value = false
+      }
+    }
     
     // 设置当前活动图层
     const setActiveLayer = (layer) => {
@@ -1371,7 +1546,14 @@ export default {
       setActiveLayer,
       bringLayerToTop,
       refreshMartinLayerStyle,
-      updateMvtLayerStyles
+      updateMvtLayerStyles,
+      mouseCoordinates,
+      currentBaseMapAttribution,
+      initializeCoordinateTracking,
+      updateBaseMapAttribution,
+      refreshing,
+      refreshAllLayers,
+      refreshLayersOrder
     }
   },
   expose: ['showStyleDialog', 'showAddLayerDialog', 'toggleLayerVisibility', 'map', 'bringLayerToTop', 'setActiveLayer', 'currentActiveLayer', 'refreshMartinLayerStyle', 'updateMvtLayerStyles']
@@ -1506,6 +1688,67 @@ export default {
 .dialog-loading .el-icon {
   margin-bottom: 10px;
   font-size: 24px;
+}
+
+/* 地图控件组样式 */
+.map-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.refresh-button {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border: 1px solid #67c23a;
+}
+
+.refresh-button:hover {
+  background-color: #5daf34;
+  border-color: #5daf34;
+}
+
+.refresh-button.is-loading {
+  background-color: #85ce61;
+  border-color: #85ce61;
+}
+
+/* 坐标信息样式 - 匹配Leaflet自带版权信息的样式 */
+.coordinate-info {
+  position: absolute;
+  bottom: 0px; /* 与Leaflet版权信息同一位置 */
+  right: 150px; /* 增加距离，确保不遮挡版权信息 */
+  z-index: 999; /* 降低层级，确保不遮挡Leaflet版权 */
+  background: rgba(255, 255, 255, 0.8); /* 匹配Leaflet版权的透明度 */
+  padding: 0px 5px; /* 匹配Leaflet版权的内边距 */
+  font-size: 11px; /* 匹配Leaflet版权的字体大小 */
+  font-family: 'Helvetica Neue', Arial, Helvetica, sans-serif; /* 匹配Leaflet默认字体 */
+  line-height: 1.5; /* 匹配Leaflet版权的行高 */
+  color: #333; /* 匹配Leaflet版权的文字颜色 */
+  white-space: nowrap;
+  pointer-events: none; /* 允许鼠标事件穿透到地图 */
+  border-radius: 0; /* 移除圆角，匹配Leaflet样式 */
+  box-shadow: none; /* 移除阴影，匹配Leaflet样式 */
+  border: none; /* 移除边框，匹配Leaflet样式 */
+}
+
+.coordinate-text {
+  /* 继承父容器的样式，与Leaflet版权信息保持一致 */
+}
+
+
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .coordinate-info {
+    bottom: 0px; /* 移动端与版权信息同一位置 */
+    right: 60px; /* 移动端版权信息较短，调整位置 */
+    padding: 0px 3px; /* 移动端保持相同的内边距比例 */
+    font-size: 10px; /* 移动端稍微减小字体 */
+  }
 }
 
 /* 响应式设计 */
