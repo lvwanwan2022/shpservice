@@ -1,6 +1,7 @@
 # GIS数据管理系统
 
 一个基于Flask + Vue的GIS数据管理平台，支持多种GIS数据格式的上传、管理、预览和地图可视化。
+项目旨在提供一个灵活、易用的GIS数据管理解决方案，适用于科研、教育及商业领域。计划开源
 
 ## 功能特性
 
@@ -37,19 +38,9 @@
 - PostgreSQL 12+
 - GeoServer 2.20+
 
-### 数据库配置
-```sql
--- 创建数据库
-CREATE DATABASE Geometry;
--- 创建用户（如果需要）
-CREATE USER postgres WITH PASSWORD '123456';
-GRANT ALL PRIVILEGES ON DATABASE Geometry TO postgres;
-```
 
 ### GeoServer配置
 - 访问地址: http://localhost:8083/geoserver
-- 默认用户名: admin
-- 默认密码: geoserver
 
 ## 快速开始
 
@@ -80,17 +71,6 @@ pip install -r requirements.txt
 1. 先安装conda: `conda install geopandas`
 2. 或使用预编译包: `pip install --find-links https://www.lfd.uci.edu/~gohlke/pythonlibs/ geopandas`
 
-#### 配置数据库
-编辑 `backend/config.py` 文件，确保数据库连接信息正确：
-```python
-DB_CONFIG = {
-    'host': 'localhost',
-    'port': 5432,
-    'database': 'Geometry',
-    'user': 'postgres',
-    'password': '123456'
-}
-```
 
 #### 启动后端服务
 ```bash
@@ -191,8 +171,6 @@ DB_CONFIG = {
     'host': 'localhost',
     'port': 5432,
     'database': 'Geometry',
-    'user': 'postgres',
-    'password': '123456'
 }
 
 # GeoServer配置
@@ -545,78 +523,3 @@ CREATE TABLE IF NOT EXISTS public.vector_05492e03
 9.地图浏览页（leaflet和Openlayers）的图层添加对话框中，仅显示自己创建的图层和其他用户设置为公开的图层；
 10.后端数据库表可能需要对应字段，用以标识文件、场景和图层的创建人id和公开/私有状态；
 11.后端接口增加用户信息参数，并根据该参数进行权限判断；
-
-第一阶段：数据库字段补充
-（预计时间：1-2天）
-任务 1.1：检查并补充必要的数据库字段
-✅ users 表：已存在，包含 id, username, password, created_at
-✅ files 表：已有 user_id, is_public 字段
-✅ scenes 表：已有 user_id, is_public 字段
-❌ geoserver_layers 表：需要添加 user_id, is_public 字段
-任务 1.2：更新数据库迁移脚本
-为 geoserver_layers 表添加权限相关字段
-为 vector_martin_services 表确认 user_id 字段存在
-第二阶段：后端认证和权限系统
-（预计时间：3-4天）
-任务 2.1：创建认证相关路由和服务
-创建 backend/routes/auth_routes.py - 登录、注册、登出接口
-创建 backend/services/auth_service.py - 认证服务逻辑
-实现 JWT token 或 session 管理
-任务 2.2：实现权限中间件
-创建权限装饰器函数，用于验证用户身份
-为所有需要权限控制的接口添加用户验证
-任务 2.3：修改现有后端接口
-修改文件相关接口（file_routes.py）添加权限过滤
-修改场景相关接口（scene_routes.py）添加权限过滤
-修改图层相关接口（layer_routes.py）添加权限过滤
-修改 Martin 服务接口添加权限过滤
-第三阶段：前端登录页面和认证状态管理
-（预计时间：2-3天）
-任务 3.1：创建登录相关组件
-创建 frontend/src/views/LoginView.vue - 登录页面
-创建 frontend/src/components/UserProfile.vue - 用户信息组件
-更新路由配置添加登录页面
-任务 3.2：实现前端认证状态管理
-扩展 frontend/src/store/modules/ 添加 auth.js 模块
-实现用户登录状态存储（localStorage/cookie）
-添加路由守卫，未登录跳转到登录页
-任务 3.3：更新API请求拦截器
-修改 frontend/src/api/gis.js 添加用户信息到请求头
-实现token过期自动跳转登录
-第四阶段：前端权限过滤实现
-（预计时间：3-4天）
-任务 4.1：修改数据上传页面
-更新 frontend/src/views/UploadView.vue
-文件列表只显示当前用户和公开文件
-添加文件公开/私有状态切换功能
-任务 4.2：修改场景管理页面
-更新 frontend/src/views/SceneView.vue
-场景列表只显示当前用户和公开场景
-添加场景公开/私有状态切换功能
-任务 4.3：修改地图浏览页面
-更新 frontend/src/views/MapViewLF.vue 和 MapViewOL.vue
-场景下拉框权限过滤
-图层添加对话框权限过滤
-更新相关组件如 MapLayerControl.vue
-第五阶段：用户界面优化和测试
-（预计时间：2-3天）
-任务 5.1：用户体验优化
-添加用户信息显示区域
-实现登出功能
-添加权限不足提示信息
-优化无权限时的界面显示
-任务 5.2：系统测试
-多用户登录测试
-权限隔离测试
-公开/私有状态切换测试
-跨页面权限一致性测试
-第六阶段：部署和文档
-（预计时间：1天）
-任务 6.1：部署准备
-更新数据库迁移脚本
-创建默认管理员用户
-配置生产环境认证参数
-任务 6.2：文档更新
-更新 README.md 用户权限说明
-创建用户使用指南
-记录API接口变更
