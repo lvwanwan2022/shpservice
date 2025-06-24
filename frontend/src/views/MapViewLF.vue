@@ -277,7 +277,7 @@ export default {
       
       // 更新URL参数
       router.replace({
-        name: 'Map',
+        name: 'MapLF',
         query: { scene_id: sceneId }
       })
       
