@@ -61,7 +61,7 @@ export default {
   name: 'HomeView',
   methods: {
     goToMap() {
-      this.$router.push('/map')
+      this.$router.push('/map-lf')
     },
     goToMapOL() {
       this.$router.push('/map-ol')
