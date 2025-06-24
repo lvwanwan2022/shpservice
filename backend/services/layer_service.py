@@ -1,11 +1,11 @@
 '''
-Author: WangNing
+Author: Lvwan-793145268@qq.com
 Date: 2025-05-27 11:25:53
-LastEditors: WangNing
+LastEditors: Lvwan-793145268@qq.com
 LastEditTime: 2025-06-07 10:41:03
 FilePath: \shpservice\backend\services\layer_service.py
 Description: 
-Copyright (c) 2025 by VGE, All Rights Reserved. 
+Copyright (c) 2025 by Lvwan, All Rights Reserved. 
 '''
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-

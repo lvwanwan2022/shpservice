@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 
 """
-Author: WangNing
+Author: Lvwan-793145268@qq.com
 Date: 2025-05-16 21:36:54
-LastEditors: WangNing
+LastEditors: Lvwan-793145268@qq.com
 LastEditTime: 2025-05-23 09:19:19
 FilePath: /shpservice/backend/app.py
 Description: 
-Copyright (c) 2025 by VGE, All Rights Reserved. 
+Copyright (c) 2025 by Lvwan, All Rights Reserved. 
 """
 
 from flask import Flask, jsonify, request, Response

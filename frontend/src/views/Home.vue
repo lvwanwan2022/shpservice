@@ -1,11 +1,11 @@
 <!--
- * @Author: WangNing
+ * @Author: Lvwan-793145268@qq.com
  * @Date: 2025-05-11 22:20:44
- * @LastEditors: WangNing
+ * @LastEditors: Lvwan-793145268@qq.com
  * @LastEditTime: 2025-06-05 16:38:50
  * @FilePath: \shpservice\frontend\src\views\Home.vue
  * @Description: 
- * Copyright (c) 2025 by VGE, All Rights Reserved. 
+ * Copyright (c) 2025 by Lvwan, All Rights Reserved. 
 -->
 <template>
   <div class="home-container">

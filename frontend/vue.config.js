@@ -1,11 +1,11 @@
 /*
- * @Author: WangNing
+ * @Author: Lvwan-793145268@qq.com
  * @Date: 2025-05-11 22:17:16
- * @LastEditors: WangNing
+ * @LastEditors: Lvwan-793145268@qq.com
  * @LastEditTime: 2025-06-03 15:26:42
  * @FilePath: \shpservice\frontend\vue.config.js
  * @Description: 
- * Copyright (c) 2025 by VGE, All Rights Reserved. 
+ * Copyright (c) 2025 by Lvwan, All Rights Reserved. 
  */
 const { defineConfig } = require('@vue/cli-service')
 

@@ -1,11 +1,11 @@
 /*
- * @Author: WangNing
+ * @Author: Lvwan-793145268@qq.com
  * @Date: 2025-05-11 22:17:16
- * @LastEditors: WangNing
+ * @LastEditors: Lvwan-793145268@qq.com
  * @LastEditTime: 2025-05-11 22:58:53
  * @FilePath: \shpservice\frontend\src\main.js
  * @Description: 
- * Copyright (c) 2025 by VGE, All Rights Reserved. 
+ * Copyright (c) 2025 by Lvwan, All Rights Reserved. 
  */
 import { createApp } from 'vue'
 import App from './App.vue'
