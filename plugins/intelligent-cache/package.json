@@ -1,0 +1,45 @@
+{
+  "name": "intelligent-cache-plugin",
+  "version": "1.0.0",
+  "description": "AI-powered intelligent caching system for WebGIS applications",
+  "main": "frontend/index.js",
+  "keywords": ["webgis", "cache", "ai", "prediction", "performance"],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "rbush": "^3.0.1",
+    "idb": "^7.1.1"
+  },
+  "peerDependencies": {
+    "vue": "^3.0.0",
+    "axios": "^1.0.0"
+  },
+  "devDependencies": {
+    "@tensorflow/tfjs": "^4.0.0"
+  },
+  "scripts": {
+    "install": "node scripts/install.js",
+    "uninstall": "node scripts/uninstall.js",
+    "test": "node scripts/test.js",
+    "build": "node scripts/build.js"
+  },
+  "plugin": {
+    "name": "IntelligentCache",
+    "type": "performance",
+    "frontend": {
+      "entry": "frontend/index.js",
+      "components": ["CacheStatsPanel", "CacheControlPanel"],
+      "services": ["CacheManager", "BehaviorTracker", "PredictionEngine"]
+    },
+    "backend": {
+      "entry": "backend/index.py",
+      "routes": ["/api/cache", "/api/prediction", "/api/behavior"],
+      "services": ["CacheManager", "BehaviorAnalyzer", "PredictionService"]
+    },
+    "config": {
+      "frontend": "config/cache-config.js",
+      "backend": "config/ai-config.js"
+    },
+    "models": ["models/behavior_predictor.json", "models/lstm_model.pth"]
+  }
+} 
