@@ -1,7 +1,7 @@
 '''
-Author: WangNing
+Author: Lvwan
 Date: 2025-05-16 21:36:41
-LastEditors: WangNing
+LastEditors: Lvwan
 LastEditTime: 2025-06-13 13:01:11
 FilePath: \shpservice\backend\config.py
 Description: 

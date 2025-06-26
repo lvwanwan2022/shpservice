@@ -8,14 +8,15 @@ web_ui: disable
 #
 # Defaults to `cors: true`, which allows all origins.
 # Sending/Acting on CORS headers can be completely disabled via `cors: false`
-cors:
+cors: true
+#cors:
   # Sets the `Access-Control-Allow-Origin` header [default: *]
   # '*' will use the requests `ORIGIN` header
-  origin:
-    - http://localhost:8080
+  #origin:
+    #- http://localhost:8080
   # Sets `Access-Control-Max-Age` Header. [default: null]
   # null means not setting the header for preflight requests
-  max_age: 3600
+  #max_age: 3600
 postgres:
   connection_string: postgresql://postgres:123456@localhost:5432/Geometry
   pool_size: 20
