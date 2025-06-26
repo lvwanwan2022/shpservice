@@ -364,7 +364,7 @@
             <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
             <template #tip>
               <div class="el-upload__tip">
-                支持格式：dem.tif(最大10GB), dom.tif(最大10GB), vector.mbtiles(矢量瓦片,最大10GB), raster.mbtiles(栅格瓦片,最大10GB), dwg, dxf, geojson, zip(最大500MB, shp需打包成zip上传)<br>
+                支持格式：dem.tif(最大10GB), dom.tif(最大10GB), vector.mbtiles(矢量瓦片,最大10GB), raster.mbtiles(栅格瓦片,最大10GB), dxf, geojson, zip(最大500MB, shp需打包成zip上传)<br>
                 <span style="color: #67C23A; font-size: 12px;">
                   💡 大文件(>500MB)将自动使用分片上传，网络中断时会自动重试，确保上传成功
                 </span>
@@ -482,7 +482,7 @@ export default {
     const fileList = ref([])
     const uploaders = ref([])
     const disciplines = ref(['综合', '测绘', '地勘', '水文', '水工', '施工', '建筑', '金结', '电一', '电二', '消防', '暖通', '给排水', '环水', '移民', '其他'])
-    const fileTypes = ref(['shp', 'dem.tif', 'dom.tif', 'dwg', 'dxf', 'geojson', 'vector.mbtiles', 'raster.mbtiles'])
+    const fileTypes = ref(['shp', 'dem.tif', 'dom.tif', 'dxf', 'geojson', 'vector.mbtiles', 'raster.mbtiles'])
     const total = ref(0)
     const currentPage = ref(1)
     const pageSize = ref(12)
@@ -538,8 +538,8 @@ export default {
       coordinate_system: [
         { 
           validator: (rule, value, callback) => {
-            if (['dwg', 'dxf', 'dom.tif', 'dem.tif'].includes(uploadForm.file_type) && !value) {
-              callback(new Error('DWG/DXF/TIF文件必须选择坐标系'))
+            if (['dxf', 'dom.tif', 'dem.tif'].includes(uploadForm.file_type) && !value) {
+              callback(new Error('DXF/TIF文件必须选择坐标系'))
             } else {
               callback()
             }
@@ -680,7 +680,7 @@ export default {
     // 文件类型变化
     const handleFileTypeChange = (val) => {
       // 如果不是需要坐标系的文件类型，则清空坐标系
-      if (!['dwg', 'dxf', 'dom.tif', 'dem.tif'].includes(val)) {
+      if (!['dxf', 'dom.tif', 'dem.tif'].includes(val)) {
         uploadForm.coordinate_system = ''
       }
     }
@@ -703,7 +703,7 @@ export default {
       //console.log('文件变化:', file)
       
       if (file && file.raw) {
-        const validExtensions = ['tif', 'mbtiles', 'dwg', 'dxf', 'geojson', 'zip']
+        const validExtensions = ['tif', 'mbtiles', 'dxf', 'geojson', 'zip']
         const extension = file.name.split('.').pop().toLowerCase()
         
         if (!validExtensions.includes(extension)) {
@@ -730,8 +730,7 @@ export default {
           }
         } else if (extension === 'dxf') {
           uploadForm.file_type = 'dxf'
-        } else if (extension === 'dwg') {
-          uploadForm.file_type = 'dwg'
+        
         } else if (extension === 'geojson') {
           uploadForm.file_type = 'geojson'
         } else if (extension === 'zip') {
@@ -765,8 +764,8 @@ export default {
         await uploadFormRef.value.validate()
         
         // 验证需要坐标系的文件类型必须有坐标系
-        if (['dwg', 'dxf', 'dom.tif', 'dem.tif'].includes(uploadForm.file_type) && !uploadForm.coordinate_system) {
-          ElMessage.error('DWG/DXF/TIF文件必须选择坐标系')
+        if (['dxf', 'dom.tif', 'dem.tif'].includes(uploadForm.file_type) && !uploadForm.coordinate_system) {
+          ElMessage.error('DXF/TIF文件必须选择坐标系')
           return
         }
         
@@ -1199,7 +1198,7 @@ export default {
 
     // 是否显示坐标系选择
     const showCoordinateSystem = computed(() => {
-      return ['dwg', 'dxf', 'dom.tif', 'dem.tif'].includes(uploadForm.file_type)
+      return [ 'dxf', 'dom.tif', 'dem.tif'].includes(uploadForm.file_type)
     })
 
     // 坐标系搜索相关方法
