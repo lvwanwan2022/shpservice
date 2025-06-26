@@ -470,6 +470,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import gisApi from '@/api/gis'
 import CoordinateSystemSearch from '@/components/CoordinateSystemSearch.vue'
+import { processServiceUrl } from '@/utils/urlUtils.js'
 
 export default {
   name: 'UploadView',
@@ -1131,17 +1132,34 @@ export default {
     // 复制服务地址
     const copyServiceUrl = async (url) => {
       try {
-        await navigator.clipboard.writeText(url)
+        // 使用工具函数处理URL中的localhost地址替换
+        const processedUrl = processServiceUrl(url)
+        
+        await navigator.clipboard.writeText(processedUrl)
         ElMessage.success('服务地址已复制到剪贴板')
+        
+        // 在开发环境下显示URL转换信息
+        if (process.env.NODE_ENV === 'development' && url !== processedUrl) {
+          console.log('原始URL:', url)
+          console.log('处理后URL:', processedUrl)
+        }
       } catch (error) {
         // 降级方案：创建临时输入框
+        const processedUrl = processServiceUrl(url)
+        
         const textArea = document.createElement('textarea')
-        textArea.value = url
+        textArea.value = processedUrl
         document.body.appendChild(textArea)
         textArea.select()
         document.execCommand('copy')
         document.body.removeChild(textArea)
         ElMessage.success('服务地址已复制到剪贴板')
+        
+        // 在开发环境下显示URL转换信息
+        if (process.env.NODE_ENV === 'development' && url !== processedUrl) {
+          console.log('原始URL:', url)
+          console.log('处理后URL:', processedUrl)
+        }
       }
     }
 
