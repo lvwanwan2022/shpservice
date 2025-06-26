@@ -218,6 +218,7 @@ import { register } from 'ol/proj/proj4'
 import  gcj02Mecator  from '@/utils/GCJ02'
 import { MARTIN_BASE_URL } from '@/config/index'
 import { Loading } from '@element-plus/icons-vue'
+import { getRecommendedPreloadLevel, getRecommendedCacheSize, getDeviceType } from '@/utils/deviceUtils'
 
 export default {
   name: 'MapViewerOL',
@@ -416,6 +417,13 @@ export default {
  // 设置GCJ02的有效范围（基于中国区域）
         
 
+        // 获取设备特定的预加载配置
+        const preloadLevel = getRecommendedPreloadLevel()
+        const cacheSize = getRecommendedCacheSize()
+        const deviceType = getDeviceType()
+        
+        console.log(`🚀 地图预加载配置 - 设备类型: ${deviceType}, 预加载级别: ${preloadLevel}, 缓存大小: ${cacheSize}`)
+        
         // 高德地图 - 使用GCJ02坐标系修正偏移
         const gaodeLayer = new TileLayer({
           source: new XYZ({
@@ -423,11 +431,13 @@ export default {
             crossOrigin: 'anonymous',
             projection: gcj02Mecator, // 使用GCJ02坐标系
             maxZoom: 18,              // 高德地图原生最大缩放级别
-            minZoom: 3                // 最小缩放级别
+            minZoom: 3,               // 最小缩放级别
+            cacheSize: cacheSize      // 设置缓存大小
           }),
           visible: true,
           maxZoom: 23,                // 允许过采样到更高级别
-          minZoom: 3
+          minZoom: 3,
+          preload: preloadLevel       // 设置预加载级别
         })
         
         // 高德卫星地图 - 使用GCJ02坐标系修正偏移
@@ -437,11 +447,13 @@ export default {
             crossOrigin: 'anonymous',
             projection: gcj02Mecator, // 使用GCJ02坐标系
             maxZoom: 18,              // 高德卫星图原生最大缩放级别
-            minZoom: 3
+            minZoom: 3,
+            cacheSize: cacheSize      // 设置缓存大小
           }),
           visible: false,
           maxZoom: 23,                // 允许过采样到更高级别
-          minZoom: 3
+          minZoom: 3,
+          preload: preloadLevel       // 设置预加载级别
         })
         
         // OpenStreetMap
@@ -450,11 +462,13 @@ export default {
             url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
             crossOrigin: 'anonymous',
             maxZoom: 19,              // OSM原生最大缩放级别
-            minZoom: 1
+            minZoom: 1,
+            cacheSize: cacheSize      // 设置缓存大小
           }),
           visible: false,
           maxZoom: 23,                // 允许过采样到更高级别
-          minZoom: 1
+          minZoom: 1,
+          preload: preloadLevel       // 设置预加载级别
         })
         
         // Esri 世界影像（卫星图）
@@ -463,11 +477,13 @@ export default {
             url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
             crossOrigin: 'anonymous',
             maxZoom: 21,              // Esri影像最大缩放级别（原生支持21级）
-            minZoom: 1
+            minZoom: 1,
+            cacheSize: cacheSize      // 设置缓存大小
           }),
           visible: false,
           maxZoom: 23,                // 允许过采样到更高级别
-          minZoom: 1
+          minZoom: 1,
+          preload: preloadLevel       // 设置预加载级别
         })
         
         //console.log('✅ 底图图层创建成功')

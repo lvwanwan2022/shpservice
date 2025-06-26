@@ -192,6 +192,7 @@ import BaseMapSwitcherLF from './BaseMapSwitcherLF.vue'
 import DxfStyleEditor from './DxfStyleEditor.vue'
 import defaultDxfStylesConfig from '@/config/defaultDxfStyles.json'
 import { MARTIN_BASE_URL } from '@/config/index'
+import { getRecommendedPreloadLevel, getRecommendedCacheSize, getDeviceType } from '@/utils/deviceUtils'
 
 // 修复Leaflet图标问题
 delete L.Icon.Default.prototype._getIconUrl

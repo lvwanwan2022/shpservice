@@ -29,6 +29,7 @@
 <script>
 import { ref, onMounted } from 'vue'
 import L from 'leaflet'
+import { getRecommendedPreloadLevel, getRecommendedCacheSize, getDeviceType } from '@/utils/deviceUtils'
 
 export default {
   name: 'BaseMapSwitcherLF',
@@ -42,6 +43,13 @@ export default {
     
     // 创建不同的底图图层
     const createBaseMapLayer = (type) => {
+      // 获取设备特定的预加载配置
+      const preloadLevel = getRecommendedPreloadLevel()
+      const cacheSize = getRecommendedCacheSize()
+      const deviceType = getDeviceType()
+      
+      console.log(`🚀 Leaflet地图预加载配置 - 设备类型: ${deviceType}, 预加载级别: ${preloadLevel}, 缓存大小: ${cacheSize}`)
+      
       const subdomains = ['01', '02', '03', '04']
       let url = ''
       let attribution = ''
@@ -58,6 +66,12 @@ export default {
             maxNativeZoom: 18,  // 原生瓦片最大级别
             maxZoom: 23,    // 允许过采样到更高级别
             detectRetina: true,
+            // Leaflet预加载和缓存配置
+            keepBuffer: preloadLevel,     // 预加载级别（桌面3级，移动2级）
+            updateWhenZooming: false,     // 缩放时不立即更新，优化性能
+            updateWhenIdle: true,         // 空闲时更新
+            tileCacheSize: cacheSize,     // 瓦片缓存大小
+            maxConcurrentRequests: deviceType === 'mobile' ? 4 : 6,  // 最大并发请求数
             // 错误瓦片处理
             errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
             // 当瓦片加载失败时的处理
@@ -74,6 +88,12 @@ export default {
             maxNativeZoom: 18,  // 原生瓦片最大级别
             maxZoom: 23,    // 允许过采样到更高级别
             detectRetina: true,
+            // Leaflet预加载和缓存配置
+            keepBuffer: preloadLevel,     // 预加载级别（桌面3级，移动2级）
+            updateWhenZooming: false,     // 缩放时不立即更新，优化性能
+            updateWhenIdle: true,         // 空闲时更新
+            tileCacheSize: cacheSize,     // 瓦片缓存大小
+            maxConcurrentRequests: deviceType === 'mobile' ? 4 : 6,  // 最大并发请求数
             errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
             bounds: [[-85.051128779807, -180], [85.051128779807, 180]]
           }
@@ -88,6 +108,12 @@ export default {
             maxNativeZoom: 19,  // 原生瓦片最大级别
             maxZoom: 23,    // 允许过采样到更高级别
             detectRetina: true,
+            // Leaflet预加载和缓存配置
+            keepBuffer: preloadLevel,     // 预加载级别（桌面3级，移动2级）
+            updateWhenZooming: false,     // 缩放时不立即更新，优化性能
+            updateWhenIdle: true,         // 空闲时更新
+            tileCacheSize: cacheSize,     // 瓦片缓存大小
+            maxConcurrentRequests: deviceType === 'mobile' ? 4 : 6,  // 最大并发请求数
             errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
           }
           break
@@ -100,6 +126,12 @@ export default {
             maxNativeZoom: 21,  // 原生瓦片最大级别（Esri支持到21级）
             maxZoom: 23,    // 允许过采样到更高级别
             detectRetina: true,
+            // Leaflet预加载和缓存配置
+            keepBuffer: preloadLevel,     // 预加载级别（桌面3级，移动2级）
+            updateWhenZooming: false,     // 缩放时不立即更新，优化性能
+            updateWhenIdle: true,         // 空闲时更新
+            tileCacheSize: cacheSize,     // 瓦片缓存大小
+            maxConcurrentRequests: deviceType === 'mobile' ? 4 : 6,  // 最大并发请求数
             errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
           }
           break

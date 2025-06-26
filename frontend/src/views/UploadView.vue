@@ -1139,8 +1139,8 @@ export default {
         
         // 在开发环境下显示URL转换信息
         if (process.env.NODE_ENV === 'development' && url !== processedUrl) {
-          console.log('原始URL:', url)
-          console.log('处理后URL:', processedUrl)
+          //console.log('原始URL:', url)
+          //console.log('处理后URL:', processedUrl)
         }
       } catch (error) {
         // 降级方案：创建临时输入框
@@ -1156,8 +1156,8 @@ export default {
         
         // 在开发环境下显示URL转换信息
         if (process.env.NODE_ENV === 'development' && url !== processedUrl) {
-          console.log('原始URL:', url)
-          console.log('处理后URL:', processedUrl)
+          //console.log('原始URL:', url)
+          //console.log('处理后URL:', processedUrl)
         }
       }
     }
