@@ -694,7 +694,7 @@ export default {
 
     // 处理文件移除
     const handleRemove = () => {
-      ////console.log('文件被移除')
+      //console.log('文件被移除')
       uploadForm.file = null
     }
 
@@ -957,7 +957,7 @@ export default {
       }
       
       try {
-        ////console.log(`发布GeoServer服务：${file.id}`)
+        //console.log(`发布GeoServer服务：${file.id}`)
         
         // 检查需要坐标系的文件类型是否需要坐标系选择
         let publishParams = {}

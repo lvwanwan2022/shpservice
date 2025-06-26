@@ -326,7 +326,7 @@ export default {
         
         // 提供用户反馈
         // const statusText = layer.visibility ? '显示' : '隐藏' // 注释掉未使用的变量
-        ////console.log(`图层"${layer.layer_name}"已${statusText}`)
+        //console.log(`图层"${layer.layer_name}"已${statusText}`)
         
       } catch (error) {
         console.error('更新图层可见性失败', error)
@@ -536,8 +536,8 @@ export default {
 
     // 显示添加图层对话框
     const showAddLayerDialog = () => {
-      ////console.log('showAddLayerDialog called')
-      ////console.log('mapViewerRef.value:', mapViewerRef.value)
+      //console.log('showAddLayerDialog called')
+      //console.log('mapViewerRef.value:', mapViewerRef.value)
       
       if (!mapViewerRef.value) {
         console.error('mapViewerRef.value is null or undefined')
@@ -622,7 +622,7 @@ export default {
 
     // 处理图层添加事件
     const onLayerAdded = (/* event */) => { // 注释掉未使用的参数
-      ////console.log('收到图层添加事件:', event)
+      //console.log('收到图层添加事件:', event)
       // 刷新当前场景的图层列表
       if (selectedSceneId.value) {
         fetchSceneLayers(selectedSceneId.value)

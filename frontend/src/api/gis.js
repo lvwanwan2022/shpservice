@@ -19,7 +19,7 @@ const service = axios.create({
 // 请求拦截器
 service.interceptors.request.use(
   config => {
-    ////console.log('API请求:', config.method?.toUpperCase(), config.url, config.params || config.data)
+    //console.log('API请求:', config.method?.toUpperCase(), config.url, config.params || config.data)
     return config
   },
   error => {
@@ -31,7 +31,7 @@ service.interceptors.request.use(
 // 响应拦截器
 service.interceptors.response.use(
   response => {
-    ////console.log('API响应:', response.status, response.config.url)
+    //console.log('API响应:', response.status, response.config.url)
     const res = response.data
     return res
   },
@@ -69,7 +69,7 @@ async function checkServiceStatus() {
       timeout: 5000 
     })
     if (response.ok) {
-      ////console.log('✅ 后端服务正常')
+      //console.log('✅ 后端服务正常')
     } else {
       console.error('❌ 后端服务异常:', response.status)
     }
@@ -647,7 +647,7 @@ export default {
   
   // 获取图层样式配置
   getLayerStyle(layerId) {
-    ////console.log(`调用API: GET /api/layers/${layerId}/style`)
+    //console.log(`调用API: GET /api/layers/${layerId}/style`)
     
     // 验证layerId
     if (!layerId || layerId === undefined || layerId === null) {
@@ -987,7 +987,7 @@ export default {
   // 发布服务到GeoServer
   async publishServiceToGeoServer(fileId) {
     try {
-      ////console.log('开始发布到GeoServer，文件ID:', fileId)
+      //console.log('开始发布到GeoServer，文件ID:', fileId)
       
       const response = await service({
         url: `/services/geoserver/publish/${fileId}`,
@@ -995,7 +995,7 @@ export default {
         timeout: 300000
       })
       
-      ////console.log('GeoServer发布响应:', response)
+      //console.log('GeoServer发布响应:', response)
       return response
     } catch (error) {
       console.error('发布到GeoServer失败:', error)

@@ -422,7 +422,7 @@ export default {
         const cacheSize = getRecommendedCacheSize()
         const deviceType = getDeviceType()
         
-        console.log(`🚀 地图预加载配置 - 设备类型: ${deviceType}, 预加载级别: ${preloadLevel}, 缓存大小: ${cacheSize}`)
+        //console.log(`🚀 地图预加载配置 - 设备类型: ${deviceType}, 预加载级别: ${preloadLevel}, 缓存大小: ${cacheSize}`)
         
         // 高德地图 - 使用GCJ02坐标系修正偏移
         const gaodeLayer = new TileLayer({
@@ -661,7 +661,7 @@ export default {
         
         // 检查点击位置是否有要素
         const features = map.value.getFeaturesAtPixel(pixel)
-        ////console.log('features',features)
+        //console.log('features',features)
         if (features && features.length > 0) {
           // 找到第一个要素
           const feature = features[0]
@@ -892,7 +892,7 @@ export default {
         
         return (feature) => {
           const properties = feature.getProperties()
-          ////console.log('properties',properties)
+          //console.log('properties',properties)
           const geometryType = feature.getGeometry().getType()
           
           // 🔧 解决MVT layer属性冲突问题 - 后端方案
@@ -1229,7 +1229,7 @@ export default {
             }
           });
           
-          console.log('创建栅格MBTiles图层:', layer.layer_name);
+          //console.log('创建栅格MBTiles图层:', layer.layer_name);
         } else {
 
           
@@ -1495,11 +1495,7 @@ export default {
         const currentZoom = currentView.getZoom()
         const currentRotation = currentView.getRotation()
         
-        console.log('🔄 刷新图层 - 保存视口信息:', {
-          center: currentCenter,
-          zoom: currentZoom,
-          rotation: currentRotation
-        })
+        
 
         // 重新加载场景
         await loadScene(props.sceneId)
@@ -1511,7 +1507,7 @@ export default {
           if (currentRotation !== undefined) {
             map.value.getView().setRotation(currentRotation)
           }
-          console.log('✅ 视口已恢复')
+          //console.log('✅ 视口已恢复')
         }
 
         ElMessage.success('图层刷新成功')
@@ -1687,7 +1683,7 @@ export default {
         //const jsonbig=require('json-bigint')({ storeAsString: true })
         if (serviceType === 'martin') {
           const martinServices = await gisApi.searchMartinServices({ file_id: serviceInfo.file_id })
-          console.log('lv-martinServices:', martinServices)
+          
           const martinService = martinServices.data.services.find(service => service.file_id === serviceInfo.file_id)
           
           if (!martinService) {
@@ -2051,31 +2047,7 @@ export default {
       }
     })
     
-    // // 添加调试代码 - 监听相关数据变化
-    // watch(() => styleDialogVisible.value, (newVal) => {
-    //   console.log('=== MapViewerOL 调试信息 ===')
-    //   console.log('styleDialogVisible:', newVal)
-    //   console.log('currentStyleLayer:', currentStyleLayer.value)
-    //   console.log('activeStyleTab:', activeStyleTab.value)
-    //   console.log('isDxfMartinLayer:', isDxfMartinLayer.value)
-    //   console.log('isVectorLayer:', isVectorLayer.value)
-    //   console.log('hasPointGeometry:', hasPointGeometry.value)
-    //   console.log('hasLineGeometry:', hasLineGeometry.value)
-    //   console.log('hasPolygonGeometry:', hasPolygonGeometry.value)
-    //   console.log('========================')
-    // })
     
-    // watch(() => currentStyleLayer.value, (newVal) => {
-    //   console.log('=== currentStyleLayer 变化 ===')
-    //   console.log('新值:', newVal)
-    //   if (newVal) {
-    //     console.log('service_type:', newVal.service_type)
-    //     console.log('file_type:', newVal.file_type)
-    //     console.log('martin_service_id:', newVal.martin_service_id)
-    //     console.log('完整对象:', JSON.stringify(newVal, null, 2))
-    //   }
-    //   console.log('===========================')
-    // })
     
     return {
       mapContainer,

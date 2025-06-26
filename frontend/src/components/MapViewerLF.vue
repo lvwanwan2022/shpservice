@@ -415,7 +415,7 @@ export default {
         }
 
         const response = await gisApi.getScene(sceneId)
-        console.log('Leaflet场景API响应:', response)
+        //console.log('Leaflet场景API响应:', response)
         
         currentScene.value = response.data.scene
         
@@ -520,7 +520,7 @@ export default {
       
       // 检查是否为栅格mbtiles
       if (layer.file_type === 'raster.mbtiles') {
-        console.log('创建栅格MBTiles图层:', layer.layer_name);
+        //console.log('创建栅格MBTiles图层:', layer.layer_name);
         // 使用普通瓦片图层加载栅格mbtiles
         mvtLayer = L.tileLayer(mvtUrl, {
           maxZoom: 22,
@@ -988,7 +988,7 @@ export default {
     
     // 底图切换事件处理
     const onBaseMapChanged = (baseMapType) => {
-      console.log(`底图切换到: ${baseMapType}`)
+      //console.log(`底图切换到: ${baseMapType}`)
       updateBaseMapAttribution(baseMapType)
       
       // 修复图层显示顺序问题
@@ -1001,7 +1001,7 @@ export default {
     const refreshLayersOrder = () => {
       if (!map.value) return
       
-      console.log('刷新图层显示顺序...')
+      //console.log('刷新图层显示顺序...')
       
       try {
         // 1. 重新设置所有图层的z-index
@@ -1031,7 +1031,7 @@ export default {
           }
         }, 50)
         
-        console.log(`已刷新图层z-index: MVT图层${mvtIndex}个, WMS图层${wmsIndex}个`)
+        //console.log(`已刷新图层z-index: MVT图层${mvtIndex}个, WMS图层${wmsIndex}个`)
         
       } catch (error) {
         console.error('刷新图层顺序失败:', error)
@@ -1076,7 +1076,7 @@ export default {
       refreshing.value = true
       
       try {
-        console.log('开始刷新所有图层...')
+        //console.log('开始刷新所有图层...')
         
         // 获取当前场景ID
         const currentSceneId = props.sceneId || route.query.scene_id
@@ -1084,7 +1084,7 @@ export default {
         if (currentSceneId) {
           // 重新加载场景图层
           await loadScene(currentSceneId)
-          console.log('图层刷新完成')
+          //console.log('图层刷新完成')
         } else {
           console.warn('没有场景ID，无法刷新图层')
         }
@@ -1451,31 +1451,6 @@ export default {
       }
     })
     
-    // 添加调试代码 - 监听相关数据变化
-    // watch(() => styleDialogVisible.value, (newVal) => {
-    //   console.log('=== MapViewerLF 调试信息 ===')
-    //   console.log('styleDialogVisible:', newVal)
-    //   console.log('currentStyleLayer:', currentStyleLayer.value)
-    //   console.log('activeStyleTab:', activeStyleTab.value)
-    //   console.log('isDxfMartinLayer:', isDxfMartinLayer.value)
-    //   console.log('isVectorLayer:', isVectorLayer.value)
-    //   console.log('hasPointGeometry:', hasPointGeometry.value)
-    //   console.log('hasLineGeometry:', hasLineGeometry.value)
-    //   console.log('hasPolygonGeometry:', hasPolygonGeometry.value)
-    //   console.log('========================')
-    // })
-    
-    // watch(() => currentStyleLayer.value, (newVal) => {
-    //   console.log('=== currentStyleLayer 变化 ===')
-    //   console.log('新值:', newVal)
-    //   if (newVal) {
-    //     console.log('service_type:', newVal.service_type)
-    //     console.log('file_type:', newVal.file_type)
-    //     console.log('martin_service_id:', newVal.martin_service_id)
-    //     console.log('完整对象:', JSON.stringify(newVal, null, 2))
-    //   }
-    //   console.log('===========================')
-    // })
     
     onMounted(() => {
       nextTick(() => {

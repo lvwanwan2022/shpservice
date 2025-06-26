@@ -123,7 +123,7 @@ app.mount('#app')
 // 当Leaflet加载完成后应用坐标修复补丁
 const applyGlobalCoordinateFix = () => {
   if (window.L) {
-    ////console.log('应用全局Martin坐标修复补丁...')
+    //console.log('应用全局Martin坐标修复补丁...')
     applyMartinCoordinateFixes(window.L)
   }
 }

@@ -140,7 +140,7 @@ export default {
         currentLayer.value = newLayer
         layerStatus.value = '正常'
         
-        ////console.log(`切换到底图: ${MAP_SERVICES[serviceKey].name}`)
+        //console.log(`切换到底图: ${MAP_SERVICES[serviceKey].name}`)
         ElMessage.success(`已切换到${MAP_SERVICES[serviceKey].name}`)
         
         // 通知父组件

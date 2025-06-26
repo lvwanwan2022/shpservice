@@ -15,7 +15,7 @@ export function patchVectorGridZoomAnimation(L) {
     return
   }
 
-  ////console.log('应用VectorGrid缩放动画修复补丁...')
+  //console.log('应用VectorGrid缩放动画修复补丁...')
 
   // 修复VectorGrid的_animateZoom方法，防止_map为null的错误
   const originalVectorGridPrototype = L.VectorGrid.prototype
@@ -103,7 +103,7 @@ export function patchVectorGridCoordinates(L) {
     return
   }
 
-  ////console.log('应用VectorGrid坐标安全补丁...')
+  //console.log('应用VectorGrid坐标安全补丁...')
 
   const originalProtobuf = L.vectorGrid.protobuf
 
@@ -207,7 +207,7 @@ export function patchVectorGridCoordinates(L) {
  * @param {Object} L - Leaflet对象
  */
 export function applyMartinCoordinateFixes(L) {
-  ////console.log('应用Martin服务坐标修复补丁...')
+  //console.log('应用Martin服务坐标修复补丁...')
   
   try {
     // 应用VectorGrid坐标补丁
@@ -216,7 +216,7 @@ export function applyMartinCoordinateFixes(L) {
     // 应用VectorGrid缩放动画修复补丁
     patchVectorGridZoomAnimation(L)
     
-    ////console.log('Martin服务坐标修复补丁应用完成')
+    //console.log('Martin服务坐标修复补丁应用完成')
   } catch (error) {
     console.error('应用坐标修复补丁失败:', error)
   }

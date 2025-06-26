@@ -54,14 +54,7 @@ export const getBackendUrl = () => apiConfig.backendApi.url
 export const getMartinUrl = () => apiConfig.martinService.url
 export const getGeoServerUrl = () => apiConfig.geoServerService.fullUrl
 
-// 调试信息
-if (process.env.VUE_APP_DEBUG === 'true') {
-  console.log('API配置信息:', {
-    backend: apiConfig.backendApi.url,
-    martin: apiConfig.martinService.url,
-    geoserver: apiConfig.geoServerService.fullUrl
-  })
-}
+
 
 export { apiConfig }
 export default apiConfig 

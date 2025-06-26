@@ -164,8 +164,8 @@
       });
       
       // 添加调试信息
-      console.log('页面加载完成，尝试加载MBTiles图层...');
-      console.log('MBTiles URL:', mbtilesUrl);
+      //console.log('页面加载完成，尝试加载MBTiles图层...');
+      //console.log('MBTiles URL:', mbtilesUrl);
       
       // 尝试获取TileJSON信息，使用超时控制
       const controller = new AbortController();
@@ -182,7 +182,7 @@
           return response.json();
         })
         .then(tileJson => {
-          console.log('TileJSON信息:', tileJson);
+          //console.log('TileJSON信息:', tileJson);
           
           // 如果有bounds信息，自动缩放到数据范围
           if (tileJson.bounds) {

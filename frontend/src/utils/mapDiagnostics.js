@@ -274,7 +274,7 @@ export class MapDiagnostics {
   async runFullDiagnostics(containerElement = null) {
     this.results = []
     
-    ////console.log('开始运行地图诊断...')
+    //console.log('开始运行地图诊断...')
 
     // 1. 检查Leaflet库
     this.checkLeafletLibrary()
@@ -296,7 +296,7 @@ export class MapDiagnostics {
       this.testBasicMapCreation(containerElement)
     }
 
-    ////console.log('诊断完成，结果:', this.results)
+    //console.log('诊断完成，结果:', this.results)
     return this.results
   }
 
@@ -320,18 +320,18 @@ export class MapDiagnostics {
     const report = this.getReport()
     
     console.group('🔍 地图诊断报告')
-    ////console.log(`总计: ${report.summary.total} 项检查`)
-    ////console.log(`✅ 成功: ${report.summary.success}`)
-    ////console.log(`⚠️ 警告: ${report.summary.warning}`)
-    ////console.log(`❌ 错误: ${report.summary.error}`)
+    //console.log(`总计: ${report.summary.total} 项检查`)
+    //console.log(`✅ 成功: ${report.summary.success}`)
+    //console.log(`⚠️ 警告: ${report.summary.warning}`)
+    //console.log(`❌ 错误: ${report.summary.error}`)
     
     console.group('详细结果:')
     for (const result of report.details) {
       const icon = result.status === 'success' ? '✅' : 
                    result.status === 'warning' ? '⚠️' : '❌'
-      ////console.log(`${icon} ${result.test}: ${result.message}`)
+      //console.log(`${icon} ${result.test}: ${result.message}`)
       if (result.details) {
-        ////console.log(`   详情: ${result.details}`)
+        //console.log(`   详情: ${result.details}`)
       }
     }
     console.groupEnd()
