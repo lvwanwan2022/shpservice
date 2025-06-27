@@ -5,9 +5,8 @@
     <!-- 右上角地图控件 -->
     <div class="map-controls">
       <BaseMapSwitcherLF v-if="map" :map="map" @base-map-changed="onBaseMapChanged" />
-      <el-tooltip content="刷新图层" placement="left" :show-after="500">
+      <el-tooltip v-if="map" content="刷新图层" placement="left" :show-after="500">
         <el-button 
-          v-if="map" 
           type="success" 
           circle 
           size="small" 

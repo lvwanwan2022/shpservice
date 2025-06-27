@@ -47,14 +47,20 @@
             <!-- 新的图层卡片列表 -->
             <div class="layer-cards" v-if="layersList && layersList.length > 0">
               <div 
-                v-for="layer in layersList" 
+                v-for="(layer, index) in sortedLayersList" 
                 :key="layer.id" 
                 class="layer-card"
                 :class="{ 
                   'active': currentActiveLayer && currentActiveLayer.scene_layer_id === layer.scene_layer_id,
-                  'invisible': !layer.visibility 
+                  'invisible': !layer.visibility,
+                  'dragging': draggingLayerId === layer.id
                 }"
+                draggable="true"
                 @click="selectLayer(layer)"
+                @dragstart="handleDragStart($event, layer, index)"
+                @dragend="handleDragEnd"
+                @dragover="handleDragOver($event, index)"
+                @drop="handleDrop($event, index)"
               >
                 <div class="layer-card-header">
                   <div class="layer-title">
@@ -130,6 +136,26 @@
                   <span class="tag" :class="getLayerStatusClass(layer)">
                     {{ getLayerStatusText(layer) }}
                   </span>
+                </div>
+                
+                <!-- 🔥 透明度控制 -->
+                <div class="layer-opacity-control" @click.stop>
+                  <div class="opacity-label">
+                    <i class="el-icon-view opacity-icon"></i>
+                    <span class="opacity-text">透明度</span>
+                    <span class="opacity-value">{{ Math.round((layer.opacity || 1) * 100) }}%</span>
+                  </div>
+                  <el-slider
+                    v-model="layer.opacity"
+                    :min="0"
+                    :max="1"
+                    :step="0.1"
+                    :show-tooltip="false"
+                    size="small"
+                    @input="onLayerOpacityChange(layer)"
+                    @click.stop
+                    class="opacity-slider"
+                  />
                 </div>
               </div>
             </div>
@@ -247,7 +273,7 @@
 
 <script>
 /* eslint-disable */
-import { ref, reactive, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import gisApi from '@/api/gis'
@@ -280,6 +306,10 @@ export default {
     const loading = ref(false)
     const layerInfoDialogVisible = ref(false)
     const currentLayerInfo = ref(null)
+    
+    // 拖拽相关状态
+    const draggingLayerId = ref(null)
+    const dragStartIndex = ref(-1)
     const currentActiveLayer = ref(null)
     
     // 获取场景列表
@@ -375,6 +405,14 @@ export default {
         loading.value = true
         const response = await gisApi.getScene(sceneId)
         layersList.value = response.data.layers
+        
+        // 🔥 初始化图层透明度（如果没有设置则默认为1）
+        layersList.value.forEach(layer => {
+          if (layer.opacity === undefined || layer.opacity === null) {
+            layer.opacity = 1
+          }
+        })
+        
         // 清除选中状态
         currentActiveLayer.value = null
       } catch (error) {
@@ -444,6 +482,39 @@ export default {
         ElMessage.error('更新图层可见性失败')
         // 回滚状态
         layer.visibility = !layer.visibility
+      }
+    }
+
+    // 🔥 图层透明度变化处理
+    const onLayerOpacityChange = (layer) => {
+      console.log('图层透明度变化:', layer.layer_name, '透明度:', layer.opacity)
+      
+      // 限制透明度范围
+      if (layer.opacity < 0) layer.opacity = 0
+      if (layer.opacity > 1) layer.opacity = 1
+      
+      console.log('mapViewerRef.value状态:', !!mapViewerRef.value)
+      console.log('updateLayerOpacity方法存在:', !!mapViewerRef.value?.updateLayerOpacity)
+      
+      // 通知MapViewerOL组件更新图层透明度
+      if (mapViewerRef.value && mapViewerRef.value.updateLayerOpacity) {
+        console.log('调用 updateLayerOpacity 方法...')
+        mapViewerRef.value.updateLayerOpacity(layer, layer.opacity)
+      } else if (mapViewerRef.value && mapViewerRef.value.updateLayerProperty) {
+        console.log('fallback: 调用 updateLayerProperty 方法...')
+        // 通用的图层属性更新方法
+        mapViewerRef.value.updateLayerProperty(layer, { opacity: layer.opacity })
+      } else {
+        console.log('fallback: 发送自定义事件...')
+        // 发送自定义事件通知地图组件
+        const event = new CustomEvent('layerOpacityChanged', {
+          detail: {
+            layerId: layer.id,
+            layer: layer,
+            opacity: layer.opacity
+          }
+        })
+        window.dispatchEvent(event)
       }
     }
     
@@ -863,6 +934,19 @@ export default {
       return sceneList.value.find(scene => scene.id === selectedSceneId.value)
     }) */
     
+    // 图层按顺序排序（layer_order大的在上面）
+    const sortedLayersList = computed(() => {
+      if (!layersList.value || !Array.isArray(layersList.value)) {
+        return []
+      }
+      
+      return [...layersList.value].sort((a, b) => {
+        const orderA = a.layer_order || 0
+        const orderB = b.layer_order || 0
+        return orderB - orderA // 降序排列，大的在前面
+      })
+    })
+
     // 图层数量计算属性
     const layerCount = computed(() => {
       return layersList.value ? layersList.value.length : 0
@@ -873,11 +957,201 @@ export default {
       const count = layerCount.value
       return count === 0 ? '暂无图层' : `${count} 个图层`
     }
+
+    // 拖拽开始
+    const handleDragStart = (event, layer, index) => {
+      draggingLayerId.value = String(layer.id)  // 🔥 确保为字符串
+      dragStartIndex.value = index
+      event.dataTransfer.effectAllowed = 'move'
+      event.dataTransfer.setData('text/plain', String(layer.id))  // 🔥 确保为字符串
+      
+      // 🔥 创建优化的拖拽图像
+      createOptimizedDragImage(event, layer)
+    }
+
+    // 🔥 创建优化的拖拽图像
+    const createOptimizedDragImage = (event, layer) => {
+      // 创建一个小巧精美的拖拽图像
+      const dragImage = document.createElement('div')
+      
+      // 限制图层名称长度
+      const displayName = layer.layer_name.length > 20 ? 
+        layer.layer_name.substring(0, 20) + '...' : 
+        layer.layer_name
+      
+      dragImage.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <i class="el-icon-rank" style="font-size: 14px;"></i>
+          <span style="font-size: 12px; font-weight: 500;">${displayName}</span>
+        </div>
+      `
+      
+      // 设置简洁的样式
+      dragImage.style.cssText = `
+        position: absolute;
+        top: -1000px;
+        left: -1000px;
+        background: linear-gradient(135deg, #409EFF, #36A3F7);
+        color: white;
+        padding: 6px 10px;
+        border-radius: 16px;
+        font-size: 12px;
+        box-shadow: 0 4px 15px rgba(64, 158, 255, 0.3);
+        opacity: 0.95;
+        max-width: 180px;
+        white-space: nowrap;
+        z-index: 9999;
+        pointer-events: none;
+        transform: rotate(1deg) scale(0.9);
+        border: 2px solid rgba(255,255,255,0.3);
+      `
+      
+      // 添加到body
+      document.body.appendChild(dragImage)
+      
+      // 设置拖拽图像，调整偏移位置
+      event.dataTransfer.setDragImage(dragImage, 15, 8)
+      
+      // 立即清理
+      setTimeout(() => {
+        if (dragImage.parentNode) {
+          document.body.removeChild(dragImage)
+        }
+      }, 0)
+    }
+
+    // 拖拽结束
+    const handleDragEnd = () => {
+      draggingLayerId.value = null
+      dragStartIndex.value = -1
+      console.log('拖拽操作结束')
+    }
+
+    // 拖拽悬停
+    const handleDragOver = (event, index) => {
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'move'
+    }
+
+    // 拖拽放置
+    const handleDrop = async (event, dropIndex) => {
+      event.preventDefault()
+      
+      const draggedLayerId = parseInt(event.dataTransfer.getData('text/plain'))
+      const startIndex = dragStartIndex.value
+      
+      if (startIndex === dropIndex || startIndex === -1) {
+        return
+      }
+
+      try {
+        // 计算新的图层顺序
+        const newLayersOrder = calculateNewLayersOrder(startIndex, dropIndex)
+        
+        // 批量更新图层顺序
+        await updateLayersOrder(newLayersOrder)
+        
+        ElMessage.success('图层顺序更新成功')
+        
+        // 🔥 立即刷新UI和地图图层顺序
+        await refreshLayersAfterReorder()
+        
+      } catch (error) {
+        console.error('更新图层顺序失败:', error)
+        ElMessage.error('更新图层顺序失败')
+      }
+    }
+
+    // 计算新的图层顺序
+    const calculateNewLayersOrder = (fromIndex, toIndex) => {
+      const sortedLayers = [...sortedLayersList.value]
+      const movedLayer = sortedLayers[fromIndex]
+      
+      // 移除被拖拽的图层
+      sortedLayers.splice(fromIndex, 1)
+      // 插入到新位置
+      sortedLayers.splice(toIndex, 0, movedLayer)
+      
+      // 重新分配layer_order（从大到小，因为显示时是从大到小排序）
+      const newOrders = {}
+      const maxOrder = sortedLayers.length
+      
+      sortedLayers.forEach((layer, index) => {
+        const newOrder = maxOrder - index // 第一个（index=0）获得最大order
+        // 🔥 保持layer_id为字符串，避免大整数精度丢失
+        const layerId = String(layer.id)
+        newOrders[layerId] = newOrder
+      })
+      
+      console.log('计算的新图层顺序:', newOrders)
+      return newOrders
+    }
+
+    // 批量更新图层顺序
+    const updateLayersOrder = async (newOrders) => {
+      console.log('准备发送的数据:', {
+        sceneId: selectedSceneId.value,
+        layerOrders: newOrders
+      })
+      // 使用现有的批量更新接口
+      await gisApi.reorderSceneLayers(selectedSceneId.value, newOrders)
+    }
+
+    // 🔥 拖拽重新排序后的刷新函数
+    const refreshLayersAfterReorder = async () => {
+      try {
+        console.log('开始刷新图层顺序...')
+        
+        // 1. 重新获取场景数据，更新UI中的图层卡片顺序
+        console.log('重新获取场景图层数据...')
+        await fetchSceneLayers(selectedSceneId.value)
+        
+        // 2. 等待下一个tick确保UI已更新
+        await nextTick()
+        
+        // 3. 通知地图组件刷新图层显示顺序
+        if (mapViewerRef.value) {
+          console.log('通知地图组件刷新图层...')
+          
+          // 尝试调用不同的刷新方法
+          if (mapViewerRef.value.refreshAllLayers) {
+            await mapViewerRef.value.refreshAllLayers()
+            console.log('✅ 地图图层已刷新(refreshAllLayers)')
+          }
+          
+          if (mapViewerRef.value.refreshLayerOrder) {
+            await mapViewerRef.value.refreshLayerOrder()
+            console.log('✅ 地图图层顺序已重新排列(refreshLayerOrder)')
+          }
+          
+          // 如果没有专门的刷新方法，尝试重新加载场景
+          if (mapViewerRef.value.loadScene) {
+            await mapViewerRef.value.loadScene(selectedSceneId.value)
+            console.log('✅ 地图场景已重新加载(loadScene)')
+          }
+        } else {
+          console.warn('mapViewerRef不可用，无法刷新地图')
+        }
+        
+        console.log('✅ 图层顺序刷新完成')
+        
+      } catch (error) {
+        console.error('❌ 刷新图层顺序失败:', error)
+        // 如果刷新失败，至少要重新获取数据
+        try {
+          await fetchSceneLayers(selectedSceneId.value)
+          console.log('备用方案：重新获取图层数据成功')
+        } catch (fallbackError) {
+          console.error('备用方案也失败了:', fallbackError)
+        }
+      }
+    }
     
     return {
       sceneList,
       selectedSceneId,
       layersList,
+      sortedLayersList,
       loading,
       layerInfoDialogVisible,
       currentLayerInfo,
@@ -890,6 +1164,7 @@ export default {
       toggleLayerPanel,
       goToSceneManage,
       toggleLayerVisibility,
+      onLayerOpacityChange,
       moveLayerUp,
       moveLayerDown,
       handleLayerAction,
@@ -915,7 +1190,14 @@ export default {
       editScene,
       saveScene,
       deleteScene,
-      getLayerCountText
+      getLayerCountText,
+      
+      // 拖拽相关
+      draggingLayerId,
+      handleDragStart,
+      handleDragEnd,
+      handleDragOver,
+      handleDrop
     }
   }
 }
@@ -1255,6 +1537,22 @@ export default {
   opacity: 0.6;
 }
 
+.layer-card.dragging {
+  opacity: 0.7;
+  transform: scale(0.98) rotate(1deg);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  transition: all 0.2s ease;
+}
+
+.layer-card[draggable="true"] {
+  cursor: grab;
+}
+
+.layer-card[draggable="true"]:active {
+  cursor: grabbing;
+}
+
 .layer-card-header {
   padding: 12px 15px;
   display: flex;
@@ -1397,5 +1695,78 @@ export default {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* 🔥 透明度控制样式 */
+.layer-opacity-control {
+  padding: 8px 15px 10px;
+  background: #fafbfc;
+  border-top: 1px solid #f0f0f0;
+  margin: 0;
+  border-radius: 0 0 8px 8px;
+}
+
+.opacity-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #606266;
+}
+
+.opacity-icon {
+  font-size: 14px;
+  color: #909399;
+  margin-right: 4px;
+}
+
+.opacity-text {
+  flex: 1;
+  margin-left: 2px;
+}
+
+.opacity-value {
+  font-weight: 500;
+  color: #409eff;
+  font-size: 11px;
+  min-width: 35px;
+  text-align: right;
+}
+
+.opacity-slider {
+  width: 100%;
+}
+
+.opacity-slider .el-slider__runway {
+  height: 4px;
+  background-color: #e4e7ed;
+}
+
+.opacity-slider .el-slider__bar {
+  height: 4px;
+  background-color: #409eff;
+}
+
+.opacity-slider .el-slider__button {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #409eff;
+  background-color: #fff;
+}
+
+.opacity-slider .el-slider__button:hover {
+  transform: scale(1.1);
+}
+
+/* 当图层卡片被拖拽时隐藏透明度控制 */
+.layer-card.dragging .layer-opacity-control {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* 隐藏状态的图层，透明度控制也相应调整 */
+.layer-card.invisible .layer-opacity-control {
+  opacity: 0.6;
 }
 </style> 

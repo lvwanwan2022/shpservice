@@ -251,14 +251,20 @@
             <!-- 新的图层卡片列表 -->
             <div class="layer-cards" v-if="layersList && layersList.length > 0">
               <div 
-                v-for="layer in layersList" 
+                v-for="(layer, index) in sortedLayersList" 
                 :key="layer.id" 
                 class="layer-card"
                 :class="{ 
                   'active': currentActiveLayer && currentActiveLayer.scene_layer_id === layer.scene_layer_id,
-                  'invisible': !layer.visibility 
+                  'invisible': !layer.visibility,
+                  'dragging': draggingLayerId === layer.id
                 }"
+                draggable="true"
                 @click="selectLayer(layer)"
+                @dragstart="handleDragStart($event, layer, index)"
+                @dragend="handleDragEnd"
+                @dragover="handleDragOver($event, index)"
+                @drop="handleDrop($event, index)"
               >
                 <div class="layer-card-header">
                   <div class="layer-title">
@@ -395,6 +401,10 @@ export default {
     const currentActiveLayer = ref(null);
     const layerPanelCollapsed = ref(false);
     const mapViewerRef = ref(null);
+    
+    // 拖拽相关状态
+    const draggingLayerId = ref(null);
+    const dragStartIndex = ref(-1);
 
     // 缓存相关状态
     const cacheProgressVisible = ref(false);
@@ -980,11 +990,110 @@ export default {
       }
     });
 
+    // 图层按顺序排序（layer_order大的在上面）
+    const sortedLayersList = computed(() => {
+      if (!layersList.value || !Array.isArray(layersList.value)) {
+        return []
+      }
+      
+      return [...layersList.value].sort((a, b) => {
+        const orderA = a.layer_order || 0
+        const orderB = b.layer_order || 0
+        return orderB - orderA // 降序排列，大的在前面
+      })
+    })
+
+    // 拖拽开始
+    const handleDragStart = (event, layer, index) => {
+      draggingLayerId.value = layer.id
+      dragStartIndex.value = index
+      event.dataTransfer.effectAllowed = 'move'
+      event.dataTransfer.setData('text/plain', layer.id.toString())
+      
+      // 设置拖拽图像
+      const dragImage = event.target.cloneNode(true)
+      dragImage.style.opacity = '0.8'
+      dragImage.style.transform = 'rotate(2deg)'
+      document.body.appendChild(dragImage)
+      event.dataTransfer.setDragImage(dragImage, 0, 0)
+      setTimeout(() => document.body.removeChild(dragImage), 0)
+    }
+
+    // 拖拽结束
+    const handleDragEnd = () => {
+      draggingLayerId.value = null
+      dragStartIndex.value = -1
+    }
+
+    // 拖拽悬停
+    const handleDragOver = (event) => {
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'move'
+    }
+
+    // 拖拽放置
+    const handleDrop = async (event, dropIndex) => {
+      event.preventDefault()
+      
+      //const draggedLayerId = parseInt(event.dataTransfer.getData('text/plain'))
+      const startIndex = dragStartIndex.value
+      
+      if (startIndex === dropIndex || startIndex === -1) {
+        return
+      }
+
+      try {
+        // 计算新的图层顺序
+        const newLayersOrder = calculateNewLayersOrder(startIndex, dropIndex)
+        
+        // 批量更新图层顺序
+        await updateLayersOrder(newLayersOrder)
+        
+        ElMessage.success('图层顺序更新成功')
+        
+        // 刷新场景数据
+        await onSceneChange(selectedSceneId.value)
+        
+      } catch (error) {
+        console.error('更新图层顺序失败:', error)
+        ElMessage.error('更新图层顺序失败')
+      }
+    }
+
+    // 计算新的图层顺序
+    const calculateNewLayersOrder = (fromIndex, toIndex) => {
+      const sortedLayers = [...sortedLayersList.value]
+      const movedLayer = sortedLayers[fromIndex]
+      
+      // 移除被拖拽的图层
+      sortedLayers.splice(fromIndex, 1)
+      // 插入到新位置
+      sortedLayers.splice(toIndex, 0, movedLayer)
+      
+      // 重新分配layer_order（从大到小，因为显示时是从大到小排序）
+      const newOrders = {}
+      const maxOrder = sortedLayers.length
+      
+      sortedLayers.forEach((layer, index) => {
+        const newOrder = maxOrder - index // 第一个（index=0）获得最大order
+        newOrders[layer.id] = newOrder
+      })
+      
+      return newOrders
+    }
+
+    // 批量更新图层顺序
+    const updateLayersOrder = async (newOrders) => {
+      // 使用现有的批量更新接口
+      await gisApi.reorderSceneLayers(selectedSceneId.value, newOrders)
+    }
+
     return {
       // 基础状态
       selectedSceneId,
       sceneList,
       layersList,
+      sortedLayersList,
       currentActiveLayer,
       layerPanelCollapsed,
       mapViewerRef,
@@ -1033,7 +1142,14 @@ export default {
       getServiceTypeClass,
       getServiceTypeText,
       getLayerStatusClass,
-      getLayerStatusText
+      getLayerStatusText,
+      
+      // 拖拽相关
+      draggingLayerId,
+      handleDragStart,
+      handleDragEnd,
+      handleDragOver,
+      handleDrop
     };
   }
 };
@@ -1160,6 +1276,21 @@ export default {
 
 .layer-card.invisible {
   opacity: 0.6;
+}
+
+.layer-card.dragging {
+  opacity: 0.5;
+  transform: rotate(2deg);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+}
+
+.layer-card[draggable="true"] {
+  cursor: grab;
+}
+
+.layer-card[draggable="true"]:active {
+  cursor: grabbing;
 }
 
 .layer-card-header {

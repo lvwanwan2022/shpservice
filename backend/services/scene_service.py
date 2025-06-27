@@ -598,12 +598,19 @@ class SceneService:
         
         Args:
             scene_id: 场景ID
-            layer_order_map: 图层ID到顺序的映射，例如：{1: 2, 3: 1}
+            layer_order_map: 图层ID到顺序的映射，例如：{"326586450273505300": 2, "326656740819079200": 1}
             
         Returns:
             True 如果更新成功
         """
         for layer_id, order in layer_order_map.items():
+            # 🔥 确保layer_id转换为整数类型（对于数据库查询）
+            try:
+                layer_id_int = int(layer_id)
+            except ValueError:
+                print(f"警告：无效的layer_id格式: {layer_id}")
+                continue
+                
             sql = """
             UPDATE scene_layers
             SET layer_order = %(order)s
@@ -612,10 +619,11 @@ class SceneService:
             
             params = {
                 'scene_id': scene_id,
-                'layer_id': layer_id,
+                'layer_id': layer_id_int,  # 数据库中layer_id是BIGINT类型
                 'order': order
             }
             
+            print(f"更新图层顺序: scene_id={scene_id}, layer_id={layer_id_int}, order={order}")
             execute_query(sql, params)
         
         return True

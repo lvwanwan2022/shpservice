@@ -563,7 +563,18 @@ export default {
     return authHttp({  // 🔥 使用带认证的请求
       url: `/scenes/${sceneId}/layers/reorder`,
       method: 'post',
-      data: { layer_orders: layerOrders }
+      data: { layer_order: layerOrders }
+    })
+  },
+
+  // 更新单个图层的顺序
+  updateLayerOrder(sceneId, layerId, newOrder) {
+    return authHttp({
+      url: `/scenes/${sceneId}/layers/${layerId}/order`,
+      method: 'put',
+      data: {
+        layer_order: newOrder
+      }
     })
   },
   

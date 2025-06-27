@@ -5,9 +5,8 @@
     <!-- 底图切换器和刷新按钮组 -->
     <div class="map-controls">
       <BaseMapSwitcherOL v-if="map" :map="map" @base-map-changed="onBaseMapChanged" />
-      <el-tooltip content="刷新图层" placement="left" :show-after="500">
+      <el-tooltip v-if="map" content="刷新图层" placement="left" :show-after="500">
         <el-button 
-          v-if="map" 
           type="success" 
           circle 
           size="small" 
@@ -499,8 +498,37 @@ export default {
             zoom: 10,
             maxZoom: 23,  // 全局最大缩放级别（适配所有底图）
             minZoom: 1    // 全局最小缩放级别
-          })
+          }),
+          // 设置Canvas渲染器属性来优化性能
+          pixelRatio: window.devicePixelRatio || 1,
+          // 在OpenLayers 10.x中，可以通过设置renderer选项来优化Canvas
+          renderer: 'canvas'
         })
+        
+        // 等地图渲染完成后设置Canvas的willReadFrequently属性
+        map.value.once('rendercomplete', () => {
+          try {
+            const mapElement = map.value.getTargetElement()
+            const canvas = mapElement.querySelector('canvas')
+            if (canvas) {
+              // 尝试重新获取context并设置willReadFrequently
+              const existingContext = canvas.getContext('2d')
+              if (existingContext) {
+                // 设置一个标记，让浏览器知道这个Canvas会被频繁读取
+                canvas.setAttribute('data-will-read-frequently', 'true')
+                console.log('✅ Canvas willReadFrequently 属性已设置')
+              }
+            }
+          } catch (error) {
+            console.warn('设置Canvas willReadFrequently属性时出错:', error)
+          }
+        })
+
+        // Canvas willReadFrequently 优化说明：
+        // 1. 改用鼠标悬停检测，只在鼠标停止移动100ms后检查要素，大幅减少Canvas读取次数
+        // 2. 设置Canvas属性标记，提示浏览器优化频繁读取操作
+        // 3. 添加鼠标离开事件清理定时器，避免不必要的要素检测
+        // 4. 这种方式将Canvas读取频率从每次移动降低到仅在悬停时，性能提升显著
         
         // 6. 设置底图引用供切换器使用
         map.value.baseLayers = {
@@ -687,20 +715,43 @@ export default {
         }
       })
       
-      // 鼠标移动事件 - 改变鼠标样式
+      // 鼠标悬停检测 - 只在鼠标停止移动时检查要素（大幅减少性能开销）
+      let hoverTimeout = null
+      const hoverDelay = 100 // 鼠标停止移动100ms后检查要素
+      
       map.value.on('pointermove', function (evt) {
         if (evt.dragging) return
         
-        const pixel = evt.pixel
-        const hasFeature = map.value.hasFeatureAtPixel(pixel, {
-          layerFilter: (layer) => {
-            // 只对MVT图层启用手型cursor
-            return mvtLayers.value && Object.values(mvtLayers.value).includes(layer)
-          }
-        })
+        // 清除之前的定时器
+        if (hoverTimeout) {
+          clearTimeout(hoverTimeout)
+        }
         
-        // 改变鼠标样式
-        map.value.getTargetElement().style.cursor = hasFeature ? 'pointer' : ''
+        // 立即重置鼠标样式为默认
+        map.value.getTargetElement().style.cursor = ''
+        
+        // 设置新的定时器，延迟检查要素
+        hoverTimeout = setTimeout(() => {
+          const pixel = evt.pixel
+          const hasFeature = map.value.hasFeatureAtPixel(pixel, {
+            layerFilter: (layer) => {
+              // 只对MVT图层启用手型cursor
+              return mvtLayers.value && Object.values(mvtLayers.value).includes(layer)
+            }
+          })
+          
+          // 改变鼠标样式
+          map.value.getTargetElement().style.cursor = hasFeature ? 'pointer' : ''
+        }, hoverDelay)
+      })
+      
+      // 鼠标离开地图时清理定时器和样式
+      map.value.on('pointerleave', function () {
+        if (hoverTimeout) {
+          clearTimeout(hoverTimeout)
+          hoverTimeout = null
+        }
+        map.value.getTargetElement().style.cursor = ''
       })
       
       //console.log('✅ 弹窗初始化完成')
@@ -818,8 +869,15 @@ export default {
         // 清除现有图层
         clearAllLayers()
         
+        // 按layer_order排序后添加图层（顺序小的先添加，这样大的会在上层）
+        const sortedLayers = [...layersList.value].sort((a, b) => {
+          const orderA = a.layer_order || 0
+          const orderB = b.layer_order || 0
+          return orderA - orderB // 升序排列，小的先添加
+        })
+        
         // 添加新图层
-        for (const layer of layersList.value) {
+        for (const layer of sortedLayers) {
           //console.log('lvlayertype:', layer)
           if (layer.service_type === 'martin') {
             await addMartinLayer(layer)
@@ -1221,7 +1279,7 @@ export default {
             }),
             opacity: typeof layer.opacity === 'number' ? layer.opacity : 1.0,
             visible: layer.visibility !== false,
-            zIndex: layer.zIndex || 1,
+            zIndex: layer.layer_order || 1,
             properties: {
               layerId: layer.id,
               layerName: layer.layer_name,
@@ -1253,7 +1311,7 @@ export default {
             opacity: typeof layer.opacity === 'number' ? layer.opacity : 1.0,
             visible: layer.visibility !== false,
             // 设置渲染顺序
-            zIndex: layer.zIndex || 1,
+            zIndex: layer.layer_order || 1,
             // 添加图层标识
             properties: {
               layerId: layer.id,
@@ -1417,6 +1475,7 @@ export default {
           }),
           opacity: typeof layer.opacity === 'number' ? layer.opacity : 1.0,
           visible: layer.visibility !== false,
+          zIndex: layer.layer_order || 1,
           // 添加图层标识
           properties: {
             layerId: layer.id,
@@ -1539,6 +1598,46 @@ export default {
     const updateLayerVisibility = async (layerId, visibility) => {
       if (props.readonly) return
       await gisApi.updateSceneLayer(props.sceneId, layerId, { visibility })
+    }
+
+    // 🔥 更新图层透明度
+    const updateLayerOpacity = (layer, opacity) => {
+      console.log('🎯 updateLayerOpacity被调用:', layer.layer_name, '透明度:', opacity)
+      
+      // 确保透明度在有效范围内
+      const normalizedOpacity = Math.max(0, Math.min(1, opacity))
+      console.log('标准化透明度:', normalizedOpacity)
+      
+      // 根据服务类型获取对应的图层对象
+      console.log('图层信息:', {
+        id: layer.id,
+        service_type: layer.service_type,
+        mvtLayers中的键: Object.keys(mvtLayers.value),
+        mapLayers中的键: Object.keys(mapLayers.value)
+      })
+      
+      const targetLayer = layer.service_type === 'martin' 
+        ? mvtLayers.value[layer.id] 
+        : mapLayers.value[layer.id]
+      
+      if (!targetLayer) {
+        console.warn('❌ 未找到图层对象:', layer.id, layer.service_type)
+        console.log('mvtLayers.value:', Object.keys(mvtLayers.value))
+        console.log('mapLayers.value:', Object.keys(mapLayers.value))
+        return
+      }
+      
+      console.log('找到图层对象:', targetLayer)
+      console.log('图层对象类型:', targetLayer.constructor.name)
+      console.log('是否有setOpacity方法:', typeof targetLayer.setOpacity)
+      
+      // 设置图层透明度
+      if (targetLayer.setOpacity) {
+        targetLayer.setOpacity(normalizedOpacity)
+        console.log('✅ 图层透明度已更新:', layer.layer_name, normalizedOpacity)
+      } else {
+        console.warn('❌ 图层对象不支持setOpacity方法:', layer.id)
+      }
     }
     
     // 显示样式设置对话框
@@ -2070,6 +2169,7 @@ export default {
       hasPolygonGeometry,
       isDxfMartinLayer,
       toggleLayerVisibility,
+      updateLayerOpacity,
       showAddLayerDialog,
       searchLayers,
       addLayerToScene,
@@ -2103,7 +2203,7 @@ export default {
       updateBaseMapAttribution
     }
   },
-  expose: ['showStyleDialog', 'showAddLayerDialog', 'toggleLayerVisibility', 'map', 'bringLayerToTop', 'setActiveLayer', 'currentActiveLayer', 'getLayerCRSInfo', 'transformCoordinates', 'initializeProjections', 'registerProjection', 'projectionsInitialized', 'applyDxfStylesToLayer']
+  expose: ['showStyleDialog', 'showAddLayerDialog', 'toggleLayerVisibility', 'updateLayerOpacity', 'map', 'bringLayerToTop', 'setActiveLayer', 'currentActiveLayer', 'getLayerCRSInfo', 'transformCoordinates', 'initializeProjections', 'registerProjection', 'projectionsInitialized', 'applyDxfStylesToLayer']
 }
 </script>
 

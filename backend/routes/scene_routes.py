@@ -745,6 +745,7 @@ def delete_layer(scene_id, layer_id):
         return jsonify({'error': '服务器内部错误'}), 500
 
 @scene_bp.route('/<int:scene_id>/layers/reorder', methods=['POST'])
+@require_auth  # 🔥 添加认证装饰器
 def reorder_layers(scene_id):
     """重新排序场景图层
     ---
@@ -775,14 +776,16 @@ def reorder_layers(scene_id):
     """
     try:
         data = request.json
+        #current_app.logger.info(f"重新排序图层请求: scene_id={scene_id}, data={data}")
         
-        # 检查场景是否存在
-        scene = scene_service.get_scene_by_id(scene_id)
-        if not scene:
-            return jsonify({'error': '场景不存在'}), 404
+        # 🔥 使用统一权限验证函数
+        has_permission, scene, error_response = verify_scene_permission(scene_id, "重新排序图层")
+        if not has_permission:
+            return error_response
         
         # 验证必填字段
         if not data.get('layer_order'):
+            current_app.logger.error(f"缺少必填字段: layer_order, 接收到的数据: {data}")
             return jsonify({'error': '缺少必填字段: layer_order'}), 400
         
         # 验证layer_order格式
@@ -790,10 +793,11 @@ def reorder_layers(scene_id):
         if not isinstance(layer_order, dict):
             return jsonify({'error': 'layer_order必须是对象'}), 400
         
-        # 将字符串键转换为整数
+        # 🔥 保持layer_id为字符串，避免大整数精度丢失
         layer_order_map = {}
         for layer_id, order in layer_order.items():
-            layer_order_map[int(layer_id)] = int(order)
+            # 保持layer_id为字符串，但确保order为整数
+            layer_order_map[str(layer_id)] = int(order)
         
         # 重新排序图层
         scene_service.reorder_layers(scene_id, layer_order_map)
@@ -804,4 +808,79 @@ def reorder_layers(scene_id):
     
     except Exception as e:
         current_app.logger.error(f"重新排序图层错误: {str(e)}")
+        return jsonify({'error': '服务器内部错误'}), 500
+
+@scene_bp.route('/<int:scene_id>/layers/<int:layer_id>/order', methods=['PUT'])
+@require_auth
+def update_layer_order(scene_id, layer_id):
+    """更新单个图层的顺序
+    ---
+    tags:
+      - 场景管理
+    parameters:
+      - name: scene_id
+        in: path
+        type: integer
+        required: true
+        description: 场景ID
+      - name: layer_id
+        in: path
+        type: integer
+        required: true
+        description: 图层ID
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            layer_order:
+              type: integer
+              description: 新的图层顺序
+    responses:
+      200:
+        description: 图层顺序更新成功
+      400:
+        description: 参数错误
+      403:
+        description: 权限不足
+      404:
+        description: 场景或图层不存在
+    """
+    try:
+        data = request.json
+        
+        # 🔥 使用统一权限验证函数
+        has_permission, scene, error_response = verify_scene_permission(scene_id, "更新图层顺序")
+        if not has_permission:
+            return error_response
+        
+        # 验证必填字段
+        if 'layer_order' not in data:
+            return jsonify({'error': '缺少必填字段: layer_order'}), 400
+        
+        new_order = data['layer_order']
+        if not isinstance(new_order, int):
+            return jsonify({'error': 'layer_order必须是整数'}), 400
+        
+        # 检查场景图层是否存在
+        from models.db import execute_query
+        scene_layer_check = execute_query(
+            "SELECT * FROM scene_layers WHERE scene_id = %s AND layer_id = %s", 
+            (scene_id, layer_id)
+        )
+        if not scene_layer_check:
+            return jsonify({'error': '场景中不存在该图层'}), 404
+        
+        # 更新图层顺序
+        scene_service.update_scene_layer(scene_id, layer_id, {'layer_order': new_order})
+        
+        return jsonify({
+            'message': '图层顺序更新成功',
+            'layer_id': layer_id,
+            'new_order': new_order
+        }), 200
+    
+    except Exception as e:
+        current_app.logger.error(f"更新图层顺序错误: {str(e)}")
         return jsonify({'error': '服务器内部错误'}), 500 
