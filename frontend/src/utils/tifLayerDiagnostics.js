@@ -128,7 +128,7 @@ export const createImprovedWmsLayer = (layerInfo, options = {}) => {
  * @param {Object} layerInfo - 图层信息
  * @returns {Promise<L.LatLngBounds|null>} 图层边界框
  */
-export const getLayerBounds = async (layerInfo) => {
+export const getSceneLayerBounds = async (layerInfo) => {
   try {
     if (layerInfo.bbox) {
       const bbox = layerInfo.bbox

@@ -539,7 +539,7 @@ export default {
         // 1. 优先使用新的图层边界API（bbox已经是转换后的EPSG:4326坐标）
         try {
           //20250617更改给后端传scene_layer_id，而不是layer.id
-          const response = await gisApi.getLayerBounds(layer.scene_layer_id)
+          const response = await gisApi.getSceneLayerBounds(layer.scene_layer_id)
           if (response?.success && response.data?.bbox) {
             bbox = response.data.bbox
             // coordinate_system字段仅用于显示原始坐标系，bbox已经是EPSG:4326坐标
@@ -582,7 +582,7 @@ export default {
           ElMessage.warning('无法获取图层边界信息')
           return
         }
-        console.log('bbox:', bbox)
+        //console.log('bbox:', bbox)
         // 4. 验证边界框数据并转换格式
         let minx, miny, maxx, maxy
         

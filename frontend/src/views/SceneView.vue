@@ -309,12 +309,12 @@ export default {
     // 检查用户是否有场景操作权限
     const canEditScene = (scene) => {
       if (!currentUser.value) {
-        console.log('权限检查失败: 用户未登录')
+        //console.log('权限检查失败: 用户未登录')
         return false
       }
       
       if (!scene) {
-        console.log('权限检查失败: 场景信息为空')
+        //console.log('权限检查失败: 场景信息为空')
         return false
       }
       
@@ -337,22 +337,15 @@ export default {
     // 方法
     const loadScenes = async () => {
       try {
-        console.log('开始加载场景列表...')
+        
         
         const response = await gisApi.getScenes()
         
-        console.log('API响应:', response)
+      
         
         if (response && response.data.scenes) {
           scenes.value = response.data.scenes
-          console.log('加载的场景数量:', scenes.value.length)
-          console.log('场景详情:', scenes.value.map(s => ({
-            id: s.id,
-            name: s.name,
-            is_public: s.is_public,
-            creator: s.creator,
-            user_id: s.user_id
-          })))
+          
         } else {
           console.warn('API响应格式异常，使用空数组')
           scenes.value = []
@@ -408,8 +401,7 @@ export default {
         await sceneFormRef.value.validate()
         saving.value = true
         
-        // 调试日志
-        console.log('保存场景数据:', sceneForm)
+        
         
         if (dialogMode.value === 'create') {
           await gisApi.createScene(sceneForm)
@@ -620,17 +612,17 @@ export default {
     onMounted(async () => {
       // 🔥 清除可能被截断的用户信息缓存，重新获取最新的用户信息
       try {
-        console.log('重新获取用户信息以确保ID字段正确...')
+        //console.log('重新获取用户信息以确保ID字段正确...')
         const freshUser = await authService.getCurrentUser()
         if (freshUser) {
           currentUser.value = freshUser
-          console.log('最新用户信息:', freshUser)
+          //console.log('最新用户信息:', freshUser)
         } else {
           // 如果无法获取最新信息，使用本地缓存但确保ID为字符串
           const cachedUser = authService.getUser()
           if (cachedUser) {
             currentUser.value = cachedUser
-            console.log('使用缓存用户信息:', cachedUser)
+            //console.log('使用缓存用户信息:', cachedUser)
           }
         }
       } catch (error) {

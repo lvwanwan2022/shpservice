@@ -1,3 +1,8 @@
+if (typeof window !== 'undefined') {
+  window.__VUE_OPTIONS_API__ = true
+  window.__VUE_PROD_DEVTOOLS__ = false
+  window.__VUE_PROD_HYDRATION_MISMATCH_DETAILS__ = false
+}
 /*
  * @Author: Lvwan-793145268@qq.com
  * @Date: 2025-05-11 22:17:16

@@ -480,8 +480,10 @@ export default {
       try {
         const tileJsonUrl = layer.tilejson_url || mvtUrl.replace('/{z}/{x}/{y}', '.json')
         //console.log('🎨 TileJSON URL:', tileJsonUrl)
-        
-        const response = await fetch(tileJsonUrl)
+        // 请修改常量赋值错误修改
+        const tileJsonUrl_re=tileJsonUrl.replace('http://localhost:3000',MARTIN_BASE_URL)
+        //console.log('tileJsonUrl',tileJsonUrl_re)
+        const response = await fetch(tileJsonUrl_re)
         if (response.ok) {
           const tileJson = await response.json()
           //console.log('🎨 TileJSON内容:', tileJson)

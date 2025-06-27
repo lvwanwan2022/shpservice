@@ -331,15 +331,16 @@
 
     <!-- 分页 -->
     <div class="pagination">
-      <el-pagination
-        :current-page="currentPage"
-        :page-sizes="[12, 24, 36, 48]"
-        :page-size="pageSize"
-        layout="total, sizes, prev, pager, next, jumper"
-        :total="total"
-        @size-change="handleSizeChange"
-        @current-change="handleCurrentChange"
-      />
+      <!-- 新的写法 -->
+    <el-pagination
+      v-model:current-page="currentPage"
+      v-model:page-size="pageSize"
+      :page-sizes="[12, 24, 36, 48]"
+      layout="total, sizes, prev, pager, next, jumper"
+      :total="total"
+      @size-change="handleSizeChange"
+      @current-change="handleCurrentChange"
+    />
     </div>
 
     <!-- 上传弹窗 -->

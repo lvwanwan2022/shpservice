@@ -715,8 +715,8 @@ def get_style_template(geometry_type):
             'error_type': 'internal_error'
         }), 500
 
-@layer_bp.route('/<int:scene_layer_id>/bounds', methods=['GET'])
-def get_layer_bounds(scene_layer_id):
+@layer_bp.route('/<int:scene_layer_id>/scenelayerbounds', methods=['GET'])
+def get_scene_layer_bounds(scene_layer_id):
     """获取图层边界信息
     
     Args:
@@ -732,6 +732,146 @@ def get_layer_bounds(scene_layer_id):
                 FROM scene_layers sl                
                 WHERE sl.id = %s
             """, (scene_layer_id,))
+            
+            scene_layer_record = cursor.fetchone()
+            layer_id = scene_layer_record['layer_id']
+            layer_type = scene_layer_record['layer_type']
+            
+            if layer_type == 'geoserver':
+              # 首先尝试从geoserver_layers表获取图层信息
+              cursor.execute("""
+                  SELECT gl.id, gl.name, gl.title, gl.wms_url, gl.file_id,
+                        gw.name as workspace_name, f.file_name, f.bbox, f.coordinate_system
+                  FROM geoserver_layers gl
+                  LEFT JOIN geoserver_workspaces gw ON gl.workspace_id = gw.id
+                  LEFT JOIN files f ON gl.file_id = f.id
+                  WHERE gl.id = %s
+              """, (layer_id,))
+              
+              layer_record = cursor.fetchone()
+            
+              # GeoServer图层处理
+              layer_name = layer_record['file_name'] or layer_record['title'] or layer_record['name']
+              file_id = layer_record['file_id']
+              coordinate_system = layer_record['coordinate_system'] or 'EPSG:4326'
+              
+              # 构建完整图层名称用于GetCapabilities查询
+              full_layer_name = f"{layer_record['workspace_name']}:{layer_record['name']}"
+              wms_url = layer_record['wms_url']
+              
+              # 尝试从GeoServer GetCapabilities获取边界
+              bbox = get_geoserver_layer_bounds(full_layer_name, wms_url)
+              
+              # 如果GetCapabilities失败，尝试从文件bbox获取
+              if not bbox and layer_record.get('bbox'):
+                  if isinstance(layer_record['bbox'], str):
+                      try:
+                          bbox = json.loads(layer_record['bbox'])
+                      except:
+                          pass
+                  else:
+                      bbox = layer_record['bbox']
+              
+              if not bbox:
+                  return jsonify({
+                      'success': False,
+                      'error': '无法获取GeoServer图层边界信息'
+                  }), 500
+              
+              return jsonify({
+                  'success': True,
+                  'data': {
+                      'bbox': bbox,
+                      'layer_id': layer_id,
+                      'layer_name': layer_name,
+                      'service_type': 'geoserver',
+                      'coordinate_system': coordinate_system,
+                      'file_id': file_id,
+                      'file_name': layer_record['file_name'],
+                      'workspace_name': layer_record['workspace_name']
+                  }
+              })
+            
+            elif layer_type == 'martin':
+                # 如果在geoserver_layers中没找到，尝试从vector_martin_services表查找
+                cursor.execute("""
+                    SELECT vms.id, vms.table_name, vms.original_filename, vms.file_id,
+                           f.file_name, f.bbox, f.coordinate_system
+                    FROM vector_martin_services vms
+                    LEFT JOIN files f ON vms.file_id::bigint = f.id
+                    WHERE vms.id = %s AND vms.status = 'active'
+                """, (layer_id,))
+                
+                martin_record = cursor.fetchone()
+                #logger.info(f"lv-martin_record:{martin_record}")
+                if not martin_record:
+                    return jsonify({
+                        'success': False,
+                        'error': f'未找到ID为{layer_id}的图层'
+                    }), 404
+                
+                # Martin服务处理
+                layer_name = martin_record['original_filename'] or martin_record['table_name']
+                file_id = martin_record['file_id']
+                coordinate_system = martin_record['coordinate_system'] or 'EPSG:4326'
+                
+                # 从Martin服务获取边界
+                bbox = get_martin_service_bounds(layer_id)
+                
+                if not bbox and martin_record.get('bbox'):
+                    # 如果Martin服务获取失败，尝试从文件bbox获取
+                    if isinstance(martin_record['bbox'], str):
+                        try:
+                            bbox = json.loads(martin_record['bbox'])
+                        except:
+                            pass
+                    else:
+                        bbox = martin_record['bbox']
+                
+                if not bbox:
+                    return jsonify({
+                        'success': False,
+                        'error': '无法获取Martin图层边界信息'
+                    }), 500
+                
+                return jsonify({
+                    'success': True,
+                    'data': {
+                        'bbox': bbox,
+                        'layer_id': layer_id,
+                        'layer_name': layer_name,
+                        'service_type': 'martin',
+                        'coordinate_system': coordinate_system,
+                        'file_id': file_id,
+                        'file_name': martin_record['file_name']
+                    }
+                })
+            
+            
+    except Exception as e:
+        logger.error(f"获取图层边界失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'获取图层边界失败: {str(e)}'
+        }), 500
+
+@layer_bp.route('/<int:layer_id>/bounds', methods=['GET'])
+def get_layer_bounds(layer_id):
+    """获取图层边界信息
+    
+    Args:
+        layer_id: 图层ID
+    """
+    try:
+        with get_db_connection() as conn:
+            from psycopg2.extras import RealDictCursor
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            # 首先尝试从geoserver_layers表获取图层信息
+            cursor.execute("""
+                SELECT sl.id, sl.layer_id, sl.layer_type
+                FROM scene_layers sl                
+                WHERE sl.layer_id = %s
+            """, (layer_id,))
             
             scene_layer_record = cursor.fetchone()
             layer_id = scene_layer_record['layer_id']

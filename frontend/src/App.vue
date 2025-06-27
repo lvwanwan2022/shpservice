@@ -13,6 +13,7 @@
               <router-link to="/scene">场景管理</router-link>
               <!-- <router-link to="/map-lf">地图浏览(Leaflet)</router-link> -->
               <router-link to="/map-ol">地图浏览(OpenLayers)</router-link>
+              <router-link to="/map-ol-cache">地图浏览(缓存版)</router-link>
              
              
             </div>

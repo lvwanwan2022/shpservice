@@ -464,9 +464,9 @@ export default {
   },
   
   // 获取图层边界信息
-  getLayerBounds(layerId) {
+  getSceneLayerBounds(scenelayerId) {
     return service({
-      url: `/layers/${layerId}/bounds`,
+      url: `/layers/${scenelayerId}/scenelayerbounds`,
       method: 'get'
     })
   },

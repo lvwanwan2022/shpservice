@@ -426,7 +426,7 @@ export default {
         
         // 优先使用新的图层边界API
         try {
-          const response = await gisApi.getLayerBounds(layer.scene_layer_id)
+          const response = await gisApi.getSceneLayerBounds(layer.scene_layer_id)
           if (response?.success && response.data?.bbox) {
             bbox = response.data.bbox
             //console.log('从图层边界API获取到边界:', bbox)

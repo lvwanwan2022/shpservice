@@ -419,6 +419,7 @@ export default {
 
         // 获取设备特定的预加载配置
         const preloadLevel = getRecommendedPreloadLevel()
+        //console.log('preloadLevel',preloadLevel)
         const cacheSize = getRecommendedCacheSize()
         const deviceType = getDeviceType()
         
