@@ -170,3 +170,4 @@ class CollaborativeFilteringPredictor:
         }
         
         return preferences
+

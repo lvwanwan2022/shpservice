@@ -291,7 +291,7 @@ GET /api/scenes/:sceneId
 // 返回: { data: { id, name, layers: [...] } }
 
 // 3. 获取图层边界
-GET /api/layers/:layerId/bounds
+GET /api/layers/:scenelayerId/scene_layer_bounds
 // 返回: { data: { bbox: [minX, minY, maxX, maxY] } }
 ```
 

@@ -34,7 +34,7 @@ export class DxfStyleManager {
   async getLayersFromMartinService(tableName) {
     try {
       const response = await gisApi.getMartinServiceLayers(tableName)
-      console.log('Martin API 原始响应:', response)
+      //console.log('Martin API 原始响应:', response)
       
       // 处理不同的响应格式
       if (response?.success && response.data?.layers) {
@@ -42,11 +42,11 @@ export class DxfStyleManager {
         return response.data.layers
       } else if (response?.vector_layers) {
         // TileJSON 格式：直接从 vector_layers 提取
-        console.log('从 TileJSON vector_layers 提取图层:', response.vector_layers)
+        //console.log('从 TileJSON vector_layers 提取图层:', response.vector_layers)
         return response.vector_layers.map(layer => layer.id)
       } else if (response?.data?.vector_layers) {
         // TileJSON 格式：从 data.vector_layers 提取
-        console.log('从 data.vector_layers 提取图层:', response.data.vector_layers)
+        //console.log('从 data.vector_layers 提取图层:', response.data.vector_layers)
         return response.data.vector_layers.map(layer => layer.id)
       } else {
         // 如果没有 vector_layers，使用表名作为默认图层
@@ -84,14 +84,14 @@ export class DxfStyleManager {
       
       // 向后兼容：如果没有style_config，尝试style字段
       if (response?.success && response.data?.style) {
-        console.log('找到 style 字段:', response.data.style)
+        //console.log('找到 style 字段:', response.data.style)
         if (typeof response.data.style === 'string') {
           return JSON.parse(response.data.style)
         }
         return response.data.style
       }
       
-      console.log('未找到样式配置，返回null')
+      //console.log('未找到样式配置，返回null')
       return null
     } catch (error) {
       console.error('获取Martin服务样式失败:', error)
@@ -109,16 +109,13 @@ export class DxfStyleManager {
    */
   async saveMartinServiceStyle(martinServiceId, styleConfig) {
     try {
-      console.log('=== saveMartinServiceStyle 调用 ===')
-      console.log('传入的 martinServiceId:', martinServiceId)
-      console.log('martinServiceId 类型:', typeof martinServiceId)
-      console.log('传入的 styleConfig:', styleConfig)
+ 
       
       const response = await gisApi.updateMartinServiceStyle(martinServiceId, styleConfig)
-      console.log('保存样式 API响应:', response)
+
       
       if (response?.success) {
-        console.log('样式保存成功')
+
         return true
       } else {
         console.error('样式保存失败:', response?.error || '未知错误')

@@ -116,7 +116,7 @@ export default {
           return
         }
         
-        console.log('开始注册用户:', this.registerForm.username)
+        //console.log('开始注册用户:', this.registerForm.username)
         
         const result = await authService.register(
           this.registerForm.username,
@@ -124,11 +124,11 @@ export default {
           this.registerForm.email
         )
         
-        console.log('注册API返回结果:', result)
+        //console.log('注册API返回结果:', result)
         
         if (result.success) {
           this.$message?.success?.(result.message || '注册成功')
-          console.log('注册成功，用户信息:', result.data)
+          //console.log('注册成功，用户信息:', result.data)
           
           // 注册成功后跳转到登录页面
           setTimeout(() => {

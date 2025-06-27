@@ -82,7 +82,7 @@ export default {
     
     // 添加登录状态监听器
     this.authListener = (event, isLoggedIn, userInfo) => {
-      console.log('用户状态变化:', { event, isLoggedIn, userInfo })
+      //console.log('用户状态变化:', { event, isLoggedIn, userInfo })
       this.isLoggedIn = isLoggedIn
       this.userInfo = userInfo || {}
     }
@@ -115,7 +115,7 @@ export default {
         //})
       } else {
         this.userInfo = {}
-        console.log('用户未登录')
+        //console.log('用户未登录')
       }
     },
     

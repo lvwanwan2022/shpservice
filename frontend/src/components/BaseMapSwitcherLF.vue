@@ -48,7 +48,7 @@ export default {
       const cacheSize = getRecommendedCacheSize()
       const deviceType = getDeviceType()
       
-      console.log(`🚀 Leaflet地图预加载配置 - 设备类型: ${deviceType}, 预加载级别: ${preloadLevel}, 缓存大小: ${cacheSize}`)
+      //console.log(`🚀 Leaflet地图预加载配置 - 设备类型: ${deviceType}, 预加载级别: ${preloadLevel}, 缓存大小: ${cacheSize}`)
       
       const subdomains = ['01', '02', '03', '04']
       let url = ''
@@ -235,7 +235,7 @@ export default {
           }
         })
         
-        console.log(`底图z-index: 0, 其他图层数量: ${otherLayers.length}`)
+        //console.log(`底图z-index: 0, 其他图层数量: ${otherLayers.length}`)
         
       } catch (error) {
         console.error('刷新图层顺序失败:', error)
