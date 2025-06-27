@@ -141,7 +141,7 @@
                 </template>
               </template>
               <template v-else>
-                <el-form-item label="透明度">
+                <el-form-item label="不透明度">
                   <el-slider v-model="styleForm.raster.opacity" :min="0" :max="1" :step="0.1"></el-slider>
                 </el-form-item>
               </template>
@@ -1602,34 +1602,20 @@ export default {
 
     // 🔥 更新图层透明度
     const updateLayerOpacity = (layer, opacity) => {
-      console.log('🎯 updateLayerOpacity被调用:', layer.layer_name, '透明度:', opacity)
+      console.log('🎯 更新图层透明度:', layer.layer_name, '透明度:', opacity)
       
       // 确保透明度在有效范围内
       const normalizedOpacity = Math.max(0, Math.min(1, opacity))
-      console.log('标准化透明度:', normalizedOpacity)
       
       // 根据服务类型获取对应的图层对象
-      console.log('图层信息:', {
-        id: layer.id,
-        service_type: layer.service_type,
-        mvtLayers中的键: Object.keys(mvtLayers.value),
-        mapLayers中的键: Object.keys(mapLayers.value)
-      })
-      
       const targetLayer = layer.service_type === 'martin' 
         ? mvtLayers.value[layer.id] 
         : mapLayers.value[layer.id]
       
       if (!targetLayer) {
         console.warn('❌ 未找到图层对象:', layer.id, layer.service_type)
-        console.log('mvtLayers.value:', Object.keys(mvtLayers.value))
-        console.log('mapLayers.value:', Object.keys(mapLayers.value))
         return
       }
-      
-      console.log('找到图层对象:', targetLayer)
-      console.log('图层对象类型:', targetLayer.constructor.name)
-      console.log('是否有setOpacity方法:', typeof targetLayer.setOpacity)
       
       // 设置图层透明度
       if (targetLayer.setOpacity) {

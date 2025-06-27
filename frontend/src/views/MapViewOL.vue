@@ -139,23 +139,31 @@
                 </div>
                 
                 <!-- 🔥 透明度控制 -->
-                <div class="layer-opacity-control" @click.stop>
-                  <div class="opacity-label">
+                <div 
+                  class="layer-opacity-control" 
+                  @click.stop
+                  @mousedown.stop
+                  @dragstart.stop="$event.preventDefault()"
+                  @drag.stop="$event.preventDefault()"
+                >
+                  <div class="opacity-row">
                     <i class="el-icon-view opacity-icon"></i>
-                    <span class="opacity-text">透明度</span>
+                    <span class="opacity-text">不透明度</span>
+                    <el-slider
+                      v-model="layer.opacity"
+                      :min="0"
+                      :max="1"
+                      :step="0.1"
+                      :show-tooltip="false"
+                      size="small"
+                      @input="onLayerOpacityChange(layer)"
+                      @click.stop
+                      @mousedown.stop
+                      @dragstart.stop="$event.preventDefault()"
+                      class="opacity-slider"
+                    />
                     <span class="opacity-value">{{ Math.round((layer.opacity || 1) * 100) }}%</span>
                   </div>
-                  <el-slider
-                    v-model="layer.opacity"
-                    :min="0"
-                    :max="1"
-                    :step="0.1"
-                    :show-tooltip="false"
-                    size="small"
-                    @input="onLayerOpacityChange(layer)"
-                    @click.stop
-                    class="opacity-slider"
-                  />
                 </div>
               </div>
             </div>
@@ -406,11 +414,13 @@ export default {
         const response = await gisApi.getScene(sceneId)
         layersList.value = response.data.layers
         
-        // 🔥 初始化图层透明度（如果没有设置则默认为1）
+        // 🔥 初始化图层不透明度（如果没有设置或为0则默认为1）
         layersList.value.forEach(layer => {
-          if (layer.opacity === undefined || layer.opacity === null) {
-            layer.opacity = 1
+          if (layer.opacity === undefined || layer.opacity === null || layer.opacity === 0) {
+            layer.opacity = 1.0  // 默认100%不透明度
           }
+          // 确保数值在有效范围内
+          layer.opacity = Math.max(0, Math.min(1, parseFloat(layer.opacity) || 1.0))
         })
         
         // 清除选中状态
@@ -487,35 +497,60 @@ export default {
 
     // 🔥 图层透明度变化处理
     const onLayerOpacityChange = (layer) => {
-      console.log('图层透明度变化:', layer.layer_name, '透明度:', layer.opacity)
-      
       // 限制透明度范围
       if (layer.opacity < 0) layer.opacity = 0
       if (layer.opacity > 1) layer.opacity = 1
       
-      console.log('mapViewerRef.value状态:', !!mapViewerRef.value)
-      console.log('updateLayerOpacity方法存在:', !!mapViewerRef.value?.updateLayerOpacity)
-      
-      // 通知MapViewerOL组件更新图层透明度
+      // 1. 立即更新地图中的图层透明度
       if (mapViewerRef.value && mapViewerRef.value.updateLayerOpacity) {
-        console.log('调用 updateLayerOpacity 方法...')
         mapViewerRef.value.updateLayerOpacity(layer, layer.opacity)
-      } else if (mapViewerRef.value && mapViewerRef.value.updateLayerProperty) {
-        console.log('fallback: 调用 updateLayerProperty 方法...')
-        // 通用的图层属性更新方法
-        mapViewerRef.value.updateLayerProperty(layer, { opacity: layer.opacity })
-      } else {
-        console.log('fallback: 发送自定义事件...')
-        // 发送自定义事件通知地图组件
-        const event = new CustomEvent('layerOpacityChanged', {
-          detail: {
-            layerId: layer.id,
-            layer: layer,
+      }
+      
+      // 2. 防抖更新数据库
+      updateLayerOpacityInDatabase(layer)
+    }
+    
+    // 防抖定时器映射
+    const opacityUpdateTimers = ref(new Map())
+    
+    // 🔥 更新数据库中的图层透明度（防抖）
+    const updateLayerOpacityInDatabase = async (layer) => {
+      if (!selectedSceneId.value || !layer.scene_layer_id) {
+        console.warn('缺少场景ID或图层ID，跳过数据库更新')
+        return
+      }
+      
+      // 清除之前的定时器
+      if (opacityUpdateTimers.value.has(layer.id)) {
+        clearTimeout(opacityUpdateTimers.value.get(layer.id))
+      }
+      
+      // 设置新的防抖定时器（500ms后执行）
+      const timer = setTimeout(async () => {
+        try {
+          const updateData = {
             opacity: layer.opacity
           }
-        })
-        window.dispatchEvent(event)
-      }
+          
+          console.log('保存透明度到数据库:', {
+            scene_id: selectedSceneId.value,
+            layer_id: layer.id,
+            opacity: layer.opacity
+          })
+          
+          // 调用后端API更新透明度
+          await gisApi.updateSceneLayer(selectedSceneId.value, layer.id, updateData)
+          console.log('✅ 透明度已保存到数据库')
+          
+          // 清除定时器
+          opacityUpdateTimers.value.delete(layer.id)
+        } catch (error) {
+          console.error('保存透明度失败:', error)
+          ElMessage.error('透明度设置保存失败')
+        }
+      }, 500)
+      
+      opacityUpdateTimers.value.set(layer.id, timer)
     }
     
     // 上移图层
@@ -1697,45 +1732,48 @@ export default {
   overflow: hidden;
 }
 
-/* 🔥 透明度控制样式 */
+/* 🔥 透明度控制样式 - 紧凑型 */
 .layer-opacity-control {
-  padding: 8px 15px 10px;
+  padding: 6px 15px 8px;
   background: #fafbfc;
   border-top: 1px solid #f0f0f0;
   margin: 0;
   border-radius: 0 0 8px 8px;
 }
 
-.opacity-label {
+.opacity-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
+  gap: 8px;
   font-size: 12px;
   color: #606266;
 }
 
 .opacity-icon {
-  font-size: 14px;
+  font-size: 12px;
   color: #909399;
-  margin-right: 4px;
+  flex-shrink: 0;
 }
 
 .opacity-text {
-  flex: 1;
-  margin-left: 2px;
+  font-size: 11px;
+  color: #606266;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .opacity-value {
   font-weight: 500;
   color: #409eff;
   font-size: 11px;
-  min-width: 35px;
+  min-width: 30px;
   text-align: right;
+  flex-shrink: 0;
 }
 
 .opacity-slider {
-  width: 100%;
+  flex: 1;
+  margin: 0 8px;
 }
 
 .opacity-slider .el-slider__runway {

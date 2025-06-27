@@ -350,6 +350,15 @@ class SceneService:
             if 'visibility' in layer:
                 layer['visibility'] = bool(layer['visibility'])
             
+            # 处理不透明度字段
+            if 'opacity' in layer:
+                if layer['opacity'] is None or layer['opacity'] == 0:
+                    layer['opacity'] = 1.0  # 默认100%不透明度
+                else:
+                    layer['opacity'] = float(layer['opacity'])
+            else:
+                layer['opacity'] = 1.0
+            
             if layer.get('style_config'):
                 try:
                     if isinstance(layer['style_config'], str):
