@@ -287,14 +287,15 @@ export default {
       try {
         const response = await gisApi.getScenes()
         sceneList.value = response.data.scenes
-       // console.log('sceneList:', sceneList.value)
+       //console.log('sceneListlen:', sceneList.value.length)
         // 如果URL中有scene_id参数，设置为当前选中的场景
         const sceneIdFromQuery = route.query.scene_id
+        //console.log('sceneIdFromQuery:', sceneIdFromQuery)
         if (sceneIdFromQuery) {
           selectedSceneId.value = sceneIdFromQuery
-        } else if (sceneList.length > 0) {
+        } else if (sceneList.value.length > 0) {
           // 如果没有指定场景，选择第一个场景
-          selectedSceneId.value = sceneList[0].id
+          selectedSceneId.value = sceneList.value[0].id
         }
       } catch (error) {
         console.error('获取场景列表失败', error)
