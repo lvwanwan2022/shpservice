@@ -570,6 +570,7 @@ def init_database():
             service_url TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            boundingbox JSONB,
             CONSTRAINT chk_layer_type CHECK (layer_type IN ('geoserver', 'martin'))
         )
         """
