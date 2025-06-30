@@ -361,7 +361,14 @@ export default {
       layerCount: 0,
       lastUpdate: Date.now()
     });
-
+    const observer = new ResizeObserver(entries => {
+      try {
+        // 你的回调逻辑
+      } catch (e) {
+        console.error('ResizeObserver 异常:', e);
+        // 处理异常
+      }
+    });
     // 缓存服务实例
     let tileCacheService = null;
     let dataCacheService = null;
