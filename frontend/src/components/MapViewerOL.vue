@@ -141,7 +141,7 @@
                 </template>
               </template>
               <template v-else>
-                <el-form-item label="不透明度">
+                <el-form-item label="透明度">
                   <el-slider v-model="styleForm.raster.opacity" :min="0" :max="1" :step="0.1"></el-slider>
                 </el-form-item>
               </template>

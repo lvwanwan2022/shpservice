@@ -395,10 +395,10 @@ export async function preloadAreaTiles(layerId, urlTemplate, bounds, minZoom, ma
     }
 
     await Promise.all(promises);
-    console.log(`缩放级别 ${zoom} 预加载完成`);
+    
   }
 
-  console.log(`预加载完成: ${layerId}`);
+ 
 }
 
 /**
@@ -533,7 +533,7 @@ export class CacheStrategyManager {
    * @param {object} options 选项
    */
   async executeLoginStrategy(scenes, options = {}) {
-    console.log('执行登录缓存策略');
+
     
     const strategy = { ...this.strategies.login, ...options };
     const allTasks = [];
@@ -567,7 +567,7 @@ export class CacheStrategyManager {
    * @param {object} options 选项
    */
   async executeSceneSwitchStrategy(scene, options = {}) {
-    console.log(`执行场景切换缓存策略: ${scene.id}`);
+
     
     const strategy = { ...this.strategies.sceneSwitch, ...options };
     const tasks = [];
@@ -601,7 +601,7 @@ export class CacheStrategyManager {
    * @param {object} options 选项
    */
   async executeZoomStrategy(visibleLayers, currentBounds, currentZoom, options = {}) {
-    console.log(`执行缩放缓存策略: zoom=${currentZoom}`);
+
     
     const strategy = { ...this.strategies.zoom, ...options };
     const tasks = [];
@@ -637,7 +637,7 @@ export class CacheStrategyManager {
    */
   async executeTasks(tasks, progressCallback) {
     if (this.isPreloading) {
-      console.log('已有预加载任务在进行中，添加到队列');
+
       this.priorityQueue.push(...tasks);
       return;
     }
@@ -787,7 +787,7 @@ export class CacheStrategyManager {
     this.isPreloading = false;
     this.currentTasks.clear();
     this.priorityQueue = [];
-    console.log('所有预加载任务已停止');
+
   }
 
   /**
@@ -810,24 +810,6 @@ export const CacheDebugger = {
   /**
    * 打印缓存统计信息到控制台
    */
-  async printStats() {
-    const stats = await getCacheUsage();
-    console.group('瓦片缓存统计');
-    console.log('总瓦片数:', stats.totalTiles);
-    console.log('总大小:', stats.totalSizeFormatted);
-    console.log('图层数量:', stats.layerCount);
-    console.log('平均瓦片大小:', formatFileSize(stats.averageTileSize));
-    
-    if (stats.layers.length > 0) {
-      console.group('图层详情');
-      stats.layers.forEach(layer => {
-        console.log(`${layer.id}: ${layer.count}个瓦片, ${layer.sizeFormatted}`);
-      });
-      console.groupEnd();
-    }
-    
-    console.groupEnd();
-  },
 
   /**
    * 验证特定瓦片是否存在
@@ -835,7 +817,7 @@ export const CacheDebugger = {
   async checkTile(layerId, z, x, y) {
     const cacheService = getGlobalCacheService();
     const tile = await cacheService.getTile(layerId, z, x, y);
-    console.log(`瓦片 ${layerId}_${z}_${x}_${y}:`, tile ? '存在' : '不存在');
+
     return !!tile;
   },
 
@@ -845,7 +827,7 @@ export const CacheDebugger = {
   async listLayers() {
     const stats = await getCacheUsage();
     const layers = stats.layers.map(layer => layer.id);
-    console.log('缓存的图层:', layers);
+
     return layers;
   }
 };
@@ -892,9 +874,9 @@ export class DataCacheService {
    */
   async fetchScenes() {
     try {
-      console.log('开始获取scenes数据...');
+
       const response = await this.gisApi.getScenes();
-      console.log('获取到scenes数据:', response);
+
       
       // 解析API响应数据
       let scenes = null;
@@ -908,8 +890,7 @@ export class DataCacheService {
         console.warn('未能解析scenes数据，响应格式:', response);
         return [];
       }
-      
-      console.log(`解析到 ${scenes.length} 个场景:`, scenes);
+
       return scenes;
     } catch (error) {
       console.error('获取scenes数据失败:', error);
@@ -922,9 +903,9 @@ export class DataCacheService {
    */
   async fetchSceneWithLayers(sceneId) {
     try {
-      console.log(`开始获取scene ${sceneId} 的详情和layers...`);
+
       const sceneResponse = await this.gisApi.getScene(sceneId);
-      console.log(`Scene ${sceneId} API响应:`, sceneResponse);
+
       
       // 解析scene数据
       let scene = null;
@@ -940,7 +921,7 @@ export class DataCacheService {
         layers = scene.layers || [];
       }
       
-      console.log(`Scene ${sceneId} 包含 ${layers.length} 个图层:`, layers);
+      //console.log(`Scene ${sceneId} 包含 ${layers.length} 个图层:`, layers);
       
       return {
         scene,
@@ -957,9 +938,9 @@ export class DataCacheService {
    */
   async fetchLayerBounds(sceneLayerId) {
     try {
-      console.log(`开始获取scene图层 ${sceneLayerId} 的bounds...`);
+      //console.log(`开始获取scene图层 ${sceneLayerId} 的bounds...`);
       const response = await this.gisApi.getSceneLayerBounds(sceneLayerId);
-      console.log(`scene图层 ${sceneLayerId} API响应:`, response);
+      //console.log(`scene图层 ${sceneLayerId} API响应:`, response);
       
       // 解析bounds数据
       let bounds = null;
@@ -971,7 +952,7 @@ export class DataCacheService {
         bounds = response;
       }
       
-      console.log(`scene图层 ${sceneLayerId} bounds:`, bounds);
+      //console.log(`scene图层 ${sceneLayerId} bounds:`, bounds);
       return bounds;
     } catch (error) {
       console.error(`获取scene图层 ${sceneLayerId} bounds失败:`, error);
@@ -985,12 +966,12 @@ export class DataCacheService {
    */
   async executeLoginStrategy() {
     if (this.loading) {
-      console.log('已有加载任务在执行中，跳过');
+      //console.log('已有加载任务在执行中，跳过');
       return;
     }
 
     this.loading = true;
-    console.log('🚀 开始执行登录缓存策略...');
+    //console.log('🚀 开始执行登录缓存策略...');
 
     try {
       // 1. 获取所有scenes
@@ -998,11 +979,11 @@ export class DataCacheService {
       const scenes = await this.fetchScenes();
       
       if (!scenes || scenes.length === 0) {
-        console.log('没有找到scenes数据');
+        //console.log('没有找到scenes数据');
         return;
       }
 
-      console.log(`找到 ${scenes.length} 个场景`);
+      //console.log(`找到 ${scenes.length} 个场景`);
       let processedScenes = 0;
       let totalLayers = 0;
       
@@ -1044,7 +1025,7 @@ export class DataCacheService {
       }
 
       this.updateProgress(10, 10, `完成！处理了 ${scenes.length} 个场景，${totalLayers} 个图层`);
-      console.log(`✅ 登录缓存策略执行完成！处理了 ${scenes.length} 个场景，${totalLayers} 个图层`);
+      //console.log(`✅ 登录缓存策略执行完成！处理了 ${scenes.length} 个场景，${totalLayers} 个图层`);
 
     } catch (error) {
       console.error('❌ 登录缓存策略执行失败:', error);
@@ -1059,12 +1040,12 @@ export class DataCacheService {
    */
   async executeSceneSwitchStrategy(sceneId) {
     if (this.loading) {
-      console.log('已有加载任务在执行中，跳过');
+      //console.log('已有加载任务在执行中，跳过');
       return;
     }
 
     this.loading = true;
-    console.log(`🔄 开始执行场景切换缓存策略，场景ID: ${sceneId}...`);
+    //console.log(`🔄 开始执行场景切换缓存策略，场景ID: ${sceneId}...`);
 
     try {
       this.updateProgress(1, 5, `获取场景 ${sceneId} 信息...`);
@@ -1097,7 +1078,7 @@ export class DataCacheService {
       }
 
       this.updateProgress(5, 5, `完成场景 ${scene.name} 的缓存！`);
-      console.log(`✅ 场景切换缓存策略执行完成！场景: ${scene.name}`);
+      //console.log(`✅ 场景切换缓存策略执行完成！场景: ${scene.name}`);
 
     } catch (error) {
       console.error('❌ 场景切换缓存策略执行失败:', error);
@@ -1123,7 +1104,7 @@ export class DataCacheService {
         north: bboxData.maxy
       };
       
-      console.log(`图层 ${layerId} bounds:`, bounds);
+      //console.log(`图层 ${layerId} bounds:`, bounds);
       
       // 使用智能缩放级别计算
       const mapSize = [1024, 768]; // 假设的地图容器大小
@@ -1152,12 +1133,12 @@ export class DataCacheService {
           zoomLevels = getRecommendedZoomLevels(bounds, mapSize, 'conservative');
       }
       
-      console.log(`图层 ${layerId} 推荐缩放级别:`, zoomLevels);
+      //console.log(`图层 ${layerId} 推荐缩放级别:`, zoomLevels);
       
       for (const zoomLevel of zoomLevels) {
         try {
           const tileList = calculateTileList(bounds, zoomLevel);
-          console.log(`图层 ${layerId} 在缩放级别 ${zoomLevel} 需要 ${tileList.length} 个瓦片`);
+          //console.log(`图层 ${layerId} 在缩放级别 ${zoomLevel} 需要 ${tileList.length} 个瓦片`);
           
           // 这里可以调用瓦片预加载逻辑
           // 暂时只记录日志，实际的瓦片加载会在地图组件中实现
@@ -1182,7 +1163,7 @@ export class DataCacheService {
     }
 
     try {
-      console.log(`开始模拟预加载图层 ${layerId} 的 ${tileList.length} 个瓦片...`);
+      //console.log(`开始模拟预加载图层 ${layerId} 的 ${tileList.length} 个瓦片...`);
       
       // 为了演示，我们只保存前几个瓦片的模拟数据
       const maxTilesToSave = Math.min(tileList.length, 5); // 限制保存数量避免过多
@@ -1211,7 +1192,7 @@ export class DataCacheService {
             }
           );
           
-          console.log(`保存测试瓦片: ${layerId}_${zoomLevel}_${tile.x}_${tile.y}`);
+          //console.log(`保存测试瓦片: ${layerId}_${zoomLevel}_${tile.x}_${tile.y}`);
         } catch (error) {
           console.warn(`保存瓦片 ${tile.x},${tile.y} 失败:`, error);
         }
@@ -1223,16 +1204,16 @@ export class DataCacheService {
       }
       
       // 记录预加载信息到缓存系统的元数据中
-      const metadata = {
-        layerId,
-        zoomLevel,
-        tileCount: tileList.length,
-        savedTiles: maxTilesToSave,
-        preloadedAt: Date.now(),
-        strategy: 'background_preload'
-      };
+      // const metadata = {
+      //   layerId,
+      //   zoomLevel,
+      //   tileCount: tileList.length,
+      //   savedTiles: maxTilesToSave,
+      //   preloadedAt: Date.now(),
+      //   strategy: 'background_preload'
+      // };
       
-      console.log(`预加载完成:`, metadata);
+      //console.log(`预加载完成:`, metadata);
     } catch (error) {
       console.error('模拟预加载瓦片失败:', error);
     }

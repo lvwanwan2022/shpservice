@@ -53,9 +53,7 @@ class OpenLayersCacheAdapter {
              const imageUrl = URL.createObjectURL(tileCache.data);
              image.onload = () => {
                URL.revokeObjectURL(imageUrl);
-               if (this.debug) {
-                 console.log(`✅ 缓存瓦片加载成功: ${layerId}_${z}_${x}_${y}`);
-               }
+               
              };
              image.onerror = () => {
                URL.revokeObjectURL(imageUrl);
@@ -64,9 +62,7 @@ class OpenLayersCacheAdapter {
                image.src = src;
              };
              image.src = imageUrl;
-             if (this.debug) {
-               console.log(`🎯 命中瓦片缓存: ${layerId}_${z}_${x}_${y}`);
-             }
+             
              return;
           } else {
             // 缓存未命中，进行网络请求

@@ -44,11 +44,7 @@ export default {
       this.isLoggedIn = authService.isAuthenticated()
       this.token = authService.getToken()
       this.userInfo = authService.getUser()
-      console.log('调试刷新:', {
-        isLoggedIn: this.isLoggedIn,
-        token: this.token,
-        userInfo: this.userInfo
-      })
+      
     },
     
     close() {

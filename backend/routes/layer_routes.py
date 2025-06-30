@@ -726,16 +726,42 @@ def get_scene_layer_bounds(scene_layer_id):
         with get_db_connection() as conn:
             from psycopg2.extras import RealDictCursor
             cursor = conn.cursor(cursor_factory=RealDictCursor)
-            # 首先尝试从geoserver_layers表获取图层信息
+            
+            # 首先查询是否已有缓存的边界框信息
             cursor.execute("""
-                SELECT sl.id, sl.layer_id, sl.layer_type
+                SELECT sl.id, sl.layer_id, sl.layer_type, sl.boundingbox
                 FROM scene_layers sl                
                 WHERE sl.id = %s
             """, (scene_layer_id,))
             
             scene_layer_record = cursor.fetchone()
+            if not scene_layer_record:
+                return jsonify({
+                    'success': False,
+                    'error': f'未找到ID为{scene_layer_id}的场景图层'
+                }), 404
+            
             layer_id = scene_layer_record['layer_id']
             layer_type = scene_layer_record['layer_type']
+            cached_bbox = scene_layer_record['boundingbox']
+            
+            # 如果有缓存的边界框，直接返回
+            if cached_bbox:
+                current_app.logger.info(f"从缓存返回图层边界框: scene_layer_id={scene_layer_id}")
+                return jsonify({
+                    'success': True,
+                    'data': {
+                        'bbox': cached_bbox,
+                        'layer_id': layer_id,
+                        'service_type': layer_type,
+                        'from_cache': True
+                    }
+                })
+            
+            # 没有缓存，按原逻辑计算边界框
+            current_app.logger.info(f"计算图层边界框: scene_layer_id={scene_layer_id}, layer_type={layer_type}")
+            bbox = None
+            layer_info = {}
             
             if layer_type == 'geoserver':
               # 首先尝试从geoserver_layers表获取图层信息
@@ -777,6 +803,19 @@ def get_scene_layer_bounds(scene_layer_id):
                       'success': False,
                       'error': '无法获取GeoServer图层边界信息'
                   }), 500
+              
+              # 保存计算出的边界框到数据库缓存
+              try:
+                  cursor.execute("""
+                      UPDATE scene_layers 
+                      SET boundingbox = %s, updated_at = CURRENT_TIMESTAMP
+                      WHERE id = %s
+                  """, (json.dumps(bbox), scene_layer_id))
+                  conn.commit()
+                  current_app.logger.info(f"已缓存GeoServer图层边界框到数据库: scene_layer_id={scene_layer_id}")
+              except Exception as e:
+                  current_app.logger.warning(f"保存GeoServer图层边界框缓存失败: {str(e)}")
+                  # 即使保存失败也不影响正常返回
               
               return jsonify({
                   'success': True,
@@ -833,6 +872,19 @@ def get_scene_layer_bounds(scene_layer_id):
                         'success': False,
                         'error': '无法获取Martin图层边界信息'
                     }), 500
+                
+                # 保存计算出的边界框到数据库缓存
+                try:
+                    cursor.execute("""
+                        UPDATE scene_layers 
+                        SET boundingbox = %s, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = %s
+                    """, (json.dumps(bbox), scene_layer_id))
+                    conn.commit()
+                    current_app.logger.info(f"已缓存Martin图层边界框到数据库: scene_layer_id={scene_layer_id}")
+                except Exception as e:
+                    current_app.logger.warning(f"保存Martin图层边界框缓存失败: {str(e)}")
+                    # 即使保存失败也不影响正常返回
                 
                 return jsonify({
                     'success': True,

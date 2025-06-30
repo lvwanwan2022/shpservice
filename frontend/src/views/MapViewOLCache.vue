@@ -454,7 +454,7 @@ export default {
           cacheProgress.message = progress.message;
         });
 
-        console.log('缓存服务初始化成功');
+        //console.log('缓存服务初始化成功');
       } catch (error) {
         console.error('缓存服务初始化失败:', error);
         ElMessage.error('缓存服务初始化失败');
@@ -478,7 +478,7 @@ export default {
         cacheProgressVisible.value = true;
         cacheProgress.status = '';
         
-        console.log('开始执行登录缓存策略...');
+        //console.log('开始执行登录缓存策略...');
         await dataCacheService.executeLoginStrategy();
         
         cacheProgress.status = 'success';
@@ -513,7 +513,7 @@ export default {
 
     // 场景切换时的缓存加载
     const onSceneChange = async (sceneId) => {
-      console.log('场景切换:', sceneId);
+      //console.log('场景切换:', sceneId);
       
       // 加载新场景的图层
       await loadSceneLayers(sceneId);
@@ -521,9 +521,9 @@ export default {
       // 自动执行场景切换缓存策略
       if (dataCacheService && !cacheLoading.value) {
         try {
-          console.log('执行场景切换缓存策略...');
+          //console.log('执行场景切换缓存策略...');
           await dataCacheService.executeSceneSwitchStrategy(sceneId);
-          console.log('场景切换缓存完成');
+          //console.log('场景切换缓存完成');
         } catch (error) {
           console.warn('场景切换缓存失败:', error);
         }
@@ -565,11 +565,11 @@ export default {
       }
 
       try {
-        console.log('开始读取IndexedDB缓存数据...');
+        //console.log('开始读取IndexedDB缓存数据...');
         
         // 获取所有缓存数据
         const allTiles = await tileCacheService.getAllTiles();
-        console.log('获取到的瓦片数据:', allTiles);
+        //console.log('获取到的瓦片数据:', allTiles);
         
         // 按图层ID分组
         const layerGroups = {};
@@ -608,7 +608,7 @@ export default {
         cacheStats.layerCount = Object.keys(layerGroups).length;
         cacheStats.lastUpdate = lastUpdate || Date.now();
 
-        console.log('缓存数据统计:', cacheStats);
+        //console.log('缓存数据统计:', cacheStats);
         ElMessage.success(`成功加载 ${totalTiles} 个瓦片数据`);
         
       } catch (error) {
@@ -746,7 +746,7 @@ export default {
       }
 
       try {
-        console.log('开始添加测试缓存数据...');
+        //console.log('开始添加测试缓存数据...');
         
         // 创建测试图片数据
         const createTestImage = (layerId, z, x, y) => {
@@ -826,7 +826,7 @@ export default {
                 );
                 
                 totalSaved++;
-                console.log(`保存测试瓦片: ${layer.id}_${z}_${tile.x}_${tile.y}`);
+                //console.log(`保存测试瓦片: ${layer.id}_${z}_${tile.x}_${tile.y}`);
               } catch (error) {
                 console.warn(`保存测试瓦片失败:`, error);
               }
@@ -835,7 +835,7 @@ export default {
         }
         
         ElMessage.success(`成功添加 ${totalSaved} 个测试瓦片数据`);
-        console.log(`测试数据添加完成，共 ${totalSaved} 个瓦片`);
+        //console.log(`测试数据添加完成，共 ${totalSaved} 个瓦片`);
         
       } catch (error) {
         console.error('添加测试数据失败:', error);
@@ -853,7 +853,7 @@ export default {
         if (sceneList.value.length > 0 ) {
           selectedSceneId.value = sceneList.value[0].id;
           await onSceneChange(selectedSceneId.value);
-          //console.log('自动选择第一个场景:', selectedSceneId.value);
+          ////console.log('自动选择第一个场景:', selectedSceneId.value);
         }
       } catch (error) {
         console.error('获取场景列表失败:', error);
@@ -868,7 +868,7 @@ export default {
         const response = await gisApi.getScene(sceneId);
         const scene = response.data || response;
         layersList.value = scene.layers || [];
-        console.log(`获取到场景 ${sceneId} 的图层:`, layersList.value);
+        //console.log(`获取到场景 ${sceneId} 的图层:`, layersList.value);
       } catch (error) {
         console.error('获取场景图层失败:', error);
         ElMessage.error('获取场景图层失败');
@@ -881,11 +881,13 @@ export default {
 
     const selectLayer = (layer) => {
       currentActiveLayer.value = layer;
-      console.log('选择图层:', layer);
+      //console.log('选择图层:', layer);
     };
 
     const toggleLayerVisibility = (layer) => {
-      console.log('切换图层可见性:', layer.layer_name, layer.visibility);
+      if(this.debug){
+        console.log('切换图层可见性:', layer.layer_name, layer.visibility);
+      }
       // 这里可以调用地图组件的方法来切换图层可见性
     };
 
@@ -920,15 +922,15 @@ export default {
         );
         
         // 这里调用删除图层的API
-        console.log('删除图层:', layer);
+        //console.log('删除图层:', layer);
         ElMessage.success('图层删除成功');
       } catch (error) {
-        console.log('取消删除');
+        //console.log('取消删除');
       }
     };
 
     const showAddLayerDialog = () => {
-      console.log('显示添加图层对话框');
+      //console.log('显示添加图层对话框');
       ElMessage.info('添加图层功能开发中...');
     };
 
@@ -941,7 +943,7 @@ export default {
     };
 
     const onLayerSelected = (layer) => {
-      console.log('地图组件选择图层:', layer);
+      //console.log('地图组件选择图层:', layer);
       currentActiveLayer.value = layer;
     };
 
@@ -978,7 +980,7 @@ export default {
 
     // 生命周期
     onMounted(async () => {
-      console.log('MapViewOLCache 组件挂载');
+      //console.log('MapViewOLCache 组件挂载');
       await initCacheService();
       await loadScenes();
     });

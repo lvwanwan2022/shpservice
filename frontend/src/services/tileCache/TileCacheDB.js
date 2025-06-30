@@ -37,7 +37,7 @@ class TileCacheDB {
       // 数据库打开成功
       request.onsuccess = (event) => {
         this.db = event.target.result;
-        console.log('瓦片缓存数据库打开成功');
+        //console.log('瓦片缓存数据库打开成功');
         resolve(this.db);
       };
 
@@ -71,7 +71,7 @@ class TileCacheDB {
         objectStore.createIndex('coordinate', ['tileX', 'tileY'], { unique: false });
         objectStore.createIndex('fullIndex', ['layerId', 'zoomLevel', 'tileX', 'tileY'], { unique: true });
 
-        console.log('瓦片缓存数据库结构创建成功');
+        //console.log('瓦片缓存数据库结构创建成功');
       };
     });
   }
@@ -125,7 +125,7 @@ class TileCacheDB {
     if (this.db) {
       this.db.close();
       this.db = null;
-      console.log('瓦片缓存数据库已关闭');
+      //console.log('瓦片缓存数据库已关闭');
     }
   }
 
@@ -140,7 +140,7 @@ class TileCacheDB {
       const deleteRequest = window.indexedDB.deleteDatabase(this.dbName);
       
       deleteRequest.onsuccess = () => {
-        console.log('瓦片缓存数据库删除成功');
+        //console.log('瓦片缓存数据库删除成功');
         resolve();
       };
       

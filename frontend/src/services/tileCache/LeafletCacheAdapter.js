@@ -64,9 +64,7 @@ class LeafletCacheAdapter {
             const cachedTile = await this.cacheService.getTile(layerId, z, x, y);
             if (cachedTile) {
               this.loadTileFromCache(tile, cachedTile, done);
-              if (this.debug) {
-                console.log(`从缓存加载瓦片: ${layerId}_${z}_${x}_${y}`);
-              }
+              
               return;
             }
           }
@@ -104,9 +102,7 @@ class LeafletCacheAdapter {
                   url
                 });
                 
-                if (this.debug) {
-                  console.log(`瓦片已缓存: ${layerId}_${z}_${x}_${y}`);
-                }
+                
               }
             }, 'image/png');
 
@@ -208,9 +204,7 @@ class LeafletCacheAdapter {
             const cachedTile = await this.cacheService.getTile(layerId, z, x, y);
             if (cachedTile) {
               this.loadTileFromCache(tile, cachedTile, done);
-              if (this.debug) {
-                console.log(`从缓存加载WMS瓦片: ${layerId}_${z}_${x}_${y}`);
-              }
+              
               return;
             }
           }
@@ -244,9 +238,7 @@ class LeafletCacheAdapter {
                   url
                 });
                 
-                if (this.debug) {
-                  console.log(`WMS瓦片已缓存: ${layerId}_${z}_${x}_${y}`);
-                }
+               
               }
             }, this.options.format || 'image/png');
 
@@ -355,10 +347,10 @@ class LeafletCacheAdapter {
         }
 
         await Promise.all(promises);
-        console.log(`缩放级别 ${zoom} 预加载完成`);
+        //console.log(`缩放级别 ${zoom} 预加载完成`);
       }
 
-      console.log(`预加载完成: ${layerId}`);
+      //console.log(`预加载完成: ${layerId}`);
     } catch (error) {
       console.error('预加载瓦片时出错:', error);
     }

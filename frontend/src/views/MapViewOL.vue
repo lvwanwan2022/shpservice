@@ -532,15 +532,15 @@ export default {
             opacity: layer.opacity
           }
           
-          console.log('保存透明度到数据库:', {
-            scene_id: selectedSceneId.value,
-            layer_id: layer.id,
-            opacity: layer.opacity
-          })
+          //console.log('保存透明度到数据库:', {
+          //   scene_id: selectedSceneId.value,
+          //   layer_id: layer.id,
+          //   opacity: layer.opacity
+          // })
           
           // 调用后端API更新透明度
           await gisApi.updateSceneLayer(selectedSceneId.value, layer.id, updateData)
-          console.log('✅ 透明度已保存到数据库')
+          //console.log('✅ 透明度已保存到数据库')
           
           // 清除定时器
           opacityUpdateTimers.value.delete(layer.id)
@@ -1059,7 +1059,7 @@ export default {
     const handleDragEnd = () => {
       draggingLayerId.value = null
       dragStartIndex.value = -1
-      console.log('拖拽操作结束')
+      //console.log('拖拽操作结束')
     }
 
     // 拖拽悬停
@@ -1118,16 +1118,16 @@ export default {
         newOrders[layerId] = newOrder
       })
       
-      console.log('计算的新图层顺序:', newOrders)
+      //console.log('计算的新图层顺序:', newOrders)
       return newOrders
     }
 
     // 批量更新图层顺序
     const updateLayersOrder = async (newOrders) => {
-      console.log('准备发送的数据:', {
-        sceneId: selectedSceneId.value,
-        layerOrders: newOrders
-      })
+      //console.log('准备发送的数据:', {
+      //   sceneId: selectedSceneId.value,
+      //   layerOrders: newOrders
+      // })
       // 使用现有的批量更新接口
       await gisApi.reorderSceneLayers(selectedSceneId.value, newOrders)
     }
@@ -1135,10 +1135,10 @@ export default {
     // 🔥 拖拽重新排序后的刷新函数
     const refreshLayersAfterReorder = async () => {
       try {
-        console.log('开始刷新图层顺序...')
+        //console.log('开始刷新图层顺序...')
         
         // 1. 重新获取场景数据，更新UI中的图层卡片顺序
-        console.log('重新获取场景图层数据...')
+        //console.log('重新获取场景图层数据...')
         await fetchSceneLayers(selectedSceneId.value)
         
         // 2. 等待下一个tick确保UI已更新
@@ -1146,36 +1146,36 @@ export default {
         
         // 3. 通知地图组件刷新图层显示顺序
         if (mapViewerRef.value) {
-          console.log('通知地图组件刷新图层...')
+          //console.log('通知地图组件刷新图层...')
           
           // 尝试调用不同的刷新方法
           if (mapViewerRef.value.refreshAllLayers) {
             await mapViewerRef.value.refreshAllLayers()
-            console.log('✅ 地图图层已刷新(refreshAllLayers)')
+            //console.log('✅ 地图图层已刷新(refreshAllLayers)')
           }
           
           if (mapViewerRef.value.refreshLayerOrder) {
             await mapViewerRef.value.refreshLayerOrder()
-            console.log('✅ 地图图层顺序已重新排列(refreshLayerOrder)')
+            //console.log('✅ 地图图层顺序已重新排列(refreshLayerOrder)')
           }
           
           // 如果没有专门的刷新方法，尝试重新加载场景
           if (mapViewerRef.value.loadScene) {
             await mapViewerRef.value.loadScene(selectedSceneId.value)
-            console.log('✅ 地图场景已重新加载(loadScene)')
+            //console.log('✅ 地图场景已重新加载(loadScene)')
           }
         } else {
           console.warn('mapViewerRef不可用，无法刷新地图')
         }
         
-        console.log('✅ 图层顺序刷新完成')
+        //console.log('✅ 图层顺序刷新完成')
         
       } catch (error) {
         console.error('❌ 刷新图层顺序失败:', error)
         // 如果刷新失败，至少要重新获取数据
         try {
           await fetchSceneLayers(selectedSceneId.value)
-          console.log('备用方案：重新获取图层数据成功')
+          //console.log('备用方案：重新获取图层数据成功')
         } catch (fallbackError) {
           console.error('备用方案也失败了:', fallbackError)
         }

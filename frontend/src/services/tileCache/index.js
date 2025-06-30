@@ -111,7 +111,6 @@ export function quickSetup(options = {}) {
       }
     }
 
-    console.log('瓦片缓存系统初始化成功');
   } catch (error) {
     result.error = error.message;
     console.error('瓦片缓存系统初始化失败:', error);

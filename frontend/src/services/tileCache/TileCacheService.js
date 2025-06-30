@@ -30,7 +30,7 @@ class TileCacheService {
       let blob;
       
       // 添加调试信息
-      console.log('瓦片数据类型:', typeof tileData, tileData?.constructor?.name);
+      //console.log('瓦片数据类型:', typeof tileData, tileData?.constructor?.name);
       
       if (tileData instanceof Blob) {
         blob = tileData;
@@ -77,7 +77,7 @@ class TileCacheService {
         const request = store.put(tileRecord);
         
         request.onsuccess = () => {
-          console.log(`瓦片缓存保存成功: ${tileId}`);
+          //console.log(`瓦片缓存保存成功: ${tileId}`);
           resolve(true);
         };
         
@@ -113,7 +113,7 @@ class TileCacheService {
           if (result) {
             // 检查缓存是否过期
             if (this.isCacheExpired(result.timestamp)) {
-              console.log(`瓦片缓存已过期: ${tileId}`);
+              //console.log(`瓦片缓存已过期: ${tileId}`);
               this.deleteTile(layerId, zoomLevel, tileX, tileY); // 异步删除过期缓存
               resolve(null);
             } else {
@@ -165,7 +165,7 @@ class TileCacheService {
         const request = store.delete(tileId);
         
         request.onsuccess = () => {
-          console.log(`瓦片缓存删除成功: ${tileId}`);
+          //console.log(`瓦片缓存删除成功: ${tileId}`);
           resolve(true);
         };
         
@@ -203,7 +203,7 @@ class TileCacheService {
             };
             cursor.continue();
           } else {
-            console.log(`删除图层 ${layerId} 的 ${deleteCount} 个瓦片缓存`);
+            //console.log(`删除图层 ${layerId} 的 ${deleteCount} 个瓦片缓存`);
             resolve(deleteCount);
           }
         };
@@ -243,7 +243,7 @@ class TileCacheService {
             };
             cursor.continue();
           } else {
-            console.log(`删除图层 ${layerId} 缩放级别 ${zoomLevel} 的 ${deleteCount} 个瓦片缓存`);
+            //console.log(`删除图层 ${layerId} 缩放级别 ${zoomLevel} 的 ${deleteCount} 个瓦片缓存`);
             resolve(deleteCount);
           }
         };
@@ -365,7 +365,7 @@ class TileCacheService {
             };
             cursor.continue();
           } else {
-            console.log(`清理了 ${cleanCount} 个过期瓦片缓存`);
+            //console.log(`清理了 ${cleanCount} 个过期瓦片缓存`);
             resolve(cleanCount);
           }
         };
@@ -393,7 +393,7 @@ class TileCacheService {
         const request = store.clear();
         
         request.onsuccess = () => {
-          console.log('所有瓦片缓存已清理');
+          //console.log('所有瓦片缓存已清理');
           resolve(true);
         };
         
@@ -421,7 +421,7 @@ class TileCacheService {
         
         request.onsuccess = (event) => {
           const tiles = event.target.result || [];
-          console.log(`获取到 ${tiles.length} 个瓦片数据`);
+          //console.log(`获取到 ${tiles.length} 个瓦片数据`);
           resolve(tiles);
         };
         

@@ -109,7 +109,7 @@ export default {
         
         if (result.success) {
           this.$message?.success?.(result.data.message || '登录成功')
-          console.log('登录成功，用户信息:', result.data.user)
+          //console.log('登录成功，用户信息:', result.data.user)
           // 给一点时间让状态更新
           setTimeout(() => {
             this.redirectAfterLogin()

@@ -259,7 +259,7 @@ export default {
     // 初始化瓦片缓存
     const initializeTileCache = async () => {
       try {
-        console.log('🔄 初始化瓦片缓存...')
+        //console.log('🔄 初始化瓦片缓存...')
         
         // 创建缓存实例
         tileCache.value = createTileCache({
@@ -297,18 +297,9 @@ export default {
           }
         }, 30000) // 每30秒检查一次
 
-        // 添加全局调试方法
-        if (typeof window !== 'undefined') {
-          window.debugTileCache = () => {
-            if (olCacheAdapter.value) {
-              console.log('🔍 瓦片缓存调试信息:', olCacheAdapter.value.getDebugInfo())
-            } else {
-              console.log('❌ 缓存适配器未初始化')
-            }
-          }
-        }
         
-        console.log('✅ 瓦片缓存初始化完成')
+        
+        //console.log('✅ 瓦片缓存初始化完成')
         return true
       } catch (error) {
         console.error('❌ 瓦片缓存初始化失败:', error)
@@ -1428,7 +1419,7 @@ export default {
             }
           });
           
-          console.log('创建栅格MBTiles图层 (缓存支持):', layer.layer_name);
+          //console.log('创建栅格MBTiles图层 (缓存支持):', layer.layer_name);
         } else {
           // 创建矢量切片图层 - 用于矢量mbtiles和其他矢量数据（支持缓存）
           const layerCacheKey = `martin-vector-${layer.id}-${layer.layer_name}`;
@@ -1487,7 +1478,7 @@ export default {
             });
           }
           
-          console.log('创建矢量MBTiles图层 (缓存支持):', layer.layer_name);
+          //console.log('创建矢量MBTiles图层 (缓存支持):', layer.layer_name);
         }
         
         // 使用统一变量名
@@ -2268,7 +2259,7 @@ export default {
       // 清理缓存适配器状态
       if (olCacheAdapter.value) {
         olCacheAdapter.value.clearAllStates()
-        console.log('🧹 清理缓存适配器状态')
+        //console.log('🧹 清理缓存适配器状态')
       }
       
       clearAllLayers()

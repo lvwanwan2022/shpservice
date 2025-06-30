@@ -2,7 +2,7 @@
  * 瓦片缓存系统使用示例
  * 展示如何在不同场景下使用瓦片缓存功能
  */
-
+/*eslint-disable*/
 import { 
   quickSetup, 
   createOpenLayersAdapter, 
@@ -21,7 +21,7 @@ import {
  * 示例1: 系统初始化和基本设置
  */
 export async function example1_BasicSetup() {
-  console.log('=== 示例1: 基本设置 ===');
+
   
   // 快速初始化缓存系统
   const setup = quickSetup({
@@ -32,12 +32,11 @@ export async function example1_BasicSetup() {
   });
 
   if (setup.supported) {
-    console.log('缓存系统初始化成功');
-    console.log('可用适配器:', Object.keys(setup.adapters));
+
     
     // 查看缓存使用情况
     const usage = await getCacheUsage();
-    console.log('当前缓存使用情况:', usage);
+    //console.log('当前缓存使用情况:', usage);
   } else {
     console.error('缓存系统初始化失败:', setup.error);
   }
@@ -47,7 +46,7 @@ export async function example1_BasicSetup() {
  * 示例2: 计算bounds对应的瓦片列表
  */
 export function example2_CalculateTiles() {
-  console.log('=== 示例2: 计算瓦片列表 ===');
+  //console.log('=== 示例2: 计算瓦片列表 ===');
   
   // 定义一个区域范围（北京市中心）
   const bounds = {
@@ -58,24 +57,24 @@ export function example2_CalculateTiles() {
   };
 
   // 计算单个缩放级别的瓦片列表
-  const tilesAtZoom10 = calculateTileList(bounds, 10);
-  console.log(`缩放级别10的瓦片数量: ${tilesAtZoom10.length}`);
-  console.log('前5个瓦片坐标:', tilesAtZoom10.slice(0, 5));
+  //const tilesAtZoom10 = calculateTileList(bounds, 10);
+  //console.log(`缩放级别10的瓦片数量: ${tilesAtZoom10.length}`);
+  //console.log('前5个瓦片坐标:', tilesAtZoom10.slice(0, 5));
 
   // 计算多个缩放级别的瓦片列表
-  const tilesMultiZoom = calculateTileList(bounds, { min: 8, max: 12 });
-  console.log(`缩放级别8-12的总瓦片数量: ${tilesMultiZoom.length}`);
+  //const tilesMultiZoom = calculateTileList(bounds, { min: 8, max: 12 });
+  //console.log(`缩放级别8-12的总瓦片数量: ${tilesMultiZoom.length}`);
 
   // 只计算瓦片数量（不生成列表）
-  const tileCount = calculateTileCount(bounds, { min: 8, max: 12 });
-  console.log(`快速计算的瓦片数量: ${tileCount}`);
+  //const tileCount = calculateTileCount(bounds, { min: 8, max: 12 });
+  //console.log(`快速计算的瓦片数量: ${tileCount}`);
 }
 
 /**
  * 示例3: OpenLayers集成
  */
 export function example3_OpenLayersIntegration() {
-  console.log('=== 示例3: OpenLayers集成 ===');
+  //console.log('=== 示例3: OpenLayers集成 ===');
   
   if (typeof window === 'undefined' || !window.ol) {
     console.warn('OpenLayers未加载，跳过示例');
@@ -124,7 +123,7 @@ export function example3_OpenLayersIntegration() {
     bounds,
     10,
     (loaded, total) => {
-      console.log(`预加载进度: ${loaded}/${total}`);
+      //console.log(`预加载进度: ${loaded}/${total}`);
     }
   );
 
@@ -135,7 +134,7 @@ export function example3_OpenLayersIntegration() {
  * 示例4: Leaflet集成
  */
 export function example4_LeafletIntegration() {
-  console.log('=== 示例4: Leaflet集成 ===');
+  //('=== 示例4: Leaflet集成 ===');
   
   if (typeof window === 'undefined' || !window.L) {
     console.warn('Leaflet未加载，跳过示例');
@@ -176,10 +175,8 @@ export function example4_LeafletIntegration() {
     'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     bounds,
     8,
-    12,
-    (loaded, total, zoom) => {
-      console.log(`预加载进度: ${loaded}/${total} (缩放级别: ${zoom})`);
-    }
+    12
+    
   );
 
   return { map, cacheAdapter };
@@ -189,23 +186,19 @@ export function example4_LeafletIntegration() {
  * 示例5: 缓存策略管理器使用
  */
 export async function example5_CacheStrategyManager() {
-  console.log('=== 示例5: 缓存策略管理器 ===');
+  
   
   // 创建策略管理器
   const strategyManager = new CacheStrategyManager({
     loginStrategy: {
       priority: 3,
-      zoomLevels: { min: 8, max: 12 },
-      progressCallback: (progress) => {
-        console.log(`登录策略进度: ${progress.completed}/${progress.total}`);
-      }
+      zoomLevels: { min: 8, max: 12 }
+     
     },
     sceneSwitchStrategy: {
       priority: 2,
-      zoomLevels: { min: 10, max: 14 },
-      progressCallback: (progress) => {
-        console.log(`场景切换进度: ${progress.completed}/${progress.total}`);
-      }
+      zoomLevels: { min: 10, max: 14 }
+      
     },
     zoomStrategy: {
       priority: 1,
@@ -263,12 +256,11 @@ export async function example5_CacheStrategyManager() {
     }
   ];
 
-  // 执行登录策略
-  console.log('执行登录预加载策略...');
+  
   await strategyManager.executeLoginStrategy(mockScenes);
 
   // 执行场景切换策略
-  console.log('执行场景切换策略...');
+  
   await strategyManager.executeSceneSwitchStrategy(mockScenes[0]);
 
   // 执行缩放策略
@@ -280,40 +272,39 @@ export async function example5_CacheStrategyManager() {
     west: 116.35
   };
   
-  console.log('执行缩放策略...');
+
   await strategyManager.executeZoomStrategy(visibleLayers, currentBounds, 12);
 
-  // 查看任务状态
-  console.log('任务状态:', strategyManager.getTaskStatus());
+ 
 }
 
 /**
  * 示例6: 缓存管理和调试
  */
 export async function example6_CacheManagement() {
-  console.log('=== 示例6: 缓存管理和调试 ===');
+
   
   // 使用调试工具
   await CacheDebugger.printStats();
   
   // 检查特定瓦片
   const hasTile = await CacheDebugger.checkTile('osm-base', 10, 100, 200);
-  console.log('瓦片存在:', hasTile);
+
   
   // 列出所有图层
   const layers = await CacheDebugger.listLayers();
-  console.log('缓存的图层:', layers);
+
   
   // 获取详细的缓存使用情况
   const usage = await getCacheUsage();
-  console.log('缓存使用详情:', usage);
+
   
   // 如果缓存过大，可以清理过期缓存
   if (usage.totalSize > 100 * 1024 * 1024) { // 超过100MB
-    console.log('缓存过大，开始清理...');
+
     const { cleanExpiredTiles } = await import('./utils.js');
     const cleanedCount = await cleanExpiredTiles(3 * 24 * 60 * 60 * 1000); // 3天
-    console.log(`已清理 ${cleanedCount} 个过期瓦片`);
+
   }
 }
 
@@ -321,7 +312,7 @@ export async function example6_CacheManagement() {
  * 示例7: 自定义缓存策略
  */
 export async function example7_CustomStrategy() {
-  console.log('=== 示例7: 自定义缓存策略 ===');
+
   
   const strategyManager = new CacheStrategyManager();
   
@@ -329,23 +320,18 @@ export async function example7_CustomStrategy() {
   strategyManager.setStrategy('login', {
     priority: 5,
     zoomLevels: { min: 6, max: 15 },
-    maxConcurrent: 10,
-    progressCallback: (progress) => {
-      console.log(`高优先级预加载: ${Math.round(progress.completed / progress.total * 100)}%`);
-    }
+    maxConcurrent: 10
   });
   
   // 自定义轻量级缩放策略
   strategyManager.setStrategy('zoom', {
     priority: 1,
     zoomBuffer: 1, // 只预加载当前级别前后1级
-    boundsExpansion: 0.2, // 只扩展20%的边界
-    progressCallback: (progress) => {
-      console.log(`轻量级缩放预加载: ${progress.completed}/${progress.total}`);
-    }
+    boundsExpansion: 0.2// 只扩展20%的边界
+    
   });
   
-  console.log('自定义策略配置完成');
+
   
   // 测试自定义策略
   const testScene = {
@@ -368,7 +354,7 @@ export const example8_DataCacheService = {
   description: '展示如何使用DataCacheService调用后端API获取数据并缓存',
   
   async run() {
-    console.log('\n=== 示例8：完整的数据缓存服务 ===');
+
     
     try {
       // 1. 导入所需模块
@@ -378,7 +364,7 @@ export const example8_DataCacheService = {
       // 模拟GIS API (在实际使用中会导入真实的API)
       const mockGisApi = {
         async getScenes() {
-          console.log('🔍 调用API: getScenes()');
+    
           return {
             data: [
               { id: 1, name: '城市规划场景', description: '包含建筑、道路等图层' },
@@ -388,7 +374,7 @@ export const example8_DataCacheService = {
         },
         
         async getScene(sceneId) {
-          console.log(`🔍 调用API: getScene(${sceneId})`);
+      
           const scenes = {
             1: {
               id: 1,
@@ -411,7 +397,7 @@ export const example8_DataCacheService = {
         },
         
         async getSceneLayerBounds(layerId) {
-          console.log(`🔍 调用API: getSceneLayerBounds(${layerId})`);
+          
           // 模拟不同图层的bounds
           const bounds = {
             101: { bbox: [116.3, 39.9, 116.5, 40.1] }, // 北京建筑物
@@ -428,30 +414,26 @@ export const example8_DataCacheService = {
       };
       
       // 2. 创建缓存服务
-      console.log('📦 创建瓦片缓存服务...');
+     
       const tileCacheService = createTileCache({
         maxCacheSize: 100 * 1024 * 1024, // 100MB
         maxCacheAge: 24 * 60 * 60 * 1000 // 1天
       });
       
       // 3. 创建数据缓存服务
-      console.log('📊 创建数据缓存服务...');
+      
       const dataCacheService = new DataCacheService(tileCacheService, mockGisApi);
       
-      // 4. 设置进度回调
-      dataCacheService.setProgressCallback((progress) => {
-        console.log(`📈 进度更新: ${progress.percent}% - ${progress.message} (${progress.current}/${progress.total})`);
-      });
+      
       
       // 5. 执行登录缓存策略
-      console.log('\n🚀 执行登录缓存策略...');
+      
       await dataCacheService.executeLoginStrategy();
       
       // 6. 执行场景切换缓存策略
-      console.log('\n🔄 执行场景切换缓存策略...');
+      
       await dataCacheService.executeSceneSwitchStrategy(1);
       
-      console.log('\n✅ 数据缓存服务示例完成！');
       
     } catch (error) {
       console.error('❌ 数据缓存服务示例失败:', error);
@@ -466,7 +448,7 @@ export const example8_DataCacheService = {
 
 // 示例9：类似于用户示例的瓦片加载函数
 function createCacheFirstTileLoadFunction() {
-  console.log('=== 示例9：类似用户示例的瓦片加载函数 ===');
+
   
   // 创建缓存适配器
   const adapter = new OpenLayersCacheAdapter({
@@ -530,12 +512,7 @@ function createCacheFirstTileLoadFunction() {
    * };
    */
 
-  console.log('瓦片加载函数已创建，包含以下特性：');
-  console.log('- 缓存优先策略：先检查IndexedDB缓存');
-  console.log('- 网络降级：缓存未命中时从网络加载');
-  console.log('- 自动重试：网络失败时最多重试3次');
-  console.log('- 自动缓存：网络成功后保存到IndexedDB');
-  console.log('- 错误处理：最终失败时设置瓦片错误状态');
+
 
   return wmtsTileLoadFunction;
 }
@@ -544,7 +521,7 @@ function createCacheFirstTileLoadFunction() {
  * 运行所有示例
  */
 export async function runAllExamples() {
-  console.log('开始运行所有瓦片缓存示例...');
+
   
   try {
     await example1_BasicSetup();
@@ -556,7 +533,7 @@ export async function runAllExamples() {
     await example7_CustomStrategy();
     await example8_DataCacheService.run();
     
-    console.log('所有示例运行完成！');
+
   } catch (error) {
     console.error('示例运行失败:', error);
   }
