@@ -211,33 +211,17 @@
                 >
                   <i class="el-icon-download"></i> 缓存
                 </el-button>
-                <el-button 
-                  type="success" 
-                  size="small" 
-                  @click="loadLayerToMap(row)"
-                  title="加载到地图"
-                >
-                  <i class="el-icon-location"></i>
-                </el-button>
               </template>
               
               <!-- 已有缓存时的操作 -->
               <template v-else>
                 <el-button 
-                  type="primary" 
+                  type="info" 
                   size="small" 
-                  @click="loadLayerToMap(row)"
-                  title="加载到地图"
+                  @click="visualizeCache(row)"
+                  title="可视化缓存"
                 >
-                  <i class="el-icon-location"></i>
-                </el-button>
-                <el-button 
-                  type="success" 
-                  size="small" 
-                  @click="zoomToLayer(row)"
-                  title="缩放到图层"
-                >
-                  <i class="el-icon-zoom-in"></i>
+                  <i class="el-icon-view"></i>
                 </el-button>
                 <el-button 
                   type="danger" 
@@ -321,6 +305,66 @@
         <el-button @click="stopCacheOperation" :disabled="!cacheOperationRunning">停止操作</el-button>
       </template>
     </el-dialog>
+
+    <!-- 缓存可视化对话框 -->
+    <el-dialog 
+      title="缓存数据可视化" 
+      v-model="cacheVisualizationVisible" 
+      width="90%"
+      top="5vh"
+      :close-on-click-modal="false"
+      custom-class="cache-visualization-dialog"
+      @opened="onVisualizationDialogOpened"
+    >
+      <div class="cache-visualization-content">
+        <div class="cache-info-panel">
+          <div class="info-left">
+            <h4>{{ currentVisualizationLayer.layerName }}</h4>
+            <div class="cache-stats-row">
+              <span>场景: {{ currentVisualizationLayer.sceneName }}</span>
+              <span>瓦片数: {{ currentVisualizationLayer.tiles?.length || 0 }}</span>
+              <span>缓存大小: {{ formatFileSize(currentVisualizationLayer.totalSize || 0) }}</span>
+            </div>
+          </div>
+          <div class="info-right">
+            <el-button-group>
+              <el-button 
+                :type="showCacheGrid ? 'primary' : 'default'" 
+                size="small"
+                @click="toggleCacheGrid"
+              >
+                {{ showCacheGrid ? '隐藏' : '显示' }}缓存网格
+              </el-button>
+              <el-button 
+                :type="showCachePoints ? 'primary' : 'default'" 
+                size="small"
+                @click="toggleCachePoints"
+              >
+                {{ showCachePoints ? '隐藏' : '显示' }}缓存点位
+              </el-button>
+              <el-button 
+                type="info" 
+                size="small"
+                @click="resetMapView"
+              >
+                重置视图
+              </el-button>
+              <el-button 
+                type="warning" 
+                size="small"
+                @click="switchToTestData"
+              >
+                测试数据
+              </el-button>
+            </el-button-group>
+          </div>
+        </div>
+        <div id="cache-visualization-map" class="cache-map-container"></div>
+      </div>
+      <template #footer>
+        <el-button @click="cacheVisualizationVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -331,6 +375,22 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import gisApi from '@/api/gis.js';
 import { DataCacheService, formatFileSize, formatTimeAgo } from '@/services/tileCache/utils.js';
 import { createTileCache } from '@/services/tileCache/index.js';
+
+// OpenLayers导入
+import { Map, View, Feature } from 'ol';
+import { Tile as TileLayer, Vector as VectorLayer } from 'ol/layer';
+import { OSM, Vector as VectorSource, TileImage, XYZ } from 'ol/source';
+import { Polygon, Point } from 'ol/geom';
+import { Style, Stroke, Fill, Text } from 'ol/style';
+import { fromLonLat, transformExtent, toLonLat } from 'ol/proj';
+import { defaults as defaultControls } from 'ol/control';
+import Circle from 'ol/style/Circle';
+
+// 引入proj4库用于坐标系转换
+import proj4 from 'proj4';
+import { register } from 'ol/proj/proj4';
+// 引入GCJ02坐标系
+import gcj02Mecator from '@/utils/GCJ02';
 
 export default {
   name: 'CacheManagerView',
@@ -361,6 +421,12 @@ export default {
       layerCount: 0,
       lastUpdate: Date.now()
     });
+
+    // 缓存可视化相关
+    const cacheVisualizationVisible = ref(false);
+    const currentVisualizationLayer = ref({});
+    let visualizationMap = null;
+
     const observer = new ResizeObserver(entries => {
       try {
         // 你的回调逻辑
@@ -912,18 +978,6 @@ export default {
       });
     };
 
-    const loadLayerToMap = (layer) => {
-      ElMessage.info(`加载图层到地图: ${layer.layerName}`);
-    };
-
-    const zoomToLayer = (layer) => {
-      if (layer.bounds) {
-        ElMessage.success(`缩放到图层: ${layer.layerName}`);
-      } else {
-        ElMessage.warning('该图层没有边界信息');
-      }
-    };
-
     const deleteLayerCache = async (layer) => {
       if (!tileCacheService) {
         ElMessage.warning('缓存服务未初始化');
@@ -1164,6 +1218,397 @@ export default {
       expandedRowKeys.value = expandedRows.map(r => r.layerId);
     };
 
+    const visualizeCache = async (layer) => {
+      console.log('开始可视化缓存:', layer);
+      
+      if (!layer.tiles || layer.tiles.length === 0) {
+        ElMessage.warning('该图层没有缓存数据');
+        return;
+      }
+
+      console.log('缓存瓦片数据:', layer.tiles);
+      currentVisualizationLayer.value = layer;
+      cacheVisualizationVisible.value = true;
+
+      // 等待对话框显示后再初始化地图
+      setTimeout(() => {
+        console.log('对话框已显示，开始初始化地图');
+        initVisualizationMap(layer);
+      }, 500); // 增加延迟时间
+    };
+
+    const initVisualizationMap = async (layer) => {
+      console.log('initVisualizationMap 被调用，图层:', layer);
+      
+      const mapContainer = document.getElementById('cache-visualization-map');
+      console.log('地图容器:', mapContainer);
+      
+      if (!mapContainer) {
+        console.error('地图容器未找到');
+        ElMessage.error('地图容器未找到，请重试');
+        return;
+      }
+
+      console.log('容器尺寸:', {
+        width: mapContainer.offsetWidth,
+        height: mapContainer.offsetHeight,
+        clientWidth: mapContainer.clientWidth,
+        clientHeight: mapContainer.clientHeight
+      });
+
+      // 清除之前的地图实例
+      if (visualizationMap) {
+        console.log('清除之前的地图实例');
+        visualizationMap.setTarget(null);
+        visualizationMap = null;
+      }
+
+      // 计算瓦片边界
+      const tileBounds = calculateTileBounds(layer.tiles);
+      console.log('计算的瓦片边界:', tileBounds);
+      
+      // 如果没有有效边界，使用默认位置
+      if (!tileBounds.extent) {
+        tileBounds.centerLon = 116.4074; // 北京
+        tileBounds.centerLat = 39.9042;
+        tileBounds.extent = [116.3, 39.8, 116.5, 40.0];
+        console.log('使用默认边界:', tileBounds);
+      }
+      
+      // 创建瓦片网格要素
+      const tileFeatures = layer.tiles.map((tile, index) => {
+        console.log(`创建瓦片特征 ${index}:`, tile);
+        const bounds = getTileBounds(tile.zoomLevel, tile.tileX, tile.tileY);
+        console.log(`瓦片 ${index} 边界:`, bounds);
+        
+        const feature = new Feature({
+          geometry: new Polygon([bounds]),
+          tileInfo: tile
+        });
+        
+        feature.setStyle(new Style({
+          stroke: new Stroke({
+            color: '#FF0000',
+            width: 4
+          }),
+          fill: new Fill({
+            color: 'rgba(255, 0, 0, 0.4)'
+          }),
+          text: new Text({
+            text: `Z${tile.zoomLevel}\n${tile.tileX},${tile.tileY}`,
+            font: 'bold 14px Arial',
+            fill: new Fill({
+              color: '#FFFFFF'
+            }),
+            stroke: new Stroke({
+              color: '#FF0000',
+              width: 2
+            }),
+            textAlign: 'center',
+            textBaseline: 'middle',
+            backgroundStroke: new Stroke({
+              color: 'rgba(0, 0, 0, 0.8)',
+              width: 8
+            }),
+            backgroundFill: new Fill({
+              color: 'rgba(0, 0, 0, 0.8)'
+            })
+          })
+        }));
+        
+        return feature;
+      });
+
+      console.log('创建的瓦片特征数量:', tileFeatures.length);
+
+      // 创建矢量图层
+      const vectorSource = new VectorSource({
+        features: tileFeatures
+      });
+
+      const vectorLayer = new VectorLayer({
+        source: vectorSource,
+        zIndex: 1000,
+        opacity: 1
+      });
+
+      // 创建简单点标记作为备用方案
+      const centerFeatures = layer.tiles.map((tile, index) => {
+        const bounds = getTileBounds(tile.zoomLevel, tile.tileX, tile.tileY);
+        const centerLon = (bounds[0][0] + bounds[2][0]) / 2;
+        const centerLat = (bounds[0][1] + bounds[2][1]) / 2;
+        
+        const feature = new Feature({
+          geometry: new Point(fromLonLat([centerLon, centerLat])),
+          tileInfo: tile
+        });
+        
+        feature.setStyle(new Style({
+          image: new Circle({
+            radius: 8,
+            fill: new Fill({ color: '#FF0000' }),
+            stroke: new Stroke({ color: '#FFFFFF', width: 2 })
+          }),
+          text: new Text({
+            text: `Z${tile.zoomLevel}`,
+            font: 'bold 12px Arial',
+            fill: new Fill({ color: '#FFFFFF' }),
+            stroke: new Stroke({ color: '#FF0000', width: 2 }),
+            offsetY: -20
+          })
+        }));
+        
+        return feature;
+      });
+
+      const pointSource = new VectorSource({
+        features: centerFeatures
+      });
+
+      const pointLayer = new VectorLayer({
+        source: pointSource,
+        zIndex: 1001
+      });
+
+      // 添加一个简单的测试要素用于对比
+      const testFeature = new Feature({
+        geometry: new Point(fromLonLat([tileBounds.centerLon, tileBounds.centerLat]))
+      });
+      
+      testFeature.setStyle(new Style({
+        image: new Circle({
+          radius: 15,
+          fill: new Fill({ color: '#00FF00' }),
+          stroke: new Stroke({ color: '#000000', width: 3 })
+        }),
+        text: new Text({
+          text: '测试点',
+          font: 'bold 16px Arial',
+          fill: new Fill({ color: '#000000' }),
+          stroke: new Stroke({ color: '#FFFFFF', width: 2 }),
+          offsetY: -30
+        })
+      }));
+
+      const testSource = new VectorSource({
+        features: [testFeature]
+      });
+
+      const testLayer = new VectorLayer({
+        source: testSource,
+        zIndex: 1002
+      });
+
+      console.log('创建地图，中心点:', [tileBounds.centerLon, tileBounds.centerLat]);
+
+      // 创建地图
+      try {
+        visualizationMap = new Map({
+          target: 'cache-visualization-map',
+          layers: [
+            new TileLayer({
+              source: new XYZ({
+                url: 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+                crossOrigin: 'anonymous',
+                projection: gcj02Mecator,
+                maxZoom: 18,
+                minZoom: 3
+              }),
+              zIndex: 0
+            }),
+            vectorLayer,
+            pointLayer,
+            testLayer
+          ],
+          view: new View({
+            center: fromLonLat([tileBounds.centerLon, tileBounds.centerLat]),
+            zoom: 10,
+            projection: 'EPSG:3857'
+          }),
+          controls: defaultControls({
+            zoom: true,
+            attribution: true
+          })
+        });
+
+        // 存储图层引用以便切换
+        visualizationMap.vectorLayer = vectorLayer;
+        visualizationMap.pointLayer = pointLayer;
+        visualizationMap.testLayer = testLayer;
+
+        console.log('地图创建成功:', visualizationMap);
+
+        // 监听地图加载完成事件
+        visualizationMap.once('rendercomplete', () => {
+          console.log('地图渲染完成');
+          
+          // 检查矢量图层的特征
+          console.log('矢量图层特征数量:', vectorSource.getFeatures().length);
+          console.log('矢量图层范围:', vectorSource.getExtent());
+          
+          // 调整视图到瓦片范围
+          if (tileBounds.extent) {
+            try {
+              const transformedExtent = transformExtent(
+                tileBounds.extent, 
+                'EPSG:4326', 
+                'EPSG:3857'
+              );
+              console.log('变换后的边界:', transformedExtent);
+              
+              visualizationMap.getView().fit(transformedExtent, {
+                padding: [50, 50, 50, 50],
+                duration: 1000,
+                maxZoom: 15
+              });
+            } catch (extentError) {
+              console.error('调整视图范围失败:', extentError);
+            }
+          }
+        });
+
+        // 添加地图点击事件来调试
+        visualizationMap.on('click', (evt) => {
+          const features = visualizationMap.getFeaturesAtPixel(evt.pixel);
+          console.log('点击位置的特征:', features);
+          if (features.length > 0) {
+            console.log('特征信息:', features[0].get('tileInfo'));
+          }
+          
+          // 显示点击位置的坐标
+          const coordinate = evt.coordinate;
+          const lonlat = toLonLat(coordinate);
+          console.log('点击坐标 (投影):', coordinate);
+          console.log('点击坐标 (经纬度):', lonlat);
+        });
+
+        // 强制更新地图尺寸
+        setTimeout(() => {
+          if (visualizationMap) {
+            console.log('更新地图尺寸');
+            visualizationMap.updateSize();
+          }
+        }, 100);
+
+      } catch (mapError) {
+        console.error('创建地图失败:', mapError);
+        ElMessage.error('创建地图失败: ' + mapError.message);
+      }
+    };
+
+    const calculateTileBounds = (tiles) => {
+      if (!tiles || tiles.length === 0) {
+        return { centerLon: 0, centerLat: 0, extent: null };
+      }
+
+      let minLon = Infinity, maxLon = -Infinity;
+      let minLat = Infinity, maxLat = -Infinity;
+
+      tiles.forEach(tile => {
+        const bounds = getTileBounds(tile.zoomLevel, tile.tileX, tile.tileY);
+        const [minX, minY, maxX, maxY] = bounds[0].concat(bounds[2]);
+        
+        minLon = Math.min(minLon, minX);
+        maxLon = Math.max(maxLon, maxX);
+        minLat = Math.min(minLat, minY);
+        maxLat = Math.max(maxLat, maxY);
+      });
+
+      return {
+        centerLon: (minLon + maxLon) / 2,
+        centerLat: (minLat + maxLat) / 2,
+        extent: [minLon, minLat, maxLon, maxLat]
+      };
+    };
+
+    const getTileBounds = (z, x, y) => {
+      const n = Math.pow(2, z);
+      const lonDeg = (x / n) * 360.0 - 180.0;
+      const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n)));
+      const latDeg = (latRad * 180.0) / Math.PI;
+      
+      const lonDeg2 = ((x + 1) / n) * 360.0 - 180.0;
+      const latRad2 = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 1) / n)));
+      const latDeg2 = (latRad2 * 180.0) / Math.PI;
+      
+      return [
+        [lonDeg, latDeg],
+        [lonDeg2, latDeg],
+        [lonDeg2, latDeg2],
+        [lonDeg, latDeg2],
+        [lonDeg, latDeg]
+      ];
+    };
+
+    const onVisualizationDialogOpened = () => {
+      console.log('对话框已打开事件触发');
+      // 在对话框打开后调整地图尺寸
+      setTimeout(() => {
+        if (visualizationMap) {
+          console.log('对话框打开后更新地图尺寸');
+          visualizationMap.updateSize();
+        }
+      }, 200);
+    };
+
+    const showCacheGrid = ref(true);
+    const showCachePoints = ref(true);
+
+    const toggleCacheGrid = () => {
+      showCacheGrid.value = !showCacheGrid.value;
+      if (visualizationMap && visualizationMap.vectorLayer) {
+        visualizationMap.vectorLayer.setVisible(showCacheGrid.value);
+        console.log('缓存网格可见性:', showCacheGrid.value);
+      }
+    };
+
+    const toggleCachePoints = () => {
+      showCachePoints.value = !showCachePoints.value;
+      if (visualizationMap && visualizationMap.pointLayer) {
+        visualizationMap.pointLayer.setVisible(showCachePoints.value);
+        console.log('缓存点位可见性:', showCachePoints.value);
+      }
+    };
+
+    const resetMapView = () => {
+      if (visualizationMap) {
+        const layer = currentVisualizationLayer.value;
+        if (layer && layer.tiles && layer.tiles.length > 0) {
+          const tileBounds = calculateTileBounds(layer.tiles);
+          if (tileBounds.extent) {
+            const transformedExtent = transformExtent(
+              tileBounds.extent, 
+              'EPSG:4326', 
+              'EPSG:3857'
+            );
+            visualizationMap.getView().fit(transformedExtent, {
+              padding: [50, 50, 50, 50],
+              duration: 1000,
+              maxZoom: 15
+            });
+            console.log('重置视图到瓦片范围');
+          } else {
+            visualizationMap.getView().setCenter(fromLonLat([116.4074, 39.9042]));
+            visualizationMap.getView().setZoom(10);
+            console.log('重置视图到默认位置');
+          }
+        } else {
+          visualizationMap.getView().setCenter(fromLonLat([116.4074, 39.9042]));
+          visualizationMap.getView().setZoom(10);
+          console.log('重置视图到默认位置');
+        }
+      }
+    };
+
+    const switchToTestData = () => {
+      if (visualizationMap && visualizationMap.testLayer) {
+        const isVisible = visualizationMap.testLayer.getVisible();
+        visualizationMap.testLayer.setVisible(!isVisible);
+        console.log('测试数据可见性:', !isVisible);
+        ElMessage.info(isVisible ? '隐藏测试数据' : '显示测试数据');
+      }
+    };
+
     onMounted(() => {
       initCacheService();
     });
@@ -1181,14 +1626,14 @@ export default {
       tileImageUrl,
       cacheData,
       cacheStats,
+      cacheVisualizationVisible,
+      currentVisualizationLayer,
       filteredCacheData,
       refreshCacheData,
       filterCacheData,
       clearAllCache,
       exportCacheData,
       importCacheData,
-      loadLayerToMap,
-      zoomToLayer,
       deleteLayerCache,
       startLayerCache,
       previewTile,
@@ -1197,7 +1642,15 @@ export default {
       stopCacheOperation,
       handleExpandChange,
       formatFileSize,
-      formatTimeAgo
+      formatTimeAgo,
+      visualizeCache,
+      onVisualizationDialogOpened,
+      showCacheGrid,
+      showCachePoints,
+      toggleCacheGrid,
+      toggleCachePoints,
+      resetMapView,
+      switchToTestData
     };
   }
 };
@@ -1367,6 +1820,7 @@ export default {
 }
 
 .progress-details {
+  margin-top: 10px;
   font-size: 14px;
   color: #999;
 }
@@ -1400,5 +1854,88 @@ export default {
   .expanded-content {
     padding: 12px;
   }
+}
+
+/* 缓存可视化对话框样式 */
+:deep(.cache-visualization-dialog) {
+  .el-dialog__body {
+    padding: 0;
+    height: 80vh;
+    overflow: hidden;
+  }
+  
+  .el-dialog__header {
+    border-bottom: 1px solid #e4e7ed;
+    padding: 16px 20px;
+  }
+  
+  .el-dialog {
+    margin-top: 5vh !important;
+  }
+}
+
+.cache-visualization-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.cache-info-panel {
+  padding: 16px;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.info-left {
+  flex: 1;
+}
+
+.info-right {
+  flex-shrink: 0;
+  margin-left: 20px;
+}
+
+.cache-info-panel h4 {
+  margin: 0 0 8px 0;
+  color: #333;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.cache-stats-row {
+  display: flex;
+  gap: 20px;
+  font-size: 14px;
+  color: #666;
+}
+
+.cache-map-container {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 600px;
+  position: relative;
+  overflow: hidden;
+  background-color: #f0f0f0;
+}
+
+.cache-map-container .ol-viewport {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* 确保OpenLayers地图控件样式正常 */
+.cache-map-container .ol-zoom {
+  left: 8px;
+  top: 8px;
+}
+
+.cache-map-container .ol-attribution {
+  right: 8px;
+  bottom: 8px;
 }
 </style>
