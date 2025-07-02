@@ -1652,13 +1652,109 @@ if (updated) {
       try {
         visualizationMap = new Map({
           target: 'cache-visualization-map',
-
-          layers: [baseLayer, dataLayer],
-
+          layers: [
+            new TileLayer({
+              source: new XYZ({
+                url: 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+                crossOrigin: 'anonymous',
+                maxZoom: 18,
+                minZoom: 3
+              }),
+              zIndex: 0
+            }),
+            dataLayer,
+            new VectorLayer({
+              source: new VectorSource({
+                features: [
+                  new Feature({
+                    geometry: new Point([104.06, 30.67]),
+                    style: new Style({
+                      image: new Circle({
+                        radius: 5,
+                        fill: new Fill({
+                          color: 'rgba(255, 0, 0, 0.8)'
+                        }),
+                        stroke: new Stroke({
+                          color: '#fff',
+                          width: 1
+                        })
+                      })
+                    })
+                  })
+                ]
+              }),
+              style: {
+                'stroke-color': '#0000FF',
+                'stroke-width': 2,
+                'fill-color': 'rgba(0, 0, 255, 0.1)',
+                'circle-radius': 5,
+                'circle-fill-color': '#FF0000'
+              },
+              zIndex: 2
+            }),
+            new VectorLayer({
+              source: new VectorSource({
+                features: [
+                  new Feature({
+                    geometry: new Point([104.06, 30.67]),
+                    style: new Style({
+                      image: new Circle({
+                        radius: 5,
+                        fill: new Fill({
+                          color: 'rgba(0, 255, 0, 0.8)'
+                        }),
+                        stroke: new Stroke({
+                          color: '#fff',
+                          width: 1
+                        })
+                      })
+                    })
+                  })
+                ]
+              }),
+              style: {
+                'stroke-color': '#00FF00',
+                'stroke-width': 2,
+                'fill-color': 'rgba(0, 255, 0, 0.1)',
+                'circle-radius': 5,
+                'circle-fill-color': '#00FF00'
+              },
+              zIndex: 3
+            }),
+            new VectorLayer({
+              source: new VectorSource({
+                features: [
+                  new Feature({
+                    geometry: new Point([104.06, 30.67]),
+                    style: new Style({
+                      image: new Circle({
+                        radius: 5,
+                        fill: new Fill({
+                          color: 'rgba(0, 0, 255, 0.8)'
+                        }),
+                        stroke: new Stroke({
+                          color: '#fff',
+                          width: 1
+                        })
+                      })
+                    })
+                  })
+                ]
+              }),
+              style: {
+                'stroke-color': '#FF0000',
+                'stroke-width': 2,
+                'fill-color': 'rgba(0, 0, 255, 0.1)',
+                'circle-radius': 5,
+                'circle-fill-color': '#FF0000'
+              },
+              zIndex: 4
+            })
+          ],
           view: new View({
             center: fromLonLat([tileBounds.centerLon, tileBounds.centerLat]),
             zoom: 10,
-            //projection: 'EPSG:3857'
+            projection: 'EPSG:3857'
           }),
           controls: defaultControls({
             zoom: true,
