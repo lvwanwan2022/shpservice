@@ -1652,25 +1652,9 @@ if (updated) {
       try {
         visualizationMap = new Map({
           target: 'cache-visualization-map',
-<<<<<<< HEAD
-          layers: [
-            new TileLayer({
-              source: new XYZ({
-                url: 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
-                crossOrigin: 'anonymous',
-                //projection: gcj02Mecator,
-                maxZoom: 18,
-                minZoom: 3
-              }),
-              zIndex: 0
-            }),
-            vectorLayer,
-            pointLayer,
-            testLayer
-          ],
-=======
+
           layers: [baseLayer, dataLayer],
->>>>>>> 4114e5d40fbd882fefa88d05993a771c26506db7
+
           view: new View({
             center: fromLonLat([tileBounds.centerLon, tileBounds.centerLat]),
             zoom: 10,
