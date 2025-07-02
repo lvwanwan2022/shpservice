@@ -529,6 +529,11 @@ CREATE TABLE IF NOT EXISTS public.vector_05492e03
 1）使用IndexDB缓存切片数据，https://juejin.cn/post/7395487322958446619
 @https://juejin.cn/post/7026900352968425486 
 
+缓存管理
+充分浏览F:\PluginDevelopment\shpservice\frontend\src\services\tileCache文件夹下写好的函数，文件夹下主要列出IndexDB的操作函数，地图的Adapter是否主要就是写一个tileLoadFunction函数呢，不要examples.js
+帮我重新调整该文件夹下的文件：文件夹下的文件尽量少，操作IndexDB的弄成一个文件，tile相关的计算弄成一个文件，自定义的tileLoadFunction做成一个文件就比较好
+
+
 缓存管理页面-每个图层的操作栏帮我都做成缓存、可视化、和删除，没有这几个button的实现逻辑现在都不对：
 ①点击缓存：
 弹出地图对话框
@@ -546,7 +551,7 @@ CREATE TABLE IF NOT EXISTS public.vector_05492e03
 ③删除缓存
 删除数据库中本图层的所有缓存
 
-充分浏览F:\PluginDevelopment\shpservice\frontend\src\services\tileCache文件夹下写好的函数，文件夹下
+
 
 
 openlayers从IndexDB加载缓存

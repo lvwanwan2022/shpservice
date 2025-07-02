@@ -15,7 +15,7 @@ const backend_url = 'http://172.16.118.124:5030'
 //const MARTIN_BASE_URL = 'http://192.168.1.17:3000'
 const MARTIN_BASE_URL = 'http://172.16.118.124:3000'
 //console.log('Vue配置中使用的 MARTIN_BASE_URL:', MARTIN_BASE_URL)
-
+const GEOSERVER_BASE_URL = 'http://172.16.118.124:8083'
 
 
 module.exports = defineConfig({
