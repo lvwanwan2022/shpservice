@@ -390,7 +390,7 @@ import Circle from 'ol/style/Circle';
 import proj4 from 'proj4';
 import { register } from 'ol/proj/proj4';
 // 引入GCJ02坐标系
-import gcj02Mecator from '@/utils/GCJ02';
+//import gcj02Mecator from '@/utils/GCJ02';
 
 export default {
   name: 'CacheManagerView',
@@ -1410,7 +1410,7 @@ export default {
               source: new XYZ({
                 url: 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
                 crossOrigin: 'anonymous',
-                projection: gcj02Mecator,
+                //projection: gcj02Mecator,
                 maxZoom: 18,
                 minZoom: 3
               }),
@@ -1423,7 +1423,7 @@ export default {
           view: new View({
             center: fromLonLat([tileBounds.centerLon, tileBounds.centerLat]),
             zoom: 10,
-            projection: 'EPSG:3857'
+            //projection: 'EPSG:3857'
           }),
           controls: defaultControls({
             zoom: true,
