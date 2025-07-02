@@ -528,6 +528,9 @@ CREATE TABLE IF NOT EXISTS public.vector_05492e03
 1.前端
 1）使用IndexDB缓存切片数据，https://juejin.cn/post/7395487322958446619
 @https://juejin.cn/post/7026900352968425486 
+
+openlayers从IndexDB加载缓存
+https://openlayers.org/en/latest/apidoc/module-ol_source_XYZ-XYZ.html#tileLoadFunction
 2）用户不同的操作行为触发不同的缓存加载策略：
    ①登录时，加载scenes数据，根据不同的scenes下的layers，加载不同layers的bounds，根据bounds加载范围内固定缩放级别的地图切片数据、加载图层切片数据；
    ②场景切换时，预加载该场景下的所有图层bounds和范围内的一定缩放级别范围内的切片数据
