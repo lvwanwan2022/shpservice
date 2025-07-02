@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MVT 缓存测试</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@8.2.0/ol.css">
+    <script src="https://cdn.jsdelivr.net/npm/ol@8.2.0/dist/ol.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        #map {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #ccc;
+        }
+        .controls {
+            margin: 10px 0;
+        }
+        button {
+            margin: 5px;
+            padding: 8px 16px;
+        }
+        .info {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>MVT 缓存数据测试</h1>
+    
+    <div class="info">
+        <p>这是一个简单的测试页面，用于验证 OpenLayers 加载缓存的 MVT 数据。</p>
+        <p><strong>重要提示：</strong>此页面必须与 Vue 应用在同一服务器上运行才能访问相同的 IndexedDB 数据库！</p>
+        <p>当前页面源: <span id="current-origin"></span></p>
+        <p>状态: <span id="status">初始化中...</span></p>
+    </div>
+
+    <div class="controls">
+        <button onclick="checkEnvironment()">🔍 检查环境</button>
+        <button onclick="checkAllDatabases()">检查缓存数据库</button>
+        <button onclick="reinitializeDB()">重新初始化数据库</button>
+        <button onclick="checkCachedData()">检查缓存数据</button>
+        <button onclick="loadCachedData()">加载缓存数据</button>
+        <button onclick="loadSpecificLayer()">选择图层加载</button>
+        <button onclick="clearMap()">清除图层</button>
+        <button onclick="showMapInfo()">显示地图信息</button>
+        <button onclick="forceRefresh()">强制刷新瓦片</button>
+        <button onclick="showSampleData()">显示样本数据</button>
+        <button onclick="openVueApp()">🚀 打开 Vue 应用</button>
+    </div>
+
+    <div id="map"></div>
+
+    <script>
+        let map;
+        let mvtLayer;
+        let tileCacheService;
+
+        // 新增 Base64 → ArrayBuffer 工具函数
+        function base64ToArrayBuffer(base64) {
+            const binaryString = atob(base64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        // 初始化地图
+        function initMap() {
+            console.log('初始化地图...');
+            
+            // 创建底图
+            const baseLayer = new ol.layer.Tile({
+                source: new ol.source.OSM()
+            });
+
+            // 创建地图
+            map = new ol.Map({
+                target: 'map',
+                layers: [baseLayer],
+                view: new ol.View({
+                    center: ol.proj.fromLonLat([106.28, 31.61]), // 数据范围中心
+                    zoom: 12
+                })
+            });
+
+            document.getElementById('status').textContent = '地图初始化完成';
+            console.log('地图创建成功');
+        }
+
+        // 初始化缓存服务
+        async function initCacheService() {
+            try {
+                // 基于实际的 indexedDBOperations.js 创建瓦片缓存服务
+                class TileCacheDB {
+                    constructor() {
+                        this.dbName = 'TileCacheDB';
+                        this.dbVersion = 1;
+                        this.storeName = 'tiles';
+                        this.db = null;
+                    }
+
+                    async openDB() {
+                        return new Promise((resolve, reject) => {
+                            if (this.db) {
+                                resolve(this.db);
+                                return;
+                            }
+
+                            const indexedDB = window.indexedDB || 
+                                             window.mozIndexedDB || 
+                                             window.webkitIndexedDB || 
+                                             window.msIndexedDB;
+
+                            if (!indexedDB) {
+                                reject(new Error('浏览器不支持 IndexedDB'));
+                                return;
+                            }
+
+                            const request = indexedDB.open(this.dbName, this.dbVersion);
+
+                            request.onsuccess = (event) => {
+                                this.db = event.target.result;
+                                console.log(`数据库 ${this.dbName} 打开成功，版本: ${this.db.version}`);
+                                console.log(`对象存储:`, Array.from(this.db.objectStoreNames));
+                                resolve(this.db);
+                            };
+
+                            request.onerror = (event) => {
+                                console.error('瓦片缓存数据库打开失败:', event.target.error);
+                                reject(event.target.error);
+                            };
+
+                            request.onupgradeneeded = (event) => {
+                                const db = event.target.result;
+                                console.log('数据库需要升级，正在创建对象存储...');
+                                
+                                if (db.objectStoreNames.contains(this.storeName)) {
+                                    db.deleteObjectStore(this.storeName);
+                                }
+
+                                const objectStore = db.createObjectStore(this.storeName, {
+                                    keyPath: 'id'
+                                });
+
+                                // 创建索引
+                                objectStore.createIndex('layerId', 'layerId', { unique: false });
+                                objectStore.createIndex('zoomLevel', 'zoomLevel', { unique: false });
+                                objectStore.createIndex('tileX', 'tileX', { unique: false });
+                                objectStore.createIndex('tileY', 'tileY', { unique: false });
+                                objectStore.createIndex('timestamp', 'timestamp', { unique: false });
+                                objectStore.createIndex('layerZoom', ['layerId', 'zoomLevel'], { unique: false });
+                                objectStore.createIndex('coordinate', ['tileX', 'tileY'], { unique: false });
+                                objectStore.createIndex('fullIndex', ['layerId', 'zoomLevel', 'tileX', 'tileY'], { unique: true });
+                                
+                                console.log('对象存储创建完成');
+                            };
+                        });
+                    }
+
+                    generateTileId(layerId, zoomLevel, tileX, tileY) {
+                        return `${layerId}_${zoomLevel}_${tileX}_${tileY}`;
+                    }
+
+                    async getStore(mode = 'readonly') {
+                        const db = await this.openDB();
+                        const transaction = db.transaction([this.storeName], mode);
+                        return transaction.objectStore(this.storeName);
+                    }
+                }
+
+                class TileCacheService {
+                    constructor() {
+                        this.db = new TileCacheDB();
+                    }
+
+                    async getTile(layerId, zoomLevel, tileX, tileY) {
+                        try {
+                            const store = await this.db.getStore('readonly');
+                            const id = this.db.generateTileId(layerId, zoomLevel, tileX, tileY);
+                            
+                            return new Promise((resolve, reject) => {
+                                const request = store.get(id);
+                                request.onsuccess = () => resolve(request.result);
+                                request.onerror = () => reject(request.error);
+                            });
+                        } catch (error) {
+                            console.error('获取瓦片失败:', error);
+                            return null;
+                        }
+                    }
+
+                    async getAllTiles() {
+                        try {
+                            const store = await this.db.getStore('readonly');
+                            
+                            return new Promise((resolve, reject) => {
+                                const request = store.getAll();
+                                request.onsuccess = () => {
+                                    console.log(`IndexedDB getAll() 返回 ${request.result.length} 条记录`);
+                                    resolve(request.result);
+                                };
+                                request.onerror = () => {
+                                    console.error('getAll() 请求失败:', request.error);
+                                    reject(request.error);
+                                };
+                            });
+                        } catch (error) {
+                            console.error('获取所有瓦片失败:', error);
+                            return [];
+                        }
+                    }
+
+                    async getCacheStats() {
+                        try {
+                            const tiles = await this.getAllTiles();
+                            const layers = new Set();
+                            let totalSize = 0;
+                            let lastUpdate = 0;
+
+                            tiles.forEach(tile => {
+                                layers.add(tile.layerId);
+                                totalSize += tile.size || 0;
+                                lastUpdate = Math.max(lastUpdate, tile.timestamp || 0);
+                            });
+
+                            return {
+                                totalTiles: tiles.length,
+                                layerCount: layers.size,
+                                totalSize,
+                                lastUpdate
+                            };
+                        } catch (error) {
+                            console.error('获取缓存统计失败:', error);
+                            return {
+                                totalTiles: 0,
+                                layerCount: 0,
+                                totalSize: 0,
+                                lastUpdate: 0
+                            };
+                        }
+                    }
+
+                    async getLayerTiles(layerId) {
+                        try {
+                            const store = await this.db.getStore('readonly');
+                            const index = store.index('layerId');
+                            
+                            return new Promise((resolve, reject) => {
+                                const request = index.getAll(layerId);
+                                request.onsuccess = () => resolve(request.result);
+                                request.onerror = () => reject(request.error);
+                            });
+                        } catch (error) {
+                            console.error('获取图层瓦片失败:', error);
+                            return [];
+                        }
+                    }
+                }
+
+                tileCacheService = new TileCacheService();
+                await tileCacheService.db.openDB();
+                console.log('缓存服务初始化完成，使用与前端一致的数据库操作');
+            } catch (error) {
+                console.error('缓存服务初始化失败:', error);
+            }
+        }
+
+        // 检查缓存数据
+        async function checkCachedData() {
+            try {
+                console.log('开始检查 IndexedDB 数据库结构...');
+                
+                // 先检查数据库结构
+                await checkDatabaseStructure();
+                
+                // 使用正确的方法获取所有瓦片
+                console.log('调用 tileCacheService.getAllTiles()...');
+                const allTiles = await tileCacheService.getAllTiles();
+                console.log(`缓存中共有 ${allTiles.length} 个瓦片记录`);
+                
+                if (allTiles.length === 0) {
+                    console.log('缓存为空');
+                    
+                    // 额外调试：直接查询数据库
+                    console.log('进行额外的直接数据库查询...');
+                    await directDatabaseQuery();
+                    
+                    return { layerIds: [], totalTiles: 0, format: 'structured' };
+                }
+                
+                // 分析数据结构
+                const sampleRecord = allTiles[0];
+                console.log('示例记录结构:', sampleRecord);
+                console.log('记录字段:', Object.keys(sampleRecord));
+                
+                // 按图层分组显示
+                const layerGroups = {};
+                
+                allTiles.forEach(tile => {
+                    const layerId = tile.layerId;
+                    const z = tile.zoomLevel;
+                    const x = tile.tileX;
+                    const y = tile.tileY;
+                    
+                    if (!layerGroups[layerId]) {
+                        layerGroups[layerId] = [];
+                    }
+                    layerGroups[layerId].push(`${z}/${x}/${y}`);
+                });
+                
+                const layerIds = Object.keys(layerGroups);
+                console.log(`发现 ${layerIds.length} 个图层:`);
+                
+                Object.keys(layerGroups).forEach(layerId => {
+                    console.log(`图层 ${layerId}: ${layerGroups[layerId].length} 个瓦片`);
+                    console.log(`瓦片列表:`, layerGroups[layerId].slice(0, 5), layerGroups[layerId].length > 5 ? '...' : '');
+                });
+                
+                // 获取缓存统计
+                const stats = await tileCacheService.getCacheStats();
+                console.log('缓存统计:', stats);
+                
+                return { layerIds, totalTiles: allTiles.length, format: 'structured', stats };
+                
+            } catch (error) {
+                console.error('检查缓存数据失败:', error);
+                return { layerIds: [], totalTiles: 0, format: 'structured' };
+            }
+        }
+
+        // 直接数据库查询调试
+        async function directDatabaseQuery() {
+            try {
+                console.log('=== 直接数据库查询调试 ===');
+                
+                const db = await tileCacheService.db.openDB();
+                console.log('数据库对象:', db);
+                console.log('数据库版本:', db.version);
+                console.log('对象存储名称:', Array.from(db.objectStoreNames));
+                
+                if (db.objectStoreNames.contains('tiles')) {
+                    console.log('尝试直接从 tiles 存储获取数据...');
+                    
+                    return new Promise((resolve) => {
+                        const transaction = db.transaction(['tiles'], 'readonly');
+                        const store = transaction.objectStore('tiles');
+                        
+                        // 使用 count() 获取记录数
+                        const countRequest = store.count();
+                        countRequest.onsuccess = () => {
+                            console.log(`直接查询记录数: ${countRequest.result}`);
+                        };
+                        
+                        // 使用 openCursor() 遍历所有记录
+                        const cursorRequest = store.openCursor();
+                        let recordCount = 0;
+                        const samples = [];
+                        
+                        cursorRequest.onsuccess = (event) => {
+                            const cursor = event.target.result;
+                            if (cursor) {
+                                recordCount++;
+                                if (samples.length < 3) {
+                                    samples.push(cursor.value);
+                                }
+                                cursor.continue();
+                            } else {
+                                console.log(`通过游标统计记录数: ${recordCount}`);
+                                console.log('前3条记录样本:', samples);
+                                resolve();
+                            }
+                        };
+                        
+                        cursorRequest.onerror = () => {
+                            console.error('游标查询失败:', cursorRequest.error);
+                            resolve();
+                        };
+                        
+                        transaction.onerror = () => {
+                            console.error('事务失败:', transaction.error);
+                            resolve();
+                        };
+                    });
+                } else {
+                    console.log('tiles 对象存储不存在');
+                }
+                
+            } catch (error) {
+                console.error('直接数据库查询失败:', error);
+            }
+        }
+
+        // 检查数据库结构
+        async function checkDatabaseStructure() {
+            return new Promise((resolve, reject) => {
+                // 打开数据库但不指定版本，获取所有存在的数据库
+                const request = indexedDB.open('TileCacheDB');
+                
+                request.onsuccess = (event) => {
+                    const db = event.target.result;
+                    console.log(`数据库版本: ${db.version}`);
+                    console.log(`对象存储列表:`, Array.from(db.objectStoreNames));
+                    
+                    if (db.objectStoreNames.length === 0) {
+                        console.log('数据库中没有对象存储');
+                    } else {
+                        // 检查每个对象存储
+                        Array.from(db.objectStoreNames).forEach(storeName => {
+                            console.log(`发现对象存储: ${storeName}`);
+                        });
+                    }
+                    
+                    db.close();
+                    resolve();
+                };
+                
+                request.onerror = () => {
+                    console.log('数据库不存在或无法打开');
+                    resolve();
+                };
+                
+                request.onupgradeneeded = (event) => {
+                    console.log('数据库需要升级，可能是首次创建');
+                    event.target.result.close();
+                    resolve();
+                };
+            });
+        }
+
+        // 检查缓存数据库
+        async function checkAllDatabases() {
+            console.log('检查缓存数据库...');
+            
+            try {
+                console.log(`检查数据库: TileCacheDB`);
+                await checkSpecificDatabase('TileCacheDB');
+                
+                // 同时显示样本数据
+                await showSampleData();
+            } catch (error) {
+                console.log(`数据库 TileCacheDB 不存在或无法访问:`, error);
+            }
+        }
+
+        // 检查特定数据库
+        async function checkSpecificDatabase(dbName) {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(dbName);
+                
+                request.onsuccess = (event) => {
+                    const db = event.target.result;
+                    console.log(`✓ 数据库 ${dbName} 存在, 版本: ${db.version}`);
+                    console.log(`  对象存储:`, Array.from(db.objectStoreNames));
+                    
+                    // 检查每个存储的数据
+                    Array.from(db.objectStoreNames).forEach(storeName => {
+                        const transaction = db.transaction([storeName], 'readonly');
+                        const store = transaction.objectStore(storeName);
+                        const countRequest = store.count();
+                        
+                        countRequest.onsuccess = () => {
+                            console.log(`  ${storeName}: ${countRequest.result} 条记录`);
+                        };
+                    });
+                    
+                    db.close();
+                    resolve();
+                };
+                
+                request.onerror = () => {
+                    reject(new Error(`无法打开数据库 ${dbName}`));
+                };
+            });
+        }
+
+        // 加载缓存数据
+        async function loadCachedData() {
+            if (!tileCacheService) {
+                document.getElementById('status').textContent = '缓存服务未初始化';
+                return;
+            }
+
+            console.log('开始加载缓存数据...');
+            document.getElementById('status').textContent = '正在加载缓存数据...';
+
+            try {
+                // 首先检查缓存中有什么数据
+                const cacheInfo = await checkCachedData();
+                
+                if (cacheInfo.layerIds.length === 0) {
+                    document.getElementById('status').textContent = '缓存中没有数据';
+                    console.log('缓存中没有找到任何图层数据');
+                    return;
+                }
+                
+                // 使用检测到的第一个图层ID
+                const layerId = cacheInfo.layerIds[0];
+                console.log(`使用图层ID: ${layerId}`);
+                
+                // 创建 MVT 格式解析器
+                const mvtFormat = new ol.format.MVT();
+
+                // 创建矢量瓦片源
+                const mvtSource = new ol.source.VectorTile({
+                    format: mvtFormat,
+                    tileGrid: ol.tilegrid.createXYZ({
+                        maxZoom: 20,
+                        minZoom: 0
+                    }),
+                    tileLoadFunction: function(tile) {
+                        // 使用 setLoader 让 OpenLayers 正确触发渲染流程
+                        tile.setLoader(function(extent, resolution, projection) {
+                            const coords = tile.getTileCoord();
+                            const [z, x, y] = [coords[0], coords[1], -coords[2] - 1];
+                            console.log(`Loader 请求瓦片: ${layerId} - ${z}/${x}/${y}`);
+
+                            tileCacheService.getTile(layerId, z, x, y)
+                                .then(cachedTile => {
+                                    if (!cachedTile || !cachedTile.data) {
+                                        tile.setFeatures([]);
+                                        return;
+                                    }
+
+                                    let toArrayBuffer;
+                                    if (cachedTile.data instanceof ArrayBuffer) {
+                                        toArrayBuffer = Promise.resolve(cachedTile.data);
+                                    } else if (cachedTile.data instanceof Blob) {
+                                        toArrayBuffer = cachedTile.data.arrayBuffer();
+                                    } else if (typeof cachedTile.data === 'string') {
+                                        toArrayBuffer = Promise.resolve(base64ToArrayBuffer(cachedTile.data));
+                                    } else {
+                                        tile.setFeatures([]);
+                                        return;
+                                    }
+
+                                    toArrayBuffer.then(buf => {
+                                        const features = mvtFormat.readFeatures(buf, {
+                                            extent,
+                                            featureProjection: projection
+                                        });
+                                        tile.setFeatures(features);
+                                    }).catch(err => {
+                                        console.error('解析 MVT 失败', err);
+                                        tile.setFeatures([]);
+                                    });
+                                })
+                                .catch(err => {
+                                    console.error('加载缓存瓦片失败', err);
+                                    tile.setFeatures([]);
+                                });
+                        });
+                    }
+                });
+
+                // 创建矢量瓦片图层
+                mvtLayer = new ol.layer.VectorTile({
+                    source: mvtSource,
+                    style: new ol.style.Style({
+                        stroke: new ol.style.Stroke({
+                            color: '#0000FF',
+                            width: 2
+                        }),
+                        fill: new ol.style.Fill({
+                            color: 'rgba(0, 0, 255, 0.3)'
+                        }),
+                        image: new ol.style.Circle({
+                            radius: 5,
+                            fill: new ol.style.Fill({
+                                color: '#FF0000'
+                            })
+                        })
+                    })
+                });
+
+                // 添加到地图
+                map.addLayer(mvtLayer);
+                
+                // 调整视图到数据范围
+                const extent = ol.proj.transformExtent(
+                    [106.25894464801621, 31.59469451854329, 106.30545857841007, 31.61905294024268],
+                    'EPSG:4326',
+                    'EPSG:3857'
+                );
+                
+                map.getView().fit(extent, {
+                    padding: [50, 50, 50, 50],
+                    duration: 1000
+                });
+
+                console.log('MVT 图层已添加到地图');
+
+            } catch (error) {
+                console.error('加载缓存数据失败:', error);
+                document.getElementById('status').textContent = '加载失败: ' + error.message;
+            }
+        }
+
+        // 清除图层
+        function clearMap() {
+            if (mvtLayer) {
+                map.removeLayer(mvtLayer);
+                mvtLayer = null;
+                console.log('已清除 MVT 图层');
+                document.getElementById('status').textContent = '已清除图层';
+            }
+        }
+
+        // 显示地图信息
+        function showMapInfo() {
+            const view = map.getView();
+            const center = ol.proj.toLonLat(view.getCenter());
+            const zoom = view.getZoom();
+            
+            console.log('地图中心:', center);
+            console.log('缩放级别:', zoom);
+            console.log('图层数量:', map.getLayers().getLength());
+            
+            document.getElementById('status').textContent = 
+                `中心: [${center[0].toFixed(6)}, ${center[1].toFixed(6)}], 缩放: ${zoom.toFixed(1)}`;
+        }
+
+        // 强制刷新瓦片
+        function forceRefresh() {
+            if (mvtLayer) {
+                console.log('强制刷新 MVT 图层...');
+                mvtLayer.getSource().refresh();
+                document.getElementById('status').textContent = '已强制刷新瓦片';
+            } else {
+                document.getElementById('status').textContent = '没有图层需要刷新';
+            }
+        }
+
+        // 重新初始化数据库
+        async function reinitializeDB() {
+            try {
+                console.log('正在重新初始化数据库...');
+                document.getElementById('status').textContent = '正在重新初始化数据库...';
+                
+                // 关闭现有连接
+                if (tileCacheService && tileCacheService.db) {
+                    tileCacheService.db.close();
+                }
+                
+                // 删除数据库
+                await new Promise((resolve, reject) => {
+                    const deleteRequest = indexedDB.deleteDatabase('TileCacheDB');
+                    deleteRequest.onsuccess = () => {
+                        console.log('数据库已删除');
+                        resolve();
+                    };
+                    deleteRequest.onerror = () => reject(deleteRequest.error);
+                });
+                
+                // 重新初始化缓存服务
+                await initCacheService();
+                
+                console.log('数据库重新初始化完成');
+                document.getElementById('status').textContent = '数据库重新初始化完成';
+                
+            } catch (error) {
+                console.error('重新初始化数据库失败:', error);
+                document.getElementById('status').textContent = '重新初始化失败: ' + error.message;
+            }
+        }
+
+        // 显示样本数据
+        async function showSampleData() {
+            try {
+                const allTiles = await tileCacheService.getAllTiles();
+                if (allTiles.length === 0) {
+                    console.log('缓存中没有数据');
+                    document.getElementById('status').textContent = '缓存中没有数据';
+                    
+                    // 进行直接数据库查询
+                    await directDatabaseQuery();
+                    return;
+                }
+                
+                console.log('=== 缓存数据样本 ===');
+                console.log(`总记录数: ${allTiles.length}`);
+                console.log('前3条记录:');
+                allTiles.slice(0, 3).forEach((record, index) => {
+                    console.log(`记录 ${index + 1}:`, record);
+                });
+                
+                // 获取缓存统计
+                const stats = await tileCacheService.getCacheStats();
+                console.log('缓存统计:', stats);
+                
+                document.getElementById('status').textContent = `显示了前3条记录，总共${allTiles.length}条记录`;
+            } catch (error) {
+                console.error('显示样本数据失败:', error);
+                document.getElementById('status').textContent = '显示样本数据失败';
+            }
+        }
+
+        // 选择特定图层加载
+        async function loadSpecificLayer() {
+            try {
+                const cacheInfo = await checkCachedData();
+                
+                if (cacheInfo.layerIds.length === 0) {
+                    alert('缓存中没有找到任何图层数据');
+                    return;
+                }
+                
+                let layerList = '可用图层:\n';
+                cacheInfo.layerIds.forEach((layerId, index) => {
+                    layerList += `${index + 1}. ${layerId}\n`;
+                });
+                
+                const choice = prompt(layerList + '\n请输入要加载的图层编号 (1-' + cacheInfo.layerIds.length + '):');
+                
+                if (choice && !isNaN(choice)) {
+                    const index = parseInt(choice) - 1;
+                    if (index >= 0 && index < cacheInfo.layerIds.length) {
+                        const selectedLayerId = cacheInfo.layerIds[index];
+                        console.log(`选择加载图层: ${selectedLayerId}`);
+                        
+                        // 清除现有图层
+                        if (mvtLayer) {
+                            map.removeLayer(mvtLayer);
+                        }
+                        
+                        // 加载选中的图层
+                        await loadLayerById(selectedLayerId);
+                    } else {
+                        alert('无效的图层编号');
+                    }
+                }
+            } catch (error) {
+                console.error('选择图层失败:', error);
+                alert('选择图层失败: ' + error.message);
+            }
+        }
+
+        // 按图层ID加载数据
+        async function loadLayerById(layerId) {
+            console.log(`开始加载图层: ${layerId}`);
+            document.getElementById('status').textContent = `正在加载图层: ${layerId}`;
+
+            try {
+                // 创建 MVT 格式解析器
+                const mvtFormat = new ol.format.MVT();
+
+                // 创建矢量瓦片源
+                const mvtSource = new ol.source.VectorTile({
+                    format: mvtFormat,
+                    tileGrid: ol.tilegrid.createXYZ({
+                        maxZoom: 20,
+                        minZoom: 0
+                    }),
+                    tileLoadFunction: function(tile) {
+                        tile.setLoader(function(extent, resolution, projection) {
+                            const coords = tile.getTileCoord();
+                            const [z, x, y] = [coords[0], coords[1], -coords[2] - 1];
+                            console.log(`Loader 请求瓦片: ${layerId} - ${z}/${x}/${y}`);
+
+                            tileCacheService.getTile(layerId, z, x, y)
+                                .then(cachedTile => {
+                                    if (!cachedTile || !cachedTile.data) {
+                                        tile.setFeatures([]);
+                                        return;
+                                    }
+
+                                    let toArrayBuffer;
+                                    if (cachedTile.data instanceof ArrayBuffer) {
+                                        toArrayBuffer = Promise.resolve(cachedTile.data);
+                                    } else if (cachedTile.data instanceof Blob) {
+                                        toArrayBuffer = cachedTile.data.arrayBuffer();
+                                    } else if (typeof cachedTile.data === 'string') {
+                                        toArrayBuffer = Promise.resolve(base64ToArrayBuffer(cachedTile.data));
+                                    } else {
+                                        tile.setFeatures([]);
+                                        return;
+                                    }
+
+                                    toArrayBuffer.then(buf => {
+                                        const features = mvtFormat.readFeatures(buf, {
+                                            extent,
+                                            featureProjection: projection
+                                        });
+                                        tile.setFeatures(features);
+                                    }).catch(err => {
+                                        console.error('解析 MVT 失败', err);
+                                        tile.setFeatures([]);
+                                    });
+                                })
+                                .catch(err => {
+                                    console.error('加载缓存瓦片失败', err);
+                                    tile.setFeatures([]);
+                                });
+                        });
+                    }
+                });
+
+                // 创建矢量瓦片图层
+                mvtLayer = new ol.layer.VectorTile({
+                    source: mvtSource,
+                    style: new ol.style.Style({
+                        stroke: new ol.style.Stroke({
+                            color: '#0000FF',
+                            width: 2
+                        }),
+                        fill: new ol.style.Fill({
+                            color: 'rgba(0, 0, 255, 0.3)'
+                        }),
+                        image: new ol.style.Circle({
+                            radius: 5,
+                            fill: new ol.style.Fill({
+                                color: '#FF0000'
+                            })
+                        })
+                    })
+                });
+
+                // 添加到地图
+                map.addLayer(mvtLayer);
+                
+                // 调整视图到数据范围（可以根据实际情况调整）
+                const extent = ol.proj.transformExtent(
+                    [106.25, 31.55, 106.35, 31.65],
+                    'EPSG:4326',
+                    'EPSG:3857'
+                );
+                
+                map.getView().fit(extent, {
+                    padding: [50, 50, 50, 50],
+                    duration: 1000
+                });
+
+                console.log(`MVT 图层 ${layerId} 已添加到地图`);
+
+            } catch (error) {
+                console.error('加载图层失败:', error);
+                document.getElementById('status').textContent = '加载失败: ' + error.message;
+            }
+        }
+
+        // 检查页面源信息
+        function checkOriginInfo() {
+            const currentOrigin = window.location.origin;
+            const currentUrl = window.location.href;
+            
+            document.getElementById('current-origin').textContent = currentOrigin;
+            
+            console.log('=== 页面源信息 ===');
+            console.log('当前源:', currentOrigin);
+            console.log('当前URL:', currentUrl);
+            console.log('协议:', window.location.protocol);
+            console.log('主机:', window.location.host);
+            console.log('端口:', window.location.port);
+            
+            // 检查是否使用文件协议
+            if (window.location.protocol === 'file:') {
+                console.warn('⚠️ 警告：您正在使用文件协议访问此页面！');
+                console.warn('IndexedDB 数据将与 Vue 应用隔离。');
+                console.warn('请通过 Vue 开发服务器访问此页面：');
+                console.warn('例如：http://localhost:8080/test-mvt-cache.html');
+                
+                document.getElementById('status').textContent = '警告：文件协议模式，数据库隔离';
+                document.getElementById('status').style.color = 'red';
+                return false;
+            }
+            
+            // 检查是否可能是正确的开发环境
+            if (currentOrigin.includes('localhost') || currentOrigin.includes('127.0.0.1')) {
+                console.log('✓ 检测到本地开发环境');
+                return true;
+            }
+            
+            console.log('ℹ️ 生产环境或其他环境');
+            return true;
+        }
+
+        // 添加数据库源检查
+        async function checkDatabaseOrigin() {
+            try {
+                console.log('=== 数据库源检查 ===');
+                
+                // 列出所有可能的数据库（这需要用户权限，可能不会成功）
+                if ('storage' in navigator && 'estimate' in navigator.storage) {
+                    const estimate = await navigator.storage.estimate();
+                    console.log('存储估算:', estimate);
+                }
+                
+                // 尝试检查是否有其他源的 IndexedDB
+                console.log('IndexedDB 支持:', !!window.indexedDB);
+                
+                return true;
+            } catch (error) {
+                console.error('数据库源检查失败:', error);
+                return false;
+            }
+        }
+
+        // 添加环境检查功能
+        async function checkEnvironment() {
+            console.log('=== 环境检查 ===');
+            
+            const isValidOrigin = checkOriginInfo();
+            await checkDatabaseOrigin();
+            
+            if (!isValidOrigin) {
+                const helpInfo = document.createElement('div');
+                helpInfo.style.cssText = 'background: #ffe6e6; border: 1px solid #ff9999; padding: 10px; margin: 10px 0; border-radius: 4px;';
+                helpInfo.innerHTML = `
+                    <h4>📋 如何正确访问此测试页面：</h4>
+                    <ol>
+                        <li>确保 Vue 开发服务器正在运行: <code>npm run serve</code></li>
+                        <li>通过开发服务器访问: <code>http://localhost:8080/test-mvt-cache.html</code></li>
+                        <li>或者将此文件移动到 Vue 项目的 public 目录中</li>
+                    </ol>
+                    <p><strong>当前问题:</strong> 文件协议与 Vue 应用的 IndexedDB 数据库隔离</p>
+                `;
+                document.body.insertBefore(helpInfo, document.getElementById('map'));
+            }
+            
+            return isValidOrigin;
+        }
+
+        // 打开 Vue 应用
+        function openVueApp() {
+            const currentHost = window.location.host;
+            const currentProtocol = window.location.protocol;
+            
+            // 尝试常见的 Vue 开发服务器端口
+            const commonPorts = ['8080', '3000', '4000', '5000', '8000'];
+            
+            if (window.location.port && !commonPorts.includes(window.location.port)) {
+                commonPorts.unshift(window.location.port);
+            }
+            
+            console.log('尝试打开 Vue 应用的可能地址:');
+            
+            commonPorts.forEach(port => {
+                const vueUrl = `${currentProtocol}//${window.location.hostname}:${port}`;
+                console.log(`- ${vueUrl}`);
+            });
+            
+            // 默认尝试 8080 端口
+            const defaultVueUrl = `${currentProtocol}//${window.location.hostname}:8080`;
+            
+            // 询问用户是否要打开
+            if (confirm(`是否在新标签页中打开 Vue 应用？\n\n推荐地址: ${defaultVueUrl}\n\n然后在 Vue 应用中使用缓存管理功能创建一些缓存数据。`)) {
+                window.open(defaultVueUrl, '_blank');
+            }
+        }
+
+        // 页面加载完成后初始化
+        window.onload = async function() {
+            // 先检查环境
+            const isValidEnvironment = await checkEnvironment();
+            
+            // 初始化地图
+            initMap();
+            
+            // 初始化缓存服务
+            await initCacheService();
+            
+            if (!isValidEnvironment) {
+                document.getElementById('status').textContent += ' - 可能无法访问 Vue 应用的缓存数据';
+            }
+        };
+    </script>
+</body>
+</html> 

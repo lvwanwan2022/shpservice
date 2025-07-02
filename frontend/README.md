@@ -334,3 +334,6 @@ mvtLayer.addTo(map);
           }),
           visible: false
         })
+
+## 6.openlayers从IndexDB加载缓存
+https://openlayers.org/en/latest/apidoc/module-ol_source_XYZ-XYZ.html#tileLoadFunction
