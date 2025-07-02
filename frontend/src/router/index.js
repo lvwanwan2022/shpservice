@@ -42,12 +42,6 @@ const routes = [
     component: () => import('@/views/MapViewOL.vue')
   },
   {
-    path: '/map-ol-cache',
-    name: 'MapOLCache',
-    component: () => import('@/views/MapViewOLCache.vue'),
-    meta: { requiresAuth: true } // 需要登录访问
-  },
-  {
     path: '/upload',
     name: 'Upload',
     component: () => import('@/views/UploadView.vue')

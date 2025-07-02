@@ -529,6 +529,26 @@ CREATE TABLE IF NOT EXISTS public.vector_05492e03
 1）使用IndexDB缓存切片数据，https://juejin.cn/post/7395487322958446619
 @https://juejin.cn/post/7026900352968425486 
 
+缓存管理页面-每个图层的操作栏帮我都做成缓存、可视化、和删除，没有这几个button的实现逻辑现在都不对：
+①点击缓存：
+弹出地图对话框
+在地图上弹出该图层的边界框+高德底图信息，信息展示当前的缩放级别供用户参考，
+可以在地图上框选一个范围，或者使用默认的边界框范围；
+用户可以输入需要缓存的起始和终止缩放级别，默认的起始缩放级别为边界框当前的缩放级别；
+根据以上用户输入信息，将相应图层数据缓存到IndexDB
+仅缓存本图层的数据到IndexDB
+
+②点击可视化
+弹出地图对话框
+显示高德底图及该图层的边界框
+在地图上显示缓存的每个瓦片，每个瓦片之间要有格线显示，每个瓦片上显示z、x、y
+
+③删除缓存
+删除数据库中本图层的所有缓存
+
+充分浏览F:\PluginDevelopment\shpservice\frontend\src\services\tileCache文件夹下写好的函数，文件夹下
+
+
 openlayers从IndexDB加载缓存
 https://openlayers.org/en/latest/apidoc/module-ol_source_XYZ-XYZ.html#tileLoadFunction
 2）用户不同的操作行为触发不同的缓存加载策略：

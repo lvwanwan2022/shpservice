@@ -1267,12 +1267,12 @@ export default {
       const tileBounds = calculateTileBounds(layer.tiles);
       console.log('计算的瓦片边界:', tileBounds);
       
-      // 如果没有有效边界，使用默认位置
+      // 如果没有有效边界，使用成都默认位置
       if (!tileBounds.extent) {
-        tileBounds.centerLon = 116.4074; // 北京
-        tileBounds.centerLat = 39.9042;
-        tileBounds.extent = [116.3, 39.8, 116.5, 40.0];
-        console.log('使用默认边界:', tileBounds);
+        tileBounds.centerLon = 104.06; // 成都
+        tileBounds.centerLat = 30.67;
+        tileBounds.extent = [102.99, 30.32, 104.79, 31.32];
+        console.log('使用成都默认边界:', tileBounds);
       }
       
       // 创建瓦片网格要素
@@ -1444,7 +1444,8 @@ export default {
           
           // 检查矢量图层的特征
           console.log('矢量图层特征数量:', vectorSource.getFeatures().length);
-          console.log('矢量图层范围:', vectorSource.getExtent());
+          console.log('计算的瓦片边界范围:', tileBounds.extent);
+          console.log('OpenLayers矢量图层范围:', vectorSource.getExtent());
           
           // 调整视图到瓦片范围
           if (tileBounds.extent) {
@@ -1504,21 +1505,39 @@ export default {
       let minLon = Infinity, maxLon = -Infinity;
       let minLat = Infinity, maxLat = -Infinity;
 
-      tiles.forEach(tile => {
+      console.log('开始计算边界，瓦片数量:', tiles.length);
+
+      tiles.forEach((tile, index) => {
         const bounds = getTileBounds(tile.zoomLevel, tile.tileX, tile.tileY);
-        const [minX, minY, maxX, maxY] = bounds[0].concat(bounds[2]);
+        // bounds是多边形坐标数组，需要正确提取边界
+        const lons = bounds.map(coord => coord[0]);
+        const lats = bounds.map(coord => coord[1]);
         
-        minLon = Math.min(minLon, minX);
-        maxLon = Math.max(maxLon, maxX);
-        minLat = Math.min(minLat, minY);
-        maxLat = Math.max(maxLat, maxY);
+        const tileminLon = Math.min(...lons);
+        const tilemaxLon = Math.max(...lons);
+        const tileminLat = Math.min(...lats);
+        const tilemaxLat = Math.max(...lats);
+        
+        console.log(`瓦片 ${index} (${tile.zoomLevel}/${tile.tileX}/${tile.tileY}) 边界:`, 
+          `经度 ${tileminLon.toFixed(6)} - ${tilemaxLon.toFixed(6)}`, 
+          `纬度 ${tileminLat.toFixed(6)} - ${tilemaxLat.toFixed(6)}`);
+        
+        minLon = Math.min(minLon, tileminLon);
+        maxLon = Math.max(maxLon, tilemaxLon);
+        minLat = Math.min(minLat, tileminLat);
+        maxLat = Math.max(maxLat, tilemaxLat);
+        
+        console.log(`当前总边界: 经度 ${minLon.toFixed(6)} - ${maxLon.toFixed(6)}, 纬度 ${minLat.toFixed(6)} - ${maxLat.toFixed(6)}`);
       });
 
-      return {
+      const result = {
         centerLon: (minLon + maxLon) / 2,
         centerLat: (minLat + maxLat) / 2,
         extent: [minLon, minLat, maxLon, maxLat]
       };
+      
+      console.log('最终计算结果:', result);
+      return result;
     };
 
     const getTileBounds = (z, x, y) => {
@@ -1588,14 +1607,14 @@ export default {
             });
             console.log('重置视图到瓦片范围');
           } else {
-            visualizationMap.getView().setCenter(fromLonLat([116.4074, 39.9042]));
+            visualizationMap.getView().setCenter(fromLonLat([104.06, 30.67]));
             visualizationMap.getView().setZoom(10);
-            console.log('重置视图到默认位置');
+            console.log('重置视图到成都默认位置');
           }
         } else {
-          visualizationMap.getView().setCenter(fromLonLat([116.4074, 39.9042]));
+          visualizationMap.getView().setCenter(fromLonLat([104.06, 30.67]));
           visualizationMap.getView().setZoom(10);
-          console.log('重置视图到默认位置');
+          console.log('重置视图到成都默认位置');
         }
       }
     };
