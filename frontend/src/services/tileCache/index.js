@@ -40,7 +40,7 @@ export {
 } from './tileLoadFunctions.js';
 
 // 简化缓存服务
-export { SimpleCacheService } from './simpleCacheService.js';
+export { SimpleCacheService } from './cacheService.js';
 
 // 默认导出全局缓存服务
 export { getGlobalCacheService as default } from './indexedDBOperations.js'; 

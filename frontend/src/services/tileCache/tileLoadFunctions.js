@@ -1,478 +1,384 @@
 /**
- * 自定义瓦片加载函数模块
- * 提供OpenLayers和Leaflet的瓦片缓存加载函数
+ * 瓦片加载函数库
+ * 提供统一的瓦片加载函数，支持缓存和网络加载
  */
 
 import { getGlobalCacheService } from './indexedDBOperations.js';
-import { extractTileCoordinates, buildTileUrl } from './tileCalculations.js';
+import { MVT } from 'ol/format';
 
 /**
- * 创建OpenLayers的瓦片缓存加载函数
- * @param {string} layerId 图层ID
- * @param {string} baseUrl 基础URL模板
- * @param {object} options 选项
+ * 创建WMTS瓦片加载函数
+ * @param {Object} options - 配置选项
+ * @param {string} options.layerId - 图层ID
+ * @param {Object} options.tileCacheService - 瓦片缓存服务实例
+ * @param {Array} options.retryCodes - 需要重试的HTTP状态码
+ * @param {Object} options.retries - 重试计数器
  * @returns {Function} 瓦片加载函数
  */
-export function createOpenLayersTileLoadFunction(layerId, baseUrl, options = {}) {
-  const cacheService = getGlobalCacheService();
-  const enableCache = options.enableCache !== false;
-  const cacheFirst = options.cacheFirst !== false;
-  const debug = options.debug || false;
-  
-  return (tile, src) => {
-    if (!enableCache) {
-      // 缓存未启用，直接加载
-      loadTileFromNetwork(tile, src);
-      return;
-    }
+export function createWmtsTileLoadFunction(options = {}) {
+  const {
+    layerId = 'default_layer',
+    tileCacheService = getGlobalCacheService(),
+    retryCodes = [404, 503, 500],
+    retries = {}
+  } = options;
 
-    const coords = extractTileCoordinates(src, baseUrl);
-    if (!coords) {
-      // 无法提取坐标，降级到普通加载
-      loadTileFromNetwork(tile, src);
-      return;
-    }
-
-    const { z, x, y } = coords;
-
-    if (tile.getImage) {
-      // 栅格瓦片处理
-      handleRasterTile(tile, src, layerId, z, x, y, cacheService, cacheFirst, debug);
+  return function wmtsTileLoadFunction(imageTile, src) {
+    const image = imageTile.getImage();
+    
+    // 从URL中提取瓦片坐标
+    const match = src.match(/\/(\d+)\/(\d+)\/(\d+)/);
+    let x, y, z;
+    
+    if (match) {
+      x = parseInt(match[1]);
+      y = parseInt(match[2]);
+      z = parseInt(match[3]);
     } else {
-      // 矢量瓦片处理
-      handleVectorTile(tile, src, layerId, z, x, y, cacheService, cacheFirst, debug);
+      // 如果无法解析坐标，直接加载
+      fetch(src).then(response => response.blob())
+        .then(blob => {
+          const imageUrl = URL.createObjectURL(blob);
+          image.src = imageUrl;
+        })
+        .catch(() => imageTile.setState(3));
+      return;
     }
-  };
-}
 
-/**
- * 处理栅格瓦片加载
- */
-function handleRasterTile(tile, src, layerId, z, x, y, cacheService, cacheFirst, debug) {
-  const image = tile.getImage();
-  
-  if (cacheFirst) {
-    // 优先检查缓存
-    cacheService.getTile(layerId, z, x, y).then((cachedTile) => {
-      if (cachedTile) {
-        // 从缓存加载
-        loadImageFromCache(image, cachedTile, debug);
-      } else {
-        // 缓存未命中，从网络加载并缓存
-        loadImageFromNetworkWithCache(image, src, layerId, z, x, y, cacheService, debug);
-      }
-    }).catch((error) => {
-      console.error('检查缓存失败:', error);
-      // 降级到普通加载
-      image.src = src;
-    });
-  } else {
-    // 直接从网络加载并缓存
-    loadImageFromNetworkWithCache(image, src, layerId, z, x, y, cacheService, debug);
-  }
-}
-
-/**
- * 处理矢量瓦片加载
- */
-function handleVectorTile(tile, src, layerId, z, x, y, cacheService, cacheFirst, debug) {
-  if (cacheFirst) {
-    // 优先检查缓存
-    cacheService.getTile(layerId, z, x, y).then((cachedTile) => {
-      if (cachedTile) {
-        // 从缓存加载
-        loadVectorTileFromCache(tile, cachedTile, debug);
-      } else {
-        // 缓存未命中，从网络加载并缓存
-        loadVectorTileFromNetworkWithCache(tile, src, layerId, z, x, y, cacheService, debug);
-      }
-    }).catch((error) => {
-      console.error('检查缓存失败:', error);
-      // 降级到普通加载
-      loadVectorTileFromNetwork(tile, src);
-    });
-  } else {
-    // 直接从网络加载并缓存
-    loadVectorTileFromNetworkWithCache(tile, src, layerId, z, x, y, cacheService, debug);
-  }
-}
-
-/**
- * 从缓存加载图片
- */
-function loadImageFromCache(image, cachedTile, debug) {
-  const imageUrl = URL.createObjectURL(cachedTile.data);
-  
-  image.onload = () => {
-    URL.revokeObjectURL(imageUrl);
-    if (debug) {
-      console.log(`✅ 缓存瓦片加载成功: ${cachedTile.id}`);
+    // 检查缓存中是否已经存在该瓦片
+    if (tileCacheService) {
+      tileCacheService.getTile(layerId, z, x, y).then((tileCache) => {
+        if (tileCache != null && tileCache.data) {
+          // 如果已经存在，直接使用缓存的瓦片替换图片瓦片
+          let imageUrl;
+          if (tileCache.data instanceof Blob) {
+            imageUrl = URL.createObjectURL(tileCache.data);
+          } else if (typeof tileCache.data === 'string') {
+            // 如果是base64字符串
+            imageUrl = 'data:image/png;base64,' + tileCache.data;
+          } else {
+            // 如果是ArrayBuffer
+            const blob = new Blob([tileCache.data], { type: 'image/png' });
+            imageUrl = URL.createObjectURL(blob);
+          }
+          image.src = imageUrl;
+          console.log(`命中底图瓦片缓存: ${z}/${x}/${y}`);
+          return;
+        } else {
+          // 缓存中没有，尝试从网络加载
+          tryLoadFromNetwork();
+        }
+      }).catch(error => {
+        console.error('检查瓦片缓存失败:', error);
+        // 缓存检查失败，尝试从网络加载
+        tryLoadFromNetwork();
+      });
+    } else {
+      // 缓存服务未初始化，直接从网络加载
+      tryLoadFromNetwork();
     }
-  };
-  
-  image.onerror = () => {
-    URL.revokeObjectURL(imageUrl);
-    console.error(`❌ 缓存瓦片加载失败: ${cachedTile.id}`);
-  };
-  
-  image.src = imageUrl;
-}
 
-/**
- * 从网络加载图片并缓存
- */
-function loadImageFromNetworkWithCache(image, src, layerId, z, x, y, cacheService, debug) {
-  fetch(src, {
-    method: 'GET',
-    mode: 'cors',
-    cache: 'force-cache'
-  }).then((response) => {
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+    // 网络加载函数
+    function tryLoadFromNetwork() {
+      fetch(src, {
+        method: 'GET',
+        keepalive: true,
+        cache: "force-cache"
+      }).then((response) => {
+        if (retryCodes.includes(response.status)) {
+          retries[src] = (retries[src] || 0) + 1;
+          if (retries[src] < 3) {
+            console.log("请求瓦片失败，重新尝试次数：" + retries[src]);
+            setTimeout(() => imageTile.load(), retries[src] * 250);
+          } else {
+            console.warn(`底图瓦片 ${z}/${x}/${y} 网络加载失败，已达到最大重试次数`);
+            imageTile.setState(3); // error
+          }
+          return Promise.reject();
+        }
+        return response.blob();
+      })
+      .then((blob) => {
+        const imageUrl = URL.createObjectURL(blob);
+        image.src = imageUrl;
+        
+        // 缓存瓦片到IndexedDB
+        if (tileCacheService) {
+          tileCacheService.saveTile(layerId, z, x, y, blob, {
+            contentType: 'image/png',
+            url: src
+          }).then(() => {
+            console.log(`底图瓦片已缓存: ${z}/${x}/${y}`);
+          }).catch(error => {
+            console.error('缓存底图瓦片失败:', error);
+          });
+        }
+      })
+      .catch((error) => {
+        console.warn(`底图瓦片 ${z}/${x}/${y} 网络加载失败:`, error.message);
+        // 网络加载失败，尝试查找附近的缓存瓦片作为替代
+        tryLoadNearbyCache();
+      });
     }
-    return response.blob();
-  }).then((blob) => {
-    // 创建图片URL
-    const imageUrl = URL.createObjectURL(blob);
-    
-    image.onload = () => {
-      URL.revokeObjectURL(imageUrl);
-      if (debug) {
-        console.log(`✅ 网络瓦片加载成功: ${layerId}_${z}_${x}_${y}`);
-      }
-    };
-    
-    image.onerror = () => {
-      URL.revokeObjectURL(imageUrl);
-      console.error(`❌ 网络瓦片图像加载失败: ${layerId}_${z}_${x}_${y}`);
-    };
-    
-    image.src = imageUrl;
-    
-    // 异步保存到缓存
-    cacheService.saveTile(layerId, z, x, y, blob, {
-      contentType: blob.type || 'image/png',
-      url: src
-    }).catch(err => {
-      console.warn('缓存瓦片失败:', err);
-    });
-    
-  }).catch((error) => {
-    console.warn('网络请求失败，降级到标准加载:', error.message);
-    image.src = src;
-  });
-}
 
-/**
- * 从缓存加载矢量瓦片
- */
-function loadVectorTileFromCache(tile, cachedTile, debug) {
-  try {
-    // 设置瓦片数据
-    if (tile.setFeatures && cachedTile.data) {
-      // 如果是解析后的要素数据
-      tile.setFeatures(cachedTile.data);
-    } else if (tile.setData && cachedTile.data) {
-      // 如果是原始二进制数据
-      tile.setData(cachedTile.data);
-    }
-    
-    if (debug) {
-      console.log(`✅ 缓存矢量瓦片加载成功: ${cachedTile.id}`);
-    }
-  } catch (error) {
-    console.error('加载缓存矢量瓦片失败:', error);
-    throw error;
-  }
-}
-
-/**
- * 从网络加载矢量瓦片并缓存
- */
-function loadVectorTileFromNetworkWithCache(tile, src, layerId, z, x, y, cacheService, debug) {
-  fetch(src, {
-    method: 'GET',
-    mode: 'cors'
-  }).then((response) => {
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    return response.arrayBuffer();
-  }).then((arrayBuffer) => {
-    // 设置瓦片数据
-    tile.setData(arrayBuffer);
-    
-    if (debug) {
-      console.log(`✅ 网络矢量瓦片加载成功: ${layerId}_${z}_${x}_${y}`);
-    }
-    
-    // 异步保存到缓存
-    const blob = new Blob([arrayBuffer], { type: 'application/x-protobuf' });
-    cacheService.saveTile(layerId, z, x, y, blob, {
-      contentType: 'application/x-protobuf',
-      url: src
-    }).catch(err => {
-      console.warn('缓存矢量瓦片失败:', err);
-    });
-    
-  }).catch((error) => {
-    console.warn('矢量瓦片网络请求失败:', error.message);
-    loadVectorTileFromNetwork(tile, src);
-  });
-}
-
-/**
- * 普通的瓦片网络加载（降级方案）
- */
-function loadTileFromNetwork(tile, src) {
-  if (tile.getImage) {
-    // 栅格瓦片
-    const image = tile.getImage();
-    image.onload = () => {};
-    image.onerror = () => console.error('瓦片加载失败:', src);
-    image.src = src;
-  } else {
-    // 矢量瓦片
-    loadVectorTileFromNetwork(tile, src);
-  }
-}
-
-/**
- * 普通的矢量瓦片网络加载
- */
-function loadVectorTileFromNetwork(tile, src) {
-  fetch(src).then((response) => {
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    return response.arrayBuffer();
-  }).then((arrayBuffer) => {
-    tile.setData(arrayBuffer);
-  }).catch((error) => {
-    console.error('矢量瓦片加载失败:', error);
-  });
-}
-
-/**
- * 创建Leaflet的瓦片缓存加载函数
- * @param {string} layerId 图层ID
- * @param {object} options 选项
- * @returns {object} Leaflet瓦片图层扩展
- */
-export function createLeafletCachedTileLayer(layerId, urlTemplate, options = {}) {
-  // 检查Leaflet是否可用
-  if (typeof window === 'undefined' || !window.L) {
-    console.error('Leaflet 未加载');
-    return null;
-  }
-
-  const cacheService = getGlobalCacheService();
-  const enableCache = options.enableCache !== false;
-  const cacheFirst = options.cacheFirst !== false;
-
-  // 扩展Leaflet的TileLayer
-  const CachedTileLayer = window.L.TileLayer.extend({
-    initialize: function(url, opts) {
-      this.layerId = layerId;
-      this.cacheService = cacheService;
-      this.enableCache = enableCache;
-      this.cacheFirst = cacheFirst;
-      window.L.TileLayer.prototype.initialize.call(this, url, opts);
-    },
-
-    createTile: function(coords, done) {
-      const tile = document.createElement('img');
-      const url = this.getTileUrl(coords);
-      
-      if (this.options.crossOrigin || this.options.crossOrigin === '') {
-        tile.crossOrigin = this.options.crossOrigin;
-      }
-
-      this.loadTileWithCache(tile, url, coords, done);
-      return tile;
-    },
-
-    loadTileWithCache: async function(tile, url, coords, done) {
-      if (!this.enableCache) {
-        this.loadTileFromNetwork(tile, url, done);
+    // 尝试加载附近的缓存瓦片作为替代
+    function tryLoadNearbyCache() {
+      if (!tileCacheService) {
+        imageTile.setState(3); // error
         return;
       }
 
-      const { x, y, z } = coords;
+      // 搜索附近的缓存瓦片（同一层级的相邻瓦片）
+      const searchOffsets = [
+        [0, 0], [1, 0], [-1, 0], [0, 1], [0, -1],
+        [1, 1], [-1, -1], [1, -1], [-1, 1]
+      ];
 
-      try {
-        if (this.cacheFirst) {
-          const cachedTile = await this.cacheService.getTile(this.layerId, z, x, y);
-          if (cachedTile) {
-            this.loadTileFromCache(tile, cachedTile, done);
+      let foundCache = false;
+      
+      const searchPromises = searchOffsets.map(([dx, dy]) => {
+        return tileCacheService.getTile(layerId, z, x + dx, y + dy);
+      });
+
+      Promise.all(searchPromises).then(results => {
+        for (let i = 0; i < results.length; i++) {
+          const tileCache = results[i];
+          if (tileCache && tileCache.data && !foundCache) {
+            foundCache = true;
+            let imageUrl;
+            if (tileCache.data instanceof Blob) {
+              imageUrl = URL.createObjectURL(tileCache.data);
+            } else if (typeof tileCache.data === 'string') {
+              imageUrl = 'data:image/png;base64,' + tileCache.data;
+            } else {
+              const blob = new Blob([tileCache.data], { type: 'image/png' });
+              imageUrl = URL.createObjectURL(blob);
+            }
+            image.src = imageUrl;
+            console.log(`使用附近缓存瓦片替代 ${z}/${x}/${y}，来源: ${z}/${x + searchOffsets[i][0]}/${y + searchOffsets[i][1]}`);
             return;
           }
         }
-
-        await this.loadTileFromNetworkWithCache(tile, url, this.layerId, z, x, y, done);
-      } catch (error) {
-        console.error('瓦片加载失败:', error);
-        this.loadTileFromNetwork(tile, url, done);
-      }
-    },
-
-    loadTileFromNetworkWithCache: async function(tile, url, layerId, z, x, y, done) {
-      try {
-        const response = await fetch(url, { mode: 'cors' });
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+        
+        if (!foundCache) {
+          console.warn(`底图瓦片 ${z}/${x}/${y} 无法加载，且无可用的缓存替代`);
+          imageTile.setState(3); // error
         }
-        
-        const blob = await response.blob();
-        const imageUrl = URL.createObjectURL(blob);
-        
-        tile.onload = () => {
-          URL.revokeObjectURL(imageUrl);
-          done(null, tile);
-        };
-        
-        tile.onerror = (error) => {
-          URL.revokeObjectURL(imageUrl);
-          done(error, tile);
-        };
-        
-        tile.src = imageUrl;
-        
-        // 异步保存到缓存
-        this.cacheService.saveTile(layerId, z, x, y, blob, {
-          contentType: blob.type || 'image/png',
-          url
-        }).catch(err => {
-          console.warn('缓存瓦片失败:', err);
-        });
-        
-      } catch (error) {
-        console.error('网络请求失败:', error);
-        done(error, tile);
-      }
-    },
-
-    loadTileFromCache: function(tile, cachedTile, done) {
-      const url = URL.createObjectURL(cachedTile.data);
-      
-      tile.onload = () => {
-        URL.revokeObjectURL(url);
-        done(null, tile);
-      };
-      
-      tile.onerror = (error) => {
-        URL.revokeObjectURL(url);
-        done(error, tile);
-      };
-      
-      tile.src = url;
-    },
-
-    loadTileFromNetwork: function(tile, url, done) {
-      tile.onload = () => done(null, tile);
-      tile.onerror = (error) => done(error, tile);
-      tile.src = url;
-    }
-  });
-
-  return new CachedTileLayer(urlTemplate, options);
-}
-
-/**
- * 创建带缓存的WMS图层加载函数
- * @param {string} layerId 图层ID
- * @param {string} baseUrl WMS服务基础URL
- * @param {object} options WMS图层选项
- * @returns {Function} WMS瓦片加载函数
- */
-export function createWMSTileLoadFunction(layerId, baseUrl, options = {}) {
-  const cacheService = getGlobalCacheService();
-  const enableCache = options.enableCache !== false;
-  const cacheFirst = options.cacheFirst !== false;
-  
-  return (tile, src) => {
-    if (!enableCache) {
-      loadTileFromNetwork(tile, src);
-      return;
-    }
-
-    // WMS URL通常包含bbox参数，需要特殊处理来提取坐标
-    const coords = extractWMSCoordinates(src);
-    if (!coords) {
-      loadTileFromNetwork(tile, src);
-      return;
-    }
-
-    const { z, x, y } = coords;
-    
-    if (tile.getImage) {
-      handleRasterTile(tile, src, layerId, z, x, y, cacheService, cacheFirst, false);
-    } else {
-      loadTileFromNetwork(tile, src);
+      }).catch(error => {
+        console.error('搜索附近缓存瓦片失败:', error);
+        imageTile.setState(3); // error
+      });
     }
   };
 }
 
 /**
- * 从WMS URL中提取瓦片坐标（简化实现）
+ * 创建MVT瓦片加载函数
+ * @param {Object} options - 配置选项
+ * @param {string} options.layerId - 图层ID
+ * @param {Object} options.tileCacheService - 瓦片缓存服务实例
+ * @returns {Function} 瓦片加载函数
  */
-function extractWMSCoordinates(url) {
-  // 这是一个简化的实现，实际使用中可能需要更复杂的逻辑
-  // 根据bbox参数和图层配置计算瓦片坐标
-  const coords = extractTileCoordinates(url);
-  return coords;
+export function createMvtTileLoadFunction(options = {}) {
+  const {
+    layerId = 'mvt_layer',
+    tileCacheService = getGlobalCacheService()
+  } = options;
+
+  return function mvtTileLoadFunction(tile, url) {
+    // 对于 VectorTile，我们需要设置 loader 而不是直接操作 image
+    tile.setLoader(function(extent, resolution, projection) {
+      // 从URL中提取瓦片坐标
+      const match = url.match(/\/(\d+)\/(\d+)\/(\d+)$/);
+      if (!match) {
+        console.warn('无法解析瓦片坐标:', url);
+        tile.setFeatures([]);
+        return;
+      }
+      
+      const [z, x, y] = [parseInt(match[1]), parseInt(match[2]), parseInt(match[3])];
+      console.log(`MVT瓦片请求: ${z}/${x}/${y} - ${url}`);
+      
+      // 从URL中提取layerId（假设URL格式为 .../layerId/{z}/{x}/{y}）
+      const layerMatch = url.match(/\/([^/]+)\/\d+\/\d+\/\d+$/);
+      const currentLayerId = layerMatch ? layerMatch[1] : layerId;
+      
+      // 检查缓存中是否已经存在该MVT瓦片
+      if (tileCacheService) {
+        tileCacheService.getTile(currentLayerId, z, x, y).then((tileCache) => {
+          if (tileCache != null && tileCache.data) {
+            // 如果已经存在，直接使用缓存的MVT数据
+            loadFromCache(tileCache);
+            return;
+          } else {
+            // 缓存中没有，尝试从网络加载
+            tryLoadMVTFromNetwork();
+          }
+        }).catch(error => {
+          console.error('检查MVT瓦片缓存失败:', error);
+          // 缓存检查失败，尝试从网络加载
+          tryLoadMVTFromNetwork();
+        });
+      } else {
+        // 没有缓存服务，直接从网络加载
+        tryLoadMVTFromNetwork();
+      }
+
+      // 从缓存加载MVT数据
+      function loadFromCache(tileCache) {
+        try {
+          let arrayBuffer;
+          if (tileCache.data instanceof ArrayBuffer) {
+            arrayBuffer = tileCache.data;
+          } else if (tileCache.data instanceof Blob) {
+            // 如果是Blob，转换为ArrayBuffer
+            tileCache.data.arrayBuffer().then(buffer => {
+              const mvtFormat = new MVT();
+              const features = mvtFormat.readFeatures(buffer, {
+                extent: extent,
+                featureProjection: projection
+              });
+              tile.setFeatures(features);
+              console.log(`命中MVT瓦片缓存: ${z}/${x}/${y}，包含 ${features.length} 个要素`);
+            }).catch(error => {
+              console.error('从缓存Blob解析MVT失败:', error);
+              tile.setFeatures([]);
+            });
+            return;
+          } else if (typeof tileCache.data === 'string') {
+            // 如果是base64字符串，转换为ArrayBuffer
+            const binaryString = atob(tileCache.data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            arrayBuffer = bytes.buffer;
+          } else {
+            console.warn('未知的缓存数据类型:', typeof tileCache.data);
+            arrayBuffer = tileCache.data;
+          }
+          
+          // 解析缓存的MVT数据
+          const mvtFormat = new MVT();
+          const features = mvtFormat.readFeatures(arrayBuffer, {
+            extent: extent,
+            featureProjection: projection
+          });
+          
+          tile.setFeatures(features);
+          console.log(`命中MVT瓦片缓存: ${z}/${x}/${y}，包含 ${features.length} 个要素`);
+        } catch (error) {
+          console.error('解析缓存MVT数据失败:', error);
+          // 缓存数据有问题，尝试从网络加载
+          tryLoadMVTFromNetwork();
+        }
+      }
+
+      // 尝试从网络加载MVT数据
+      function tryLoadMVTFromNetwork() {
+        fetch(url)
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+            return response.arrayBuffer();
+          })
+          .then(arrayBuffer => {
+            // 解析MVT数据
+            const mvtFormat = new MVT();
+            const features = mvtFormat.readFeatures(arrayBuffer, {
+              extent: extent,
+              featureProjection: projection
+            });
+            
+            console.log(`MVT瓦片 ${z}/${x}/${y} 加载成功，包含 ${features.length} 个要素`);
+            tile.setFeatures(features);
+            
+            // 缓存MVT瓦片到IndexedDB
+            if (tileCacheService) {
+              tileCacheService.saveTile(currentLayerId, z, x, y, arrayBuffer, {
+                contentType: 'application/vnd.mapbox-vector-tile',
+                url: url
+              }).then(() => {
+                console.log(`MVT瓦片已缓存: ${z}/${x}/${y}`);
+              }).catch(error => {
+                console.error('缓存MVT瓦片失败:', error);
+              });
+            }
+          })
+          .catch(error => {
+            console.warn(`MVT瓦片 ${z}/${x}/${y} 网络加载失败:`, error.message);
+            // 网络加载失败，尝试查找附近的缓存MVT瓦片作为替代
+            tryLoadNearbyMVTCache();
+          });
+      }
+
+      // 尝试加载附近的缓存MVT瓦片作为替代
+      function tryLoadNearbyMVTCache() {
+        if (!tileCacheService) {
+          console.warn(`MVT瓦片 ${z}/${x}/${y} 无法加载，无缓存服务`);
+          tile.setFeatures([]);
+          return;
+        }
+
+        // 搜索附近的缓存瓦片（同一层级的相邻瓦片）
+        const searchOffsets = [
+          [0, 0], [1, 0], [-1, 0], [0, 1], [0, -1],
+          [1, 1], [-1, -1], [1, -1], [-1, 1]
+        ];
+
+        let foundCache = false;
+        
+        const searchPromises = searchOffsets.map(([dx, dy]) => {
+          return tileCacheService.getTile(currentLayerId, z, x + dx, y + dy);
+        });
+
+        Promise.all(searchPromises).then(results => {
+          for (let i = 0; i < results.length; i++) {
+            const tileCache = results[i];
+            if (tileCache && tileCache.data && !foundCache) {
+              foundCache = true;
+              console.log(`使用附近缓存MVT瓦片替代 ${z}/${x}/${y}，来源: ${z}/${x + searchOffsets[i][0]}/${y + searchOffsets[i][1]}`);
+              loadFromCache(tileCache);
+              return;
+            }
+          }
+          
+          if (!foundCache) {
+            console.warn(`MVT瓦片 ${z}/${x}/${y} 无法加载，且无可用的缓存替代`);
+            tile.setFeatures([]);
+          }
+        }).catch(error => {
+          console.error('搜索附近缓存MVT瓦片失败:', error);
+          tile.setFeatures([]);
+        });
+      }
+    });
+  };
 }
 
 /**
- * 预加载区域瓦片
- * @param {string} layerId 图层ID
- * @param {string} urlTemplate URL模板
- * @param {object} bounds 边界
- * @param {number} minZoom 最小缩放级别
- * @param {number} maxZoom 最大缩放级别
- * @param {Function} progressCallback 进度回调
+ * 获取默认的WMTS瓦片加载函数
+ * @param {string} layerId - 图层ID
+ * @returns {Function} 瓦片加载函数
  */
-export async function preloadAreaTiles(layerId, urlTemplate, bounds, minZoom, maxZoom, progressCallback) {
-  const cacheService = getGlobalCacheService();
-  const { calculateTileList } = await import('./tileCalculations.js');
-  
-  const tileList = calculateTileList(bounds, { min: minZoom, max: maxZoom });
-  let completed = 0;
-  
-  for (const { z, x, y } of tileList) {
-    try {
-      // 检查是否已缓存
-      const cached = await cacheService.getTile(layerId, z, x, y);
-      if (!cached) {
-        // 构建URL并下载
-        const url = buildTileUrl(urlTemplate, z, x, y);
-        const response = await fetch(url);
-        if (response.ok) {
-          const blob = await response.blob();
-          await cacheService.saveTile(layerId, z, x, y, blob, {
-            contentType: blob.type || 'image/png',
-            url
-          });
-        }
-      }
-      
-      completed++;
-      if (progressCallback) {
-        progressCallback(completed, tileList.length);
-      }
-    } catch (error) {
-      console.warn(`预加载瓦片失败 ${z}/${x}/${y}:`, error);
-      completed++;
-      if (progressCallback) {
-        progressCallback(completed, tileList.length);
-      }
-    }
-  }
+export function getDefaultWmtsTileLoadFunction(layerId = 'default_layer') {
+  return createWmtsTileLoadFunction({ layerId });
 }
 
+/**
+ * 获取默认的MVT瓦片加载函数
+ * @param {string} layerId - 图层ID
+ * @returns {Function} 瓦片加载函数
+ */
+export function getDefaultMvtTileLoadFunction(layerId = 'mvt_layer') {
+  return createMvtTileLoadFunction({ layerId });
+}
+
+// 导出默认实例
 export default {
-  createOpenLayersTileLoadFunction,
-  createLeafletCachedTileLayer,
-  createWMSTileLoadFunction,
-  preloadAreaTiles
-}; 
+  createWmtsTileLoadFunction,
+  createMvtTileLoadFunction,
+  getDefaultWmtsTileLoadFunction,
+  getDefaultMvtTileLoadFunction
+};

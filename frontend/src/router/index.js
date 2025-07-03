@@ -62,6 +62,12 @@ const routes = [
     name: 'Feedback',
     component: () => import('@/feedback/views/FeedbackView.vue'),
     meta: { requiresAuth: true } // 反馈系统需要登录
+  },
+  {
+    path: '/tile-load-test',
+    name: 'TileLoadTest',
+    component: () => import('@/views/TileLoadTestView.vue'),
+    meta: { requiresAuth: false } // 瓦片加载测试页面
   }
   
 ]

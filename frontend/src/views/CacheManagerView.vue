@@ -22,9 +22,7 @@
             <i class="el-icon-upload2"></i> 导入
           </el-button>
         </el-upload>
-        <el-button type="success" size="small" @click="generateTestData" plain>
-          <i class="el-icon-magic-stick"></i> 生成测试数据
-        </el-button>
+        
       </div>
       <div class="toolbar-right">
         <el-select
@@ -213,16 +211,7 @@
                 title="缓存图层"
               >
                 <i class="el-icon-download"></i> 缓存
-              </el-button>
-              <el-button 
-                type="info" 
-                size="small" 
-                @click="visualizeCache(row)"
-                :disabled="!row.tiles || row.tiles.length === 0"
-                title="可视化缓存"
-              >
-                <i class="el-icon-view"></i> 可视化
-              </el-button>
+              </el-button>              
               <el-button 
                 type="danger" 
                 size="small" 
@@ -245,66 +234,7 @@
       </div>
     </div>
 
-    <!-- 瓦片预览对话框 -->
-    <el-dialog 
-      title="瓦片预览" 
-      v-model="tilePreviewVisible" 
-      width="500px"
-    >
-      <div class="tile-preview">
-        <div class="tile-info">
-          <p><strong>图层ID:</strong> {{ currentTile?.layerId }}</p>
-          <p><strong>缩放级别:</strong> {{ currentTile?.zoomLevel }}</p>
-          <p><strong>坐标:</strong> X={{ currentTile?.tileX }}, Y={{ currentTile?.tileY }}</p>
-          <p><strong>大小:</strong> {{ formatFileSize(currentTile?.size || 0) }}</p>
-          <p><strong>类型:</strong> {{ currentTile?.contentType || 'image/png' }}</p>
-        </div>
-        <div class="tile-image">
-          <template v-if="currentTile && currentTile.contentType && (currentTile.contentType.startsWith('image/') || currentTile.contentType === 'image/png' || currentTile.contentType === 'image/jpeg')">
-            <img 
-              v-if="tileImageUrl" 
-              :src="tileImageUrl" 
-              alt="瓦片图像"
-              style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px;"
-            />
-            <div v-else class="loading-placeholder">
-              <i class="el-icon-loading"></i>
-              <p>加载中...</p>
-            </div>
-          </template>
-          <template v-else>
-            <div class="loading-placeholder">
-              <i class="el-icon-warning-outline"></i>
-              <p>暂不支持该类型瓦片预览</p>
-            </div>
-          </template>
-        </div>
-      </div>
-    </el-dialog>
 
-    <!-- 缓存进度对话框 -->
-    <el-dialog 
-      title="缓存操作进度" 
-      v-model="cacheProgressVisible" 
-      :closable="false"
-      :close-on-click-modal="false"
-      width="500px"
-    >
-      <div class="cache-progress">
-        <el-progress 
-          :percentage="cacheProgress.percent" 
-          :status="cacheProgress.status"
-          :stroke-width="8"
-        ></el-progress>
-        <p class="progress-text">{{ cacheProgress.message }}</p>
-        <div class="progress-details">
-          <span>{{ cacheProgress.current }} / {{ cacheProgress.total }}</span>
-        </div>
-      </div>
-      <template #footer>
-        <el-button @click="stopCacheOperation" :disabled="!cacheOperationRunning">停止操作</el-button>
-      </template>
-    </el-dialog>
 
     <!-- 缓存配置对话框 -->
     <el-dialog 
@@ -314,6 +244,7 @@
       top="5vh"
       :close-on-click-modal="false"
       custom-class="cache-config-dialog"
+      destroy-on-close
       @opened="onCacheConfigDialogOpened"
     >
       <div class="cache-config-content">
@@ -364,69 +295,15 @@
             </div>
           </div>
           <div class="config-right">
-            <div id="cache-config-map" style="width: 100%; height: 400px; border: 1px solid #ddd;"></div>
+            <div id="cache-config-map"></div>
           </div>
         </div>
       </div>
-    </el-dialog>
-
-    <!-- 缓存可视化对话框 -->
-    <el-dialog 
-      title="缓存数据可视化" 
-      v-model="cacheVisualizationVisible" 
-      width="90%"
-      top="5vh"
-      :close-on-click-modal="false"
-      custom-class="cache-visualization-dialog"
-      @opened="onVisualizationDialogOpened"
-    >
-      <div class="cache-visualization-content">
-        <div class="cache-info-panel">
-          <div class="info-left">
-            <h4>{{ currentVisualizationLayer.layerName }}</h4>
-            <div class="cache-stats-row">
-              <span>场景: {{ currentVisualizationLayer.sceneName }}</span>
-              <span>瓦片数: {{ currentVisualizationLayer.tiles?.length || 0 }}</span>
-              <span>缓存大小: {{ formatFileSize(currentVisualizationLayer.totalSize || 0) }}</span>
-            </div>
-          </div>
-          <div class="info-right">
-            <el-button-group>
-              <el-button 
-                :type="showCacheGrid ? 'primary' : 'default'" 
-                size="small"
-                @click="toggleCacheGrid"
-              >
-                {{ showCacheGrid ? '隐藏' : '显示' }}缓存网格
-              </el-button>
-              <el-button 
-                :type="showCachePoints ? 'primary' : 'default'" 
-                size="small"
-                @click="toggleCachePoints"
-              >
-                {{ showCachePoints ? '隐藏' : '显示' }}缓存点位
-              </el-button>
-              <el-button 
-                type="info" 
-                size="small"
-                @click="resetMapView"
-              >
-                重置视图
-              </el-button>
-            </el-button-group>
-          </div>
-        </div>
-        <div id="cache-visualization-map" class="cache-map-container"></div>
-      </div>
-      <template #footer>
-        <el-button @click="cacheVisualizationVisible = false">关闭</el-button>
-      </template>
     </el-dialog>
   </div>
 </template>
 
 <script>
-/*eslint-disable*/
 import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import gisApi from '@/api/gis.js';
@@ -434,19 +311,19 @@ import { formatFileSize, formatTimeAgo, SimpleCacheService, calculateTileCount, 
 
 // OpenLayers导入
 import { Map, View, Feature } from 'ol';
-import { Tile as TileLayer, Vector as VectorLayer, VectorTile as VectorTileLayer } from 'ol/layer';
-import { OSM, Vector as VectorSource, TileImage, XYZ, VectorTile as VectorTileSource } from 'ol/source';
-import { createXYZ } from 'ol/tilegrid';
-import MVT from 'ol/format/MVT';
-import { Polygon, Point } from 'ol/geom';
-import { Style, Stroke, Fill, Text } from 'ol/style';
-import { fromLonLat, transformExtent, toLonLat } from 'ol/proj';
-import { defaults as defaultControls } from 'ol/control';
-import Circle from 'ol/style/Circle';
+import { Tile as TileLayer, VectorTile as VectorTileLayer, Vector as VectorLayer } from 'ol/layer';
+import { XYZ, VectorTile as VectorTileSource, Vector as VectorSource } from 'ol/source';
+import { Polygon } from 'ol/geom';
+import { Style, Stroke, Fill, Circle } from 'ol/style';
+import { fromLonLat } from 'ol/proj';
+import { MVT } from 'ol/format';
 
-// 引入proj4库用于坐标系转换
-import proj4 from 'proj4';
-import { register } from 'ol/proj/proj4';
+import { 
+  createWmtsTileLoadFunction, 
+  createMvtTileLoadFunction
+} from '@/services/tileCache/tileLoadFunctions.js';
+
+
 // 引入GCJ02坐标系
 //import gcj02Mecator from '@/utils/GCJ02';
 
@@ -467,7 +344,7 @@ export default {
       message: '准备中...',
       status: ''
     });
-
+    
     const tilePreviewVisible = ref(false);
     const currentTile = ref(null);
     const tileImageUrl = ref('');
@@ -480,18 +357,13 @@ export default {
       lastUpdate: Date.now()
     });
 
-    // 缓存可视化相关
-    const cacheVisualizationVisible = ref(false);
-    const currentVisualizationLayer = ref({});
-    let visualizationMap = null;
+
 
     // 缓存配置相关
     const cacheConfigVisible = ref(false);
     const currentCacheLayer = ref({});
     let configMap = null;
-    let drawSource = null;
-    let drawVector = null;
-    let drawInteraction = null;
+
     
     const cacheConfig = reactive({
       minZoom: 10,
@@ -508,14 +380,7 @@ export default {
              (cacheConfig.useDefaultBounds || cacheConfig.selectedBounds);
     });
 
-    const observer = new ResizeObserver(entries => {
-      try {
-        // 你的回调逻辑
-      } catch (e) {
-        console.error('ResizeObserver 异常:', e);
-        // 处理异常
-      }
-    });
+  
     // 缓存服务实例
     let tileCacheService = null;
     let dataCacheService = null;
@@ -575,8 +440,6 @@ export default {
         const allTiles = await tileCacheService.getAllTiles();
         //console.log('获取到的瓦片数据:', allTiles);
         
-        // 输出缓存中的layerId列表用于调试
-        const cacheLayerIds = [...new Set(allTiles.map(tile => tile.layerId))];
         //console.log('缓存中的layerId列表:', cacheLayerIds);
         
         // 3. 按图层ID分组缓存数据
@@ -606,8 +469,7 @@ export default {
           }
         });
 
-        // 输出场景图层中的layerId列表用于调试
-        const sceneLayerIds = cacheData.value.map(layer => layer.layerId);
+       
         //console.log('场景图层的layerId列表:', sceneLayerIds);
         //console.log('layerId匹配情况:');
         
@@ -615,21 +477,17 @@ export default {
         cacheData.value.forEach(layer => {
           // 尝试多种匹配方式
           let cachedData = null;
-          let matchedLayerId = null;
+          
           
           // 方式1: 直接匹配
           cachedData = layerGroups[layer.layerId];
-          if (cachedData) {
-            matchedLayerId = layer.layerId;
-          }
+          
           
           // 方式2: 如果是场景ID_图层ID格式，尝试用图层ID部分匹配
           if (!cachedData && layer.layerId.includes('_')) {
             const layerIdPart = layer.layerId.split('_')[1]; // 提取图层ID部分
             cachedData = layerGroups[layerIdPart];
-            if (cachedData) {
-              matchedLayerId = layerIdPart;
-            }
+           
           }
           
           // 方式3: 尝试匹配martin-vector格式
@@ -639,7 +497,7 @@ export default {
               if (cacheLayerId.startsWith('martin-vector-') && 
                   cacheLayerId.includes(layer.sceneLayerId.toString())) {
                 cachedData = layerGroups[cacheLayerId];
-                matchedLayerId = cacheLayerId;
+                
                 break;
               }
             }
@@ -648,9 +506,7 @@ export default {
           // 方式4: 根据sceneLayerId匹配
           if (!cachedData && layer.sceneLayerId) {
             cachedData = layerGroups[layer.sceneLayerId.toString()];
-            if (cachedData) {
-              matchedLayerId = layer.sceneLayerId.toString();
-            }
+            
           }
           
           if (cachedData) {
@@ -1008,7 +864,8 @@ export default {
             for (const layer of importData.layers) {
               for (const tile of layer.tiles) {
                 try {
-                  //console.log('导入瓦片元数据:', tile);
+                  console.log('导入瓦片元数据:', tile);
+                  
                   importedCount++;
                   
                   cacheProgress.current = importedCount;
@@ -1295,26 +1152,86 @@ export default {
         })
       }));
 
-      const boundsSource = new VectorSource({
-        features: [boundsFeature]
-      });
+              // 创建WMTS瓦片加载函数
+        const wmtsTileLoadFunction = createWmtsTileLoadFunction({
+            layerId: 'gaode_base',
+            tileCacheService: tileCacheService
+          });
+        
+        // 创建高德地图底图源
+        const gaodeSource = new XYZ({
+          url: 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+          crossOrigin: 'anonymous',
+          maxZoom: 18,
+          minZoom: 3
+        });
+        
+        // 设置自定义瓦片加载函数
+        gaodeSource.setTileLoadFunction(wmtsTileLoadFunction);
+        
+        // 创建底图图层
+        const baseLayer = new TileLayer({
+          source: gaodeSource
+        });
+        
+        // 创建MVT瓦片加载函数
+        const mvtTileLoadFunction = createMvtTileLoadFunction({
+          layerId: currentCacheLayer.value.layerId || 'test_mvt_layer',
+          tileCacheService: tileCacheService
+        });
+        
+        // 创建边界框图层
+        const boundsSource = new VectorSource({
+          features: [boundsFeature]
+        });
 
-      const boundsLayer = new VectorLayer({
-        source: boundsSource
-      });
-
+        const boundsLayer = new VectorLayer({
+          source: boundsSource
+        });
+        //ToDo:获取当前图层的layerType: "vector"或"raster"
+        //ToDo:如果layerType为"vector"，则创建MVT图层，否则创建WMTS图层
+        //再次检查如果originalLayer.service_type: "martin"
+        // 如果有MVT URL，创建MVT图层
+        let mvtLayer = null;
+        console.log('currentCacheLayer.value.mvt_url',currentCacheLayer.value);
+        if (currentCacheLayer.value.originalLayer.mvt_url) {
+          let url = currentCacheLayer.value.originalLayer.mvt_url;
+          url=url.replace('.pbf','');
+          const mvtSource = new VectorTileSource({
+            url: url,
+            format: new MVT(),
+            tileLoadFunction: mvtTileLoadFunction
+          });
+          
+          mvtLayer = new VectorTileLayer({
+            source: mvtSource,
+            style: new Style({
+              stroke: new Stroke({
+                color: '#FF0000',
+                width: 2
+              }),
+              fill: new Fill({
+                color: 'rgba(255, 0, 0, 0.3)'
+              }),
+              image: new Circle({
+                radius: 5,
+                fill: new Fill({
+                  color: '#FF0000'
+                })
+              })
+            })
+          });
+        }
+  
       // 创建地图
+      const layers = [baseLayer, boundsLayer];
+      if (mvtLayer) {
+        layers.push(mvtLayer);
+      }
+
       configMap = new Map({
         target: 'cache-config-map',
-        layers: [
-          new TileLayer({
-            source: new XYZ({
-              url: 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
-              crossOrigin: 'anonymous'
-            })
-          }),
-          boundsLayer
-        ],
+        layers: layers,
         view: new View({
           center: fromLonLat([centerLon, centerLat]),
           zoom: currentMapZoom.value
@@ -1353,16 +1270,8 @@ export default {
         cacheProgress.total = estimatedTileCount.value;
 
         ElMessage.info(`开始缓存图层: ${currentCacheLayer.value.layerName}`);
-        
-        // 使用配置的参数进行缓存
-        const bounds = cacheConfig.useDefaultBounds ? 
-          currentCacheLayer.value.bounds : 
-          cacheConfig.selectedBounds;
-        
-        const zoomLevels = {
-          min: cacheConfig.minZoom,
-          max: cacheConfig.maxZoom
-        };
+
+
 
         // 这里需要实现具体的缓存逻辑
         // 暂时使用原有的缓存策略作为示例
@@ -1407,77 +1316,25 @@ export default {
 
         await refreshCacheData();
         
-// 重新同步 currentCacheLayer，确保引用的是最新的表格数据
-const updated = cacheData.value.find(
-  l => l.layerId === currentCacheLayer.value.layerId
-);
-if (updated) {
-  currentCacheLayer.value = updated;
-}
-
-      } catch (error) {
-        cacheProgressVisible.value = false;
-        cacheOperationRunning.value = false;
-        
-        console.error('缓存图层失败:', error);
-        cacheProgress.status = 'exception';
-        cacheProgress.message = '缓存失败: ' + error.message;
-        ElMessage.error('缓存失败: ' + error.message);
-      }
-    };
-
-    // 生成测试数据
-    const generateTestData = async () => {
-      if (!dataCacheService) {
-        ElMessage.warning('缓存服务未初始化');
-        return;
-      }
-
-      try {
-        await ElMessageBox.confirm(
-          '确定要生成测试缓存数据吗？这将执行登录缓存策略生成一些测试瓦片。',
-          '确认生成测试数据',
-          {
-            confirmButtonText: '生成',
-            cancelButtonText: '取消',
-            type: 'info',
-          }
+        // 重新同步 currentCacheLayer，确保引用的是最新的表格数据
+        const updated = cacheData.value.find(
+          l => l.layerId === currentCacheLayer.value.layerId
         );
-
-        cacheProgressVisible.value = true;
-        cacheOperationRunning.value = true;
-        cacheProgress.message = '正在生成测试缓存数据...';
-        cacheProgress.percent = 0;
-
-        ElMessage.info('开始生成测试缓存数据...');
-        
-        // 执行登录缓存策略来生成测试数据
-        await dataCacheService.executeLoginStrategy();
-        
-        cacheProgress.status = 'success';
-        cacheProgress.percent = 100;
-        cacheProgress.message = '测试数据生成完成！';
-        
-        ElMessage.success('测试数据生成完成');
-        
-        setTimeout(() => {
-          cacheProgressVisible.value = false;
-          cacheOperationRunning.value = false;
-        }, 1500);
-
-        await refreshCacheData();
-      } catch (error) {
-        cacheProgressVisible.value = false;
-        cacheOperationRunning.value = false;
-        
-        if (error !== 'cancel') {
-          console.error('生成测试数据失败:', error);
-          cacheProgress.status = 'exception';
-          cacheProgress.message = '生成失败: ' + error.message;
-          ElMessage.error('生成测试数据失败: ' + error.message);
+        if (updated) {
+          currentCacheLayer.value = updated;
         }
-      }
-    };
+
+              } catch (error) {
+                cacheProgressVisible.value = false;
+                cacheOperationRunning.value = false;
+                
+                console.error('缓存图层失败:', error);
+                cacheProgress.status = 'exception';
+                cacheProgress.message = '缓存失败: ' + error.message;
+                ElMessage.error('缓存失败: ' + error.message);
+              }
+            };
+
 
     const stopCacheOperation = () => {
       if (dataCacheService) {
@@ -1492,459 +1349,11 @@ if (updated) {
       expandedRowKeys.value = expandedRows.map(r => r.layerId);
     };
 
-    const visualizeCache = async (layer) => {
-      //console.log('开始可视化缓存:', layer);
-      
-      if (!layer.tiles || layer.tiles.length === 0) {
-        ElMessage.warning('该图层没有缓存数据');
-        return;
-      }
 
-      //console.log('缓存瓦片数据:', layer.tiles);
-      currentVisualizationLayer.value = layer;
-      cacheVisualizationVisible.value = true;
 
-      // 等待对话框显示后再初始化地图
-      setTimeout(() => {
-        //console.log('对话框已显示，开始初始化地图');
-        initVisualizationMap(layer);
-      }, 500);
-    };
 
-    const initVisualizationMap = async (layer) => {
-      console.log('initVisualizationMap 被调用，图层:', layer);
-      
-      const mapContainer = document.getElementById('cache-visualization-map');
-      
-      if (!mapContainer) {
-        console.error('地图容器未找到');
-        ElMessage.error('地图容器未找到，请重试');
-        return;
-      }
 
-      // 清除之前的地图实例
-      if (visualizationMap) {
-        visualizationMap.setTarget(null);
-        visualizationMap = null;
-      }
-
-      // 计算瓦片边界
-      const tileBounds = calculateTileBounds(layer.tiles);
-      
-      // 如果没有有效边界，使用成都默认位置
-      if (!tileBounds.extent) {
-        tileBounds.centerLon = 104.06;
-        tileBounds.centerLat = 30.67;
-        tileBounds.extent = [102.99, 30.32, 104.79, 31.32];
-      }
-
-      // 创建底图 - 使用 OSM 确保能显示
-      const baseLayer = new TileLayer({
-        source: new OSM(),
-        zIndex: 0
-      });
-
-      // 检查缓存数据类型，决定如何加载
-      const firstTile = layer.tiles[0];
-      const isMVT = firstTile && firstTile.contentType === 'application/x-protobuf';
-      console.log('第一个瓦片信息:', firstTile);
-      console.log('是否为 MVT:', isMVT);
-      
-      let dataLayer;
-      
-      if (isMVT) {
-        console.log('检测到 MVT 数据，创建矢量瓦片图层');
-        // 创建 MVT 图层加载缓存数据
-        const mvtFormat = new MVT();
-        const mvtSource = new VectorTileSource({
-          format: mvtFormat,
-          tileGrid: createXYZ({
-            maxZoom: 20
-          }),
-          tileLoadFunction: async (tile, url) => {
-            const coords = tile.getTileCoord();
-            const [z, x, y] = [coords[0], coords[1], -coords[2] - 1];
-            console.log(`尝试加载 MVT 瓦片: ${z}/${x}/${y}`);
-            
-            try {
-              const cachedTile = await tileCacheService.getTile(layer.layerId, z, x, y);
-              if (cachedTile && cachedTile.data) {
-                console.log(`找到缓存瓦片 ${z}/${x}/${y}, 大小:`, cachedTile.size);
-                const arrayBuffer = await cachedTile.data.arrayBuffer();
-                console.log('ArrayBuffer 大小:', arrayBuffer.byteLength);
-                
-                const features = mvtFormat.readFeatures(arrayBuffer, {
-                  extent: tile.getExtent(),
-                  featureProjection: 'EPSG:3857'
-                });
-                console.log(`解析到 ${features.length} 个要素`);
-                tile.setFeatures(features);
-              } else {
-                console.log(`未找到缓存瓦片 ${z}/${x}/${y}`);
-                tile.setFeatures([]);
-              }
-            } catch (error) {
-              console.warn(`加载 MVT 瓦片 ${z}/${x}/${y} 失败:`, error);
-              tile.setFeatures([]);
-            }
-          }
-        });
-
-        dataLayer = new VectorTileLayer({
-          source: mvtSource,
-          style: {
-            'stroke-color': '#0000FF',
-            'stroke-width': 2,
-            'fill-color': 'rgba(0, 0, 255, 0.3)',
-            'circle-radius': 5,
-            'circle-fill-color': '#FF0000'
-          },
-          zIndex: 1
-        });
-      } else {
-        console.log('非 MVT 数据，创建普通图层');
-        // 对于非 MVT 数据，创建瓦片边界可视化
-        const tileFeatures = layer.tiles.map((tile, index) => {
-          const bounds = getTileBounds(tile.zoomLevel, tile.tileX, tile.tileY);
-          
-          const feature = new Feature({
-            geometry: new Polygon([bounds]),
-            tileInfo: tile
-          });
-          
-          feature.setStyle(new Style({
-            stroke: new Stroke({
-              color: '#FF0000',
-              width: 2
-            }),
-            fill: new Fill({
-              color: 'rgba(255, 0, 0, 0.1)'
-            }),
-            text: new Text({
-              text: `Z${tile.zoomLevel}\n${tile.tileX},${tile.tileY}`,
-              font: 'bold 12px Arial',
-              fill: new Fill({
-                color: '#FFFFFF'
-              }),
-              stroke: new Stroke({
-                color: '#FF0000',
-                width: 1
-              }),
-              textAlign: 'center',
-              textBaseline: 'middle'
-            })
-          }));
-          
-          return feature;
-        });
-
-        const vectorSource = new VectorSource({
-          features: tileFeatures
-        });
-
-        dataLayer = new VectorLayer({
-          source: vectorSource,
-          zIndex: 1
-        });
-      }
-
-      // 创建地图
-      try {
-        visualizationMap = new Map({
-          target: 'cache-visualization-map',
-          layers: [
-            new TileLayer({
-              source: new XYZ({
-                url: 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
-                crossOrigin: 'anonymous',
-                maxZoom: 18,
-                minZoom: 3
-              }),
-              zIndex: 0
-            }),
-            dataLayer,
-            new VectorLayer({
-              source: new VectorSource({
-                features: [
-                  new Feature({
-                    geometry: new Point([104.06, 30.67]),
-                    style: new Style({
-                      image: new Circle({
-                        radius: 5,
-                        fill: new Fill({
-                          color: 'rgba(255, 0, 0, 0.8)'
-                        }),
-                        stroke: new Stroke({
-                          color: '#fff',
-                          width: 1
-                        })
-                      })
-                    })
-                  })
-                ]
-              }),
-              style: {
-                'stroke-color': '#0000FF',
-                'stroke-width': 2,
-                'fill-color': 'rgba(0, 0, 255, 0.1)',
-                'circle-radius': 5,
-                'circle-fill-color': '#FF0000'
-              },
-              zIndex: 2
-            }),
-            new VectorLayer({
-              source: new VectorSource({
-                features: [
-                  new Feature({
-                    geometry: new Point([104.06, 30.67]),
-                    style: new Style({
-                      image: new Circle({
-                        radius: 5,
-                        fill: new Fill({
-                          color: 'rgba(0, 255, 0, 0.8)'
-                        }),
-                        stroke: new Stroke({
-                          color: '#fff',
-                          width: 1
-                        })
-                      })
-                    })
-                  })
-                ]
-              }),
-              style: {
-                'stroke-color': '#00FF00',
-                'stroke-width': 2,
-                'fill-color': 'rgba(0, 255, 0, 0.1)',
-                'circle-radius': 5,
-                'circle-fill-color': '#00FF00'
-              },
-              zIndex: 3
-            }),
-            new VectorLayer({
-              source: new VectorSource({
-                features: [
-                  new Feature({
-                    geometry: new Point([104.06, 30.67]),
-                    style: new Style({
-                      image: new Circle({
-                        radius: 5,
-                        fill: new Fill({
-                          color: 'rgba(0, 0, 255, 0.8)'
-                        }),
-                        stroke: new Stroke({
-                          color: '#fff',
-                          width: 1
-                        })
-                      })
-                    })
-                  })
-                ]
-              }),
-              style: {
-                'stroke-color': '#FF0000',
-                'stroke-width': 2,
-                'fill-color': 'rgba(0, 0, 255, 0.1)',
-                'circle-radius': 5,
-                'circle-fill-color': '#FF0000'
-              },
-              zIndex: 4
-            })
-          ],
-          view: new View({
-            center: fromLonLat([tileBounds.centerLon, tileBounds.centerLat]),
-            zoom: 10,
-            projection: 'EPSG:3857'
-          }),
-          controls: defaultControls({
-            zoom: true,
-            attribution: true
-          })
-        });
-
-        // 存储图层引用以便切换
-        visualizationMap.dataLayer = dataLayer;
-
-        //console.log('地图创建成功:', visualizationMap);
-
-        // 监听地图加载完成事件
-        visualizationMap.once('rendercomplete', () => {
-          console.log('地图渲染完成，图层类型:', isMVT ? 'MVT' : '普通');
-          
-          // 调整视图到瓦片范围
-          if (tileBounds.extent) {
-            try {
-              const transformedExtent = transformExtent(
-                tileBounds.extent, 
-                'EPSG:4326', 
-                'EPSG:3857'
-              );
-              
-              visualizationMap.getView().fit(transformedExtent, {
-                padding: [50, 50, 50, 50],
-                duration: 1000,
-                maxZoom: 15
-              });
-            } catch (extentError) {
-              console.error('调整视图范围失败:', extentError);
-            }
-          }
-        });
-
-        // 添加地图点击事件来调试
-        visualizationMap.on('click', (evt) => {
-          const features = visualizationMap.getFeaturesAtPixel(evt.pixel);
-          //console.log('点击位置的特征:', features);
-          
-          
-          // 显示点击位置的坐标
-          const coordinate = evt.coordinate;
-          const lonlat = toLonLat(coordinate);
-          //console.log('点击坐标 (投影):', coordinate);
-          //console.log('点击坐标 (经纬度):', lonlat);
-        });
-
-        // 强制更新地图尺寸
-        setTimeout(() => {
-          if (visualizationMap) {
-            //console.log('更新地图尺寸');
-            visualizationMap.updateSize();
-          }
-        }, 100);
-
-      } catch (mapError) {
-        console.error('创建地图失败:', mapError);
-        ElMessage.error('创建地图失败: ' + mapError.message);
-      }
-    };
-
-    const calculateTileBounds = (tiles) => {
-      if (!tiles || tiles.length === 0) {
-        return { centerLon: 0, centerLat: 0, extent: null };
-      }
-
-      let minLon = Infinity, maxLon = -Infinity;
-      let minLat = Infinity, maxLat = -Infinity;
-
-      //console.log('开始计算边界，瓦片数量:', tiles.length);
-
-      tiles.forEach((tile, index) => {
-        const bounds = getTileBounds(tile.zoomLevel, tile.tileX, tile.tileY);
-        // bounds是多边形坐标数组，需要正确提取边界
-        const lons = bounds.map(coord => coord[0]);
-        const lats = bounds.map(coord => coord[1]);
-        
-        const tileminLon = Math.min(...lons);
-        const tilemaxLon = Math.max(...lons);
-        const tileminLat = Math.min(...lats);
-        const tilemaxLat = Math.max(...lats);
-        
-   
-        minLon = Math.min(minLon, tileminLon);
-        maxLon = Math.max(maxLon, tilemaxLon);
-        minLat = Math.min(minLat, tileminLat);
-        maxLat = Math.max(maxLat, tilemaxLat);
-        
-        //console.log(`当前总边界: 经度 ${minLon.toFixed(6)} - ${maxLon.toFixed(6)}, 纬度 ${minLat.toFixed(6)} - ${maxLat.toFixed(6)}`);
-      });
-
-      const result = {
-        centerLon: (minLon + maxLon) / 2,
-        centerLat: (minLat + maxLat) / 2,
-        extent: [minLon, minLat, maxLon, maxLat]
-      };
-      
-      //console.log('最终计算结果:', result);
-      return result;
-    };
-
-    const getTileBounds = (z, x, y) => {
-      const n = Math.pow(2, z);
-      const lonDeg = (x / n) * 360.0 - 180.0;
-      const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n)));
-      const latDeg = (latRad * 180.0) / Math.PI;
-      
-      const lonDeg2 = ((x + 1) / n) * 360.0 - 180.0;
-      const latRad2 = Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 1) / n)));
-      const latDeg2 = (latRad2 * 180.0) / Math.PI;
-      
-      return [
-        [lonDeg, latDeg],
-        [lonDeg2, latDeg],
-        [lonDeg2, latDeg2],
-        [lonDeg, latDeg2],
-        [lonDeg, latDeg]
-      ];
-    };
-
-    const onVisualizationDialogOpened = () => {
-      //console.log('对话框已打开事件触发');
-      // 在对话框打开后调整地图尺寸
-      setTimeout(() => {
-        if (visualizationMap) {
-          //console.log('对话框打开后更新地图尺寸');
-          visualizationMap.updateSize();
-        }
-      }, 200);
-    };
-
-    const showCacheGrid = ref(true);
-    const showCachePoints = ref(true);
-
-    const toggleCacheGrid = () => {
-      showCacheGrid.value = !showCacheGrid.value;
-      if (visualizationMap && visualizationMap.dataLayer) {
-        visualizationMap.dataLayer.setVisible(showCacheGrid.value);
-        console.log('缓存数据可见性:', showCacheGrid.value);
-      }
-    };
-
-    const toggleCachePoints = () => {
-      showCachePoints.value = !showCachePoints.value;
-      if (visualizationMap && visualizationMap.pointLayer) {
-        visualizationMap.pointLayer.setVisible(showCachePoints.value);
-        //console.log('缓存点位可见性:', showCachePoints.value);
-      }
-    };
-
-    const resetMapView = () => {
-      if (visualizationMap) {
-        const layer = currentVisualizationLayer.value;
-        if (layer && layer.tiles && layer.tiles.length > 0) {
-          const tileBounds = calculateTileBounds(layer.tiles);
-          if (tileBounds.extent) {
-            const transformedExtent = transformExtent(
-              tileBounds.extent, 
-              'EPSG:4326', 
-              'EPSG:3857'
-            );
-            visualizationMap.getView().fit(transformedExtent, {
-              padding: [50, 50, 50, 50],
-              duration: 1000,
-              maxZoom: 15
-            });
-            //console.log('重置视图到瓦片范围');
-          } else {
-            visualizationMap.getView().setCenter(fromLonLat([104.06, 30.67]));
-            visualizationMap.getView().setZoom(10);
-            //console.log('重置视图到成都默认位置');
-          }
-        } else {
-          visualizationMap.getView().setCenter(fromLonLat([104.06, 30.67]));
-          visualizationMap.getView().setZoom(10);
-          //console.log('重置视图到成都默认位置');
-        }
-      }
-    };
-
-    const switchToTestData = () => {
-      if (visualizationMap && visualizationMap.testLayer) {
-        const isVisible = visualizationMap.testLayer.getVisible();
-        visualizationMap.testLayer.setVisible(!isVisible);
-        //console.log('测试数据可见性:', !isVisible);
-        ElMessage.info(isVisible ? '隐藏测试数据' : '显示测试数据');
-      }
-    };
+     
 
     // 监听配置变化，自动更新瓦片数量估算
     watch(() => [cacheConfig.minZoom, cacheConfig.maxZoom, cacheConfig.selectedBounds], 
@@ -1971,8 +1380,7 @@ if (updated) {
       tileImageUrl,
       cacheData,
       cacheStats,
-      cacheVisualizationVisible,
-      currentVisualizationLayer,
+
       // 新增的缓存配置相关
       cacheConfigVisible,
       currentCacheLayer,
@@ -1990,22 +1398,14 @@ if (updated) {
       startLayerCache,
       previewTile,
       deleteTile,
-      generateTestData,
       stopCacheOperation,
       handleExpandChange,
       formatFileSize,
       formatTimeAgo,
-      visualizeCache,
-      onVisualizationDialogOpened,
       // 新增的方法
       onCacheConfigDialogOpened,
       startCacheWithConfig,
-      updateEstimatedTileCount,
-      showCacheGrid,
-      showCachePoints,
-      toggleCacheGrid,
-      toggleCachePoints,
-      resetMapView
+      updateEstimatedTileCount
     };
   }
 };
@@ -2167,45 +1567,110 @@ if (updated) {
 
 /* 缓存配置对话框样式 */
 .cache-config-content {
-  height: 500px;
+  height: 600px;
 }
 
 .cache-config-panel {
   display: flex;
   height: 100%;
-  gap: 16px;
+  gap: 20px;
 }
 
 .config-left {
-  width: 300px;
+  width: 320px;
   flex-shrink: 0;
-  padding: 16px;
-  background: #f9f9f9;
-  border-radius: 6px;
+  padding: 24px;
+  background: #fafbfc;
+  border: 1px solid #e1e4e8;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .config-left h4 {
-  margin: 0 0 16px 0;
-  color: #333;
-  font-size: 16px;
+  margin: 0 0 24px 0;
+  color: #24292e;
+  font-size: 18px;
+  font-weight: 600;
+  position: relative;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #409eff;
 }
 
 .config-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+  flex: 1;
+}
+
+.config-form :deep(.el-form-item__label) {
+  color: #606266 !important;
+  font-weight: 500;
+}
+
+.config-form :deep(.el-input-number) {
+  border-radius: 6px;
+}
+
+.config-form :deep(.el-input__wrapper) {
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
+
+.config-form :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.config-form :deep(.el-radio-group) {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.config-form :deep(.el-radio) {
+  color: #606266;
+  margin-right: 0;
+}
+
+.config-form :deep(.el-radio__label) {
+  color: #606266 !important;
+  font-weight: 500;
+}
+
+.config-form :deep(.el-radio__input.is-checked + .el-radio__label) {
+  color: #409eff !important;
 }
 
 .config-actions {
-  margin-top: 20px;
+  margin-top: auto;
+  padding-top: 20px;
   display: flex;
-  gap: 8px;
+  gap: 12px;
+  border-top: 1px solid #e1e4e8;
+}
+
+.config-actions :deep(.el-button) {
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.3s ease;
 }
 
 .config-right {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+}
+
+#cache-config-map {
+  width: 100%;
+  height: 100%;
+  border: 1px solid #e1e4e8;
+  border-radius: 8px;
+  background: #f8f9fa;
 }
 
 /* 缓存可视化对话框增强样式 */
@@ -2250,11 +1715,17 @@ if (updated) {
 }
 
 /* 地图容器样式 */
-#cache-config-map,
 #cache-visualization-map {
   width: 100%;
   height: 100%;
   border-radius: 4px;
+}
+
+/* 缓存配置对话框特定样式 */
+:deep(.cache-config-dialog) {
+  .el-dialog__body {
+    padding: 20px;
+  }
 }
 
 /* 工具提示样式 */
