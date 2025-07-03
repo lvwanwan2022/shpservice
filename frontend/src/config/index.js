@@ -3,7 +3,7 @@
  */
 
 // Martin服务的基础URL，从环境变量获取
-export const MARTIN_BASE_URL ='http://192.168.1.17:3000'
+export const MARTIN_BASE_URL =process.env.VUE_APP_BACKEND_PROTOCOL+'://'+ process.env.VUE_APP_MARTIN_HOST+':'+process.env.VUE_APP_MARTIN_PORT
 //export const MARTIN_BASE_URL ='http://172.16.118.124:3000'
 
 

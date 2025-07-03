@@ -5,7 +5,7 @@
 // Martin服务配置
 export const martinConfig = {
   // Martin服务地址
-  baseUrl: 'http://172.16.118.124:3000',
+  baseUrl: process.env.VUE_APP_MARTIN_HOST+':'+process.env.VUE_APP_MARTIN_PORT,
   //baseUrl: 'http://192.168.1.17:3000',
   
   // 数据库表配置
