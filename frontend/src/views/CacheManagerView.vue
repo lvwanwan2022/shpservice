@@ -3,6 +3,9 @@
     <!-- 工具栏 -->
     <div class="cache-toolbar">
       <div class="toolbar-left">
+        <el-button type="success" size="small" @click="updateScenesFromBackend" :loading="isUpdatingScenes">
+          <i class="el-icon-refresh-right"></i> 更新场景图层
+        </el-button>
         <el-button type="primary" size="small" @click="refreshCacheData">
           <i class="el-icon-refresh"></i> 刷新
         </el-button>
@@ -246,6 +249,7 @@
       custom-class="cache-config-dialog"
       destroy-on-close
       @opened="onCacheConfigDialogOpened"
+      @close="onCacheConfigDialogClosed"
     >
       <div class="cache-config-content">
         <div class="cache-config-panel">
@@ -253,7 +257,7 @@
             <h4>{{ currentCacheLayer.layerName }}</h4>
             <div class="config-form">
               <el-form label-width="120px" size="small">
-                <el-form-item label="当前缩放级别">
+                <el-form-item label="缩放级别">
                   <span>{{ currentMapZoom }}</span>
                 </el-form-item>
                 <el-form-item label="缓存状态">
@@ -296,7 +300,7 @@
 import { ref, reactive, onMounted, computed } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import gisApi from '@/api/gis.js';
-import { formatFileSize, formatTimeAgo, SimpleCacheService, TileCacheService } from '@/services/tileCache';
+import { formatFileSize, formatTimeAgo, SimpleCacheService, TileCacheService, getGlobalSceneDataCacheService } from '@/services/tileCache';
 
 // OpenLayers导入
 import { Map, View, Feature } from 'ol';
@@ -323,6 +327,7 @@ export default {
     const sceneList = ref([]);
     const cacheSearchText = ref('');
     const expandedRowKeys = ref([]);
+    const isUpdatingScenes = ref(false); // 更新场景图层的loading状态
     
     const cacheProgressVisible = ref(false);
     const cacheOperationRunning = ref(false);
@@ -346,7 +351,10 @@ export default {
       lastUpdate: Date.now()
     });
 
-
+    // 缓存服务实例
+    let tileCacheService = null;
+    let dataCacheService = null;
+    let sceneDataCacheService = null;
 
     // 缓存配置相关
     const cacheConfigVisible = ref(false);
@@ -406,9 +414,6 @@ const baseMaps = [
         ];
         let baseLayer;
         let mvtLayer = null;
-    // 缓存服务实例
-    let tileCacheService = null;
-    let dataCacheService = null;
 
     const initCacheService = async () => {
       try {
@@ -418,6 +423,9 @@ const baseMaps = [
         });
 
         dataCacheService = new SimpleCacheService(tileCacheService, gisApi);
+        
+        // 初始化场景数据缓存服务
+        sceneDataCacheService = getGlobalSceneDataCacheService();
         
         // 设置进度回调
         dataCacheService.setProgressCallback((progress) => {
@@ -429,11 +437,103 @@ const baseMaps = [
 
         //console.log('缓存服务初始化成功');
         
-        await loadScenes();
+        // 优先从IndexedDB加载场景和图层数据
+        await loadScenesFromCache();
         await refreshCacheData();
       } catch (error) {
         console.error('初始化缓存服务失败:', error);
         ElMessage.error('初始化缓存服务失败: ' + error.message);
+      }
+    };
+
+    // 从缓存加载场景数据，如果过期则从后端更新
+    const loadScenesFromCache = async () => {
+      try {
+        // 检查缓存是否过期
+        const isExpired = await sceneDataCacheService.isDataExpired('scenes_last_update');
+        
+        if (isExpired) {
+          console.log('场景数据已过期，从后端更新...');
+          await updateScenesFromBackend();
+        } else {
+          console.log('从缓存加载场景数据...');
+          const cachedScenes = await sceneDataCacheService.getCachedScenes();
+          sceneList.value = cachedScenes || [];
+        }
+      } catch (error) {
+        console.error('从缓存加载场景数据失败:', error);
+        ElMessage.warning('加载缓存数据失败，尝试从服务器获取...');
+        await loadScenes(); // 回退到原来的方式
+      }
+    };
+
+    // 手动从后端更新场景图层数据
+    const updateScenesFromBackend = async () => {
+      if (isUpdatingScenes.value) {
+        ElMessage.warning('正在更新中，请稍候...');
+        return;
+      }
+
+      isUpdatingScenes.value = true;
+      try {
+        ElMessage.info('正在从服务器更新场景图层数据...');
+        
+        // 1. 获取场景列表
+        const scenesResponse = await gisApi.getScenes();
+        const scenes = scenesResponse.data?.scenes || scenesResponse.data || [];
+        
+        // 2. 缓存场景列表
+        await sceneDataCacheService.cacheScenes(scenes);
+        sceneList.value = scenes;
+        
+        // 3. 获取并缓存每个场景的图层数据
+        for (const scene of scenes) {
+          try {
+            const sceneResponse = await gisApi.getScene(scene.id);
+            const layers = sceneResponse.data?.layers || [];
+            await sceneDataCacheService.cacheSceneLayers(scene.id, layers);
+            
+            // 获取并缓存图层边界
+            for (const layer of layers) {
+              try {
+                const layerId = layer.layer_id || layer.id;
+                const sceneLayerId = layer.scene_layer_id;
+                if (sceneLayerId) {
+                  const boundsResp = await gisApi.getSceneLayerBounds(sceneLayerId);
+                  let bounds = null;
+                  if (boundsResp.data && boundsResp.data.bbox) {
+                    bounds = boundsResp.data.bbox;
+                  } else if (boundsResp.bbox) {
+                    bounds = boundsResp.bbox;
+                  } else if (Array.isArray(boundsResp) && boundsResp.length === 4) {
+                    bounds = boundsResp;
+                  }
+                  if (bounds && Array.isArray(bounds) && bounds.length === 4) {
+                    await sceneDataCacheService.cacheLayerBounds(layerId, bounds);
+                  } else if (bounds && typeof bounds === 'object' && 'minx' in bounds) {
+                    const normalizedBounds = [bounds.minx, bounds.miny, bounds.maxx, bounds.maxy];
+                    await sceneDataCacheService.cacheLayerBounds(layerId, normalizedBounds);
+                  }
+                }
+              } catch (boundsError) {
+                console.warn(`获取图层 ${layer.layer_name} 边界失败:`, boundsError);
+              }
+            }
+          } catch (sceneError) {
+            console.warn(`获取场景 ${scene.name} 图层失败:`, sceneError);
+          }
+        }
+        
+        ElMessage.success(`成功更新 ${scenes.length} 个场景的数据到缓存`);
+        
+        // 重新加载页面数据
+        await refreshCacheData();
+        
+      } catch (error) {
+        console.error('更新场景图层数据失败:', error);
+        ElMessage.error('更新失败: ' + error.message);
+      } finally {
+        isUpdatingScenes.value = false;
       }
     };
 
@@ -567,13 +667,27 @@ const baseMaps = [
         // 初始化为空数组
         cacheData.value = [];
         
-        // 1. 先获取所有场景
-        const scenesResponse = await gisApi.getScenes();
-        const scenes = scenesResponse.data?.scenes || scenesResponse.data || [];
+        // 1. 优先从缓存获取场景列表
+        let scenes = [];
+        try {
+          const cachedScenes = await sceneDataCacheService.getCachedScenes();
+          if (cachedScenes && cachedScenes.length > 0) {
+            scenes = cachedScenes;
+            console.log('使用缓存的场景数据');
+          } else {
+            // 缓存为空，从后端获取
+            const scenesResponse = await gisApi.getScenes();
+            scenes = scenesResponse.data?.scenes || scenesResponse.data || [];
+            await sceneDataCacheService.cacheScenes(scenes);
+            console.log('从后端获取场景数据并缓存');
+          }
+        } catch (cacheError) {
+          console.warn('读取缓存场景数据失败，从后端获取:', cacheError);
+          const scenesResponse = await gisApi.getScenes();
+          scenes = scenesResponse.data?.scenes || scenesResponse.data || [];
+        }
         
         // 2. 增加底图场景
-        
-        
         // 默认中国全图范围
         const defaultBaseMapBounds = [73.0, 3.0, 135.0, 53.0];
         const baseMapLayers = baseMaps.map((bm) => ({
@@ -591,17 +705,37 @@ const baseMaps = [
           zoomLevels: [],
           originalLayer: bm
         }));
+        
         // 3. 普通场景
         if (scenes.length === 0) {
           cacheData.value = baseMapLayers;
           return;
         }
+        
         // 4. 为每个场景获取其图层
         const allLayersData = [...baseMapLayers];
         for (const scene of scenes) {
           try {
-            const sceneResponse = await gisApi.getScene(scene.id);
-            const layers = sceneResponse.data?.layers || [];
+            // 优先从缓存获取场景图层
+            let layers = [];
+            try {
+              const cachedLayers = await sceneDataCacheService.getCachedSceneLayers(scene.id);
+              if (cachedLayers && cachedLayers.length > 0) {
+                layers = cachedLayers;
+                console.log(`使用缓存的场景 ${scene.id} 图层数据`);
+              } else {
+                // 缓存为空，从后端获取
+                const sceneResponse = await gisApi.getScene(scene.id);
+                layers = sceneResponse.data?.layers || [];
+                await sceneDataCacheService.cacheSceneLayers(scene.id, layers);
+                console.log(`从后端获取场景 ${scene.id} 图层数据并缓存`);
+              }
+            } catch (layerCacheError) {
+              console.warn(`读取缓存场景 ${scene.id} 图层数据失败，从后端获取:`, layerCacheError);
+              const sceneResponse = await gisApi.getScene(scene.id);
+              layers = sceneResponse.data?.layers || [];
+            }
+            
             layers.forEach(layer => {
               // 统一使用 layer_id 作为缓存key
               const layerId = layer.layer_id || layer.id || layer.scene_layer_id;
@@ -627,6 +761,7 @@ const baseMaps = [
           }
         }
         cacheData.value = allLayersData;
+        
         // 5. 异步获取每个图层的真实边界框（普通场景图层，底图不需要）
         for (const layer of cacheData.value) {
           if (layer.sceneId === 'basemap') {
@@ -639,6 +774,14 @@ const baseMaps = [
             continue;
           }
           try {
+            // 优先从缓存获取边界
+            const cachedBounds = await sceneDataCacheService.getCachedLayerBounds(layer.sceneLayerId);
+            if (cachedBounds) {
+              layer.bounds = cachedBounds;
+              continue;
+            }
+            
+            // 缓存中没有，从后端获取
             const boundsResp = await gisApi.getSceneLayerBounds(layer.sceneLayerId);
             let bounds = null;
             if (boundsResp.data && boundsResp.data.bbox) {
@@ -650,8 +793,11 @@ const baseMaps = [
             }
             if (bounds && Array.isArray(bounds) && bounds.length === 4) {
               layer.bounds = bounds;
+              await sceneDataCacheService.cacheLayerBounds(layer.sceneLayerId, bounds);
             } else if (bounds && typeof bounds === 'object' && 'minx' in bounds) {
-              layer.bounds = [bounds.minx, bounds.miny, bounds.maxx, bounds.maxy];
+              const normalizedBounds = [bounds.minx, bounds.miny, bounds.maxx, bounds.maxy];
+              layer.bounds = normalizedBounds;
+              await sceneDataCacheService.cacheLayerBounds(layer.sceneLayerId, normalizedBounds);
             } else {
               layer.bounds = '-';
             }
@@ -1047,6 +1193,11 @@ const baseMaps = [
       }, 300);
     };
 
+    // 缓存配置对话框关闭事件
+    const onCacheConfigDialogClosed = async () => {
+      await refreshCacheData();
+    };
+
     // 初始化配置地图
     const initConfigMap = () => {
       const mapContainer = document.getElementById('cache-config-map');
@@ -1233,7 +1384,7 @@ const baseMaps = [
     };
 
     const handleExpandChange = (row, expandedRows) => {
-      expandedRowKeys.value = expandedRows.map(r => r.sceneId + '_' +r.layerId);
+      expandedRowKeys.value = expandedRows.map(r => r.sceneId + '_' + r.layerId);
     };
 
     const toggleLayerCache = () => {
@@ -1300,6 +1451,7 @@ const baseMaps = [
       sceneList,
       cacheSearchText,
       expandedRowKeys,
+      isUpdatingScenes,
       cacheProgressVisible,
       cacheOperationRunning,
       cacheProgress,
@@ -1331,8 +1483,10 @@ const baseMaps = [
       formatTimeAgo,
       // 新增的方法
       onCacheConfigDialogOpened,
+      onCacheConfigDialogClosed,
       enableLayerCache,
-      disableLayerCache
+      disableLayerCache,
+      updateScenesFromBackend
     };
   }
 };

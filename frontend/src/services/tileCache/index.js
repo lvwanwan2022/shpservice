@@ -11,6 +11,12 @@ export {
   isIndexedDBSupported
 } from './indexedDBOperations.js';
 
+// 场景图层数据缓存服务
+export {
+  SceneDataCacheService,
+  getGlobalSceneDataCacheService
+} from './sceneDataCacheService.js';
+
 // 瓦片计算相关
 export {
   latLonToTile,
