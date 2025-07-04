@@ -67,7 +67,7 @@ export function createWmtsTileLoadFunction(options = {}) {
             imageUrl = URL.createObjectURL(blob);
           }
           image.src = imageUrl;
-          console.log(`命中底图瓦片缓存: ${z}/${x}/${y}`);
+          //console.log(`命中底图瓦片缓存: ${z}/${x}/${y}`);
           return;
         } else {
           // 缓存中没有，尝试从网络加载
@@ -93,7 +93,7 @@ export function createWmtsTileLoadFunction(options = {}) {
         if (retryCodes.includes(response.status)) {
           retries[src] = (retries[src] || 0) + 1;
           if (retries[src] < 3) {
-            console.log("请求瓦片失败，重新尝试次数：" + retries[src]);
+            //console.log("请求瓦片失败，重新尝试次数：" + retries[src]);
             setTimeout(() => imageTile.load(), retries[src] * 250);
           } else {
             console.warn(`底图瓦片 ${z}/${x}/${y} 网络加载失败，已达到最大重试次数`);
@@ -160,7 +160,7 @@ export function createWmtsTileLoadFunction(options = {}) {
               imageUrl = URL.createObjectURL(blob);
             }
             image.src = imageUrl;
-            console.log(`使用附近缓存瓦片替代 ${z}/${x}/${y}，来源: ${z}/${x + searchOffsets[i][0]}/${y + searchOffsets[i][1]}`);
+            //console.log(`使用附近缓存瓦片替代 ${z}/${x}/${y}，来源: ${z}/${x + searchOffsets[i][0]}/${y + searchOffsets[i][1]}`);
             return;
           }
         }
@@ -204,7 +204,7 @@ export function createMvtTileLoadFunction(options = {}) {
       }
       
       const [z, x, y] = [parseInt(match[1]), parseInt(match[2]), parseInt(match[3])];
-      console.log(`MVT瓦片请求: ${z}/${x}/${y} - ${url}`);
+      //console.log(`MVT瓦片请求: ${z}/${x}/${y} - ${url}`);
       
       // 直接使用传入的layerId，确保与缓存key一致
       const currentLayerId = layerId;
@@ -245,9 +245,15 @@ export function createMvtTileLoadFunction(options = {}) {
                 featureProjection: projection
               });
               tile.setFeatures(features);
-              console.log(`命中MVT瓦片缓存: ${z}/${x}/${y}，包含 ${features.length} 个要素`);
+              //console.log(`命中MVT瓦片缓存: ${z}/${x}/${y}，包含 ${features.length} 个要素`);
             }).catch(error => {
               console.error('从缓存Blob解析MVT失败:', error);
+              if (tileCacheService && tileCache && tileCache.layerId !== undefined && tileCache.zoomLevel !== undefined && tileCache.tileX !== undefined && tileCache.tileY !== undefined) {
+                tileCacheService.deleteTile(tileCache.layerId, tileCache.zoomLevel, tileCache.tileX, tileCache.tileY)
+                  .then(() => {
+                    console.warn(`已自动删除损坏的MVT缓存: ${tileCache.layerId} ${tileCache.zoomLevel}/${tileCache.tileX}/${tileCache.tileY}`);
+                  });
+              }
               tile.setFeatures([]);
             });
             return;
@@ -272,7 +278,7 @@ export function createMvtTileLoadFunction(options = {}) {
           });
           
           tile.setFeatures(features);
-          console.log(`命中MVT瓦片缓存: ${z}/${x}/${y}，包含 ${features.length} 个要素`);
+          //console.log(`命中MVT瓦片缓存: ${z}/${x}/${y}，包含 ${features.length} 个要素`);
         } catch (error) {
           console.error('解析缓存MVT数据失败:', error);
           // 缓存数据有问题，尝试从网络加载
@@ -297,7 +303,7 @@ export function createMvtTileLoadFunction(options = {}) {
               featureProjection: projection
             });
             
-            console.log(`MVT瓦片 ${z}/${x}/${y} 加载成功，包含 ${features.length} 个要素`);
+            //console.log(`MVT瓦片 ${z}/${x}/${y} 加载成功，包含 ${features.length} 个要素`);
             tile.setFeatures(features);
             
             // 缓存MVT瓦片到IndexedDB（如果开启缓存存储）
@@ -344,7 +350,7 @@ export function createMvtTileLoadFunction(options = {}) {
             const tileCache = results[i];
             if (tileCache && tileCache.data && !foundCache) {
               foundCache = true;
-              console.log(`使用附近缓存MVT瓦片替代 ${z}/${x}/${y}，来源: ${z}/${x + searchOffsets[i][0]}/${y + searchOffsets[i][1]}`);
+              //console.log(`使用附近缓存MVT瓦片替代 ${z}/${x}/${y}，来源: ${z}/${x + searchOffsets[i][0]}/${y + searchOffsets[i][1]}`);
               loadFromCache(tileCache);
               return;
             }

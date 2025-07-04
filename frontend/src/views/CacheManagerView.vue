@@ -252,44 +252,24 @@
           <div class="config-left">
             <h4>{{ currentCacheLayer.layerName }}</h4>
             <div class="config-form">
-              <el-form :model="cacheConfig" label-width="120px" size="small">
-                <el-form-item label="起始缩放级别">
-                  <el-input-number 
-                    v-model="cacheConfig.minZoom" 
-                    :min="1" 
-                    :max="18" 
-                    style="width: 120px"
-                  />
-                </el-form-item>
-                <el-form-item label="终止缩放级别">
-                  <el-input-number 
-                    v-model="cacheConfig.maxZoom" 
-                    :min="1" 
-                    :max="18" 
-                    style="width: 120px"
-                  />
-                </el-form-item>
+              <el-form label-width="120px" size="small">
                 <el-form-item label="当前缩放级别">
                   <span>{{ currentMapZoom }}</span>
                 </el-form-item>
-                <el-form-item label="预计瓦片数">
-                  <span>{{ estimatedTileCount }}</span>
-                </el-form-item>
-                <el-form-item label="缓存范围">
-                  <el-radio-group v-model="cacheConfig.useDefaultBounds">
-                    <el-radio :label="true">使用默认边界框</el-radio>
-                    <el-radio :label="false">框选范围</el-radio>
-                  </el-radio-group>
+                <el-form-item label="缓存状态">
+                  <span :class="{ 'cache-enabled': currentLayerCacheEnabled, 'cache-disabled': !currentLayerCacheEnabled }">
+                    {{ currentLayerCacheEnabled ? '已开启' : '已关闭' }}
+                  </span>
                 </el-form-item>
                 <div class="config-actions">
-                  <el-button 
-                    type="primary" 
-                    @click="startCacheWithConfig"
-                    :disabled="!canStartCache"
+                  <el-button
+                    :type="currentLayerCacheEnabled ? 'success' : 'warning'"
+                    @click="toggleLayerCache"
+                    icon="el-icon-refresh"
                   >
-                    开始缓存
+                    {{ currentLayerCacheEnabled ? '关闭缓存' : '开启缓存' }}
                   </el-button>
-                  <el-button @click="cacheConfigVisible = false">取消</el-button>
+                  <el-button @click="cacheConfigVisible = false">关闭</el-button>
                 </div>
               </el-form>
             </div>
@@ -300,14 +280,23 @@
         </div>
       </div>
     </el-dialog>
+    
   </div>
+  <el-dialog v-model="tilePreviewVisible" title="瓦片预览" width="400px">
+  <div v-if="tileImageUrl">
+    <img :src="tileImageUrl" style="max-width:100%;" />
+  </div>
+  <div v-else>
+    <span>该瓦片不是图片类型或无法预览。</span>
+  </div>
+</el-dialog>
 </template>
 
 <script>
-import { ref, reactive, onMounted, computed, watch } from 'vue';
+import { ref, reactive, onMounted, computed } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import gisApi from '@/api/gis.js';
-import { formatFileSize, formatTimeAgo, SimpleCacheService, calculateTileCount, TileCacheService } from '@/services/tileCache';
+import { formatFileSize, formatTimeAgo, SimpleCacheService, TileCacheService } from '@/services/tileCache';
 
 // OpenLayers导入
 import { Map, View, Feature } from 'ol';
@@ -373,12 +362,21 @@ export default {
     });
     
     const currentMapZoom = ref(10);
-    const estimatedTileCount = ref(0);
+    const currentLayerCacheEnabled = ref(true); // 当前图层的缓存状态
     
-    const canStartCache = computed(() => {
-      return cacheConfig.minZoom <= cacheConfig.maxZoom && 
-             (cacheConfig.useDefaultBounds || cacheConfig.selectedBounds);
-    });
+    // 开启图层缓存
+    const enableLayerCache = () => {
+      currentLayerCacheEnabled.value = true;
+      ElMessage.success(`图层 "${currentCacheLayer.value.layerName}" 缓存已开启`);
+      console.log(`图层 ${currentCacheLayer.value.layerId} 缓存已开启，enableCacheStorage = true`);
+    };
+    
+    // 关闭图层缓存
+    const disableLayerCache = () => {
+      currentLayerCacheEnabled.value = false;
+      ElMessage.warning(`图层 "${currentCacheLayer.value.layerName}" 缓存已关闭`);
+      console.log(`图层 ${currentCacheLayer.value.layerId} 缓存已关闭，enableCacheStorage = false`);
+    };
 // 四个常用底图（可根据你OpenLayers页面实际key和名称调整）
 const baseMaps = [
           { 
@@ -406,7 +404,8 @@ const baseMaps = [
             url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
           },
         ];
-  
+        let baseLayer;
+        let mvtLayer = null;
     // 缓存服务实例
     let tileCacheService = null;
     let dataCacheService = null;
@@ -989,32 +988,7 @@ const baseMaps = [
       }
     };
 
-    const previewTile = async (tile) => {
-      try {
-        currentTile.value = tile;
-        tileImageUrl.value = '';
-        tilePreviewVisible.value = true;
-
-        // 判断是否为图片类型
-        const isImage = tile.contentType && (tile.contentType.startsWith('image/') || tile.contentType === 'image/png' || tile.contentType === 'image/jpeg');
-        if (!isImage) {
-          tileImageUrl.value = null;
-          return;
-        }
-
-        const tileData = await tileCacheService.getTile(tile.layerId, tile.zoomLevel, tile.tileX, tile.tileY);
-        if (tileData && tileData.data) {
-          const blob = tileData.data instanceof Blob ? tileData.data : new Blob([tileData.data], { type: tile.contentType || 'image/png' });
-          tileImageUrl.value = URL.createObjectURL(blob);
-        } else {
-          tileImageUrl.value = null;
-        }
-      } catch (error) {
-        console.error('预览瓦片失败:', error);
-        ElMessage.error('预览瓦片失败: ' + error.message);
-        tileImageUrl.value = null;
-      }
-    };
+    
 
     const deleteTile = async (tile) => {
       if (!tileCacheService) {
@@ -1049,81 +1023,22 @@ const baseMaps = [
       }
     };
     
-    // 开始缓存图层
+    // 开始配置图层缓存
     const startLayerCache = async (layer) => {
-      if (!dataCacheService) {
-        ElMessage.warning('缓存服务未初始化');
-        return;
-      }
-
       // 设置当前图层并显示配置对话框
       currentCacheLayer.value = layer;
       
-      // 初始化配置
-      const layerBounds = layer.bounds;
-      if (Array.isArray(layerBounds) && layerBounds.length === 4) {
-        cacheConfig.selectedBounds = layerBounds;
-        
-        // 根据边界框计算合适的缩放级别
-        const recommendedZoom = calculateRecommendedZoom(layerBounds);
-        cacheConfig.minZoom = Math.max(1, recommendedZoom - 2);
-        cacheConfig.maxZoom = Math.min(18, recommendedZoom + 2);
-        currentMapZoom.value = recommendedZoom;
-      } else {
-        // 默认配置
-        cacheConfig.minZoom = 10;
-        cacheConfig.maxZoom = 15;
-        currentMapZoom.value = 10;
-        cacheConfig.selectedBounds = [104.04, 30.64, 104.08, 30.68]; // 成都默认区域
-      }
+      // 初始化缓存状态（默认开启）
+      currentLayerCacheEnabled.value = true;
       
-      cacheConfig.useDefaultBounds = true;
-      updateEstimatedTileCount();
+      // 设置默认缩放级别
+      currentMapZoom.value = 10;
       
+      // 显示配置对话框
       cacheConfigVisible.value = true;
     };
 
-    // 计算推荐的缩放级别
-    const calculateRecommendedZoom = (bounds) => {
-      if (!Array.isArray(bounds) || bounds.length !== 4) return 10;
-      
-      const [minX, minY, maxX, maxY] = bounds;
-      const width = Math.abs(maxX - minX);
-      const height = Math.abs(maxY - minY);
-      const area = width * height;
-      
-      // 根据面积估算合适的缩放级别
-      if (area > 100) return 8;      // 大范围
-      if (area > 10) return 10;      // 中等范围
-      if (area > 1) return 12;       // 小范围
-      if (area > 0.1) return 14;     // 很小范围
-      return 16;                     // 微小范围
-    };
 
-    // 更新估算的瓦片数量
-    const updateEstimatedTileCount = () => {
-      if (!cacheConfig.selectedBounds) {
-        estimatedTileCount.value = 0;
-        return;
-      }
-      
-      const bounds = {
-        west: cacheConfig.selectedBounds[0],
-        south: cacheConfig.selectedBounds[1],
-        east: cacheConfig.selectedBounds[2],
-        north: cacheConfig.selectedBounds[3]
-      };
-      
-      try {
-        estimatedTileCount.value = calculateTileCount(bounds, {
-          min: cacheConfig.minZoom,
-          max: cacheConfig.maxZoom
-        });
-      } catch (error) {
-        console.warn('计算瓦片数量失败:', error);
-        estimatedTileCount.value = 0;
-      }
-    };
 
     // 缓存配置对话框打开事件
     const onCacheConfigDialogOpened = () => {
@@ -1176,15 +1091,14 @@ const baseMaps = [
       
       const isBaseMap = baseMaps.find(bm => bm.key === currentCacheLayer.value.layerId);
       
-      let baseLayer;
-      let mvtLayer = null;
+      
       
       if (isBaseMap) {
         // 如果当前图层是底图，则使用底图的url和layerId创建WMTS图层
         const wmtsTileLoadFunction = createWmtsTileLoadFunction({
           layerId: isBaseMap.key,
           tileCacheService: tileCacheService,
-          enableCacheStorage: true
+          enableCacheStorage: currentLayerCacheEnabled.value
         });
         
         const baseMapSource = new XYZ({
@@ -1208,7 +1122,7 @@ const baseMaps = [
         const wmtsTileLoadFunction = createWmtsTileLoadFunction({
           layerId: 'gaode',
           tileCacheService: tileCacheService,
-          enableCacheStorage: true
+          enableCacheStorage: true // 默认底图始终开启缓存
         });
         
         const gaodeSource = new XYZ({
@@ -1229,7 +1143,7 @@ const baseMaps = [
           const mvtTileLoadFunction = createMvtTileLoadFunction({
             layerId: currentCacheLayer.value.layerId,
             tileCacheService: tileCacheService,
-            enableCacheStorage: true
+            enableCacheStorage: currentLayerCacheEnabled.value
           });
           
           let url = currentCacheLayer.value.originalLayer.mvt_url;
@@ -1293,7 +1207,7 @@ const baseMaps = [
       // 监听缩放级别变化
       configMap.getView().on('change:resolution', () => {
         currentMapZoom.value = Math.round(configMap.getView().getZoom());
-        updateEstimatedTileCount();
+        
       });
 
       // 强制更新地图尺寸
@@ -1304,83 +1218,7 @@ const baseMaps = [
       }, 100);
     };
 
-    // 开始实际缓存
-    const startCacheWithConfig = async () => {
-      if (!dataCacheService) {
-        ElMessage.warning('缓存服务未初始化');
-        return;
-      }
 
-      try {
-        cacheConfigVisible.value = false;
-        
-        cacheProgressVisible.value = true;
-        cacheOperationRunning.value = true;
-        cacheProgress.message = `正在缓存图层 "${currentCacheLayer.value.layerName}"...`;
-        cacheProgress.percent = 0;
-        cacheProgress.current = 0;
-        cacheProgress.total = estimatedTileCount.value;
-
-        ElMessage.info(`开始缓存图层: ${currentCacheLayer.value.layerName}`);
-
-
-
-        // 这里需要实现具体的缓存逻辑
-        // 为所有图层（包括底图）使用统一的缓存逻辑
-        await dataCacheService.cacheLayerData(
-          currentCacheLayer.value.sceneId,
-          {
-            ...currentCacheLayer.value,
-            layer_id: currentCacheLayer.value.layerId, // 现在layerId就是layer_id
-            layer_name: currentCacheLayer.value.layerName,
-            scene_layer_id: currentCacheLayer.value.sceneLayerId,
-          },
-          'scene',
-          {
-            bounds: cacheConfig.useDefaultBounds ? currentCacheLayer.value.bounds : cacheConfig.selectedBounds,
-            zoomLevels: { min: cacheConfig.minZoom, max: cacheConfig.maxZoom },
-            maxTiles: 1000,
-            urlTemplate: currentCacheLayer.value.originalLayer?.url, // 确保传递底图的URL
-            onProgress: (current, total) => {
-              cacheProgress.current = current;
-              cacheProgress.total = total;
-              cacheProgress.percent = total > 0 ? Math.round((current / total) * 100) : 0;
-              cacheProgress.message = `已缓存 ${current} / ${total} 瓦片...`;
-            }
-          }
-        );
-        
-        cacheProgress.status = 'success';
-        cacheProgress.percent = 100;
-        cacheProgress.message = '缓存完成！';
-        
-        ElMessage.success(`图层 ${currentCacheLayer.value.layerName} 缓存完成！`);
-        
-        setTimeout(() => {
-          cacheProgressVisible.value = false;
-          cacheOperationRunning.value = false;
-        }, 1500);
-
-        await refreshCacheData();
-        
-        // 重新同步 currentCacheLayer，确保引用的是最新的表格数据
-        const updated = cacheData.value.find(
-          l => l.layerId === currentCacheLayer.value.layerId
-        );
-        if (updated) {
-          currentCacheLayer.value = updated;
-        }
-
-              } catch (error) {
-                cacheProgressVisible.value = false;
-                cacheOperationRunning.value = false;
-                
-                console.error('缓存图层失败:', error);
-                cacheProgress.status = 'exception';
-                cacheProgress.message = '缓存失败: ' + error.message;
-                ElMessage.error('缓存失败: ' + error.message);
-              }
-            };
 
 
     const stopCacheOperation = () => {
@@ -1396,19 +1234,60 @@ const baseMaps = [
       expandedRowKeys.value = expandedRows.map(r => r.layerId);
     };
 
+    const toggleLayerCache = () => {
+      currentLayerCacheEnabled.value = !currentLayerCacheEnabled.value;
+      
+      // 重新设置 tileLoadFunction
+      if (configMap) {
+        // 这里假设你有 baseLayer 和/或 mvtLayer 的引用
+        if (baseLayer && baseLayer.getSource && baseLayer.getSource().setTileLoadFunction) {
+          const wmtsTileLoadFunction = createWmtsTileLoadFunction({
+            layerId: currentCacheLayer.value.layerId,
+            tileCacheService: tileCacheService,
+            enableCacheStorage: currentLayerCacheEnabled.value
+          });
+          baseLayer.getSource().setTileLoadFunction(wmtsTileLoadFunction);
+        }
+        if (mvtLayer && mvtLayer.getSource && mvtLayer.getSource().setTileLoadFunction) {
+          const mvtTileLoadFunction = createMvtTileLoadFunction({
+            layerId: currentCacheLayer.value.layerId,
+            tileCacheService: tileCacheService,
+            enableCacheStorage: currentLayerCacheEnabled.value
+          });
+          mvtLayer.getSource().setTileLoadFunction(mvtTileLoadFunction);
+        }
+      }
+    };
+
+    const previewTile = async (tile) => {
+      try {
+        currentTile.value = tile;
+        tileImageUrl.value = '';
+        tilePreviewVisible.value = true;
+
+        // 判断是否为图片类型
+        const isImage = tile.contentType && (tile.contentType.startsWith('image/') || tile.contentType === 'image/png' || tile.contentType === 'image/jpeg');
+        if (!isImage) {
+          tileImageUrl.value = null;
+          return;
+        }
+
+        // 获取瓦片数据
+        const tileData = await tileCacheService.getTile(tile.layerId, tile.zoomLevel, tile.tileX, tile.tileY);
+        if (tileData && tileData.data) {
+          const blob = tileData.data instanceof Blob ? tileData.data : new Blob([tileData.data], { type: tile.contentType || 'image/png' });
+          tileImageUrl.value = URL.createObjectURL(blob);
+        } else {
+          tileImageUrl.value = null;
+        }
+      } catch (error) {
+        console.error('预览瓦片失败:', error);
+        ElMessage.error('预览瓦片失败: ' + error.message);
+        tileImageUrl.value = null;
+      }
+    };
 
 
-
-
-     
-
-    // 监听配置变化，自动更新瓦片数量估算
-    watch(() => [cacheConfig.minZoom, cacheConfig.maxZoom, cacheConfig.selectedBounds], 
-      () => {
-        updateEstimatedTileCount();
-      }, 
-      { deep: true }
-    );
 
     onMounted(() => {
       initCacheService();
@@ -1427,14 +1306,13 @@ const baseMaps = [
       tileImageUrl,
       cacheData,
       cacheStats,
-
+      toggleLayerCache,
       // 新增的缓存配置相关
       cacheConfigVisible,
       currentCacheLayer,
       cacheConfig,
       currentMapZoom,
-      estimatedTileCount,
-      canStartCache,
+      currentLayerCacheEnabled,
       filteredCacheData,
       refreshCacheData,
       filterCacheData,
@@ -1451,8 +1329,8 @@ const baseMaps = [
       formatTimeAgo,
       // 新增的方法
       onCacheConfigDialogOpened,
-      startCacheWithConfig,
-      updateEstimatedTileCount
+      enableLayerCache,
+      disableLayerCache
     };
   }
 };
@@ -1624,9 +1502,9 @@ const baseMaps = [
 }
 
 .config-left {
-  width: 320px;
+  width: 240px;
   flex-shrink: 0;
-  padding: 24px;
+  padding: 20px;
   background: #fafbfc;
   border: 1px solid #e1e4e8;
   border-radius: 8px;
@@ -1637,19 +1515,19 @@ const baseMaps = [
 }
 
 .config-left h4 {
-  margin: 0 0 24px 0;
+  margin: 0 0 20px 0;
   color: #24292e;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   position: relative;
-  padding-bottom: 12px;
+  padding-bottom: 10px;
   border-bottom: 2px solid #409eff;
 }
 
 .config-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   flex: 1;
 }
 
@@ -1693,10 +1571,12 @@ const baseMaps = [
 
 .config-actions {
   margin-top: auto;
-  padding-top: 20px;
+  padding-top: 16px;
   display: flex;
-  gap: 12px;
+  gap: 8px;
   border-top: 1px solid #e1e4e8;
+  flex-wrap: wrap;
+  justify-content: flex-start;
 }
 
 .config-actions :deep(.el-button) {
@@ -1718,6 +1598,17 @@ const baseMaps = [
   border: 1px solid #e1e4e8;
   border-radius: 8px;
   background: #f8f9fa;
+}
+
+/* 缓存状态样式 */
+.cache-enabled {
+  color: #67c23a;
+  font-weight: 600;
+}
+
+.cache-disabled {
+  color: #f56c6c;
+  font-weight: 600;
 }
 
 /* 缓存可视化对话框增强样式 */
