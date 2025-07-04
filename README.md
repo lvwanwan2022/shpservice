@@ -757,3 +757,5 @@ https://openlayers.org/en/latest/apidoc/module-ol_source_XYZ-XYZ.html#tileLoadFu
    ①用户ID、场景ID、图层ID、bounds、缩放级别、tile_X\tile_Y
    ②常用场景、常用图层、常用bounds、常用缩放级别。
 2.后端
+
+缓存管理页面-在刷新、清空、导出、导入几个button前增加一个从后端更新场景和图层信息button-本页面用到的需要到后端请求的数据全部都缓存到IndexDB中，页面加载时不从后端获取数据，全部从IndexDB中获取，只有点击后端更新场景和图层信息这个button时，才会从后端获取信息，然后更新IndexDB中相应数据，每次更新都打上时间戳，加载页面时检查时间戳，超过一天再重新更新一次，不超一天就从IndexDB加载页面数据

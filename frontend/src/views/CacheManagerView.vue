@@ -82,7 +82,7 @@
           :data="filteredCacheData" 
           size="small"
           stripe
-          :row-key="row => row.layerId"
+          :row-key="row => row.sceneId + '_' + row.layerId"
           :expand-row-keys="expandedRowKeys"
           @expand-change="handleExpandChange"
         >
@@ -306,7 +306,7 @@ import { Polygon } from 'ol/geom';
 import { Style, Stroke, Fill, Circle } from 'ol/style';
 import { fromLonLat } from 'ol/proj';
 import { MVT } from 'ol/format';
-
+import TileDebug from 'ol/source/TileDebug.js';
 import { 
   createWmtsTileLoadFunction, 
   createMvtTileLoadFunction
@@ -1188,9 +1188,11 @@ const baseMaps = [
       const boundsLayer = new VectorLayer({
         source: boundsSource
       });
-  
+      const gridLayer = new TileLayer({
+          source: new TileDebug(),
+        });
       // 创建地图
-      const layers = [baseLayer, boundsLayer];
+      const layers = [baseLayer, boundsLayer, gridLayer];
       if (mvtLayer) {
         layers.push(mvtLayer);
       }
@@ -1231,7 +1233,7 @@ const baseMaps = [
     };
 
     const handleExpandChange = (row, expandedRows) => {
-      expandedRowKeys.value = expandedRows.map(r => r.layerId);
+      expandedRowKeys.value = expandedRows.map(r => r.sceneId + '_' +r.layerId);
     };
 
     const toggleLayerCache = () => {

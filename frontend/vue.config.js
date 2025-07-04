@@ -61,6 +61,10 @@ module.exports = defineConfig({
           console.error('目标:', 'http://localhost:8083' + req.url)
         }
       }
+    },
+    client: {
+      overlay: false
     }
+
   }
 })

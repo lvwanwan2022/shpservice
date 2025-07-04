@@ -30,16 +30,31 @@ export function createWmtsTileLoadFunction(options = {}) {
     
     
     // 从URL中提取瓦片坐标信息用于缓存
-    const urlPattern = /x=(\d+).*y=(\d+).*z=(\d+)/;
+    const urlPattern1 = /x=(\d+).*y=(\d+).*z=(\d+)/;
+    const urlPattern2 = /\/([0-9]+)\/([0-9]+)\/([0-9]+)(\.[a-z]+)?$/;
+
     // 从URL中提取瓦片坐标
-    const match = src.match(urlPattern);
+    const match1 = src.match(urlPattern1);
+    const match2 = src.match(urlPattern2);
     let x, y, z;
     
-    if (match) {
-      x = parseInt(match[1]);
-      y = parseInt(match[2]);
-      z = parseInt(match[3]);
-    } else {
+    
+    if (match1) {
+      x = parseInt(match1[1]);
+      y = parseInt(match1[2]);
+      z = parseInt(match1[3]);
+    }
+    if (match2 && src.includes('arcgis')) {
+      z = parseInt(match2[1]);
+      y = parseInt(match2[2]);
+      x = parseInt(match2[3]);
+    }else if(match2){
+      z = parseInt(match2[1]);
+      x = parseInt(match2[2]);
+      y = parseInt(match2[3]);
+    }
+
+     if(!x || !y || !z) {
       // 如果无法解析坐标，直接加载
       fetch(src).then(response => response.blob())
         .then(blob => {
