@@ -379,7 +379,33 @@ export default {
       return cacheConfig.minZoom <= cacheConfig.maxZoom && 
              (cacheConfig.useDefaultBounds || cacheConfig.selectedBounds);
     });
-
+// 四个常用底图（可根据你OpenLayers页面实际key和名称调整）
+const baseMaps = [
+          { 
+            key: 'gaode', 
+            name: '高德地图', 
+            type: 'raster',
+            url: 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}'
+          },
+          { 
+            key: 'gaodeSatellite', 
+            name: '高德卫星', 
+            type: 'raster',
+            url: 'https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}'
+          },
+          { 
+            key: 'osm', 
+            name: 'OpenStreetMap', 
+            type: 'raster',
+            url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+          },
+          { 
+            key: 'esriSatellite', 
+            name: 'Esri卫星', 
+            type: 'raster',
+            url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+          },
+        ];
   
     // 缓存服务实例
     let tileCacheService = null;
@@ -475,38 +501,37 @@ export default {
         
         // 4. 将缓存数据合并到场景图层数据中
         cacheData.value.forEach(layer => {
-          // 尝试多种匹配方式
+          // 统一使用layer_id进行匹配
           let cachedData = null;
           
-          
-          // 方式1: 直接匹配
+          // 方式1: 直接使用layerId匹配（现在就是layer_id）
           cachedData = layerGroups[layer.layerId];
           
-          
-          // 方式2: 如果是场景ID_图层ID格式，尝试用图层ID部分匹配
-          if (!cachedData && layer.layerId.includes('_')) {
-            const layerIdPart = layer.layerId.split('_')[1]; // 提取图层ID部分
-            cachedData = layerGroups[layerIdPart];
-           
+          // 方式2: 如果直接匹配失败，尝试使用sceneLayerId匹配
+          if (!cachedData && layer.sceneLayerId) {
+            cachedData = layerGroups[layer.sceneLayerId.toString()];
           }
           
-          // 方式3: 尝试匹配martin-vector格式
+          // 方式3: 尝试匹配martin-vector格式（保留兼容性）
           if (!cachedData && layer.sceneLayerId) {
             // 尝试martin-vector-{layerId}-{layerName}格式
             for (const cacheLayerId in layerGroups) {
               if (cacheLayerId.startsWith('martin-vector-') && 
                   cacheLayerId.includes(layer.sceneLayerId.toString())) {
                 cachedData = layerGroups[cacheLayerId];
-                
                 break;
               }
             }
           }
           
-          // 方式4: 根据sceneLayerId匹配
-          if (!cachedData && layer.sceneLayerId) {
-            cachedData = layerGroups[layer.sceneLayerId.toString()];
-            
+          // 方式4: 尝试旧格式兼容（场景ID_图层ID格式）
+          if (!cachedData) {
+            for (const cacheLayerId in layerGroups) {
+              if (cacheLayerId.includes('_') && cacheLayerId.endsWith('_' + layer.layerId)) {
+                cachedData = layerGroups[cacheLayerId];
+                break;
+              }
+            }
           }
           
           if (cachedData) {
@@ -549,17 +574,11 @@ export default {
         
         // 2. 增加底图场景
         
-        // 四个常用底图（可根据你OpenLayers页面实际key和名称调整）
-        const baseMaps = [
-          { key: 'gaode', name: '高德地图', type: 'raster' },
-          { key: 'gaodeSatellite', name: '高德卫星', type: 'raster' },
-          { key: 'osm', name: 'OpenStreetMap', type: 'raster' },
-          { key: 'esriSatellite', name: 'Esri卫星', type: 'raster' },
-        ];
+        
         // 默认中国全图范围
         const defaultBaseMapBounds = [73.0, 3.0, 135.0, 53.0];
         const baseMapLayers = baseMaps.map((bm) => ({
-          layerId: `basemap_${bm.key}`,
+          layerId: bm.key, // 直接使用底图的key作为layer_id
           sceneId: 'basemap',
           sceneName: '底图',
           layerName: bm.name,
@@ -567,7 +586,7 @@ export default {
           minZoom: 2,
           maxZoom: 18,
           bounds: defaultBaseMapBounds,
-          sceneLayerId: `basemap_${bm.key}`,
+          sceneLayerId: bm.key,
           tiles: [],
           totalSize: 0,
           zoomLevels: [],
@@ -585,11 +604,13 @@ export default {
             const sceneResponse = await gisApi.getScene(scene.id);
             const layers = sceneResponse.data?.layers || [];
             layers.forEach(layer => {
+              // 统一使用 layer_id 作为缓存key
+              const layerId = layer.layer_id || layer.id || layer.scene_layer_id;
               allLayersData.push({
-                layerId: `${scene.id}_${layer.id || layer.layer_id}`,
+                layerId: layerId,
                 sceneId: scene.id,
                 sceneName: scene.name,
-                layerName: layer.layer_name || layer.name || `图层_${layer.id || layer.layer_id}`,
+                layerName: layer.layer_name || layer.name || `图层_${layerId}`,
                 layerType: determineLayerType(layer),
                 minZoom: layer.min_zoom || 0,
                 maxZoom: layer.max_zoom || 18,
@@ -770,7 +791,7 @@ export default {
         cacheProgress.message = '正在清空缓存...';
         cacheProgress.percent = 0;
 
-        await tileCacheService.clearAllCache();
+        await tileCacheService.clearAllTiles();
         
         cacheProgress.percent = 100;
         cacheProgress.message = '清空完成';
@@ -1151,14 +1172,45 @@ export default {
           color: 'rgba(0, 0, 255, 0.1)'
         })
       }));
-
-              // 创建WMTS瓦片加载函数
+      // 检查当前图层是否在baseMaps中    
+      
+      const isBaseMap = baseMaps.find(bm => bm.key === currentCacheLayer.value.layerId);
+      
+      let baseLayer;
+      let mvtLayer = null;
+      
+      if (isBaseMap) {
+        // 如果当前图层是底图，则使用底图的url和layerId创建WMTS图层
         const wmtsTileLoadFunction = createWmtsTileLoadFunction({
-            layerId: 'gaode_base',
-            tileCacheService: tileCacheService
-          });
+          layerId: isBaseMap.key,
+          tileCacheService: tileCacheService,
+          enableCacheStorage: true
+        });
         
-        // 创建高德地图底图源
+        const baseMapSource = new XYZ({
+          url: isBaseMap.url,
+          crossOrigin: 'anonymous',
+          maxZoom: 18,
+          minZoom: 3
+        });
+        
+        baseMapSource.setTileLoadFunction(wmtsTileLoadFunction);
+        
+        baseLayer = new TileLayer({
+          source: baseMapSource
+        });
+        
+        // 底图不创建MVT图层
+        console.log(`当前图层 ${currentCacheLayer.value.layerName} 是底图，只创建WMTS图层`);
+        
+      } else {
+        // 如果不是底图，则创建默认的高德底图 + 可能的MVT图层
+        const wmtsTileLoadFunction = createWmtsTileLoadFunction({
+          layerId: 'gaode',
+          tileCacheService: tileCacheService,
+          enableCacheStorage: true
+        });
+        
         const gaodeSource = new XYZ({
           url: 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
           crossOrigin: 'anonymous',
@@ -1166,37 +1218,23 @@ export default {
           minZoom: 3
         });
         
-        // 设置自定义瓦片加载函数
         gaodeSource.setTileLoadFunction(wmtsTileLoadFunction);
         
-        // 创建底图图层
-        const baseLayer = new TileLayer({
+        baseLayer = new TileLayer({
           source: gaodeSource
         });
         
-        // 创建MVT瓦片加载函数
-        const mvtTileLoadFunction = createMvtTileLoadFunction({
-          layerId: currentCacheLayer.value.layerId || 'test_mvt_layer',
-          tileCacheService: tileCacheService
-        });
-        
-        // 创建边界框图层
-        const boundsSource = new VectorSource({
-          features: [boundsFeature]
-        });
-
-        const boundsLayer = new VectorLayer({
-          source: boundsSource
-        });
-        //ToDo:获取当前图层的layerType: "vector"或"raster"
-        //ToDo:如果layerType为"vector"，则创建MVT图层，否则创建WMTS图层
-        //再次检查如果originalLayer.service_type: "martin"
         // 如果有MVT URL，创建MVT图层
-        let mvtLayer = null;
-        console.log('currentCacheLayer.value.mvt_url',currentCacheLayer.value);
-        if (currentCacheLayer.value.originalLayer.mvt_url) {
+        if (currentCacheLayer.value.originalLayer?.mvt_url) {
+          const mvtTileLoadFunction = createMvtTileLoadFunction({
+            layerId: currentCacheLayer.value.layerId,
+            tileCacheService: tileCacheService,
+            enableCacheStorage: true
+          });
+          
           let url = currentCacheLayer.value.originalLayer.mvt_url;
-          url=url.replace('.pbf','');
+          url = url.replace('.pbf', '');
+          
           const mvtSource = new VectorTileSource({
             url: url,
             format: new MVT(),
@@ -1221,7 +1259,21 @@ export default {
               })
             })
           });
+          
+          console.log(`当前图层 ${currentCacheLayer.value.layerName} 不是底图，创建默认底图 + MVT图层`);
+        } else {
+          console.log(`当前图层 ${currentCacheLayer.value.layerName} 不是底图且无MVT URL，只创建默认底图`);
         }
+      }
+      
+      // 创建边界框图层
+      const boundsSource = new VectorSource({
+        features: [boundsFeature]
+      });
+
+      const boundsLayer = new VectorLayer({
+        source: boundsSource
+      });
   
       // 创建地图
       const layers = [baseLayer, boundsLayer];
@@ -1274,34 +1326,29 @@ export default {
 
 
         // 这里需要实现具体的缓存逻辑
-        // 暂时使用原有的缓存策略作为示例
-        if (currentCacheLayer.value.sceneId === 'basemap') {
-          await dataCacheService.executeLoginStrategy();
-        } else {
-          // 只缓存当前图层
-          await dataCacheService.cacheLayerData(
-            currentCacheLayer.value.sceneId,
-            {
-              ...currentCacheLayer.value,
-              layer_id: currentCacheLayer.value.layerId,
-              layer_name: currentCacheLayer.value.layerName,
-              scene_layer_id: currentCacheLayer.value.sceneLayerId,
-            },
-            'scene',
-            {
-              bounds: cacheConfig.useDefaultBounds ? currentCacheLayer.value.bounds : cacheConfig.selectedBounds,
-              zoomLevels: { min: cacheConfig.minZoom, max: cacheConfig.maxZoom },
-              maxTiles: 1000,
-              onProgress: (current, total) => {
-                cacheProgress.current = current;
-                cacheProgress.total = total;
-                cacheProgress.percent = total > 0 ? Math.round((current / total) * 100) : 0;
-                cacheProgress.message = `已缓存 ${current} / ${total} 瓦片...`;
-              }
+        // 为所有图层（包括底图）使用统一的缓存逻辑
+        await dataCacheService.cacheLayerData(
+          currentCacheLayer.value.sceneId,
+          {
+            ...currentCacheLayer.value,
+            layer_id: currentCacheLayer.value.layerId, // 现在layerId就是layer_id
+            layer_name: currentCacheLayer.value.layerName,
+            scene_layer_id: currentCacheLayer.value.sceneLayerId,
+          },
+          'scene',
+          {
+            bounds: cacheConfig.useDefaultBounds ? currentCacheLayer.value.bounds : cacheConfig.selectedBounds,
+            zoomLevels: { min: cacheConfig.minZoom, max: cacheConfig.maxZoom },
+            maxTiles: 1000,
+            urlTemplate: currentCacheLayer.value.originalLayer?.url, // 确保传递底图的URL
+            onProgress: (current, total) => {
+              cacheProgress.current = current;
+              cacheProgress.total = total;
+              cacheProgress.percent = total > 0 ? Math.round((current / total) * 100) : 0;
+              cacheProgress.message = `已缓存 ${current} / ${total} 瓦片...`;
             }
-          );
-          //await dataCacheService.executeSceneSwitchStrategy(currentCacheLayer.value.sceneId);
-        }
+          }
+        );
         
         cacheProgress.status = 'success';
         cacheProgress.percent = 100;

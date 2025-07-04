@@ -14,6 +14,7 @@
 3. **附近瓦片替代**: 找不到精确缓存时使用附近瓦片
 4. **错误恢复**: 完善的错误处理和重试机制
 5. **性能优化**: 减少网络请求，提升加载速度
+6. **缓存控制**: 可选择是否启用缓存存储，支持只读缓存模式
 
 ## 使用方法
 
@@ -29,7 +30,8 @@ const wmtsTileLoadFunction = createWmtsTileLoadFunction({
   layerId: 'gaode_base',  // 图层ID，用于缓存标识
   tileCacheService: tileCacheService,  // 可选，缓存服务实例
   retryCodes: [404, 503, 500],  // 可选，需要重试的HTTP状态码
-  retries: {}  // 可选，重试计数器
+  retries: {},  // 可选，重试计数器
+  enableCacheStorage: true  // 可选，是否启用缓存存储，默认为true
 });
 
 // 创建地图源并应用加载函数
@@ -55,7 +57,8 @@ import { MVT } from 'ol/format';
 // 创建MVT瓦片加载函数
 const mvtTileLoadFunction = createMvtTileLoadFunction({
   layerId: 'vector_layer',  // 图层ID
-  tileCacheService: tileCacheService  // 可选，缓存服务实例
+  tileCacheService: tileCacheService,  // 可选，缓存服务实例
+  enableCacheStorage: true  // 可选，是否启用缓存存储，默认为true
 });
 
 // 创建MVT源并应用加载函数
@@ -80,6 +83,20 @@ import {
 // 使用默认配置
 const wmtsLoader = getDefaultWmtsTileLoadFunction('my_layer');
 const mvtLoader = getDefaultMvtTileLoadFunction('my_mvt_layer');
+
+// 禁用缓存存储（只从缓存读取，不存储新数据）
+const wmtsLoaderNoCache = getDefaultWmtsTileLoadFunction('my_layer', false);
+const mvtLoaderNoCache = getDefaultMvtTileLoadFunction('my_mvt_layer', false);
+
+// 或者使用完整配置方式
+const customWmtsLoader = createWmtsTileLoadFunction({
+  layerId: 'my_layer',
+  enableCacheStorage: false
+});
+const customMvtLoader = createMvtTileLoadFunction({
+  layerId: 'my_mvt_layer',
+  enableCacheStorage: false
+});
 ```
 
 ## 配置选项
@@ -92,6 +109,7 @@ const mvtLoader = getDefaultMvtTileLoadFunction('my_mvt_layer');
 | tileCacheService | Object | getGlobalCacheService() | 缓存服务实例 |
 | retryCodes | Array | [404, 503, 500] | 需要重试的HTTP状态码 |
 | retries | Object | {} | 重试计数器对象 |
+| enableCacheStorage | boolean | true | 是否启用缓存存储到IndexedDB |
 
 ### MVT瓦片加载函数选项
 
@@ -99,6 +117,7 @@ const mvtLoader = getDefaultMvtTileLoadFunction('my_mvt_layer');
 |------|------|--------|------|
 | layerId | string | 'mvt_layer' | 图层标识符 |
 | tileCacheService | Object | getGlobalCacheService() | 缓存服务实例 |
+| enableCacheStorage | boolean | true | 是否启用缓存存储到IndexedDB |
 
 ## 工作流程
 
@@ -129,6 +148,28 @@ const mvtLoader = getDefaultMvtTileLoadFunction('my_mvt_layer');
 2. 如果没有精确匹配，搜索附近的缓存瓦片作为替代
 3. 搜索范围包括同一缩放级别的相邻8个瓦片
 4. 提供详细的日志信息便于调试
+
+## 缓存控制
+
+### 缓存存储选项
+
+通过 `enableCacheStorage` 参数可以控制是否将新获取的瓦片存储到缓存中：
+
+- **true（默认）**: 启用缓存存储，新获取的瓦片会自动保存到IndexedDB
+- **false**: 禁用缓存存储，只从现有缓存读取数据，不存储新数据
+
+### 使用场景
+
+1. **完整缓存模式** (`enableCacheStorage: true`)：
+   - 适用于大多数场景
+   - 自动缓存所有访问的瓦片
+   - 提供最佳的离线体验
+
+2. **只读缓存模式** (`enableCacheStorage: false`)：
+   - 适用于临时浏览或演示
+   - 不会增加存储空间占用
+   - 仍然可以使用已有的缓存数据
+   - 适合在存储空间有限的设备上使用
 
 ## 缓存策略
 
@@ -185,6 +226,10 @@ const mvtLoader = getDefaultMvtTileLoadFunction('my_mvt_layer');
 3. **错误监控**: 监听加载错误，及时发现问题
 4. **性能优化**: 定期清理过期缓存，保持性能
 5. **离线支持**: 为重要图层预加载缓存数据
+6. **缓存控制**: 
+   - 对于经常访问的底图启用缓存存储
+   - 对于临时或测试图层可以禁用缓存存储
+   - 根据设备存储空间情况灵活调整缓存策略
 
 ## 注意事项
 

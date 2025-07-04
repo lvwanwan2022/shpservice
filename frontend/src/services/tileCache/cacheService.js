@@ -229,12 +229,14 @@ export class SimpleCacheService {
       const maxTiles = options.maxTiles || (strategy === 'login' ? 100 : 500);
       const limitedTileList = tileList.slice(0, maxTiles);
   
-      // 4. 缓存
-      const layerId = layer.layerId || `${sceneId}_${layer.layer_id}`;
+      // 4. 缓存 - 统一使用layer_id作为key
+      const layerId = layer.layerId || layer.layer_id;
       // 你需要传入 urlTemplate
       console.log(layer);
-      const urlTemplate = options.urlTemplate || layer.originalLayer.wms_url || layer.originalLayer.mvt_url
-      ;
+      const urlTemplate = options.urlTemplate || 
+                         layer.originalLayer?.url || 
+                         layer.originalLayer?.wms_url || 
+                         layer.originalLayer?.mvt_url;
       if (!urlTemplate) throw new Error('缺少瓦片URL模板');
       await this.fetchAndCacheTiles(layerId, limitedTileList, urlTemplate, options.onProgress);
 

@@ -13,6 +13,7 @@ import { MVT } from 'ol/format';
  * @param {Object} options.tileCacheService - 瓦片缓存服务实例
  * @param {Array} options.retryCodes - 需要重试的HTTP状态码
  * @param {Object} options.retries - 重试计数器
+ * @param {boolean} options.enableCacheStorage - 是否启用缓存存储，默认为true
  * @returns {Function} 瓦片加载函数
  */
 export function createWmtsTileLoadFunction(options = {}) {
@@ -20,14 +21,18 @@ export function createWmtsTileLoadFunction(options = {}) {
     layerId = 'default_layer',
     tileCacheService = getGlobalCacheService(),
     retryCodes = [404, 503, 500],
-    retries = {}
+    retries = {},
+    enableCacheStorage = true // 默认开启缓存存储
   } = options;
 
   return function wmtsTileLoadFunction(imageTile, src) {
     const image = imageTile.getImage();
     
+    
+    // 从URL中提取瓦片坐标信息用于缓存
+    const urlPattern = /x=(\d+).*y=(\d+).*z=(\d+)/;
     // 从URL中提取瓦片坐标
-    const match = src.match(/\/(\d+)\/(\d+)\/(\d+)/);
+    const match = src.match(urlPattern);
     let x, y, z;
     
     if (match) {
@@ -102,8 +107,8 @@ export function createWmtsTileLoadFunction(options = {}) {
         const imageUrl = URL.createObjectURL(blob);
         image.src = imageUrl;
         
-        // 缓存瓦片到IndexedDB
-        if (tileCacheService) {
+        // 缓存瓦片到IndexedDB（如果开启缓存存储）
+        if (tileCacheService && enableCacheStorage) {
           tileCacheService.saveTile(layerId, z, x, y, blob, {
             contentType: 'image/png',
             url: src
@@ -177,12 +182,14 @@ export function createWmtsTileLoadFunction(options = {}) {
  * @param {Object} options - 配置选项
  * @param {string} options.layerId - 图层ID
  * @param {Object} options.tileCacheService - 瓦片缓存服务实例
+ * @param {boolean} options.enableCacheStorage - 是否启用缓存存储，默认为true
  * @returns {Function} 瓦片加载函数
  */
 export function createMvtTileLoadFunction(options = {}) {
   const {
     layerId = 'mvt_layer',
-    tileCacheService = getGlobalCacheService()
+    tileCacheService = getGlobalCacheService(),
+    enableCacheStorage = true // 默认开启缓存存储
   } = options;
 
   return function mvtTileLoadFunction(tile, url) {
@@ -199,9 +206,8 @@ export function createMvtTileLoadFunction(options = {}) {
       const [z, x, y] = [parseInt(match[1]), parseInt(match[2]), parseInt(match[3])];
       console.log(`MVT瓦片请求: ${z}/${x}/${y} - ${url}`);
       
-      // 从URL中提取layerId（假设URL格式为 .../layerId/{z}/{x}/{y}）
-      const layerMatch = url.match(/\/([^/]+)\/\d+\/\d+\/\d+$/);
-      const currentLayerId = layerMatch ? layerMatch[1] : layerId;
+      // 直接使用传入的layerId，确保与缓存key一致
+      const currentLayerId = layerId;
       
       // 检查缓存中是否已经存在该MVT瓦片
       if (tileCacheService) {
@@ -294,8 +300,8 @@ export function createMvtTileLoadFunction(options = {}) {
             console.log(`MVT瓦片 ${z}/${x}/${y} 加载成功，包含 ${features.length} 个要素`);
             tile.setFeatures(features);
             
-            // 缓存MVT瓦片到IndexedDB
-            if (tileCacheService) {
+            // 缓存MVT瓦片到IndexedDB（如果开启缓存存储）
+            if (tileCacheService && enableCacheStorage) {
               tileCacheService.saveTile(currentLayerId, z, x, y, arrayBuffer, {
                 contentType: 'application/vnd.mapbox-vector-tile',
                 url: url
@@ -360,19 +366,21 @@ export function createMvtTileLoadFunction(options = {}) {
 /**
  * 获取默认的WMTS瓦片加载函数
  * @param {string} layerId - 图层ID
+ * @param {boolean} enableCacheStorage - 是否启用缓存存储
  * @returns {Function} 瓦片加载函数
  */
-export function getDefaultWmtsTileLoadFunction(layerId = 'default_layer') {
-  return createWmtsTileLoadFunction({ layerId });
+export function getDefaultWmtsTileLoadFunction(layerId = 'default_layer', enableCacheStorage = true) {
+  return createWmtsTileLoadFunction({ layerId, enableCacheStorage });
 }
 
 /**
  * 获取默认的MVT瓦片加载函数
  * @param {string} layerId - 图层ID
+ * @param {boolean} enableCacheStorage - 是否启用缓存存储
  * @returns {Function} 瓦片加载函数
  */
-export function getDefaultMvtTileLoadFunction(layerId = 'mvt_layer') {
-  return createMvtTileLoadFunction({ layerId });
+export function getDefaultMvtTileLoadFunction(layerId = 'mvt_layer', enableCacheStorage = true) {
+  return createMvtTileLoadFunction({ layerId, enableCacheStorage });
 }
 
 // 导出默认实例
