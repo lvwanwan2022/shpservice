@@ -87,6 +87,7 @@
           stripe
           :row-key="row => row.sceneId + '_' + row.layerId"
           :expand-row-keys="expandedRowKeys"
+          :row-class-name="({ row }) => row.originalLayer && row.originalLayer.wms_url ? 'wms-layer-row' : ''"
           @expand-change="handleExpandChange"
         >
           <!-- 展开列 -->
@@ -158,6 +159,14 @@
           <el-table-column label="缓存状态" width="100" align="center">
             <template #default="{ row }">
               <el-tag 
+                v-if="row.originalLayer && row.originalLayer.wms_url"
+                size="small" 
+                type="warning"
+              >
+                不缓存
+              </el-tag>
+              <el-tag 
+                v-else
                 size="small" 
                 :type="row.tiles && row.tiles.length > 0 ? 'success' : 'info'"
               >
@@ -169,7 +178,8 @@
           <!-- 瓦片数量 -->
           <el-table-column label="瓦片数" width="80" align="center">
             <template #default="{ row }">
-              <span v-if="row.tiles && row.tiles.length > 0">{{ row.tiles.length }}</span>
+              <span v-if="row.originalLayer && row.originalLayer.wms_url" class="no-data">N/A</span>
+              <span v-else-if="row.tiles && row.tiles.length > 0">{{ row.tiles.length }}</span>
               <span v-else class="no-data">-</span>
             </template>
           </el-table-column>
@@ -177,7 +187,8 @@
           <!-- 缓存大小 -->
           <el-table-column label="大小" width="90" align="center">
             <template #default="{ row }">
-              <span v-if="row.totalSize > 0">{{ formatFileSize(row.totalSize) }}</span>
+              <span v-if="row.originalLayer && row.originalLayer.wms_url" class="no-data">N/A</span>
+              <span v-else-if="row.totalSize > 0">{{ formatFileSize(row.totalSize) }}</span>
               <span v-else class="no-data">-</span>
             </template>
           </el-table-column>
@@ -186,7 +197,8 @@
           <el-table-column label="层级" width="120" align="center">
             <template #default="{ row }">
               <span class="zoom-levels">
-                <template v-if="Array.isArray(row.zoomLevels) && row.zoomLevels.length > 0">
+                <template v-if="row.originalLayer && row.originalLayer.wms_url">N/A</template>
+                <template v-else-if="Array.isArray(row.zoomLevels) && row.zoomLevels.length > 0">
                   {{ row.zoomLevels.length === 1 ? row.zoomLevels[0] : `${row.zoomLevels[0]}-${row.zoomLevels[row.zoomLevels.length - 1]}` }}
                 </template>
                 <template v-else>-</template>
@@ -197,7 +209,8 @@
           <!-- 边界框 -->
           <el-table-column label="边界框" min-width="180" align="center">
             <template #default="{ row }">
-              <span v-if="Array.isArray(row.bounds)">
+              <span v-if="row.originalLayer && row.originalLayer.wms_url" class="no-data">N/A</span>
+              <span v-else-if="Array.isArray(row.bounds)">
                 {{ row.bounds.map(n => n.toFixed(6)).join(', ') }}
               </span>
               <span v-else class="no-data">{{ row.bounds }}</span>
@@ -211,7 +224,8 @@
                 type="primary" 
                 size="small" 
                 @click="startLayerCache(row)"
-                title="缓存图层"
+                :disabled="row.originalLayer && row.originalLayer.wms_url"
+                :title="row.originalLayer && row.originalLayer.wms_url ? 'WMS图层不支持缓存' : '缓存图层'"
               >
                 <i class="el-icon-download"></i> 缓存
               </el-button>              
@@ -219,8 +233,8 @@
                 type="danger" 
                 size="small" 
                 @click="deleteLayerCache(row)"
-                :disabled="!row.tiles || row.tiles.length === 0"
-                title="删除缓存"
+                :disabled="(row.originalLayer && row.originalLayer.wms_url) || (!row.tiles || row.tiles.length === 0)"
+                :title="row.originalLayer && row.originalLayer.wms_url ? 'WMS图层不支持缓存操作' : (!row.tiles || row.tiles.length === 0) ? '无缓存数据可删除' : '删除缓存'"
               >
                 <i class="el-icon-delete"></i> 删除
               </el-button>
@@ -1077,6 +1091,12 @@ const baseMaps = [
     };
 
     const deleteLayerCache = async (layer) => {
+      // 检查是否为WMS图层
+      if (layer.originalLayer && layer.originalLayer.wms_url) {
+        ElMessage.warning('WMS图层不支持缓存操作');
+        return;
+      }
+      
       if (!tileCacheService) {
         ElMessage.warning('缓存服务未初始化');
         return;
@@ -1171,6 +1191,12 @@ const baseMaps = [
     
     // 开始配置图层缓存
     const startLayerCache = async (layer) => {
+      // 检查是否为WMS图层
+      if (layer.originalLayer && layer.originalLayer.wms_url) {
+        ElMessage.warning('WMS图层不支持缓存功能');
+        return;
+      }
+      
       // 设置当前图层并显示配置对话框
       currentCacheLayer.value = layer;
       
@@ -1960,5 +1986,14 @@ const baseMaps = [
 .cache-map-container .ol-attribution {
   right: 8px;
   bottom: 8px;
+}
+
+
+
+/* 不能缓存的标签样式 */
+.el-tag.el-tag--warning {
+  background-color: #fdf6ec;
+  border-color: #f5dab1;
+  color: #e6a23c;
 }
 </style>
