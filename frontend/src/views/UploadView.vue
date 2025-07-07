@@ -7,7 +7,20 @@
 
     <!-- 数据检索区 -->
     <div class="search-area">
-      <el-form :inline="true" :model="searchForm" class="search-form">
+      <!-- 移动端搜索切换按钮 -->
+      <div class="mobile-search-toggle" @click="toggleMobileSearch">
+        <el-icon class="toggle-icon" :class="{ 'rotated': mobileSearchExpanded }">
+          <ArrowDown />
+        </el-icon>
+        <span class="toggle-text">搜索筛选</span>
+        <div class="search-summary" v-if="!mobileSearchExpanded && hasActiveFilters">
+          <el-tag size="small" type="primary">{{ getActiveFiltersText() }}</el-tag>
+        </div>
+      </div>
+      
+      <!-- 搜索表单 -->
+      <div class="search-form-container" :class="{ 'mobile-collapsed': !mobileSearchExpanded }">
+        <el-form :inline="true" :model="searchForm" class="search-form">
         <el-form-item label="上传人员">
           <el-select v-model="searchForm.user_id" placeholder="请选择上传人员" clearable style="width: 150px;">
             <el-option v-for="user in uploaders" :key="user.id" :label="user.username" :value="user.id" />
@@ -34,10 +47,142 @@
           <el-button @click="resetSearch">清空</el-button>
         </el-form-item>
       </el-form>
+      </div>
     </div>
 
     <!-- 文件列表 -->
     <div class="file-list">
+      <!-- 移动端卡片布局 -->
+      <div class="mobile-file-cards">
+        <div v-for="file in fileList" :key="file.id" class="mobile-file-card">
+          <!-- 卡片头部：文件名和操作按钮 -->
+          <div class="mobile-file-card-header">
+            <div class="mobile-file-name">{{ file.file_name }}</div>
+            <div class="mobile-file-actions">
+              <el-button size="small" type="danger" @click="deleteFile(file)">删除</el-button>
+            </div>
+          </div>
+          
+          <!-- 基本信息网格 -->
+          <div class="mobile-file-info">
+            <div class="mobile-info-item">
+              <div class="mobile-info-label">文件大小</div>
+              <div class="mobile-info-value">{{ formatFileSize(file.file_size) }}</div>
+            </div>
+            <div class="mobile-info-item">
+              <div class="mobile-info-label">上传人员</div>
+              <div class="mobile-info-value">{{ file.uploader }}</div>
+            </div>
+            <div class="mobile-info-item">
+              <div class="mobile-info-label">专业</div>
+              <div class="mobile-info-value">
+                <el-tag v-if="file.discipline" size="small" type="success">{{ file.discipline }}</el-tag>
+                <span v-else>-</span>
+              </div>
+            </div>
+            <div class="mobile-info-item">
+              <div class="mobile-info-label">数据类型</div>
+              <div class="mobile-info-value">
+                <el-tag v-if="file.file_type" size="small" type="primary">{{ file.file_type }}</el-tag>
+                <span v-else>-</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 服务发布状态 -->
+          <div class="mobile-service-section">
+            <!-- GeoServer服务 -->
+            <div class="mobile-service-title">GeoServer服务</div>
+            <div class="mobile-service-row">
+              <div class="mobile-service-status">
+                <el-tag 
+                  v-if="file.geoserver_service && file.geoserver_service.is_published"
+                  type="success" 
+                  size="small"
+                >已发布</el-tag>
+                <el-tag 
+                  v-else
+                  :type="canPublishGeoServer(file) ? 'info' : 'warning'" 
+                  size="small"
+                >{{ canPublishGeoServer(file) ? '未发布' : '不能发布' }}</el-tag>
+              </div>
+              <div class="mobile-service-buttons">
+                <template v-if="file.geoserver_service && file.geoserver_service.is_published">
+                  <el-button 
+                    v-if="file.geoserver_service.wfs_url"
+                    size="small" 
+                    @click="copyServiceUrl(file.geoserver_service.wfs_url)"
+                  >WFS</el-button>
+                  <el-button 
+                    v-if="file.geoserver_service.wms_url"
+                    size="small" 
+                    @click="copyServiceUrl(file.geoserver_service.wms_url)"
+                  >WMS</el-button>
+                  <el-button 
+                    size="small" 
+                    type="danger"
+                    @click="unpublishGeoServerService(file)"
+                    :loading="file.unpublishingGeoServer"
+                  >取消</el-button>
+                </template>
+                <template v-else>
+                  <el-button 
+                    size="small" 
+                    type="primary" 
+                    @click="publishGeoServerService(file)"
+                    :loading="file.publishingGeoServer"
+                    :disabled="!canPublishGeoServer(file)"
+                  >发布</el-button>
+                </template>
+              </div>
+            </div>
+            
+            <!-- Martin服务 -->
+            <div class="mobile-service-title">Martin服务</div>
+            <div class="mobile-service-row">
+              <div class="mobile-service-status">
+                <el-tag 
+                  v-if="file.martin_service && file.martin_service.is_published"
+                  type="success" 
+                  size="small"
+                >已发布</el-tag>
+                <el-tag v-else type="info" size="small">未发布</el-tag>
+              </div>
+              <div class="mobile-service-buttons">
+                <template v-if="file.martin_service && file.martin_service.is_published">
+                  <el-button 
+                    v-if="file.martin_service.mvt_url"
+                    size="small" 
+                    @click="copyServiceUrl(file.martin_service.mvt_url)"
+                  >MVT</el-button>
+                  <el-button 
+                    v-if="file.martin_service.tilejson_url"
+                    size="small" 
+                    @click="copyServiceUrl(file.martin_service.tilejson_url)"
+                  >JSON</el-button>
+                  <el-button 
+                    size="small" 
+                    type="danger"
+                    @click="unpublishMartinService(file)"
+                    :loading="file.unpublishingMartin"
+                  >取消</el-button>
+                </template>
+                <template v-else>
+                  <el-button 
+                    size="small" 
+                    type="primary" 
+                    @click="publishMartinService(file)"
+                    :loading="file.publishingMartin"
+                    :disabled="!canPublishMartin(file)"
+                  >发布</el-button>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 桌面端表格布局 -->
       <el-table :data="fileList" style="width: 100%" border>
         <el-table-column type="index" label="序号" width="60" />
         <el-table-column prop="file_name" label="文件名" min-width="200">
@@ -468,7 +613,7 @@
 <script>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search } from '@element-plus/icons-vue'
+import { Search, ArrowDown } from '@element-plus/icons-vue'
 import gisApi from '@/api/gis'
 import CoordinateSystemSearch from '@/components/CoordinateSystemSearch.vue'
 import { processServiceUrl } from '@/utils/urlUtils.js'
@@ -494,6 +639,9 @@ export default {
     // 坐标系搜索相关
     const coordinateSearchVisible = ref(false)
     const currentEditingFile = ref(null) // 添加当前正在编辑的文件引用
+    
+    // 移动端搜索相关
+    const mobileSearchExpanded = ref(false)
     
     // 表单引用
     const uploadFormRef = ref(null)
@@ -630,6 +778,27 @@ export default {
       })
       currentPage.value = 1
       fetchFileList()
+    }
+    
+    // 切换移动端搜索展开状态
+    const toggleMobileSearch = () => {
+      mobileSearchExpanded.value = !mobileSearchExpanded.value
+    }
+    
+    // 检查是否有激活的筛选条件
+    const hasActiveFilters = computed(() => {
+      return searchForm.user_id || searchForm.discipline || searchForm.file_type || searchForm.tags || searchForm.file_name
+    })
+    
+    // 获取激活筛选条件的文字描述
+    const getActiveFiltersText = () => {
+      const filters = []
+      if (searchForm.user_id) filters.push('用户')
+      if (searchForm.discipline) filters.push('专业')
+      if (searchForm.file_type) filters.push('类型')
+      if (searchForm.tags) filters.push('标签')
+      if (searchForm.file_name) filters.push('文件名')
+      return filters.length > 0 ? `${filters.join('+')}` : ''
     }
 
     // 分页变化
@@ -1331,6 +1500,7 @@ export default {
       openCoordinateSearch,
       handleCoordinateSelect,
       Search,
+      ArrowDown,
       uploadProgress,
       uploadProgressText,
       uploadProgressStatus,
@@ -1341,7 +1511,12 @@ export default {
       cancelEditCoordinate,
       saveCoordinate,
       openCoordinateSearchForFile,
-      currentEditingFile
+      currentEditingFile,
+      // 移动端搜索相关
+      mobileSearchExpanded,
+      toggleMobileSearch,
+      hasActiveFilters,
+      getActiveFiltersText
     }
   }
 }
@@ -1364,6 +1539,16 @@ export default {
   padding: 20px;
   background-color: #f5f7fa;
   border-radius: 4px;
+}
+
+/* 桌面端隐藏移动端搜索切换按钮 */
+.mobile-search-toggle {
+  display: none;
+}
+
+/* 桌面端隐藏移动端卡片 */
+.mobile-file-cards {
+  display: none;
 }
 
 .file-list {

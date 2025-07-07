@@ -20,7 +20,20 @@
     <div class="scene-content">
       <!-- 搜索和筛选 -->
       <div class="search-bar">
-        <el-form :inline="true" :model="searchForm">
+        <!-- 移动端搜索切换按钮 -->
+        <div class="mobile-search-toggle" @click="toggleMobileSearch">
+          <el-icon class="toggle-icon" :class="{ 'rotated': mobileSearchExpanded }">
+            <ArrowDown />
+          </el-icon>
+          <span class="toggle-text">搜索筛选</span>
+          <div class="search-summary" v-if="!mobileSearchExpanded && hasActiveFilters">
+            <el-tag size="small" type="primary">{{ getActiveFiltersText() }}</el-tag>
+          </div>
+        </div>
+        
+        <!-- 搜索表单 -->
+        <div class="search-form-container" :class="{ 'mobile-collapsed': !mobileSearchExpanded }">
+          <el-form :inline="true" :model="searchForm">
           <el-form-item label="场景名称">
             <el-input 
               v-model="searchForm.name" 
@@ -44,6 +57,7 @@
             <el-button @click="resetSearch">重置</el-button>
           </el-form-item>
         </el-form>
+        </div>
       </div>
 
       <!-- 场景列表 -->
@@ -235,7 +249,7 @@
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Refresh } from '@element-plus/icons-vue'
+import { Plus, Refresh, ArrowDown } from '@element-plus/icons-vue'
 import gisApi from '@/api/gis'
 import authService from '@/auth/authService'
 
@@ -243,7 +257,8 @@ export default {
   name: 'SceneView',
   components: {
     Plus,
-    Refresh
+    Refresh,
+    ArrowDown
   },
   setup() {
     const router = useRouter()
@@ -260,6 +275,9 @@ export default {
     
     // 获取当前用户信息
     const currentUser = ref(null)
+    
+    // 移动端搜索相关
+    const mobileSearchExpanded = ref(false)
     
     // 搜索表单
     const searchForm = reactive({
@@ -370,6 +388,24 @@ export default {
     const resetSearch = () => {
       searchForm.name = ''
       searchForm.dateRange = null
+    }
+    
+    // 切换移动端搜索展开状态
+    const toggleMobileSearch = () => {
+      mobileSearchExpanded.value = !mobileSearchExpanded.value
+    }
+    
+    // 检查是否有激活的筛选条件
+    const hasActiveFilters = computed(() => {
+      return searchForm.name || (searchForm.dateRange && searchForm.dateRange.length > 0)
+    })
+    
+    // 获取激活筛选条件的文字描述
+    const getActiveFiltersText = () => {
+      const filters = []
+      if (searchForm.name) filters.push('场景名称')
+      if (searchForm.dateRange && searchForm.dateRange.length > 0) filters.push('创建时间')
+      return filters.length > 0 ? `${filters.join('+')}` : ''
     }
     
     const resetSceneForm = () => {
@@ -687,8 +723,12 @@ export default {
       formatDateShort,
       handleDetailDialogClose,
       canEditScene,
-      canDeleteScene
-     
+      canDeleteScene,
+      // 移动端搜索相关
+      mobileSearchExpanded,
+      toggleMobileSearch,
+      hasActiveFilters,
+      getActiveFiltersText
     }
   }
 }
@@ -737,25 +777,30 @@ export default {
   margin-bottom: 20px;
 }
 
+/* 桌面端隐藏移动端搜索切换按钮 */
+.mobile-search-toggle {
+  display: none;
+}
+
 .scenes-grid {
   flex: 1;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
   padding: 10px;
 }
 
 .scene-card {
   background: white;
   border: 1px solid #e4e7ed;
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: 8px;
+  padding: 12px;
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   height: fit-content;
-  max-height: 280px;
+  max-height: 250px;
 }
 
 .scene-card:hover {
@@ -786,13 +831,8 @@ export default {
 .scene-actions {
   display: flex;
   gap: 4px;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  flex-shrink: 0;
-}
-
-.scene-card:hover .scene-actions {
   opacity: 1;
+  flex-shrink: 0;
 }
 
 .scene-actions .el-button {

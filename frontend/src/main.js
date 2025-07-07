@@ -25,6 +25,8 @@ import router from './router'
 import store from './store'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet-draw/dist/leaflet.draw.css'
+// 引入响应式布局CSS
+import './assets/responsive.css'
 //import { fixVectorGridCompatibility } from './utils/leafletCompatibilityFix'
 
 // 导入全局错误处理器

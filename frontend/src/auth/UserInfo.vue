@@ -13,11 +13,19 @@
     </div>
     
     <!-- 已登录状态 -->
-    <el-dropdown v-else @command="handleCommand" class="user-dropdown">
+    <el-dropdown 
+      v-else 
+      @command="handleCommand" 
+      @visible-change="handleVisibleChange"
+      :trigger="['click']"
+      :hide-on-click="true"
+      class="user-dropdown"
+      ref="userDropdown"
+    >
       <span class="user-trigger">
         <el-icon><User /></el-icon>
         <span class="username">{{ displayName }}</span>
-        <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        <el-icon class="el-icon--right" :class="{ 'rotate-180': dropdownVisible }"><ArrowDown /></el-icon>
       </span>
       <template #dropdown>
         <el-dropdown-menu>
@@ -59,7 +67,8 @@ export default {
   data() {
     return {
       userInfo: {},
-      isLoggedIn: false
+      isLoggedIn: false,
+      dropdownVisible: false
     }
   },
   
@@ -166,6 +175,10 @@ export default {
         'user': '普通用户'
       }
       return roleMap[role] || role
+    },
+    
+    handleVisibleChange(visible) {
+      this.dropdownVisible = visible
     }
   }
 }
@@ -237,5 +250,14 @@ export default {
 :deep(.el-dropdown-menu__item .el-icon) {
   margin-right: 8px;
   width: 16px;
+}
+
+/* 箭头旋转动画 */
+.el-icon--right {
+  transition: transform 0.3s ease;
+}
+
+.el-icon--right.rotate-180 {
+  transform: rotate(180deg);
 }
 </style> 

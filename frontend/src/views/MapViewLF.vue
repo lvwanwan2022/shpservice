@@ -153,6 +153,22 @@
 
       <!-- 地图容器 -->
       <div class="map-container-wrapper" :class="{ 'with-panel': !layerPanelCollapsed }">
+        <!-- 移动端浮动图层管理按钮 -->
+        <div 
+          class="mobile-layer-toggle-btn" 
+          :class="{ 'show': layerPanelCollapsed }"
+          @click="toggleLayerPanel"
+        >
+          图层
+        </div>
+        
+        <!-- 地图遮罩层（当图层面板打开时） -->
+        <div 
+          v-if="!layerPanelCollapsed" 
+          class="mobile-map-overlay"
+          @click="toggleLayerPanel"
+        ></div>
+        
         <MapViewer 
           :scene-id="selectedSceneId" 
           :readonly="false"
@@ -225,7 +241,9 @@ export default {
     const layerInfoDialogVisible = ref(false)
     const currentLayerInfo = ref(null)
     const mapViewerRef = ref(null)
-    const layerPanelCollapsed = ref(false)
+    // 检测是否为移动端，移动端默认收起图层面板
+    const isMobile = window.innerWidth <= 768
+    const layerPanelCollapsed = ref(isMobile)
     const currentActiveLayer = ref(null)
     
     // 获取场景列表

@@ -177,16 +177,80 @@
           </div>
         </div>
         
-        <!-- 收起状态下的展开按钮 -->
-        <div class="collapsed-toggle" v-show="layerPanelCollapsed" @click="toggleLayerPanel">
-          <el-button 
-            link 
-            size="small"
-            class="expand-btn"
-            title="展开面板"
-          >
-            <span class="toggle-icon">》</span>
-          </el-button>
+        <!-- 收起状态下的内容 -->
+        <div class="collapsed-content" v-show="layerPanelCollapsed">
+          <!-- 展开按钮 -->
+          <div class="collapsed-toggle" @click="toggleLayerPanel">
+            <el-button 
+              link 
+              size="small"
+              class="expand-btn"
+              title="展开面板"
+            >
+              <span class="toggle-icon">》</span>
+            </el-button>
+          </div>
+          
+          <!-- 收起状态下的场景选择 -->
+          <div class="collapsed-scene-selector" v-if="sceneList && sceneList.length > 0">
+            <!-- 场景区域标题 -->
+            <div class="collapsed-section-title">场景</div>
+            <div 
+              v-for="scene in sceneList" 
+              :key="scene.id" 
+              class="collapsed-scene-item"
+              :class="{ 'active': selectedSceneId === scene.id }"
+              @click="onSceneChange(scene.id)"
+              :title="`场景: ${scene.name}
+👆 点击切换到此场景`"
+            >
+              <div class="scene-short-name">{{ scene.name.substring(0, 2) }}</div>
+              <div v-if="selectedSceneId === scene.id" class="scene-active-dot"></div>
+            </div>
+          </div>
+          
+          <!-- 分隔线 -->
+          <div class="collapsed-separator" v-if="sceneList && sceneList.length > 0 && layersList && layersList.length > 0"></div>
+          
+          <!-- 收起状态下的图层列表 -->
+          <div class="collapsed-layers" v-if="layersList && layersList.length > 0">
+            <!-- 图层区域标题 -->
+            <div class="collapsed-section-title">图层</div>
+              <div 
+                v-for="(layer) in sortedLayersList" 
+                :key="layer.id" 
+                class="collapsed-layer-item"
+                :class="{ 
+                  'active': currentActiveLayer && currentActiveLayer.scene_layer_id === layer.scene_layer_id,
+                  'invisible': !layer.visibility
+                }"
+                @click="selectLayer(layer)"
+                @dblclick="handleCollapsedLayerDblClick(layer, $event)"
+                :title="`${layer.layer_name}
+🔍 双击缩放到图层范围
+👆 单击选择图层`"
+              >
+              <!-- 可见性指示器 -->
+              <div class="visibility-indicator" :class="{ 'visible': layer.visibility }"></div>
+              <!-- 图层名称前两个字 -->
+              <div class="layer-short-name">{{ layer.layer_name.substring(0, 2) }}</div>
+              <!-- 当前活动图层标识 -->
+              <div v-if="currentActiveLayer && currentActiveLayer.scene_layer_id === layer.scene_layer_id" 
+                   class="active-dot"></div>
+            </div>
+          </div>
+          
+          <!-- 图层空状态 -->
+          <div class="collapsed-empty" v-else-if="selectedSceneId">
+            <i class="el-icon-map-location"></i>
+            <div class="empty-text">无图层</div>
+          </div>
+          
+          <!-- 场景空状态 -->
+          <div class="collapsed-empty" v-else-if="sceneList && sceneList.length === 0">
+            <i class="el-icon-folder"></i>
+            <div class="empty-text">无场景</div>
+          </div>
         </div>
       </div>
 
@@ -458,6 +522,8 @@ export default {
     const toggleLayerPanel = () => {
       layerPanelCollapsed.value = !layerPanelCollapsed.value
     }
+    
+
     
     // 跳转到场景管理
     const goToSceneManage = () => {
@@ -746,6 +812,25 @@ export default {
         console.error('缩放到图层失败:', error)
         ElMessage.error(`缩放到图层失败: ${error.message}`)
       }
+    }
+    
+    // 处理收起状态下的图层双击事件
+    const handleCollapsedLayerDblClick = async (layer, event) => {
+      // 阻止事件冒泡和默认行为
+      event.preventDefault()
+      event.stopPropagation()
+      
+      // 添加动画效果
+      const target = event.currentTarget
+      target.classList.add('zoom-animation')
+      
+      // 移除动画类（在动画结束后）
+      setTimeout(() => {
+        target.classList.remove('zoom-animation')
+      }, 200)
+      
+      // 调用缩放函数
+      await zoomToLayer(layer)
     }
     
     // 显示图层信息
@@ -1204,6 +1289,7 @@ export default {
       moveLayerDown,
       handleLayerAction,
       zoomToLayer,
+      handleCollapsedLayerDblClick,
       showLayerInfo,
       removeLayer,
       showAddLayerDialog,
@@ -1267,7 +1353,7 @@ export default {
 }
 
 .layer-panel.collapsed {
-  width: 50px;
+  width: 48px;
 }
 
 .map-container-wrapper {
@@ -1503,7 +1589,7 @@ export default {
 }
 
 .collapsed-toggle {
-  height: 50px;
+  height: 40px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -1511,6 +1597,7 @@ export default {
   border-bottom: 1px solid #e4e7ed;
   background: #f5f7fa;
   transition: all 0.3s ease;
+  flex-shrink: 0;
 }
 
 .collapsed-toggle:hover {
@@ -1541,31 +1628,254 @@ export default {
   color: #409eff;
 }
 
-/* 图层卡片样式 */
+/* 收起状态下的内容样式 */
+.collapsed-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #f8f9fa;
+}
+
+/* 收起状态下的场景选择样式 */
+.collapsed-scene-selector {
+  padding: 8px 0 5px 0;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.collapsed-section-title {
+  font-size: 8px;
+  color: #909399;
+  text-align: center;
+  margin-bottom: 4px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+.collapsed-scene-item {
+  position: relative;
+  height: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin: 1px 2px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 2px;
+  user-select: none;
+}
+
+.collapsed-scene-item:hover {
+  background: rgba(103, 194, 58, 0.1);
+  cursor: pointer;
+}
+
+.collapsed-scene-item:active {
+  transform: scale(0.95);
+  background: rgba(103, 194, 58, 0.2);
+}
+
+.collapsed-scene-item.active {
+  background: rgba(103, 194, 58, 0.15);
+  border-left: 3px solid #67c23a;
+}
+
+.scene-short-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #67c23a;
+  text-align: center;
+  line-height: 1.1;
+  max-width: 36px;
+  word-break: break-all;
+  padding: 0 2px;
+}
+
+.collapsed-scene-item.active .scene-short-name {
+  color: #5ca632;
+}
+
+.scene-active-dot {
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #67c23a;
+}
+
+/* 分隔线样式 */
+.collapsed-separator {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e4e7ed 20%, #e4e7ed 80%, transparent);
+  margin: 5px 4px;
+}
+
+.collapsed-layers {
+  flex: 1;
+  overflow-y: auto;
+  padding: 5px 0;
+}
+
+.collapsed-layer-item {
+  position: relative;
+  height: 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 1px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 2px;
+  margin: 1px 2px;
+  user-select: none; /* 防止双击时选中文本 */
+}
+
+.collapsed-layer-item:hover {
+  background: rgba(64, 158, 255, 0.1);
+  cursor: pointer;
+}
+
+/* 双击时的反馈效果 */
+.collapsed-layer-item:active {
+  transform: scale(0.95);
+  background: rgba(64, 158, 255, 0.2);
+}
+
+/* 双击动画效果 */
+@keyframes dblclick-zoom {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
+.collapsed-layer-item.zoom-animation {
+  animation: dblclick-zoom 0.2s ease-in-out;
+}
+
+.collapsed-layer-item.active {
+  background: rgba(64, 158, 255, 0.15);
+  border-left: 3px solid #409eff;
+}
+
+.collapsed-layer-item.invisible {
+  opacity: 0.5;
+}
+
+.visibility-indicator {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #dcdfe6;
+  transition: all 0.2s ease;
+}
+
+.visibility-indicator.visible {
+  background: #67c23a;
+}
+
+.layer-short-name {
+  font-size: 10px;
+  font-weight: 500;
+  color: #303133;
+  text-align: center;
+  line-height: 1.1;
+  max-width: 36px;
+  word-break: break-all;
+  padding: 0 2px;
+}
+
+.collapsed-layer-item.invisible .layer-short-name {
+  color: #909399;
+}
+
+.active-dot {
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #409eff;
+}
+
+.collapsed-empty {
+  padding: 20px 0;
+  text-align: center;
+  color: #c0c4cc;
+}
+
+.collapsed-empty i {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.collapsed-empty .empty-text {
+  font-size: 9px;
+  color: #c0c4cc;
+  text-align: center;
+}
+
+/* 收起状态下的滚动条样式 */
+.collapsed-layers::-webkit-scrollbar {
+  width: 3px;
+}
+
+.collapsed-layers::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.collapsed-layers::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 2px;
+}
+
+.collapsed-layers::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+
+
+/* 图层卡片样式 - 紧凑型 */
 .layer-cards {
   padding: 0;
   overflow-y: auto;
   max-height: 100%;
+  /* CSS变量定义 - 紧凑模式 */
+  --layer-card-spacing: 4px;
+  --layer-card-padding: 6px 10px;
+  --layer-card-border-radius: 6px;
+  --layer-info-spacing: 2px;
+  --tag-padding: 0px 4px;
 }
 
 .layer-card {
   background: white;
   border: 1px solid #e4e7ed;
-  border-radius: 8px;
-  margin-bottom: 12px;
+  border-radius: var(--layer-card-border-radius);
+  margin-bottom: var(--layer-card-spacing);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
   position: relative;
 }
 
 .layer-card:hover {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.08);
   border-color: #c6e2ff;
 }
 
 .layer-card.active {
   border-color: #409eff;
-  box-shadow: 0 2px 12px rgba(64, 158, 255, 0.2);
+  box-shadow: 0 1px 8px rgba(64, 158, 255, 0.15);
 }
 
 .layer-card.invisible {
@@ -1575,7 +1885,7 @@ export default {
 .layer-card.dragging {
   opacity: 0.7;
   transform: scale(0.98) rotate(1deg);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   z-index: 1000;
   transition: all 0.2s ease;
 }
@@ -1589,16 +1899,17 @@ export default {
 }
 
 .layer-card-header {
-  padding: 12px 15px;
+  padding: var(--layer-card-padding);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-height: 32px;
 }
 
 .layer-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex: 1;
   min-width: 0;
 }
@@ -1609,19 +1920,21 @@ export default {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 14px;
+  font-size: 12px;
+  line-height: 1.3;
 }
 
 .active-indicator {
   color: #409eff;
-  font-size: 16px;
-  margin-right: 4px;
+  font-size: 14px;
+  margin-right: 3px;
 }
 
 .layer-drag-handle {
   color: #c0c4cc;
   cursor: grab;
-  margin-right: 8px;
+  margin-right: 6px;
+  font-size: 14px;
 }
 
 .layer-drag-handle:hover {
@@ -1630,7 +1943,7 @@ export default {
 
 .layer-actions {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   opacity: 0;
   transition: opacity 0.2s;
 }
@@ -1640,9 +1953,9 @@ export default {
 }
 
 .layer-actions .el-button {
-  padding: 4px;
-  width: 24px;
-  height: 24px;
+  padding: 3px;
+  width: 20px;
+  height: 20px;
   border: none;
   background: transparent;
   color: #606266;
@@ -1665,21 +1978,21 @@ export default {
 }
 
 .layer-card-info {
-  padding: 0 15px 12px;
+  padding: var(--layer-info-spacing) 12px 8px;
   display: flex;
-  gap: 6px;
+  gap: var(--layer-info-spacing);
   flex-wrap: wrap;
 }
 
 .tag {
   display: inline-block;
-  padding: 2px 8px;
-  font-size: 11px;
-  border-radius: 12px;
+  padding: var(--tag-padding);
+  font-size: 9px;
+  border-radius: 8px;
   background: #f4f4f5;
   color: #909399;
   border: 1px solid transparent;
-  line-height: 1.2;
+  line-height: 1.3;
 }
 
 /* 服务类型样式 */
@@ -1709,7 +2022,7 @@ export default {
 }
 
 .scene-selector {
-  padding: 0 15px 15px;
+  padding: 0 15px 12px;
 }
 
 .layer-count {
@@ -1721,7 +2034,7 @@ export default {
 .panel-body {
   flex: 1;
   overflow-y: auto;
-  padding: 15px;
+  padding: 10px;
   max-height: calc(100% - 120px); /* 减去面板头部和场景选择器的高度 */
 }
 
@@ -1734,29 +2047,30 @@ export default {
 
 /* 🔥 透明度控制样式 - 紧凑型 */
 .layer-opacity-control {
-  padding: 6px 15px 8px;
+  padding: 4px 12px 6px;
   background: #fafbfc;
   border-top: 1px solid #f0f0f0;
   margin: 0;
-  border-radius: 0 0 8px 8px;
+  border-radius: 0 0 6px 6px;
 }
 
 .opacity-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
+  gap: 6px;
+  font-size: 11px;
   color: #606266;
+  min-height: 20px;
 }
 
 .opacity-icon {
-  font-size: 12px;
+  font-size: 11px;
   color: #909399;
   flex-shrink: 0;
 }
 
 .opacity-text {
-  font-size: 11px;
+  font-size: 9px;
   color: #606266;
   white-space: nowrap;
   flex-shrink: 0;
@@ -1765,30 +2079,31 @@ export default {
 .opacity-value {
   font-weight: 500;
   color: #409eff;
-  font-size: 11px;
-  min-width: 30px;
+  font-size: 9px;
+  min-width: 28px;
   text-align: right;
   flex-shrink: 0;
 }
 
 .opacity-slider {
   flex: 1;
-  margin: 0 8px;
+  margin: 0 6px;
 }
 
 .opacity-slider .el-slider__runway {
-  height: 4px;
+  height: 3px;
   background-color: #e4e7ed;
+  margin: 8px 0;
 }
 
 .opacity-slider .el-slider__bar {
-  height: 4px;
+  height: 3px;
   background-color: #409eff;
 }
 
 .opacity-slider .el-slider__button {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border: 2px solid #409eff;
   background-color: #fff;
 }
@@ -1806,5 +2121,37 @@ export default {
 /* 隐藏状态的图层，透明度控制也相应调整 */
 .layer-card.invisible .layer-opacity-control {
   opacity: 0.6;
+}
+
+/* 响应式设计 - 超小屏幕进一步压缩 */
+@media (max-width: 768px) {
+  .layer-cards {
+    --layer-card-spacing: 3px;
+    --layer-card-padding: 5px 8px;
+    --layer-card-border-radius: 4px;
+    --layer-info-spacing: 2px;
+    --tag-padding: 0px 3px;
+  }
+  
+  .layer-card-header {
+    min-height: 28px;
+  }
+  
+  .layer-name {
+    font-size: 11px;
+  }
+  
+  .tag {
+    font-size: 8px;
+  }
+  
+  .opacity-text,
+  .opacity-value {
+    font-size: 8px;
+  }
+  
+  .opacity-row {
+    min-height: 18px;
+  }
 }
 </style> 
