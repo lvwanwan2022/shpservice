@@ -159,9 +159,9 @@
             <template #default="{ row }">
               <el-tag 
                 size="small" 
-                :type="row.tiles && row.tiles.length > 0 ? 'success' : 'info'"
+                :type="row.originalLayer && row.originalLayer.wms_url ? 'danger' : (row.tiles && row.tiles.length > 0 ? 'success' : 'info')"
               >
-                {{ row.tiles && row.tiles.length > 0 ? '已缓存' : '未缓存' }}
+                {{ row.originalLayer && row.originalLayer.wms_url ? '不能缓存' : (row.tiles && row.tiles.length > 0 ? '已缓存' : '未缓存') }}
               </el-tag>
             </template>
           </el-table-column>
@@ -212,6 +212,7 @@
                 size="small" 
                 @click="startLayerCache(row)"
                 title="缓存图层"
+                :disabled="row.originalLayer && row.originalLayer.wms_url"
               >
                 <i class="el-icon-download"></i> 缓存
               </el-button>              
@@ -219,7 +220,7 @@
                 type="danger" 
                 size="small" 
                 @click="deleteLayerCache(row)"
-                :disabled="!row.tiles || row.tiles.length === 0"
+                :disabled="!row.tiles || row.tiles.length === 0 || (row.originalLayer && row.originalLayer.wms_url)"
                 title="删除缓存"
               >
                 <i class="el-icon-delete"></i> 删除
