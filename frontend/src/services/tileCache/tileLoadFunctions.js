@@ -303,7 +303,8 @@ export function createMvtTileLoadFunction(options = {}) {
 
       // 尝试从网络加载MVT数据
       function tryLoadMVTFromNetwork() {
-        fetch(url)
+        let reurl=url.replace('localhost:3000',process.env.VUE_APP_MARTIN_HOST+':'+process.env.VUE_APP_MARTIN_PORT)
+        fetch(reurl)
           .then(response => {
             if (!response.ok) {
               throw new Error(`HTTP ${response.status}`);

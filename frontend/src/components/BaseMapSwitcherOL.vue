@@ -87,6 +87,8 @@ export default {
 .base-map-switcher {
   /* 移除绝对定位，现在由父容器 .map-controls 管理位置 */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  margin: 0 !important; /* 确保没有额外的margin */
+  padding: 0 !important; /* 确保没有额外的padding */
 }
 
 .active {

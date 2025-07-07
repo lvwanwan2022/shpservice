@@ -209,16 +209,6 @@ const customMvtLoader = createMvtTileLoadFunction({
 - 缓存数据损坏时自动重新获取
 - 提供友好的错误提示
 
-## 测试页面
-
-访问 `/tile-load-test` 路由可以进入测试页面，该页面提供：
-
-1. **地图初始化**: 测试瓦片加载函数的基本功能
-2. **缓存管理**: 查看和清理缓存数据
-3. **离线模式**: 模拟网络断开情况
-4. **实时日志**: 监控瓦片加载过程
-5. **性能统计**: 查看缓存命中率和加载时间
-
 ## 最佳实践
 
 1. **图层ID命名**: 使用有意义的图层ID，便于缓存管理
@@ -250,6 +240,5 @@ const customMvtLoader = createMvtTileLoadFunction({
 ### 调试技巧
 
 1. 打开浏览器开发者工具查看网络请求
-2. 使用测试页面的日志功能监控加载过程
-3. 检查IndexedDB中的缓存数据结构
-4. 使用Performance面板分析性能瓶颈 
+2. 检查IndexedDB中的缓存数据结构
+3. 使用Performance面板分析性能瓶颈 

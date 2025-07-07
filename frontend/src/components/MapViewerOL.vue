@@ -17,6 +17,17 @@
           <i class="el-icon-refresh"></i>
         </el-button>
       </el-tooltip>
+      <el-tooltip v-if="map" :content="layersCacheEnabled ? '关闭缓存' : '开启缓存'" placement="left" :show-after="500">
+        <el-button 
+          :type="layersCacheEnabled ? 'warning' : 'info'" 
+          circle 
+          size="small" 
+          @click="toggleLayersCache"
+          class="cache-toggle-button"
+        >
+          <i :class="layersCacheEnabled ? 'el-icon-folder-opened' : 'el-icon-folder'"></i>
+        </el-button>
+      </el-tooltip>
     </div>
 
     <!-- 右下角信息面板 -->
@@ -218,6 +229,11 @@ import  gcj02Mecator  from '@/utils/GCJ02'
 import { MARTIN_BASE_URL } from '@/config/index'
 import { Loading } from '@element-plus/icons-vue'
 import { getRecommendedPreloadLevel, getRecommendedCacheSize, getDeviceType } from '@/utils/deviceUtils'
+import { 
+  createWmtsTileLoadFunction, 
+  createMvtTileLoadFunction
+} from '@/services/tileCache/tileLoadFunctions.js';
+import { TileCacheService, getGlobalSceneDataCacheService } from '@/services/tileCache';
 
 export default {
   name: 'MapViewerOL',
@@ -237,7 +253,9 @@ export default {
     const layersList = ref([])  // 确保初始化为空数组
     const currentActiveLayer = ref(null)
     const popup = ref(null)
-    
+    // 缓存服务实例
+    let tileCacheService = null;
+    const layersCacheEnabled = ref(false); // 当前图层的缓存状态
     // 坐标系初始化状态
     const projectionsInitialized = ref(false)
     
@@ -309,7 +327,18 @@ export default {
         return false
       }
     }
-    
+    const initCacheService = async () => {
+      try {
+        tileCacheService = new TileCacheService({
+          maxCacheSize: 500 * 1024 * 1024, // 500MB
+          maxCacheAge: 7 * 24 * 60 * 60 * 1000 // 7天
+        });
+      } catch (error) {
+        console.error('初始化缓存服务失败:', error);
+        ElMessage.error('初始化缓存服务失败: ' + error.message);
+      }
+    };
+
     // 动态注册单个坐标系
     const registerProjection = async (epsgCode) => {
       try {
@@ -423,68 +452,101 @@ export default {
         const deviceType = getDeviceType()
         
         //console.log(`🚀 地图预加载配置 - 设备类型: ${deviceType}, 预加载级别: ${preloadLevel}, 缓存大小: ${cacheSize}`)
-        
-        // 高德地图 - 使用GCJ02坐标系修正偏移
-        const gaodeLayer = new TileLayer({
-          source: new XYZ({
+        if (!tileCacheService) {
+        ElMessage.warning('缓存服务未初始化');
+        return;
+      }
+        const wmtsTileLoadFunction_gaode = createWmtsTileLoadFunction({
+          layerId: 'gaode',
+          tileCacheService: tileCacheService,
+          enableCacheStorage: layersCacheEnabled.value
+        });
+        console.log('gaodeTileLoadFunction',layersCacheEnabled.value)
+        const gaodeSource =new XYZ({
             url: 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
             crossOrigin: 'anonymous',
             projection: gcj02Mecator, // 使用GCJ02坐标系
             maxZoom: 18,              // 高德地图原生最大缩放级别
             minZoom: 3,               // 最小缩放级别
-            cacheSize: cacheSize      // 设置缓存大小
-          }),
+           // cacheSize: cacheSize      // 设置缓存大小
+          });
+          gaodeSource.setTileLoadFunction(wmtsTileLoadFunction_gaode);
+
+        // 高德地图 - 使用GCJ02坐标系修正偏移
+        const gaodeLayer = new TileLayer({
+          source: gaodeSource,
           visible: true,
           maxZoom: 23,                // 允许过采样到更高级别
           minZoom: 3,
-          preload: preloadLevel       // 设置预加载级别
+          //preload: preloadLevel       // 设置预加载级别
         })
         
-        // 高德卫星地图 - 使用GCJ02坐标系修正偏移
-        const gaodeSatelliteLayer = new TileLayer({
-          source: new XYZ({
+        const wmtsTileLoadFunction_gaodeSatellite = createWmtsTileLoadFunction({
+          layerId: 'gaodeSatellite',
+          tileCacheService: tileCacheService,
+          enableCacheStorage: layersCacheEnabled.value
+        });
+        const gaodeSatelliteSource =new XYZ({
             url: 'https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
             crossOrigin: 'anonymous',
             projection: gcj02Mecator, // 使用GCJ02坐标系
             maxZoom: 18,              // 高德卫星图原生最大缩放级别
             minZoom: 3,
-            cacheSize: cacheSize      // 设置缓存大小
-          }),
+          });
+        // 高德卫星地图 - 使用GCJ02坐标系修正偏移
+        const gaodeSatelliteLayer = new TileLayer({
+          source: gaodeSatelliteSource,
           visible: false,
           maxZoom: 23,                // 允许过采样到更高级别
           minZoom: 3,
           preload: preloadLevel       // 设置预加载级别
         })
+        gaodeSatelliteSource.setTileLoadFunction(wmtsTileLoadFunction_gaodeSatellite);
+        
+        const wmtsTileLoadFunction_osm = createWmtsTileLoadFunction({
+          layerId: 'osm',
+          tileCacheService: tileCacheService,
+          enableCacheStorage: layersCacheEnabled.value
+        });
+        const osmSource =new XYZ({
+          url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          crossOrigin: 'anonymous',
+          maxZoom: 19,              // OSM原生最大缩放级别
+          minZoom: 1,
+          cacheSize: cacheSize      // 设置缓存大小
+        });
+        osmSource.setTileLoadFunction(wmtsTileLoadFunction_osm);
         
         // OpenStreetMap
         const osmLayer = new TileLayer({
-          source: new XYZ({
-            url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            crossOrigin: 'anonymous',
-            maxZoom: 19,              // OSM原生最大缩放级别
-            minZoom: 1,
-            cacheSize: cacheSize      // 设置缓存大小
-          }),
+          source: osmSource,
           visible: false,
           maxZoom: 23,                // 允许过采样到更高级别
           minZoom: 1,
           preload: preloadLevel       // 设置预加载级别
         })
-        
+        const wmtsTileLoadFunction_esriSatellite = createWmtsTileLoadFunction({
+          layerId: 'esriSatellite',
+          tileCacheService: tileCacheService,
+          enableCacheStorage: layersCacheEnabled.value
+        });
+        const esriSatelliteSource =new XYZ({
+          url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+          crossOrigin: 'anonymous',
+          maxZoom: 21,              // Esri影像最大缩放级别（原生支持21级）
+          minZoom: 1,
+          cacheSize: cacheSize      // 设置缓存大小
+        });
+        esriSatelliteSource.setTileLoadFunction(wmtsTileLoadFunction_esriSatellite);
         // Esri 世界影像（卫星图）
         const esriSatelliteLayer = new TileLayer({
-          source: new XYZ({
-            url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-            crossOrigin: 'anonymous',
-            maxZoom: 21,              // Esri影像最大缩放级别（原生支持21级）
-            minZoom: 1,
-            cacheSize: cacheSize      // 设置缓存大小
-          }),
+          source: esriSatelliteSource,
           visible: false,
           maxZoom: 23,                // 允许过采样到更高级别
           minZoom: 1,
           preload: preloadLevel       // 设置预加载级别
         })
+       
         
         //console.log('✅ 底图图层创建成功')
         
@@ -1293,6 +1355,13 @@ export default {
 
           
           // 创建矢量切片图层 - 用于矢量mbtiles和其他矢量数据
+          // 创建带缓存功能的MVT瓦片加载函数
+          const mvtTileLoadFunction = createMvtTileLoadFunction({
+            layerId: layer.id.toString(),
+            tileCacheService: tileCacheService,
+            enableCacheStorage: layersCacheEnabled.value
+          })
+          
           olLayer = new VectorTileLayer({
             declutter: true, // 启用标注防冲突
             source: new VectorTile({
@@ -1305,7 +1374,9 @@ export default {
               // 添加属性信息
               attributions: layer.attribution || [],
               // 设置瓦片缓存大小
-              cacheSize: 128
+              cacheSize: 128,
+              // 设置自定义的瓦片加载函数，支持缓存
+              tileLoadFunction: mvtTileLoadFunction
             }),
             style: createStyleFunction(),
             opacity: typeof layer.opacity === 'number' ? layer.opacity : 1.0,
@@ -1321,7 +1392,7 @@ export default {
             }
           });
           
-          //console.log('创建矢量MBTiles图层:', layer.layer_name);
+          console.log('创建矢量MBTiles图层 (带缓存):', layer.layer_name, '缓存状态:', layersCacheEnabled.value ? '开启' : '关闭');
         }
         
         // 使用统一变量名
@@ -2081,9 +2152,97 @@ export default {
       currentBaseMapAttribution.value = attributions[baseMapType] || ''
     }
     
-    
+    // 切换底图缓存开关
+    const toggleLayersCache = () => {
+      layersCacheEnabled.value = !layersCacheEnabled.value
+      
+      // 重新设置所有底图的 tileLoadFunction
+      if (map.value && map.value.baseLayers) {
+        const baseLayers = map.value.baseLayers
+        
+        // 高德地图
+        if (baseLayers.gaode) {
+          const gaodeSource = baseLayers.gaode.getSource()
+          if (gaodeSource && gaodeSource.setTileLoadFunction) {
+            const wmtsTileLoadFunction_gaode = createWmtsTileLoadFunction({
+              layerId: 'gaode',
+              tileCacheService: tileCacheService,
+              enableCacheStorage: layersCacheEnabled.value
+            })
+            gaodeSource.setTileLoadFunction(wmtsTileLoadFunction_gaode)
+          }
+        }
+        
+        // 高德卫星图
+        if (baseLayers.gaodeSatellite) {
+          const gaodeSatelliteSource = baseLayers.gaodeSatellite.getSource()
+          if (gaodeSatelliteSource && gaodeSatelliteSource.setTileLoadFunction) {
+            const wmtsTileLoadFunction_gaodeSatellite = createWmtsTileLoadFunction({
+              layerId: 'gaodeSatellite',
+              tileCacheService: tileCacheService,
+              enableCacheStorage: layersCacheEnabled.value
+            })
+            gaodeSatelliteSource.setTileLoadFunction(wmtsTileLoadFunction_gaodeSatellite)
+          }
+        }
+        
+        // OSM
+        if (baseLayers.osm) {
+          const osmSource = baseLayers.osm.getSource()
+          if (osmSource && osmSource.setTileLoadFunction) {
+            const wmtsTileLoadFunction_osm = createWmtsTileLoadFunction({
+              layerId: 'osm',
+              tileCacheService: tileCacheService,
+              enableCacheStorage: layersCacheEnabled.value
+            })
+            osmSource.setTileLoadFunction(wmtsTileLoadFunction_osm)
+          }
+        }
+        
+        // Esri卫星图
+        if (baseLayers.esriSatellite) {
+          const esriSatelliteSource = baseLayers.esriSatellite.getSource()
+          if (esriSatelliteSource && esriSatelliteSource.setTileLoadFunction) {
+            const wmtsTileLoadFunction_esriSatellite = createWmtsTileLoadFunction({
+              layerId: 'esriSatellite',
+              tileCacheService: tileCacheService,
+              enableCacheStorage: layersCacheEnabled.value
+            })
+            esriSatelliteSource.setTileLoadFunction(wmtsTileLoadFunction_esriSatellite)
+          }
+        }
+      }
+      
+      // 重新设置所有MVT图层的 tileLoadFunction
+      if (mvtLayers.value && Object.keys(mvtLayers.value).length > 0) {
+        Object.entries(mvtLayers.value).forEach(([layerId, mvtLayer]) => {
+          try {
+            if (mvtLayer && mvtLayer.getSource) {
+              const source = mvtLayer.getSource()
+              if (source && source.setTileLoadFunction) {
+                // 为MVT图层创建新的瓦片加载函数
+                const mvtTileLoadFunction = createMvtTileLoadFunction({
+                  layerId: layerId,
+                  tileCacheService: tileCacheService,
+                  enableCacheStorage: layersCacheEnabled.value
+                })
+                source.setTileLoadFunction(mvtTileLoadFunction)
+                console.log(`MVT图层 ${layerId} 缓存状态已更新:`, layersCacheEnabled.value ? '开启' : '关闭')
+              }
+            }
+          } catch (error) {
+            console.error(`更新MVT图层 ${layerId} 缓存状态失败:`, error)
+          }
+        })
+      }
+      
+      console.log('图层缓存状态已切换:', layersCacheEnabled.value ? '开启' : '关闭')
+      console.log('已更新底图缓存:', Object.keys(map.value?.baseLayers || {}).length, '个')
+      console.log('已更新MVT图层缓存:', Object.keys(mvtLayers.value || {}).length, '个')
+    }
     
     onMounted(() => {
+      initCacheService();
       nextTick(async () => {
         // 增加一个小延迟确保DOM完全渲染
         setTimeout(async () => {
@@ -2186,7 +2345,9 @@ export default {
       mouseCoordinates,
       currentBaseMapAttribution,
       initializeCoordinateTracking,
-      updateBaseMapAttribution
+      updateBaseMapAttribution,
+      layersCacheEnabled,
+      toggleLayersCache
     }
   },
   expose: ['showStyleDialog', 'showAddLayerDialog', 'toggleLayerVisibility', 'updateLayerOpacity', 'map', 'bringLayerToTop', 'setActiveLayer', 'currentActiveLayer', 'getLayerCRSInfo', 'transformCoordinates', 'initializeProjections', 'registerProjection', 'projectionsInitialized', 'applyDxfStylesToLayer']
@@ -2353,6 +2514,8 @@ export default {
 .refresh-button {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   border: 1px solid #67c23a;
+  margin: 0 !important; /* 确保没有额外的margin */
+  padding: 0 !important; /* 确保没有额外的padding */
 }
 
 .refresh-button:hover {
@@ -2498,5 +2661,32 @@ export default {
     width: 100% !important;
     max-width: 300px;
   }
+}
+
+.cache-toggle-button {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s ease;
+  margin: 0 !important; /* 确保没有额外的margin */
+  padding: 0 !important; /* 确保没有额外的padding */
+}
+
+.cache-toggle-button.el-button--warning {
+  background-color: #e6a23c;
+  border-color: #e6a23c;
+}
+
+.cache-toggle-button.el-button--warning:hover {
+  background-color: #ebb563;
+  border-color: #ebb563;
+}
+
+.cache-toggle-button.el-button--info {
+  background-color: #909399;
+  border-color: #909399;
+}
+
+.cache-toggle-button.el-button--info:hover {
+  background-color: #a6a9ad;
+  border-color: #a6a9ad;
 }
 </style> 

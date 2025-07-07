@@ -58,15 +58,6 @@
         <div class="card-desc">提交反馈建议，参与产品改进</div>
       </el-card>
 
-      <el-card class="home-card" @click="goToTileLoadTest">
-        <div class="card-icon">
-          <i class="el-icon-cpu"></i>
-        </div>
-        <div class="card-title">瓦片加载测试</div>
-        <div class="card-desc">测试瓦片加载函数的缓存和离线功能</div>
-      </el-card>
-      
-      
     </div>
   </div>
 </template>
@@ -92,9 +83,6 @@ export default {
     },
     goToFeedback() {
       this.$router.push('/feedback')
-    },
-    goToTileLoadTest() {
-      this.$router.push('/tile-load-test')
     }
   }
 }
