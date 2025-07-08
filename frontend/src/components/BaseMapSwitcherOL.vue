@@ -86,9 +86,32 @@ export default {
 <style scoped>
 .base-map-switcher {
   /* 移除绝对定位，现在由父容器 .map-controls 管理位置 */
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  margin: 0 !important; /* 确保没有额外的margin */
-  padding: 0 !important; /* 确保没有额外的padding */
+  /*box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);*/
+}
+
+/* 🔥 手机端底图切换按钮修复 */
+@media (max-width: 768px) {
+  .base-map-switcher .el-button.is-circle {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+  }
+  
+  .base-map-switcher .el-button.is-circle i {
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
 }
 
 .active {

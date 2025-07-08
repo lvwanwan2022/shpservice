@@ -45,69 +45,177 @@
     </div>
     
     <!-- 添加图层对话框 -->
-    <el-dialog title="添加图层" v-model="addLayerDialogVisible" width="800px">
-      <div class="dialog-content">
-        <el-form :inline="true" :model="layerSearchForm" class="search-form">
-          <el-form-item label="服务类型">
-            <el-select v-model="layerSearchForm.service_type" placeholder="请选择服务类型" clearable>
-              <el-option label="全部" value="" />
-              <el-option label="GeoServer服务" value="geoserver" />
-              <el-option label="Martin服务" value="martin" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="专业">
-            <el-select v-model="layerSearchForm.discipline" placeholder="请选择专业" clearable>
-              <el-option v-for="item in disciplines" :key="item" :label="item" :value="item" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="数据类型">
-            <el-select v-model="layerSearchForm.file_type" placeholder="请选择数据类型" clearable>
-              <el-option v-for="item in fileTypes" :key="item" :label="item" :value="item" />
-            </el-select>
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" @click="searchLayers">搜索</el-button>
-          </el-form-item>
-        </el-form>
+    <el-dialog title="添加图层" v-model="addLayerDialogVisible" :width="isMobile ? '95%' : '800px'" :fullscreen="isMobile">
+      <div class="add-layer-dialog-content">
+        <!-- 数据检索区 -->
+        <div class="layer-search-area">
+          <!-- 移动端搜索切换按钮 -->
+          <div class="mobile-search-toggle" @click="toggleMobileLayerSearch">
+            <el-icon class="toggle-icon" :class="{ 'rotated': mobileLayerSearchExpanded }">
+              <ArrowDown />
+            </el-icon>
+            <span class="toggle-text">搜索筛选</span>
+            <div class="search-summary" v-if="!mobileLayerSearchExpanded && hasActiveLayerFilters">
+              <el-tag size="small" type="primary">{{ getActiveLayerFiltersText() }}</el-tag>
+            </div>
+          </div>
+          
+          <!-- 搜索表单 -->
+          <div class="search-form-container" :class="{ 'mobile-collapsed': !mobileLayerSearchExpanded }">
+            <el-form :inline="!isMobile" :model="layerSearchForm" class="layer-search-form">
+              <el-form-item label="服务类型">
+                <el-select v-model="layerSearchForm.service_type" placeholder="请选择服务类型" clearable>
+                  <el-option label="全部" value="" />
+                  <el-option label="GeoServer服务" value="geoserver" />
+                  <el-option label="Martin服务" value="martin" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="专业">
+                <el-select v-model="layerSearchForm.discipline" placeholder="请选择专业" clearable>
+                  <el-option v-for="item in disciplines" :key="item" :label="item" :value="item" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="数据类型">
+                <el-select v-model="layerSearchForm.file_type" placeholder="请选择数据类型" clearable>
+                  <el-option v-for="item in fileTypes" :key="item" :label="item" :value="item" />
+                </el-select>
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" @click="searchLayers">搜索</el-button>
+                <el-button @click="resetLayerSearch">清空</el-button>
+              </el-form-item>
+            </el-form>
+          </div>
+        </div>
         
-        <el-table :data="availableLayers" style="width: 100%" max-height="400">
-          <el-table-column prop="layer_name" label="图层名称" min-width="150" />
-          <el-table-column prop="file_type" label="数据类型" width="100" />
-          <el-table-column prop="discipline" label="专业" width="100" />
-          <el-table-column label="服务状态" width="120">
-            <template #default="scope">
-              <div class="service-status">
-                <el-tag v-if="scope.row.geoserver_service?.is_published" type="success" size="small">GeoServer已发布</el-tag>
-                <el-tag v-if="scope.row.martin_service?.is_published" type="primary" size="small">Martin已发布</el-tag>
-                <el-tag v-if="!hasAnyPublishedService(scope.row)" type="warning" size="small">未发布</el-tag>
+        <!-- 图层列表 -->
+        <div class="layer-list-container">
+          <!-- 移动端卡片布局 -->
+          <div class="mobile-layer-cards">
+            <div v-for="layer in availableLayers" :key="layer.id" class="mobile-layer-card">
+              <!-- 卡片头部：图层名称 -->
+              <div class="mobile-layer-card-header">
+                <div class="mobile-layer-name">{{ layer.layer_name }}</div>
               </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="150" fixed="right">
-            <template #default="scope">
-              <div class="layer-actions">
-                <el-button 
-                  v-if="scope.row.geoserver_service?.is_published"
-                  size="small" 
-                  type="primary" 
-                  @click="addLayerToScene(scope.row, 'geoserver')"
-                  :disabled="isLayerInScene(scope.row.id, 'geoserver')"
-                >
-                  {{ isLayerInScene(scope.row.id, 'geoserver') ? '已添加' : '添加GeoServer' }}
-                </el-button>
-                <el-button 
-                  v-if="scope.row.martin_service?.is_published"
-                  size="small" 
-                  type="success" 
-                  @click="addLayerToScene(scope.row, 'martin')"
-                  :disabled="isLayerInScene(scope.row.id, 'martin')"
-                >
-                  {{ isLayerInScene(scope.row.id, 'martin') ? '已添加' : '添加Martin' }}
-                </el-button>
+              
+              <!-- 基本信息网格 -->
+              <div class="mobile-layer-info">
+                <div class="mobile-info-item">
+                  <div class="mobile-info-label">数据类型</div>
+                  <div class="mobile-info-value">
+                    <el-tag v-if="layer.file_type" size="small" type="primary">{{ layer.file_type.toUpperCase() }}</el-tag>
+                    <span v-else>-</span>
+                  </div>
+                </div>
+                <div class="mobile-info-item">
+                  <div class="mobile-info-label">专业</div>
+                  <div class="mobile-info-value">
+                    <el-tag v-if="layer.discipline" size="small" type="success">{{ layer.discipline }}</el-tag>
+                    <span v-else>-</span>
+                  </div>
+                </div>
+                <div class="mobile-info-item">
+                  <div class="mobile-info-label">文件大小</div>
+                  <div class="mobile-info-value">{{ formatFileSize(layer.file_size) }}</div>
+                </div>
+                <div class="mobile-info-item">
+                  <div class="mobile-info-label">上传时间</div>
+                  <div class="mobile-info-value">{{ formatDate(layer.upload_time) }}</div>
+                </div>
               </div>
-            </template>
-          </el-table-column>
-        </el-table>
+              
+              <!-- 服务发布状态和操作 -->
+              <div class="mobile-service-section">
+                <!-- GeoServer服务 -->
+                <div class="mobile-service-item" v-if="layer.geoserver_service?.is_published">
+                  <div class="mobile-service-header">
+                    <div class="mobile-service-title">GeoServer服务</div>
+                    <el-tag type="success" size="small">已发布</el-tag>
+                  </div>
+                  <div class="mobile-service-actions">
+                    <el-button 
+                      size="small" 
+                      type="primary" 
+                      @click="addLayerToScene(layer, 'geoserver')"
+                      :disabled="isLayerInScene(layer.id, 'geoserver')"
+                    >
+                      {{ isLayerInScene(layer.id, 'geoserver') ? '已添加' : '添加到场景' }}
+                    </el-button>
+                  </div>
+                </div>
+                
+                <!-- Martin服务 -->
+                <div class="mobile-service-item" v-if="layer.martin_service?.is_published">
+                  <div class="mobile-service-header">
+                    <div class="mobile-service-title">Martin服务</div>
+                    <el-tag type="primary" size="small">已发布</el-tag>
+                  </div>
+                  <div class="mobile-service-actions">
+                    <el-button 
+                      size="small" 
+                      type="success" 
+                      @click="addLayerToScene(layer, 'martin')"
+                      :disabled="isLayerInScene(layer.id, 'martin')"
+                    >
+                      {{ isLayerInScene(layer.id, 'martin') ? '已添加' : '添加到场景' }}
+                    </el-button>
+                  </div>
+                </div>
+                
+                <!-- 未发布状态 -->
+                <div class="mobile-service-item" v-if="!hasAnyPublishedService(layer)">
+                  <div class="mobile-service-header">
+                    <div class="mobile-service-title">服务状态</div>
+                    <el-tag type="warning" size="small">未发布</el-tag>
+                  </div>
+                  <div class="mobile-service-note">此图层暂无可用服务</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 桌面端表格布局 -->
+          <div class="desktop-layer-table">
+            <el-table :data="availableLayers" style="width: 100%" max-height="400">
+              <el-table-column prop="layer_name" label="图层名称" min-width="150" />
+              <el-table-column prop="file_type" label="数据类型" width="100" />
+              <el-table-column prop="discipline" label="专业" width="100" />
+              <el-table-column label="服务状态" width="120">
+                <template #default="scope">
+                  <div class="service-status">
+                    <el-tag v-if="scope.row.geoserver_service?.is_published" type="success" size="small">GeoServer已发布</el-tag>
+                    <el-tag v-if="scope.row.martin_service?.is_published" type="primary" size="small">Martin已发布</el-tag>
+                    <el-tag v-if="!hasAnyPublishedService(scope.row)" type="warning" size="small">未发布</el-tag>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="150" fixed="right">
+                <template #default="scope">
+                  <div class="layer-actions">
+                    <el-button 
+                      v-if="scope.row.geoserver_service?.is_published"
+                      size="small" 
+                      type="primary" 
+                      @click="addLayerToScene(scope.row, 'geoserver')"
+                      :disabled="isLayerInScene(scope.row.id, 'geoserver')"
+                    >
+                      {{ isLayerInScene(scope.row.id, 'geoserver') ? '已添加' : '添加GeoServer' }}
+                    </el-button>
+                    <el-button 
+                      v-if="scope.row.martin_service?.is_published"
+                      size="small" 
+                      type="success" 
+                      @click="addLayerToScene(scope.row, 'martin')"
+                      :disabled="isLayerInScene(scope.row.id, 'martin')"
+                    >
+                      {{ isLayerInScene(scope.row.id, 'martin') ? '已添加' : '添加Martin' }}
+                    </el-button>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </div>
       </div>
     </el-dialog>
     
@@ -227,7 +335,7 @@ import { register } from 'ol/proj/proj4'
 // 引入ol-proj-ch库中的GCJ02坐标系
 import  gcj02Mecator  from '@/utils/GCJ02'
 import { MARTIN_BASE_URL } from '@/config/index'
-import { Loading } from '@element-plus/icons-vue'
+import { Loading, ArrowDown } from '@element-plus/icons-vue'
 import { getRecommendedPreloadLevel, getRecommendedCacheSize, getDeviceType } from '@/utils/deviceUtils'
 import { 
   createWmtsTileLoadFunction, 
@@ -237,7 +345,7 @@ import { TileCacheService, getGlobalSceneDataCacheService } from '@/services/til
 
 export default {
   name: 'MapViewerOL',
-  components: { BaseMapSwitcherOL, DxfStyleEditor, Loading },
+  components: { BaseMapSwitcherOL, DxfStyleEditor, Loading, ArrowDown },
   props: {
     sceneId: { type: [Number, String], default: null },
     readonly: { type: Boolean, default: false }
@@ -374,6 +482,14 @@ export default {
       service_type: '',
       discipline: '',
       file_type: ''
+    })
+    
+    // 移动端搜索相关
+    const mobileLayerSearchExpanded = ref(true)
+    
+    // 设备检测
+    const isMobile = computed(() => {
+      return window.innerWidth <= 768
     })
     
     // 图层样式对话框
@@ -1777,6 +1893,10 @@ export default {
     const showAddLayerDialog = async () => {
       if (!props.sceneId) return
       addLayerDialogVisible.value = true
+      // 移动端默认展开搜索
+      if (isMobile.value) {
+        mobileLayerSearchExpanded.value = true
+      }
       await fetchAvailableLayers()
     }
     
@@ -1807,6 +1927,49 @@ export default {
     
     // 搜索图层
     const searchLayers = () => fetchAvailableLayers()
+    
+    // 重置图层搜索
+    const resetLayerSearch = () => {
+      layerSearchForm.service_type = ''
+      layerSearchForm.discipline = ''
+      layerSearchForm.file_type = ''
+      fetchAvailableLayers()
+    }
+    
+    // 切换移动端图层搜索展开状态
+    const toggleMobileLayerSearch = () => {
+      mobileLayerSearchExpanded.value = !mobileLayerSearchExpanded.value
+    }
+    
+    // 检查是否有激活的图层筛选条件
+    const hasActiveLayerFilters = computed(() => {
+      return layerSearchForm.service_type || layerSearchForm.discipline || layerSearchForm.file_type
+    })
+    
+    // 获取激活图层筛选条件的文字描述
+    const getActiveLayerFiltersText = () => {
+      const filters = []
+      if (layerSearchForm.service_type) filters.push('服务')
+      if (layerSearchForm.discipline) filters.push('专业')
+      if (layerSearchForm.file_type) filters.push('类型')
+      return filters.length > 0 ? `${filters.join('+')}` : ''
+    }
+    
+    // 格式化文件大小
+    const formatFileSize = (size) => {
+      if (!size) return '-'
+      if (size < 1024) return size + ' B'
+      if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB'
+      if (size < 1024 * 1024 * 1024) return (size / (1024 * 1024)).toFixed(1) + ' MB'
+      return (size / (1024 * 1024 * 1024)).toFixed(1) + ' GB'
+    }
+    
+    // 格式化日期
+    const formatDate = (dateString) => {
+      if (!dateString) return '-'
+      const date = new Date(dateString)
+      return date.toLocaleDateString('zh-CN') + ' ' + date.toLocaleTimeString('zh-CN', { hour12: false })
+    }
     
     // 检查图层是否已在场景中
     const isLayerInScene = (fileId, serviceType) => layersList.value.some(layer => layer.file_id === fileId && layer.service_type === serviceType)
@@ -2347,7 +2510,17 @@ export default {
       initializeCoordinateTracking,
       updateBaseMapAttribution,
       layersCacheEnabled,
-      toggleLayersCache
+      toggleLayersCache,
+      // 移动端图层搜索相关
+      mobileLayerSearchExpanded,
+      isMobile,
+      toggleMobileLayerSearch,
+      hasActiveLayerFilters,
+      getActiveLayerFiltersText,
+      resetLayerSearch,
+      formatFileSize,
+      formatDate,
+      ArrowDown
     }
   },
   expose: ['showStyleDialog', 'showAddLayerDialog', 'toggleLayerVisibility', 'updateLayerOpacity', 'map', 'bringLayerToTop', 'setActiveLayer', 'currentActiveLayer', 'getLayerCRSInfo', 'transformCoordinates', 'initializeProjections', 'registerProjection', 'projectionsInitialized', 'applyDxfStylesToLayer']
@@ -2359,23 +2532,51 @@ export default {
   position: relative;
   width: 100%;
   height: 100%;
-  background-color: #e0e0e0; /* 调试背景色 */
+  background: transparent; /* 🔥 移除调试背景色，使用透明背景 */
   overflow: hidden;
   contain: layout style; /* CSS containment 优化 */
+  margin: 0; /* 🔥 移除外边距 */
+  padding: 0; /* 🔥 移除内边距 */
+  border: none; /* 🔥 移除边框 */
 }
 
 .map-container {
   width: 100%;
   height: 100%;
   position: relative;
-  background-color: #f5f5f5; /* 添加背景色以便调试 */
+  background: transparent; /* 🔥 移除调试背景色，使用透明背景 */
   min-height: 0; /* 防止flex容器高度计算问题 */
   contain: layout style; /* CSS containment 优化 */
   border: none; /* 移除调试边框 */
+  margin: 0; /* 🔥 移除外边距 */
+  padding: 0; /* 🔥 移除内边距 */
+  outline: none; /* 🔥 移除轮廓 */
 }
 
-.dialog-content {
+.add-layer-dialog-content {
   min-height: 300px;
+}
+
+/* 图层搜索区域样式 */
+.layer-search-area {
+  margin-bottom: 20px;
+  padding: 20px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
+}
+
+/* 桌面端隐藏移动端搜索切换按钮 */
+.mobile-search-toggle {
+  display: none;
+}
+
+/* 桌面端隐藏移动端卡片 */
+.mobile-layer-cards {
+  display: none;
+}
+
+.layer-list-container {
+  margin-top: 20px;
 }
 
 .search-form {
@@ -2508,14 +2709,76 @@ export default {
   z-index: 1000;
   display: flex;
   flex-direction: column;
+  align-items: center; /* 🔥 确保所有按钮居中对齐 */
   gap: 8px;
+}
+
+/* 🔥 手机端地图控件按钮修复 */
+@media (max-width: 768px) {
+  .map-controls {
+    top: 8px;
+    right: 8px;
+    gap: 6px;
+  }
+  
+  /* 🔥 确保所有圆形按钮在手机端保持正确的圆形形状 */
+  .map-controls .el-button.is-circle {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+  }
+  
+  /* 🔥 确保图标在按钮中居中 */
+  .map-controls .el-button.is-circle i {
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+  
+  /* 🔥 针对具体按钮的额外修复 */
+  .map-controls .refresh-button {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+  }
+  
+  .map-controls .cache-toggle-button {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    
+  }
+  
+  .map-controls .base-map-switcher {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+  }
+  
+  /* 🔥 确保所有按钮容器对齐 */
+  .map-controls > * {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+  }
 }
 
 .refresh-button {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   border: 1px solid #67c23a;
-  margin: 0 !important; /* 确保没有额外的margin */
-  padding: 0 !important; /* 确保没有额外的padding */
 }
 
 .refresh-button:hover {
@@ -2589,7 +2852,9 @@ export default {
   font-weight: 500;
   letter-spacing: 0.5px;
 }
-
+.el-button+.el-button {
+    margin-left: 0px;
+}
 /* 版权信息样式 */
 .copyright-info {
   background: rgba(255, 255, 255, 0.95);
@@ -2643,6 +2908,7 @@ export default {
 
 /* 响应式设计 */
 @media (max-width: 768px) {
+  /* 原有搜索表单样式 */
   .search-form {
     padding: 12px;
   }
@@ -2661,13 +2927,239 @@ export default {
     width: 100% !important;
     max-width: 300px;
   }
+  
+  /* 移动端图层搜索样式 */
+  .layer-search-area {
+    padding: 12px;
+    margin-bottom: 16px;
+  }
+  
+  /* 显示移动端搜索切换按钮 */
+  .mobile-search-toggle {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: #ffffff;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+  }
+  
+  .mobile-search-toggle:hover {
+    background: #f8f9fa;
+  }
+  
+  .toggle-icon {
+    font-size: 16px;
+    color: #409eff;
+    transition: transform 0.3s ease;
+    margin-right: 8px;
+  }
+  
+  .toggle-icon.rotated {
+    transform: rotate(180deg);
+  }
+  
+  .toggle-text {
+    font-weight: 500;
+    color: #333;
+    flex: 1;
+  }
+  
+  .search-summary {
+    margin-left: 8px;
+  }
+  
+  /* 搜索表单容器控制 */
+  .search-form-container {
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+  
+  .search-form-container.mobile-collapsed {
+    height: 0 !important;
+    opacity: 0;
+    margin: 0;
+    padding: 0;
+  }
+  
+  .layer-search-form {
+    background: #ffffff;
+    padding: 16px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+  
+  .layer-search-form .el-form-item {
+    margin-bottom: 12px;
+    width: 100%;
+  }
+  
+  .layer-search-form .el-form-item:last-child {
+    margin-bottom: 0;
+  }
+  
+  .layer-search-form .el-select,
+  .layer-search-form .el-input {
+    width: 100%;
+  }
+  
+  .layer-search-form .el-form-item__label {
+    width: auto !important;
+    margin-bottom: 4px;
+    font-weight: 500;
+    color: #606266;
+  }
+  
+  /* 隐藏桌面端表格，显示移动端卡片 */
+  .desktop-layer-table {
+    display: none !important;
+  }
+  
+  .mobile-layer-cards {
+    display: block !important;
+  }
+  
+  /* 移动端图层卡片样式 - 紧凑版 */
+  .mobile-layer-card {
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e5e7eb;
+    transition: all 0.3s ease;
+  }
+  
+  .mobile-layer-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
+  }
+  
+  .mobile-layer-card:last-child {
+    margin-bottom: 0;
+  }
+  
+  /* 图层卡片头部 - 紧凑版 */
+  .mobile-layer-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #f0f2f5;
+  }
+  
+  .mobile-layer-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1f2937;
+    line-height: 1.3;
+    word-break: break-all;
+  }
+  
+  /* 基本信息网格 - 紧凑版 */
+  .mobile-layer-info {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 8px;
+    margin-bottom: 8px;
+  }
+  
+  .mobile-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  
+  .mobile-info-label {
+    font-size: 10px;
+    color: #6b7280;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    line-height: 1.2;
+  }
+  
+  .mobile-info-value {
+    font-size: 12px;
+    color: #374151;
+    font-weight: 500;
+    line-height: 1.3;
+  }
+  
+  .mobile-info-value .el-tag {
+    font-size: 10px !important;
+    padding: 1px 4px !important;
+    height: 16px !important;
+    line-height: 14px !important;
+  }
+  
+  /* 服务发布状态区域 - 紧凑版 */
+  .mobile-service-section {
+    border-top: 1px solid #f0f2f5;
+    padding-top: 8px;
+  }
+  
+  .mobile-service-item {
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+  }
+  
+  .mobile-service-item:last-child {
+    margin-bottom: 0;
+  }
+  
+  .mobile-service-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  
+  .mobile-service-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+  }
+  
+  .mobile-service-header .el-tag {
+    font-size: 10px !important;
+    padding: 1px 4px !important;
+    height: 16px !important;
+    line-height: 14px !important;
+  }
+  
+  .mobile-service-actions {
+    display: flex;
+    justify-content: center;
+  }
+  
+  .mobile-service-actions .el-button {
+    width: 100%;
+    max-width: 160px;
+    font-size: 12px !important;
+    padding: 4px 8px !important;
+    height: 28px !important;
+  }
+  
+  .mobile-service-note {
+    text-align: center;
+    font-size: 11px;
+    color: #9ca3af;
+    font-style: italic;
+    line-height: 1.2;
+  }
 }
 
 .cache-toggle-button {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  transition: all 0.3s ease;
-  margin: 0 !important; /* 确保没有额外的margin */
-  padding: 0 !important; /* 确保没有额外的padding */
+  /*box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);*/
+  /*transition: all 0.3s ease;*/
 }
 
 .cache-toggle-button.el-button--warning {
