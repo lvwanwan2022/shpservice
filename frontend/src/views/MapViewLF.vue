@@ -1349,9 +1349,8 @@ export default {
     color: #fff;
     border-radius: 24px;
     box-shadow: 0 4px 16px rgba(64,158,255,0.18);
-    padding: 0 24px;
+    padding: 0 10px;
     height: 36px;
-    min-width: 50px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1374,6 +1373,18 @@ export default {
     display: flex;
     align-items: center;
     gap: 8px;
+    padding: 14px 14px;
+    color: white;
+    font-weight: 500;
+    position: relative;
+  }
+  .fab-content i {
+    font-size: 18px;
+  }
+  
+  .fab-text {
+    font-size: 14px;
+    font-weight: 600;
   }
   .fab-badge {
     position: absolute;

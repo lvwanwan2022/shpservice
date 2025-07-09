@@ -2615,9 +2615,8 @@ export default {
     color: #fff;
     border-radius: 24px;
     box-shadow: 0 4px 16px rgba(64,158,255,0.18);
-    padding: 0 24px;
+    padding: 0 5px;
     height: 36px;
-    min-width: 50px;
     display: flex;
     align-items: center;
     justify-content: center;
