@@ -30,6 +30,20 @@
         
         </el-button>
       </el-tooltip>
+      <el-tooltip v-if="map" :content="userLocationVisible ? '关闭定位' : '我的位置'" placement="left" :show-after="500" :hide-after="1000">
+        <el-button 
+          :type="userLocationVisible ? 'primary' : 'info'" 
+          circle 
+          size="small" 
+          @click="toggleUserLocation"
+          :loading="locationLoading"
+          class="location-button"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8M3.05,13H1V11H3.05C3.5,6.83 6.83,3.5 11,3.05V1H13V3.05C17.17,3.5 20.5,6.83 20.95,11H23V13H20.95C20.5,17.17 17.17,20.5 13,20.95V23H11V20.95C6.83,20.5 3.5,17.17 3.05,13M12,5A7,7 0 0,0 5,12A7,7 0 0,0 12,19A7,7 0 0,0 19,12A7,7 0 0,0 12,5Z"/>
+          </svg>
+        </el-button>
+      </el-tooltip>
     </div>
     
     <!-- 右下角坐标信息 -->
@@ -205,6 +219,7 @@ import DxfStyleEditor from './DxfStyleEditor.vue'
 import defaultDxfStylesConfig from '@/config/defaultDxfStyles.json'
 import { MARTIN_BASE_URL } from '@/config/index'
 import { getRecommendedPreloadLevel, getRecommendedCacheSize, getDeviceType } from '@/utils/deviceUtils'
+import { gcj02 } from '@/utils/GCJ02.js'
 
 // 修复Leaflet图标问题
 delete L.Icon.Default.prototype._getIconUrl
@@ -283,6 +298,11 @@ export default {
     
     // 刷新状态
     const refreshing = ref(false)
+    
+    // 用户位置相关
+    const userLocationVisible = ref(false)
+    const locationLoading = ref(false)
+    const userLocationMarker = ref(null)
     
     // 安全地显示弹窗的辅助函数
     const safeShowPopup = (latlng, content) => {
@@ -705,6 +725,118 @@ export default {
     // 切换底图缓存开关
     const toggleLayersCache = () => {
       layersCacheEnabled.value = !layersCacheEnabled.value
+    }
+    
+    // 获取用户位置
+    const getUserLocation = () => {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error('此浏览器不支持地理位置定位'))
+          return
+        }
+        
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            resolve({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: position.coords.accuracy
+            })
+          },
+          (error) => {
+            let message = '获取位置失败'
+            switch (error.code) {
+              case error.PERMISSION_DENIED:
+                message = '用户拒绝了位置访问权限'
+                break
+              case error.POSITION_UNAVAILABLE:
+                message = '位置信息不可用'
+                break
+              case error.TIMEOUT:
+                message = '获取位置超时'
+                break
+            }
+            reject(new Error(message))
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 60000
+          }
+        )
+      })
+    }
+    
+    // 显示用户位置
+    const showUserLocation = async () => {
+      try {
+        locationLoading.value = true
+        
+        // 获取用户位置
+        const location = await getUserLocation()
+        
+        // 浏览器获取的是WGS84坐标，在高德地图上显示需要转换为GCJ02坐标
+        const gcj02Coords =[location.longitude, location.latitude]
+        console.log('原始GPS坐标(WGS84):', [location.longitude, location.latitude])
+        //console.log('转换后高德坐标(GCJ02):', gcj02Coords)
+        
+        // 创建位置标记
+        const locationIcon = L.divIcon({
+          className: 'user-location-marker',
+          html: `
+            <div class="location-dot">
+              <div class="location-pulse"></div>
+            </div>
+          `,
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        })
+        
+        // 如果已存在位置标记，先移除
+        if (userLocationMarker.value && map.value) {
+          map.value.removeLayer(userLocationMarker.value)
+        }
+        
+        // 创建新的位置标记，使用转换后的GCJ02坐标
+        userLocationMarker.value = L.marker(
+          [gcj02Coords[1], gcj02Coords[0]], // 注意Leaflet使用[纬度, 经度]格式
+          { icon: locationIcon }
+        ).addTo(map.value)
+        
+        // 缩放到用户位置，使用转换后的GCJ02坐标
+        map.value.setView([gcj02Coords[1], gcj02Coords[0]], 16, {
+          animate: true,
+          duration: 1
+        })
+        
+        userLocationVisible.value = true
+        ElMessage.success('已定位到您的位置')
+        
+      } catch (error) {
+        console.error('获取位置失败:', error)
+        ElMessage.error(error.message || '获取位置失败')
+      } finally {
+        locationLoading.value = false
+      }
+    }
+    
+    // 隐藏用户位置
+    const hideUserLocation = () => {
+      if (userLocationMarker.value && map.value) {
+        map.value.removeLayer(userLocationMarker.value)
+        userLocationMarker.value = null
+      }
+      userLocationVisible.value = false
+      ElMessage.info('已关闭位置显示')
+    }
+    
+    // 切换用户位置显示
+    const toggleUserLocation = async () => {
+      if (userLocationVisible.value) {
+        hideUserLocation()
+      } else {
+        await showUserLocation()
+      }
     }
     // 清除所有图层
     const clearAllLayers = () => {
@@ -1548,7 +1680,11 @@ export default {
       updateBaseMapAttribution,
       refreshing,
       refreshAllLayers,
-      refreshLayersOrder
+      refreshLayersOrder,
+      // 用户定位相关
+      userLocationVisible,
+      locationLoading,
+      toggleUserLocation
     }
   },
   expose: ['showStyleDialog', 'showAddLayerDialog', 'toggleLayerVisibility', 'map', 'bringLayerToTop', 'setActiveLayer', 'currentActiveLayer', 'refreshMartinLayerStyle', 'updateMvtLayerStyles']
@@ -1720,6 +1856,74 @@ export default {
     min-height: 32px !important;
     
   }
+
+.location-button {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+  border: 1px solid #409EFF;
+}
+
+.location-button:hover {
+  background-color: #3a8ee6;
+  border-color: #3a8ee6;
+}
+
+.location-button.is-loading {
+  background-color: #66b1ff;
+  border-color: #66b1ff;
+}
+
+/* 用户位置标记样式 */
+:global(.user-location-marker) {
+  background: none !important;
+  border: none !important;
+}
+
+:global(.location-dot) {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #409EFF;
+  position: relative;
+  box-shadow: 0 0 0 2px #ffffff, 0 2px 6px rgba(0, 0, 0, 0.3);
+  animation: locationPulse 2s infinite;
+}
+
+:global(.location-pulse) {
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(64, 158, 255, 0.2);
+  animation: locationRipple 2s infinite;
+}
+
+@keyframes locationPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes locationRipple {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
 
 /* 坐标信息样式 - 匹配Leaflet自带版权信息的样式 */
 .coordinate-info {

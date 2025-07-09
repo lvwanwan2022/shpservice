@@ -30,6 +30,20 @@
         
         </el-button>
       </el-tooltip>
+      <el-tooltip v-if="map" :content="userLocationVisible ? '关闭定位' : '我的位置'" placement="left" :show-after="500" :hide-after="1000">
+        <el-button 
+          :type="userLocationVisible ? 'primary' : 'info'" 
+          circle 
+          size="small" 
+          @click="toggleUserLocation"
+          :loading="locationLoading"
+          class="location-button"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8M3.05,13H1V11H3.05C3.5,6.83 6.83,3.5 11,3.05V1H13V3.05C17.17,3.5 20.5,6.83 20.95,11H23V13H20.95C20.5,17.17 17.17,20.5 13,20.95V23H11V20.95C6.83,20.5 3.5,17.17 3.05,13M12,5A7,7 0 0,0 5,12A7,7 0 0,0 12,19A7,7 0 0,0 19,12A7,7 0 0,0 12,5Z"/>
+          </svg>
+        </el-button>
+      </el-tooltip>
     </div>
 
     <!-- 右下角信息面板 -->
@@ -322,7 +336,11 @@ import 'ol/ol.css'
 import { Map, View } from 'ol'
 import TileLayer from 'ol/layer/Tile'
 import VectorTileLayer from 'ol/layer/VectorTile'
+import VectorLayer from 'ol/layer/Vector'
 import { TileWMS, VectorTile, XYZ } from 'ol/source'
+import VectorSource from 'ol/source/Vector'
+import Feature from 'ol/Feature'
+import Point from 'ol/geom/Point'
 import { fromLonLat, transformExtent, transform } from 'ol/proj'
 import * as projlv from 'ol/proj'
 import Overlay from 'ol/Overlay'
@@ -335,7 +353,7 @@ import defaultDxfStylesConfig from '@/config/defaultDxfStyles.json'
 import proj4 from 'proj4'
 import { register } from 'ol/proj/proj4'
 // 引入ol-proj-ch库中的GCJ02坐标系
-import  gcj02Mecator  from '@/utils/GCJ02'
+import gcj02Mecator, { gcj02 } from '@/utils/GCJ02'
 import { MARTIN_BASE_URL } from '@/config/index'
 import { Loading, ArrowDown } from '@element-plus/icons-vue'
 import { getRecommendedPreloadLevel, getRecommendedCacheSize, getDeviceType } from '@/utils/deviceUtils'
@@ -377,6 +395,12 @@ export default {
     
     // 当前底图版权信息
     const currentBaseMapAttribution = ref('')
+    
+    // 用户位置相关
+    const userLocationVisible = ref(false)
+    const locationLoading = ref(false)
+    const userLocationLayer = ref(null)
+    const userLocationFeature = ref(null)
     
     // 异步初始化坐标系
     const initializeProjections = async () => {
@@ -2406,6 +2430,140 @@ export default {
       console.log('已更新MVT图层缓存:', Object.keys(mvtLayers.value || {}).length, '个')
     }
     
+    // 创建用户位置图层
+    const createUserLocationLayer = () => {
+      if (userLocationLayer.value) {
+        return userLocationLayer.value
+      }
+      
+      const vectorSource = new VectorSource()
+      const vectorLayer = new VectorLayer({
+        source: vectorSource,
+        style: new Style({
+          image: new Circle({
+            radius: 8,
+            fill: new Fill({ color: '#409EFF' }),
+            stroke: new Stroke({ color: '#ffffff', width: 2 })
+          })
+        }),
+        zIndex: 1000
+      })
+      
+      userLocationLayer.value = vectorLayer
+      return vectorLayer
+    }
+    
+    // 获取用户位置
+    const getUserLocation = () => {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error('此浏览器不支持地理位置定位'))
+          return
+        }
+        
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            resolve({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: position.coords.accuracy
+            })
+          },
+          (error) => {
+            let message = '获取位置失败'
+            switch (error.code) {
+              case error.PERMISSION_DENIED:
+                message = '用户拒绝了位置访问权限'
+                break
+              case error.POSITION_UNAVAILABLE:
+                message = '位置信息不可用'
+                break
+              case error.TIMEOUT:
+                message = '获取位置超时'
+                break
+            }
+            reject(new Error(message))
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 60000
+          }
+        )
+      })
+    }
+    
+    // 显示用户位置
+    const showUserLocation = async () => {
+      try {
+        locationLoading.value = true
+        
+        // 获取用户位置
+        const location = await getUserLocation()
+        
+        // 浏览器获取的是WGS84坐标，在高德地图上显示需要转换为GCJ02坐标
+        const gcj02Coords = gcj02.toWGS84([location.longitude, location.latitude])
+        console.log('原始GPS坐标(WGS84):', [location.longitude, location.latitude])
+        console.log('转换后高德坐标(GCJ02):', gcj02Coords)
+        const userCoords = fromLonLat(gcj02Coords)
+        // 创建位置图层（如果不存在）
+        const locationLayer = createUserLocationLayer()
+        
+        // 如果地图中没有位置图层，添加它
+        if (!map.value.getLayers().getArray().includes(locationLayer)) {
+          map.value.addLayer(locationLayer)
+        }
+        
+        // 创建位置点特征
+        if (userLocationFeature.value) {
+          locationLayer.getSource().removeFeature(userLocationFeature.value)
+        }
+        
+        userLocationFeature.value = new Feature({
+          geometry: new Point(userCoords),
+          name: '我的位置'
+        })
+        
+        locationLayer.getSource().addFeature(userLocationFeature.value)
+        
+        // 缩放到用户位置
+        map.value.getView().animate({
+          center: userCoords,
+          zoom: 16,
+          duration: 1000
+        })
+        
+        userLocationVisible.value = true
+        ElMessage.success('已定位到您的位置')
+        
+      } catch (error) {
+        console.error('获取位置失败:', error)
+        ElMessage.error(error.message || '获取位置失败')
+      } finally {
+        locationLoading.value = false
+      }
+    }
+    
+    // 隐藏用户位置
+    const hideUserLocation = () => {
+      if (userLocationLayer.value && map.value) {
+        map.value.removeLayer(userLocationLayer.value)
+        userLocationLayer.value = null
+        userLocationFeature.value = null
+      }
+      userLocationVisible.value = false
+      ElMessage.info('已关闭位置显示')
+    }
+    
+    // 切换用户位置显示
+    const toggleUserLocation = async () => {
+      if (userLocationVisible.value) {
+        hideUserLocation()
+      } else {
+        await showUserLocation()
+      }
+    }
+    
     onMounted(() => {
       initCacheService();
       nextTick(async () => {
@@ -2513,6 +2671,10 @@ export default {
       updateBaseMapAttribution,
       layersCacheEnabled,
       toggleLayersCache,
+      // 用户定位相关
+      userLocationVisible,
+      locationLoading,
+      toggleUserLocation,
       // 移动端图层搜索相关
       mobileLayerSearchExpanded,
       isMobile,
@@ -2763,6 +2925,13 @@ export default {
     
   }
   
+  .map-controls .location-button {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+  }
+  
   .map-controls .base-map-switcher {
     width: 32px !important;
     height: 32px !important;
@@ -2791,6 +2960,21 @@ export default {
 .refresh-button.is-loading {
   background-color: #85ce61;
   border-color: #85ce61;
+}
+
+.location-button {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border: 1px solid #409EFF;
+}
+
+.location-button:hover {
+  background-color: #3a8ee6;
+  border-color: #3a8ee6;
+}
+
+.location-button.is-loading {
+  background-color: #66b1ff;
+  border-color: #66b1ff;
 }
 
 .loading-placeholder {

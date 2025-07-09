@@ -143,5 +143,6 @@ proj.addProjection(gcj02Mecator);
 proj.addCoordinateTransforms('EPSG:4326', gcj02Mecator, projzh.ll2gmerc, projzh.gmerc2ll);
 proj.addCoordinateTransforms('EPSG:3857', gcj02Mecator, projzh.smerc2gmerc, projzh.gmerc2smerc);
 
-// 我使用的react，所以这里需要导出定义的gcj02Mecator，提供给外部使用
+// 导出坐标转换函数和投影对象
+export { gcj02 };
 export default gcj02Mecator;
