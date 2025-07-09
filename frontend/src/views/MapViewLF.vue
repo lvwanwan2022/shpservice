@@ -153,22 +153,92 @@
 
       <!-- 地图容器 -->
       <div class="map-container-wrapper" :class="{ 'with-panel': !layerPanelCollapsed }">
-        <!-- 移动端浮动图层管理按钮 -->
-        <div 
-          class="mobile-layer-toggle-btn" 
-          :class="{ 'show': layerPanelCollapsed }"
-          @click="toggleLayerPanel"
-        >
-          图层
-        </div>
         
         <!-- 地图遮罩层（当图层面板打开时） -->
         <div 
-          v-if="!layerPanelCollapsed" 
+          v-if="!layerPanelCollapsed && isMobile" 
           class="mobile-map-overlay"
           @click="toggleLayerPanel"
         ></div>
         
+        <!-- 手机端底部悬浮按钮 -->
+        <div v-if="isMobile" class="mobile-layer-fab" @click="mobileDrawerVisible = true">
+          <div class="fab-content">
+            <i class="el-icon-menu"></i>
+            <span class="fab-text">图层</span>
+            <div class="fab-badge" v-if="layersList && layersList.length > 0">
+              {{ layersList.length }}
+            </div>
+          </div>
+        </div>
+        <!-- 手机端抽屉式图层面板 -->
+        <div v-if="isMobile" class="mobile-drawer-overlay" :class="{ 'show': mobileDrawerVisible }" @click="mobileDrawerVisible = false">
+          <div class="mobile-drawer" :class="{ 'show': mobileDrawerVisible }" @click.stop>
+            <div class="mobile-drawer-header">
+              <div class="drawer-handle"></div>
+              <div class="drawer-title">
+                <h3>图层管理</h3>
+                <div class="drawer-actions">
+                  <el-button type="primary" size="small" @click="showAddLayerDialog">
+                    <i class="el-icon-plus"></i>
+                    <span>添加图层</span>
+                  </el-button>
+                </div>
+              </div>
+            </div>
+            <div class="mobile-drawer-content">
+              <div class="mobile-layer-list">
+                <div v-for="layer in layersList" :key="layer.id" class="mobile-layer-item">
+                  <div class="layer-header">
+                    <el-checkbox v-model="layer.visibility" @change="toggleLayerVisibility(layer)" @click.stop />
+                    <span class="layer-name">{{ layer.layer_name }}</span>
+                  </div>
+                  <div class="layer-tags">
+                    <span class="tag">{{ layer.file_type }}</span>
+                    <span class="tag">{{ layer.discipline }}</span>
+                  </div>
+                  <div class="layer-actions">
+                    <el-button
+                      link
+                      class="zoom-btn"
+                      @click.stop="handleZoomToLayerMobile(layer)"
+                      title="缩放到图层范围"
+                    >
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                        <path d="M15.5 14h-.79l-.28-.27A6.5 6.5 0 1 0 13 15.5l.27.28v.79l5 4.99L19.49 20l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/>
+                        <path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/>
+                      </svg>
+                    </el-button>
+                    <el-button
+                      link
+                      class="style-btn"
+                      @click.stop="handleShowStyleDialogMobile(layer)"
+                      title="样式设置"
+                    >
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                        <path d="M12,2A2,2 0 0,1 14,4C14,4.74 13.6,5.39 13,5.73V7H14A7,7 0 0,1 21,14H22A1,1 0 0,1 23,15V18A1,1 0 0,1 22,19H21V20A2,2 0 0,1 19,22H5A2,2 0 0,1 3,20V19H2A1,1 0 0,1 1,18V15A1,1 0 0,1 2,14H3A7,7 0 0,1 10,7H11V5.73C10.4,5.39 10,4.74 10,4A2,2 0 0,1 12,2M7.5,13A2.5,2.5 0 0,0 5,15.5A2.5,2.5 0 0,0 7.5,18A2.5,2.5 0 0,0 10,15.5A2.5,2.5 0 0,0 7.5,13M16.5,13A2.5,2.5 0 0,0 14,15.5A2.5,2.5 0 0,0 16.5,18A2.5,2.5 0 0,0 19,15.5A2.5,2.5 0 0,0 16.5,13Z"/>
+                      </svg>
+                    </el-button>
+                    <el-button
+                      link
+                      class="remove-btn"
+                      @click.stop="removeLayer(layer)"
+                      title="删除图层"
+                    >
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                        <path d="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z"/>
+                      </svg>
+                    </el-button>
+                  </div>
+                </div>
+                <div v-if="!layersList || layersList.length === 0" class="mobile-empty">
+                  <i class="el-icon-folder"></i>
+                  <p>暂无图层</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
         <MapViewer 
           :scene-id="selectedSceneId" 
           :readonly="false"
@@ -244,6 +314,7 @@ export default {
     // 检测是否为移动端，移动端默认收起图层面板
     const isMobile = window.innerWidth <= 768
     const layerPanelCollapsed = ref(isMobile)
+    const mobileDrawerVisible = ref(false)
     const currentActiveLayer = ref(null)
     
     // 获取场景列表
@@ -719,6 +790,15 @@ export default {
         currentActiveLayer.value = null
       }
     }
+
+    function handleZoomToLayerMobile(layer) {
+      zoomToLayer(layer);
+      mobileDrawerVisible.value = false;
+    }
+    function handleShowStyleDialogMobile(layer) {
+      showStyleDialog(layer);
+      mobileDrawerVisible.value = false;
+    }
     
     return {
       sceneList,
@@ -752,7 +832,11 @@ export default {
       onLayerSelected,
       getLayerTypeColor,
       isCurrentLayerInteractive,
-      resetAllLayers
+      resetAllLayers,
+      isMobile,
+      mobileDrawerVisible,
+      handleZoomToLayerMobile,
+      handleShowStyleDialogMobile
     }
   }
 }
@@ -804,7 +888,13 @@ export default {
 }
 
 .layer-panel.collapsed {
-  width: 50px;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  overflow: hidden !important;
+  box-shadow: none !important;
+  border: none !important;
+  padding: 0 !important;
 }
 
 .panel-header {
@@ -1245,5 +1335,233 @@ export default {
 .current-layer-status.empty p:first-child {
   font-weight: 600;
   color: #595959;
+}
+
+/* 手机端悬浮图层按钮 */
+@media (max-width: 768px) {
+  .mobile-layer-fab {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    z-index: 2000;
+    background: #409EFF;
+    color: #fff;
+    border-radius: 24px;
+    box-shadow: 0 4px 16px rgba(64,158,255,0.18);
+    padding: 0 24px;
+    height: 36px;
+    min-width: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: box-shadow 0.2s, background 0.2s;
+    border: none;
+    outline: none;
+    user-select: none;
+    will-change: transform;
+    opacity: 0.96;
+  }
+  .mobile-layer-fab:active {
+    box-shadow: 0 2px 8px rgba(64,158,255,0.25);
+    background: #337ecc;
+  }
+  .fab-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .fab-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: #f56c6c;
+    color: white;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: bold;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+  .mobile-drawer-overlay {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0,0,0,0.18);
+    z-index: 2100;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    transition: background 0.2s;
+    pointer-events: none;
+    opacity: 0;
+  }
+  .mobile-drawer-overlay.show {
+    pointer-events: auto;
+    opacity: 1;
+  }
+  .mobile-drawer {
+    width: 100vw;
+    max-width: 480px;
+    background: #fff;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
+    margin-bottom: 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    transition: transform 0.25s cubic-bezier(.4,0,.2,1);
+    transform: translateY(100%);
+    min-height: 220px;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+  }
+  .mobile-drawer.show {
+    transform: translateY(0);
+  }
+  .mobile-drawer-header {
+    padding: 16px 20px 0 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .drawer-handle {
+    width: 40px;
+    height: 5px;
+    background: #e4e7ed;
+    border-radius: 3px;
+    margin: 0 auto 10px auto;
+    opacity: 0.7;
+  }
+  .drawer-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .drawer-title h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0;
+    color: #303133;
+  }
+  .drawer-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mobile-drawer-content {
+    padding: 10px 10px 20px 10px;
+  }
+  .mobile-layer-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .mobile-layer-item {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-shadow: 0 2px 8px rgba(64,158,255,0.06);
+  }
+  .layer-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .layer-name {
+    font-weight: 600;
+    font-size: 15px;
+    color: #303133;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .layer-tags {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .tag {
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: #ecf5ff;
+    color: #409eff;
+    font-weight: 500;
+  }
+  .mobile-empty {
+    padding: 60px 20px;
+    text-align: center;
+    color: #909399;
+  }
+  .mobile-empty i {
+    font-size: 48px;
+    margin-bottom: 16px;
+    color: #c0c4cc;
+  }
+  .mobile-empty p {
+    margin: 0 0 20px 0;
+    font-size: 14px;
+    color: #909399;
+  }
+  .mobile-layer-item .layer-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    justify-content: flex-end;
+  }
+  .mobile-layer-item .el-button {
+    padding: 0 6px;
+    min-width: 32px;
+    min-height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* 网页端收起时左上角展开按钮 */
+.desktop-expand-btn {
+  position: fixed;
+  top: 16px;
+  left: 0;
+  z-index: 2000;
+  background: #409EFF;
+  color: #fff;
+  border-radius: 0 24px 24px 0;
+  box-shadow: 0 4px 16px rgba(64,158,255,0.18);
+  width: 40px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: box-shadow 0.2s, background 0.2s;
+  border: none;
+  outline: none;
+  user-select: none;
+  will-change: transform;
+  opacity: 0.96;
+}
+.desktop-expand-btn:active {
+  box-shadow: 0 2px 8px rgba(64,158,255,0.25);
+  background: #337ecc;
 }
 </style> 

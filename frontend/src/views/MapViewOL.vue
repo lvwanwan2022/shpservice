@@ -2607,15 +2607,30 @@ export default {
   /* 底部浮动按钮 */
   .mobile-layer-fab {
     position: fixed;
-    bottom: 10px;
-    left: 10px;
-    z-index: 999; /* 🔥 保持较低的z-index，确保对话框能显示在前面 */
-    background: linear-gradient(135deg, #409eff, #337ecc);
-    border-radius: 50px;
-    box-shadow: 0 4px 12px rgba(64, 158, 255, 0.4);
+    left: 50%;
+    bottom: 5px;
+    transform: translateX(-50%);
+    z-index: 2000;
+    background: #409EFF;
+    color: #fff;
+    border-radius: 24px;
+    box-shadow: 0 4px 16px rgba(64,158,255,0.18);
+    padding: 0 24px;
+    height: 36px;
+    min-width: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 2px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: box-shadow 0.2s, background 0.2s;
+    border: none;
+    outline: none;
     user-select: none;
+    will-change: transform;
+    opacity: 0.96;
   }
   
   .mobile-layer-fab:hover {
