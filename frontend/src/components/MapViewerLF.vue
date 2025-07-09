@@ -2,10 +2,10 @@
   <div class="map-viewer">
     <div class="map-container" ref="mapContainer"></div>
     
-    <!-- 右上角地图控件 -->
+    <!-- 底图切换器和刷新按钮组 -->
     <div class="map-controls">
       <BaseMapSwitcherLF v-if="map" :map="map" @base-map-changed="onBaseMapChanged" />
-      <el-tooltip v-if="map" content="刷新图层" placement="left" :show-after="500">
+      <el-tooltip v-if="map" content="刷新图层" placement="left" :show-after="500"  :hide-after="1000">
         <el-button 
           type="success" 
           circle 
@@ -14,7 +14,20 @@
           :loading="refreshing"
           class="refresh-button"
         >
-          <i class="el-icon-refresh"></i>
+        <svg t="1752031016790" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="5670" width="16" height="16"><path d="M1023.99872 479.424681V25.601248l-133.119834 129.919838A520.639349 520.639349 0 0 0 518.591352 0.00128C232.12771 0.00128 0 229.312993 0 512.00064s232.12771 511.99936 518.655352 511.99936c198.783752 0 371.199536-110.399862 458.367427-272.25566h-193.791758a359.87155 359.87155 0 0 1-264.575669 114.687857c-198.271752 0-359.039551-158.719802-359.039552-354.431557 0-195.775755 160.767799-354.431557 359.039552-354.431557 101.567873 0 193.279758 41.727948 258.559676 108.607864L558.655302 479.424681H1023.99872z" fill="#2c2c2c" p-id="5671"></path></svg>
+        </el-button>
+      </el-tooltip>
+      <el-tooltip v-if="map" :content="layersCacheEnabled ? '关闭缓存' : '开启缓存'" placement="left" :show-after="500" :hide-after="1000">
+        <el-button 
+          :type="layersCacheEnabled ? 'warning' : 'info'" 
+          circle 
+          size="small" 
+          @click="toggleLayersCache"
+          class="cache-toggle-button"
+        >
+          
+            <svg :class="layersCacheEnabled ? 'el-icon-folder-opened' : 'el-icon-folder'" t="1752031063403" class="icon" viewBox="0 0 1026 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="7600" width="16" height="16"><path d="M767.66305 531.384715l-236.251012 236.251011h-36.395426l-236.251012-236.251011L340.176422 449.973893 449.107294 559.47943V257.780503h127.703249v301.698927l109.505537-109.505537z m159.629062 279.542413l-92.137895-92.137894a395.880074 395.880074 0 1 0-204.325199 157.011145l99.161573 99.161573a511.834624 511.834624 0 1 1 197.429224-164.034824z" p-id="7601"></path></svg>
+        
         </el-button>
       </el-tooltip>
     </div>
@@ -218,7 +231,7 @@ export default {
     const currentScene = ref(null)
     const layersList = ref([])
     const currentActiveLayer = ref(null)
-    
+    const layersCacheEnabled = ref(false); // 当前图层的缓存状态
     // 添加图层对话框
     const addLayerDialogVisible = ref(false)
     const availableLayers = ref([])
@@ -689,7 +702,10 @@ export default {
         rawLayer.addTo(rawMap)
       }
     }
-    
+    // 切换底图缓存开关
+    const toggleLayersCache = () => {
+      layersCacheEnabled.value = !layersCacheEnabled.value
+    }
     // 清除所有图层
     const clearAllLayers = () => {
       // 如果地图未初始化，直接返回
@@ -1504,6 +1520,8 @@ export default {
       hasLineGeometry,
       hasPolygonGeometry,
       isDxfMartinLayer,
+      toggleLayersCache,
+      layersCacheEnabled,
       toggleLayerVisibility,
       showAddLayerDialog,
       searchLayers,
@@ -1679,7 +1697,10 @@ export default {
 }
 
 .refresh-button {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
   border: 1px solid #67c23a;
 }
 
@@ -1692,6 +1713,13 @@ export default {
   background-color: #85ce61;
   border-color: #85ce61;
 }
+.cache-toggle-button {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    
+  }
 
 /* 坐标信息样式 - 匹配Leaflet自带版权信息的样式 */
 .coordinate-info {
@@ -1712,11 +1740,29 @@ export default {
   border: none; /* 移除边框，匹配Leaflet样式 */
 }
 
-.coordinate-text {
-  /* 继承父容器的样式，与Leaflet版权信息保持一致 */
+.el-button+.el-button {
+    margin-left: 0px;
 }
 
+.cache-toggle-button.el-button--warning {
+  background-color: #e6a23c;
+  border-color: #e6a23c;
+}
 
+.cache-toggle-button.el-button--warning:hover {
+  background-color: #ebb563;
+  border-color: #ebb563;
+}
+
+.cache-toggle-button.el-button--info {
+  background-color: #909399;
+  border-color: #909399;
+}
+
+.cache-toggle-button.el-button--info:hover {
+  background-color: #a6a9ad;
+  border-color: #a6a9ad;
+}
 
 /* 响应式调整 */
 @media (max-width: 768px) {

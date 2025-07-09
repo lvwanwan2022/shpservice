@@ -1093,6 +1093,10 @@ export default {
       if (mapViewerRef.value) {
         mapViewerRef.value.showStyleDialog(layer)
       }
+      // 🔥 手机端：缩放后自动隐藏图层管理面板
+      if (mobileDrawerVisible.value) {
+          closeMobileDrawer()
+        }
     }
 
     // 获取服务类型样式类
