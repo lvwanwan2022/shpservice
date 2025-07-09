@@ -1895,7 +1895,7 @@ export default {
       addLayerDialogVisible.value = true
       // 移动端默认展开搜索
       if (isMobile.value) {
-        mobileLayerSearchExpanded.value = true
+        mobileLayerSearchExpanded.value = false
       }
       await fetchAvailableLayers()
     }

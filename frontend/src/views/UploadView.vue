@@ -65,117 +65,189 @@
           
           <!-- 基本信息网格 -->
           <div class="mobile-file-info">
-            <div class="mobile-info-item">
-              <div class="mobile-info-label">文件大小</div>
-              <div class="mobile-info-value">{{ formatFileSize(file.file_size) }}</div>
-            </div>
-            <div class="mobile-info-item">
-              <div class="mobile-info-label">上传人员</div>
-              <div class="mobile-info-value">{{ file.uploader }}</div>
-            </div>
-            <div class="mobile-info-item">
-              <div class="mobile-info-label">专业</div>
-              <div class="mobile-info-value">
-                <el-tag v-if="file.discipline" size="small" type="success">{{ file.discipline }}</el-tag>
-                <span v-else>-</span>
+            <div class="mobile-info-row">
+              <div class="mobile-info-item">
+                <span class="mobile-info-label">大小</span>
+                <span class="mobile-info-value">{{ formatFileSize(file.file_size) }}</span>
+              </div>
+              <div class="mobile-info-item">
+                <span class="mobile-info-label">上传人</span>
+                <span class="mobile-info-value">{{ file.uploader }}</span>
               </div>
             </div>
-            <div class="mobile-info-item">
-              <div class="mobile-info-label">数据类型</div>
-              <div class="mobile-info-value">
-                <el-tag v-if="file.file_type" size="small" type="primary">{{ file.file_type }}</el-tag>
-                <span v-else>-</span>
+            <div class="mobile-info-row">
+              <div class="mobile-info-item">
+                <span class="mobile-info-label">专业</span>
+                <span class="mobile-info-value">
+                  <el-tag v-if="file.discipline" size="small" type="success">{{ file.discipline }}</el-tag>
+                  <span v-else>-</span>
+                </span>
               </div>
+              <div class="mobile-info-item">
+                <span class="mobile-info-label">类型</span>
+                <span class="mobile-info-value">
+                  <el-tag v-if="file.file_type" size="small" type="primary">{{ file.file_type }}</el-tag>
+                  <span v-else>-</span>
+                </span>
+              </div>
+            </div>
+            <!-- 坐标系信息 -->
+            <div v-if="needsCoordinateSystem(file)" class="mobile-coordinate-row">
+              <span class="mobile-info-label">坐标系</span>
+              <div class="mobile-coordinate-container">
+                <div v-if="!file.editing_coordinate" class="mobile-coordinate-display">
+                  <span class="mobile-coordinate-text" :class="{ 'not-set': !file.coordinate_system }">
+                    {{ file.coordinate_system || '未设置' }}
+                  </span>
+                  <el-button 
+                    size="small" 
+                    type="primary"
+                    @click="startEditCoordinate(file)"
+                    title="编辑坐标系"
+                    class="mobile-edit-coordinate-btn"
+                    circle
+                  >
+                    <i class="el-icon-edit"></i>
+                  </el-button>
+                </div>
+                <div v-else class="mobile-coordinate-edit">
+                  <el-input 
+                    v-model="file.temp_coordinate_system"
+                    size="small"
+                    placeholder="如: EPSG:4326"
+                    @keyup.enter="saveCoordinate(file)"
+                  />
+                  <div class="mobile-coordinate-edit-buttons">
+                    <el-button 
+                      size="small" 
+                      type="success"
+                      @click="openCoordinateSearchForFile(file)"
+                      title="搜索坐标系"
+                      class="mobile-search-coordinate-btn"
+                      circle
+                    >
+                      <i class="el-icon-search"></i>
+                    </el-button>
+                    <el-button 
+                      size="small" 
+                      type="primary"
+                      @click="saveCoordinate(file)"
+                      title="保存"
+                      class="mobile-save-coordinate-btn"
+                      circle
+                    >
+                      <i class="el-icon-check"></i>
+                    </el-button>
+                    <el-button 
+                      size="small" 
+                      type="info"
+                      @click="cancelEditCoordinate(file)"
+                      title="取消"
+                      class="mobile-cancel-coordinate-btn"
+                      circle
+                    >
+                      <i class="el-icon-close"></i>
+                    </el-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div v-else class="mobile-coordinate-row">
+              <span class="mobile-info-label">坐标系</span>
+              <span class="mobile-not-applicable-text">不适用</span>
             </div>
           </div>
           
           <!-- 服务发布状态 -->
           <div class="mobile-service-section">
-            <!-- GeoServer服务 -->
-            <div class="mobile-service-title">GeoServer服务</div>
-            <div class="mobile-service-row">
-              <div class="mobile-service-status">
-                <el-tag 
-                  v-if="file.geoserver_service && file.geoserver_service.is_published"
-                  type="success" 
-                  size="small"
-                >已发布</el-tag>
-                <el-tag 
-                  v-else
-                  :type="canPublishGeoServer(file) ? 'info' : 'warning'" 
-                  size="small"
-                >{{ canPublishGeoServer(file) ? '未发布' : '不能发布' }}</el-tag>
+            <div class="mobile-service-header">服务状态</div>
+            <div class="mobile-service-grid">
+              <!-- GeoServer服务 -->
+              <div class="mobile-service-item">
+                <div class="mobile-service-name">GeoServer</div>
+                <div class="mobile-service-content">
+                  <el-tag 
+                    v-if="file.geoserver_service && file.geoserver_service.is_published"
+                    type="success" 
+                    size="small"
+                  >已发布</el-tag>
+                  <el-tag 
+                    v-else
+                    :type="canPublishGeoServer(file) ? 'info' : 'warning'" 
+                    size="small"
+                  >{{ canPublishGeoServer(file) ? '未发布' : '不支持' }}</el-tag>
+                  <div class="mobile-service-actions">
+                    <template v-if="file.geoserver_service && file.geoserver_service.is_published">
+                      <el-button 
+                        v-if="file.geoserver_service.wfs_url"
+                        size="small" 
+                        @click="copyServiceUrl(file.geoserver_service.wfs_url)"
+                      >WFS</el-button>
+                      <el-button 
+                        v-if="file.geoserver_service.wms_url"
+                        size="small" 
+                        @click="copyServiceUrl(file.geoserver_service.wms_url)"
+                      >WMS</el-button>
+                      <el-button 
+                        size="small" 
+                        type="danger"
+                        @click="unpublishGeoServerService(file)"
+                        :loading="file.unpublishingGeoServer"
+                      >取消</el-button>
+                    </template>
+                    <template v-else>
+                      <el-button 
+                        size="small" 
+                        type="primary" 
+                        @click="publishGeoServerService(file)"
+                        :loading="file.publishingGeoServer"
+                        :disabled="!canPublishGeoServer(file)"
+                      >发布</el-button>
+                    </template>
+                  </div>
+                </div>
               </div>
-              <div class="mobile-service-buttons">
-                <template v-if="file.geoserver_service && file.geoserver_service.is_published">
-                  <el-button 
-                    v-if="file.geoserver_service.wfs_url"
-                    size="small" 
-                    @click="copyServiceUrl(file.geoserver_service.wfs_url)"
-                  >WFS</el-button>
-                  <el-button 
-                    v-if="file.geoserver_service.wms_url"
-                    size="small" 
-                    @click="copyServiceUrl(file.geoserver_service.wms_url)"
-                  >WMS</el-button>
-                  <el-button 
-                    size="small" 
-                    type="danger"
-                    @click="unpublishGeoServerService(file)"
-                    :loading="file.unpublishingGeoServer"
-                  >取消</el-button>
-                </template>
-                <template v-else>
-                  <el-button 
-                    size="small" 
-                    type="primary" 
-                    @click="publishGeoServerService(file)"
-                    :loading="file.publishingGeoServer"
-                    :disabled="!canPublishGeoServer(file)"
-                  >发布</el-button>
-                </template>
-              </div>
-            </div>
-            
-            <!-- Martin服务 -->
-            <div class="mobile-service-title">Martin服务</div>
-            <div class="mobile-service-row">
-              <div class="mobile-service-status">
-                <el-tag 
-                  v-if="file.martin_service && file.martin_service.is_published"
-                  type="success" 
-                  size="small"
-                >已发布</el-tag>
-                <el-tag v-else type="info" size="small">未发布</el-tag>
-              </div>
-              <div class="mobile-service-buttons">
-                <template v-if="file.martin_service && file.martin_service.is_published">
-                  <el-button 
-                    v-if="file.martin_service.mvt_url"
-                    size="small" 
-                    @click="copyServiceUrl(file.martin_service.mvt_url)"
-                  >MVT</el-button>
-                  <el-button 
-                    v-if="file.martin_service.tilejson_url"
-                    size="small" 
-                    @click="copyServiceUrl(file.martin_service.tilejson_url)"
-                  >JSON</el-button>
-                  <el-button 
-                    size="small" 
-                    type="danger"
-                    @click="unpublishMartinService(file)"
-                    :loading="file.unpublishingMartin"
-                  >取消</el-button>
-                </template>
-                <template v-else>
-                  <el-button 
-                    size="small" 
-                    type="primary" 
-                    @click="publishMartinService(file)"
-                    :loading="file.publishingMartin"
-                    :disabled="!canPublishMartin(file)"
-                  >发布</el-button>
-                </template>
+              
+              <!-- Martin服务 -->
+              <div class="mobile-service-item">
+                <div class="mobile-service-name">Martin</div>
+                <div class="mobile-service-content">
+                  <el-tag 
+                    v-if="file.martin_service && file.martin_service.is_published"
+                    type="success" 
+                    size="small"
+                  >已发布</el-tag>
+                  <el-tag v-else type="info" size="small">未发布</el-tag>
+                  <div class="mobile-service-actions">
+                    <template v-if="file.martin_service && file.martin_service.is_published">
+                      <el-button 
+                        v-if="file.martin_service.mvt_url"
+                        size="small" 
+                        @click="copyServiceUrl(file.martin_service.mvt_url)"
+                      >MVT</el-button>
+                      <el-button 
+                        v-if="file.martin_service.tilejson_url"
+                        size="small" 
+                        @click="copyServiceUrl(file.martin_service.tilejson_url)"
+                      >JSON</el-button>
+                      <el-button 
+                        size="small" 
+                        type="danger"
+                        @click="unpublishMartinService(file)"
+                        :loading="file.unpublishingMartin"
+                      >取消</el-button>
+                    </template>
+                    <template v-else>
+                      <el-button 
+                        size="small" 
+                        type="primary" 
+                        @click="publishMartinService(file)"
+                        :loading="file.publishingMartin"
+                        :disabled="!canPublishMartin(file)"
+                      >发布</el-button>
+                    </template>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1931,5 +2003,479 @@ export default {
 .cancel-coordinate-btn:hover {
   background-color: #fde2e2;
   transform: scale(1.05);
+}
+
+/* 移动端特定样式 */
+.mobile-file-card {
+  margin-bottom: 10px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 8px 0 rgba(0, 0, 0, 0.08);
+}
+
+.mobile-file-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #f5f7fa;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.mobile-file-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-file-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.mobile-file-info {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mobile-info-row {
+  display: flex;
+  gap: 12px;
+}
+
+.mobile-info-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mobile-info-label {
+  font-size: 12px;
+  color: #606266;
+  min-width: 40px;
+  font-weight: 500;
+}
+
+.mobile-info-value {
+  flex: 1;
+  font-size: 13px;
+  color: #303133;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-coordinate-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mobile-coordinate-container {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-service-section {
+  padding: 8px 12px;
+  border-top: 1px solid #ebeef5;
+}
+
+.mobile-service-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 6px;
+}
+
+.mobile-service-grid {
+  display: flex;
+  gap: 8px;
+}
+
+.mobile-service-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-service-name {
+  font-size: 11px;
+  color: #606266;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.mobile-service-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mobile-service-actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.mobile-coordinate-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 4px 6px;
+  border-radius: 3px;
+  transition: background-color 0.3s ease;
+}
+
+.mobile-coordinate-display:hover {
+  background-color: #f8f9fa;
+}
+
+.mobile-coordinate-text {
+  flex: 1;
+  font-size: 12px;
+  color: #606266;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.mobile-coordinate-text.not-set {
+  color: #f56c6c;
+  font-style: italic;
+}
+
+.mobile-coordinate-edit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 3px;
+  background-color: #f8f9fa;
+  border-radius: 3px;
+  border: 1px solid #e9ecef;
+}
+
+.mobile-coordinate-edit-buttons {
+  display: flex;
+  gap: 3px;
+}
+
+.mobile-edit-coordinate-btn {
+  font-weight: 500;
+  color: #ffffff !important;
+  background-color: #409eff !important;
+  border: 1px solid #409eff;
+  border-radius: 50% !important;
+  padding: 0 !important;
+  font-size: 9px;
+  min-width: 18px !important;
+  width: 18px !important;
+  height: 18px !important;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-edit-coordinate-btn:hover {
+  background-color: #337ecc !important;
+  border-color: #337ecc;
+  transform: scale(1.1);
+  box-shadow: 0 1px 6px rgba(64, 158, 255, 0.3);
+}
+
+.mobile-edit-coordinate-btn .el-icon-edit {
+  font-size: 9px;
+  margin: 0;
+}
+
+.mobile-search-coordinate-btn,
+.mobile-save-coordinate-btn,
+.mobile-cancel-coordinate-btn {
+  font-weight: 500;
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-size: 10px;
+  min-width: 16px !important;
+  width: 16px !important;
+  height: 16px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-search-coordinate-btn {
+  color: #67c23a !important;
+  background-color: #f0f9ff;
+  border: 1px solid #d9ecff;
+}
+
+.mobile-search-coordinate-btn:hover {
+  background-color: #e1f3d8;
+}
+
+.mobile-save-coordinate-btn {
+  color: #409eff !important;
+  background-color: #ecf5ff;
+  border: 1px solid #b3d8ff;
+}
+
+.mobile-save-coordinate-btn:hover {
+  background-color: #d9ecff;
+}
+
+.mobile-cancel-coordinate-btn {
+  color: #f56c6c !important;
+  background-color: #fef0f0;
+  border: 1px solid #fbc4c4;
+}
+
+.mobile-cancel-coordinate-btn:hover {
+  background-color: #fde2e2;
+}
+
+/* 移动端不适用文本样式 */
+.mobile-not-applicable-text {
+  font-size: 12px;
+  color: #c0c4cc;
+  font-style: italic;
+}
+
+/* 移动端响应式样式 */
+@media (max-width: 768px) {
+  /* 移动端标签样式调整 */
+  .mobile-info-value .el-tag {
+    font-size: 10px !important;
+    padding: 1px 4px !important;
+    height: 16px !important;
+    line-height: 14px !important;
+    transform: scale(0.9);
+  }
+
+  .mobile-service-content .el-tag {
+    font-size: 10px !important;
+    padding: 1px 4px !important;
+    height: 16px !important;
+    line-height: 14px !important;
+    transform: scale(0.9);
+  }
+
+  /* 移动端按钮样式调整 */
+  .mobile-file-actions .el-button,
+  .mobile-service-actions .el-button {
+    font-size: 11px !important;
+    padding: 4px 8px !important;
+    height: 24px !important;
+    line-height: 16px !important;
+  }
+  /* 移动端显示搜索切换按钮 */
+  .mobile-search-toggle {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background-color: #ffffff;
+    border: 1px solid #e4e7ed;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .mobile-search-toggle:hover {
+    background-color: #f8f9fa;
+    border-color: #409eff;
+  }
+
+  .mobile-search-toggle .toggle-icon {
+    font-size: 16px;
+    color: #409eff;
+    transition: transform 0.3s ease;
+  }
+
+  .mobile-search-toggle .toggle-icon.rotated {
+    transform: rotate(180deg);
+  }
+
+  .mobile-search-toggle .toggle-text {
+    font-size: 15px;
+    font-weight: 500;
+    color: #303133;
+    margin-left: 8px;
+  }
+
+  .mobile-search-toggle .search-summary {
+    margin-left: auto;
+  }
+
+  /* 移动端显示卡片布局 */
+  .mobile-file-cards {
+    display: block !important;
+  }
+
+  /* 移动端隐藏桌面端表格 */
+  .el-table {
+    display: none !important;
+  }
+
+  /* 移动端搜索表单折叠样式 */
+  .search-form-container {
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+
+  .search-form-container.mobile-collapsed {
+    max-height: 0;
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  /* 移动端搜索表单样式调整 */
+  .search-form .el-form-item {
+    width: 100%;
+    margin-bottom: 12px;
+  }
+
+  .search-form .el-form-item .el-select,
+  .search-form .el-form-item .el-input {
+    width: 100% !important;
+  }
+
+  /* 移动端页面头部样式调整 */
+  .page-header {
+    padding: 16px 0;
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .page-header h1 {
+    margin: 0;
+    font-size: 22px;
+    text-align: center;
+  }
+
+  .page-header .el-button {
+    width: 100%;
+  }
+
+  /* 移动端搜索区域样式调整 */
+  .search-area {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  /* 移动端分页样式调整 */
+  .pagination {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .pagination .el-pagination {
+    justify-content: center;
+  }
+
+  /* 移动端坐标系编辑样式调整 */
+  .mobile-coordinate-edit {
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .mobile-coordinate-edit .el-input {
+    width: 100% !important;
+  }
+
+  .mobile-coordinate-edit-buttons {
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+}
+
+/* 超小屏幕适配 */
+@media (max-width: 480px) {
+  .upload-page {
+    padding: 8px;
+  }
+
+  .mobile-file-card {
+    margin-bottom: 8px;
+  }
+
+  .mobile-file-card-header {
+    padding: 6px 10px;
+  }
+
+  .mobile-file-name {
+    font-size: 13px;
+  }
+
+  .mobile-file-info {
+    padding: 6px 10px;
+  }
+
+  .mobile-service-section {
+    padding: 6px 10px;
+  }
+
+  .mobile-service-header {
+    font-size: 12px;
+  }
+
+  .mobile-service-name {
+    font-size: 10px;
+  }
+
+  .mobile-info-label {
+    font-size: 11px;
+    min-width: 35px;
+  }
+
+  .mobile-info-value {
+    font-size: 12px;
+  }
+
+  .mobile-coordinate-edit-buttons .el-button {
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+
+  .mobile-service-grid {
+    gap: 6px;
+  }
+
+  .mobile-service-actions {
+    gap: 3px;
+  }
+
+  .mobile-file-actions .el-button,
+  .mobile-service-actions .el-button {
+    font-size: 10px !important;
+    padding: 3px 6px !important;
+    height: 20px !important;
+    line-height: 14px !important;
+  }
+
+  .mobile-info-value .el-tag,
+  .mobile-service-content .el-tag {
+    font-size: 9px !important;
+    padding: 1px 3px !important;
+    height: 14px !important;
+    line-height: 12px !important;
+    transform: scale(0.85);
+  }
 }
 </style>

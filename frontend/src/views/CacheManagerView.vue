@@ -4,7 +4,7 @@
     <div class="cache-toolbar">
       <div class="toolbar-left">
         <el-button type="success" size="small" @click="updateScenesFromBackend" :loading="isUpdatingScenes">
-          <i class="el-icon-refresh-right"></i> 更新场景图层
+          <i class="el-icon-refresh-right"></i> 更新场景
         </el-button>
         <el-button type="primary" size="small" @click="refreshCacheData">
           <i class="el-icon-refresh"></i> 刷新
@@ -19,41 +19,53 @@
           :show-file-list="false"
           :before-upload="importCacheData"
           accept=".json"
-          style="display: inline-block;"
+          style="display: inline-flex; align-items: center;"
         >
           <el-button type="info" size="small">
             <i class="el-icon-upload2"></i> 导入
           </el-button>
         </el-upload>
-        
       </div>
-      <div class="toolbar-right">
-        <el-select
-          v-model="selectedSceneFilter"
-          placeholder="按场景筛选"
-          clearable
-          size="small"
-          style="width: 160px; margin-right: 8px;"
-          @change="filterCacheData"
-        >
-          <el-option
-            v-for="scene in sceneList"
-            :key="scene.id"
-            :label="scene.name"
-            :value="scene.id"
-          />
-        </el-select>
-        <el-input
-          v-model="cacheSearchText"
-          placeholder="搜索场景名或图层名"
-          size="small"
-          style="width: 200px"
-          @input="filterCacheData"
-        >
-          <template #prefix>
-            <i class="el-icon-search"></i>
-          </template>
-        </el-input>
+
+      <!-- 移动端搜索切换按钮 -->
+      <div class="mobile-search-toggle" @click="toggleMobileSearch">
+        <i class="el-icon-search toggle-icon" :class="{ 'rotated': mobileSearchExpanded }"></i>
+        <span class="toggle-text">搜索筛选</span>
+        <div class="search-summary" v-if="!mobileSearchExpanded && hasActiveFilters">
+          <el-tag size="small" type="primary">{{ getActiveFiltersText() }}</el-tag>
+        </div>
+      </div>
+
+      <!-- 搜索筛选区域 -->
+      <div class="search-filters" :class="{ 'mobile-collapsed': !mobileSearchExpanded }">
+        <div class="toolbar-right">
+          <el-select
+            v-model="selectedSceneFilter"
+            placeholder="按场景筛选"
+            clearable
+            size="small"
+            style="width: 160px; margin-right: 8px;"
+            @change="filterCacheData"
+          >
+            <el-option
+              v-for="scene in sceneList"
+              :key="scene.id"
+              :label="scene.name"
+              :value="scene.id"
+            />
+          </el-select>
+          <el-input
+            v-model="cacheSearchText"
+            placeholder="搜索场景名或图层名"
+            size="small"
+            style="width: 200px"
+            @input="filterCacheData"
+          >
+            <template #prefix>
+              <i class="el-icon-search"></i>
+            </template>
+          </el-input>
+        </div>
       </div>
     </div>
 
@@ -79,8 +91,132 @@
 
     <!-- 缓存数据内容 -->
     <div class="cache-content">
-      <!-- 图层缓存表格 -->
-      <div class="cache-layers">
+      <!-- 移动端卡片布局 -->
+      <div class="mobile-cache-cards">
+        <div v-for="row in filteredCacheData" :key="row.sceneId + '_' + row.layerId" class="mobile-cache-card">
+          <!-- 卡片头部 -->
+          <div class="mobile-cache-card-header">
+            <div class="mobile-cache-title">
+              <div class="mobile-scene-name">{{ row.sceneName }}</div>
+              <div class="mobile-layer-name">{{ row.layerName }}</div>
+            </div>
+            <div class="mobile-cache-actions">
+              <el-button 
+                type="primary" 
+                size="small" 
+                @click="startLayerCache(row)"
+                :disabled="row.originalLayer && row.originalLayer.wms_url"
+              >
+                缓存
+              </el-button>
+              <el-button 
+                type="danger" 
+                size="small" 
+                @click="deleteLayerCache(row)"
+                :disabled="(row.originalLayer && row.originalLayer.wms_url) || (!row.tiles || row.tiles.length === 0)"
+              >
+                删除
+              </el-button>
+            </div>
+          </div>
+
+          <!-- 基本信息 -->
+          <div class="mobile-cache-info">
+            <div class="mobile-info-row">
+              <div class="mobile-info-item">
+                <span class="mobile-info-label">服务类型</span>
+                <span class="mobile-info-value">{{ row.originalLayer && row.originalLayer.service_type ? row.originalLayer.service_type : row.layerType }}</span>
+              </div>
+              <div class="mobile-info-item">
+                <span class="mobile-info-label">缓存状态</span>
+                <span class="mobile-info-value">
+                  <el-tag 
+                    v-if="row.originalLayer && row.originalLayer.wms_url"
+                    size="small" 
+                    type="warning"
+                  >
+                    不缓存
+                  </el-tag>
+                  <el-tag 
+                    v-else
+                    size="small" 
+                    :type="row.tiles && row.tiles.length > 0 ? 'success' : 'info'"
+                  >
+                    {{ row.tiles && row.tiles.length > 0 ? '已缓存' : '未缓存' }}
+                  </el-tag>
+                </span>
+              </div>
+            </div>
+            <div class="mobile-info-row">
+              <div class="mobile-info-item">
+                <span class="mobile-info-label">瓦片数</span>
+                <span class="mobile-info-value">
+                  <span v-if="row.originalLayer && row.originalLayer.wms_url" class="no-data">N/A</span>
+                  <span v-else-if="row.tiles && row.tiles.length > 0">{{ row.tiles.length }}</span>
+                  <span v-else class="no-data">-</span>
+                </span>
+              </div>
+              <div class="mobile-info-item">
+                <span class="mobile-info-label">大小</span>
+                <span class="mobile-info-value">
+                  <span v-if="row.originalLayer && row.originalLayer.wms_url" class="no-data">N/A</span>
+                  <span v-else-if="row.totalSize > 0">{{ formatFileSize(row.totalSize) }}</span>
+                  <span v-else class="no-data">-</span>
+                </span>
+              </div>
+            </div>
+            <div class="mobile-info-row">
+              <div class="mobile-info-item">
+                <span class="mobile-info-label">层级</span>
+                <span class="mobile-info-value">
+                  <span v-if="row.originalLayer && row.originalLayer.wms_url" class="no-data">N/A</span>
+                  <span v-else-if="Array.isArray(row.zoomLevels) && row.zoomLevels.length > 0">
+                    {{ row.zoomLevels.length === 1 ? row.zoomLevels[0] : `${row.zoomLevels[0]}-${row.zoomLevels[row.zoomLevels.length - 1]}` }}
+                  </span>
+                  <span v-else class="no-data">-</span>
+                </span>
+              </div>
+              <div class="mobile-info-item">
+                <span class="mobile-info-label">边界框</span>
+                <span class="mobile-info-value">
+                  <span v-if="row.originalLayer && row.originalLayer.wms_url" class="no-data">N/A</span>
+                  <span v-else-if="Array.isArray(row.bounds)">
+                    {{ row.bounds.map(n => n.toFixed(2)).join(', ') }}
+                  </span>
+                  <span v-else class="no-data">{{ row.bounds }}</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 瓦片详情 -->
+          <div v-if="row.tiles && row.tiles.length > 0 && !row.originalLayer?.wms_url" class="mobile-tiles-section">
+            <div class="mobile-tiles-header" @click="toggleTileDetails(row)">
+              <span class="mobile-tiles-title">瓦片详情 ({{ row.tiles.length }} 个)</span>
+              <i class="el-icon-arrow-down" :class="{ 'rotated': row.tilesExpanded }"></i>
+            </div>
+            <div v-if="row.tilesExpanded" class="mobile-tiles-content">
+              <div v-for="tile in row.tiles.slice(0, 5)" :key="`${tile.zoomLevel}_${tile.tileX}_${tile.tileY}`" class="mobile-tile-item">
+                <div class="mobile-tile-info">
+                  <span class="mobile-tile-coord">{{ tile.zoomLevel }}/{{ tile.tileX }}/{{ tile.tileY }}</span>
+                  <span class="mobile-tile-size">{{ formatFileSize(tile.size) }}</span>
+                  <span class="mobile-tile-time">{{ new Date(tile.timestamp).toLocaleString() }}</span>
+                </div>
+                <div class="mobile-tile-actions">
+                  <el-button size="small" @click="previewTile(tile)">预览</el-button>
+                  <el-button size="small" type="danger" @click="deleteTile(tile)">删除</el-button>
+                </div>
+              </div>
+              <div v-if="row.tiles.length > 5" class="mobile-tiles-more">
+                还有 {{ row.tiles.length - 5 }} 个瓦片...
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 桌面端表格布局 -->
+      <div class="desktop-cache-table">
         <el-table 
           :data="filteredCacheData" 
           size="small"
@@ -151,9 +287,9 @@
           <el-table-column prop="layerName" label="图层名称" min-width="150" show-overflow-tooltip />
           <el-table-column  label="服务类型" min-width="150">
             <template #default="{ row }">
-    <span>{{ row.originalLayer && row.originalLayer.service_type ? row.originalLayer.service_type : row.layerType }}</span>
-  </template>
-  </el-table-column>
+              <span>{{ row.originalLayer && row.originalLayer.service_type ? row.originalLayer.service_type : row.layerType }}</span>
+            </template>
+          </el-table-column>
           
           <!-- 缓存状态 -->
           <el-table-column label="缓存状态" width="100" align="center">
@@ -255,10 +391,10 @@
 
     <!-- 缓存配置对话框 -->
     <el-dialog 
-      title="图层缓存配置" 
+      :title="isMobile ? '' : '图层缓存配置'" 
       v-model="cacheConfigVisible" 
-      width="90%"
-      top="5vh"
+      :width="isMobile ? '100%' : '90%'"
+      :top="isMobile ? '0' : '5vh'"
       :close-on-click-modal="false"
       custom-class="cache-config-dialog"
       destroy-on-close
@@ -266,7 +402,8 @@
       @close="onCacheConfigDialogClosed"
     >
       <div class="cache-config-content">
-        <div class="cache-config-panel">
+        <!-- 桌面端布局 -->
+        <div class="cache-config-panel desktop-layout">
           <div class="config-left">
             <h4>{{ currentCacheLayer.layerName }}</h4>
             <div class="config-form">
@@ -293,25 +430,63 @@
             </div>
           </div>
           <div class="config-right">
-            <div id="cache-config-map"></div>
+            <div id="cache-config-map-desktop"></div>
+          </div>
+        </div>
+        
+        <!-- 移动端布局 -->
+        <div class="cache-config-panel mobile-layout">
+          <!-- 顶部信息栏 -->
+          <div class="mobile-map-info-bar">
+            <span class="mobile-layer-title">{{ currentCacheLayer.layerName }}</span>
+            <span class="mobile-zoom-info">{{ currentMapZoom }}</span>
+            <span class="mobile-cache-status-badge" :class="{ 'status-enabled': currentLayerCacheEnabled, 'status-disabled': !currentLayerCacheEnabled }">
+              <i class="el-icon-circle-check" v-if="currentLayerCacheEnabled"></i>
+              <i class="el-icon-circle-close" v-else></i>
+            </span>
+            <button class="mobile-map-close-btn" @click="cacheConfigVisible = false">
+              <i class="el-icon-close"></i>
+            </button>
+          </div>
+          <!-- 地图全屏区域 -->
+          <div class="mobile-map-fullscreen">
+            <div id="cache-config-map-mobile"></div>
+            <!-- 缓存开关可选，极简悬浮 -->
+            <div class="mobile-map-fab">
+              <el-switch
+                v-model="currentLayerCacheEnabled"
+                @change="toggleLayerCache"
+                active-text="开启"
+                inactive-text="关闭"
+                active-color="#13ce66"
+                inactive-color="#ff4949"
+              />
+            </div>
           </div>
         </div>
       </div>
     </el-dialog>
-    
+
+    <!-- 瓦片预览对话框 -->
+    <el-dialog 
+      v-model="tilePreviewVisible" 
+      title="瓦片预览" 
+      :width="isMobile ? '90%' : '400px'"
+      :top="isMobile ? '10vh' : '15vh'"
+      custom-class="tile-preview-dialog"
+    >
+      <div v-if="tileImageUrl">
+        <img :src="tileImageUrl" style="max-width:100%;" />
+      </div>
+      <div v-else>
+        <span>该瓦片不是图片类型或无法预览。</span>
+      </div>
+    </el-dialog>
   </div>
-  <el-dialog v-model="tilePreviewVisible" title="瓦片预览" width="400px">
-  <div v-if="tileImageUrl">
-    <img :src="tileImageUrl" style="max-width:100%;" />
-  </div>
-  <div v-else>
-    <span>该瓦片不是图片类型或无法预览。</span>
-  </div>
-</el-dialog>
 </template>
 
 <script>
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import gisApi from '@/api/gis.js';
 import { formatFileSize, formatTimeAgo, SimpleCacheService, TileCacheService, getGlobalSceneDataCacheService } from '@/services/tileCache';
@@ -342,6 +517,7 @@ export default {
     const cacheSearchText = ref('');
     const expandedRowKeys = ref([]);
     const isUpdatingScenes = ref(false); // 更新场景图层的loading状态
+    const mobileSearchExpanded = ref(false); // 移动端搜索展开状态
     
     const cacheProgressVisible = ref(false);
     const cacheOperationRunning = ref(false);
@@ -1214,21 +1390,42 @@ const baseMaps = [
 
     // 缓存配置对话框打开事件
     const onCacheConfigDialogOpened = () => {
+      // 移动端需要更长的延迟时间确保布局完成
+      const delay = isMobile.value ? 500 : 300;
       setTimeout(() => {
+        console.log(`对话框打开，准备初始化地图 - 移动端: ${isMobile.value}`);
         initConfigMap();
-      }, 300);
+      }, delay);
     };
 
     // 缓存配置对话框关闭事件
     const onCacheConfigDialogClosed = async () => {
+      // 清理地图实例
+      if (configMap) {
+        configMap.setTarget(null);
+        configMap = null;
+        console.log('地图实例已清理');
+      }
       await refreshCacheData();
     };
 
     // 初始化配置地图
     const initConfigMap = () => {
-      const mapContainer = document.getElementById('cache-config-map');
+      // 根据屏幕尺寸选择正确的地图容器
+      const mapContainerId = isMobile.value ? 'cache-config-map-mobile' : 'cache-config-map-desktop';
+      const mapContainer = document.getElementById(mapContainerId);
       if (!mapContainer) {
-        console.error('配置地图容器未找到');
+        console.error(`配置地图容器未找到: ${mapContainerId}`);
+        return;
+      }
+
+      // 检查容器尺寸
+      const rect = mapContainer.getBoundingClientRect();
+      console.log(`地图容器尺寸 - 宽度: ${rect.width}, 高度: ${rect.height}`);
+      
+      if (rect.width === 0 || rect.height === 0) {
+        console.warn('地图容器尺寸为0，延迟再次尝试');
+        setTimeout(() => initConfigMap(), 200);
         return;
       }
 
@@ -1375,7 +1572,7 @@ const baseMaps = [
       }
 
       configMap = new Map({
-        target: 'cache-config-map',
+        target: mapContainerId,
         layers: layers,
         view: new View({
           center: fromLonLat([centerLon, centerLat]),
@@ -1389,12 +1586,22 @@ const baseMaps = [
         
       });
 
-      // 强制更新地图尺寸
+      // 强制更新地图尺寸，移动端需要更长延迟
+      const delay = isMobile.value ? 300 : 100;
       setTimeout(() => {
         if (configMap) {
           configMap.updateSize();
+          console.log(`地图初始化完成 - 容器: ${mapContainerId}, 移动端: ${isMobile.value}`);
+          
+          // 移动端再次更新尺寸
+          if (isMobile.value) {
+            setTimeout(() => {
+              configMap.updateSize();
+              console.log('移动端地图尺寸二次更新完成');
+            }, 100);
+          }
         }
-      }, 100);
+      }, delay);
     };
 
 
@@ -1414,7 +1621,12 @@ const baseMaps = [
     };
 
     const toggleLayerCache = () => {
-      currentLayerCacheEnabled.value = !currentLayerCacheEnabled.value;
+      // 显示状态反馈
+      if (currentLayerCacheEnabled.value) {
+        ElMessage.success(`图层 "${currentCacheLayer.value.layerName}" 缓存已开启`);
+      } else {
+        ElMessage.warning(`图层 "${currentCacheLayer.value.layerName}" 缓存已关闭`);
+      }
       
       // 重新设置 tileLoadFunction
       if (configMap) {
@@ -1436,6 +1648,8 @@ const baseMaps = [
           mvtLayer.getSource().setTileLoadFunction(mvtTileLoadFunction);
         }
       }
+      
+      console.log(`图层 ${currentCacheLayer.value.layerId} 缓存状态已更新: ${currentLayerCacheEnabled.value ? '开启' : '关闭'}`);
     };
 
     const previewTile = async (tile) => {
@@ -1466,10 +1680,55 @@ const baseMaps = [
       }
     };
 
+    const toggleMobileSearch = () => {
+      mobileSearchExpanded.value = !mobileSearchExpanded.value;
+    };
 
+    const hasActiveFilters = computed(() => {
+      return selectedSceneFilter.value || cacheSearchText.value;
+    });
+
+    const getActiveFiltersText = () => {
+      const filters = [];
+      if (selectedSceneFilter.value) {
+        const scene = sceneList.value.find(s => s.id === selectedSceneFilter.value);
+        if (scene) {
+          filters.push(`场景: ${scene.name}`);
+        }
+      }
+      if (cacheSearchText.value) {
+        filters.push(`搜索: "${cacheSearchText.value}"`);
+      }
+      return filters.join('，');
+    };
+
+    const toggleTileDetails = (row) => {
+      // 确保响应式属性存在
+      if (!('tilesExpanded' in row)) {
+        row.tilesExpanded = false;
+      }
+      row.tilesExpanded = !row.tilesExpanded;
+    };
+
+    // 移动端检测
+    const windowWidth = ref(window.innerWidth);
+    const isMobile = computed(() => {
+      return windowWidth.value <= 768;
+    });
+
+    // 监听窗口大小变化
+    const handleResize = () => {
+      windowWidth.value = window.innerWidth;
+    };
 
     onMounted(() => {
       initCacheService();
+      window.addEventListener('resize', handleResize);
+    });
+
+    // 清理事件监听器
+    onUnmounted(() => {
+      window.removeEventListener('resize', handleResize);
     });
 
     return {
@@ -1512,7 +1771,13 @@ const baseMaps = [
       onCacheConfigDialogClosed,
       enableLayerCache,
       disableLayerCache,
-      updateScenesFromBackend
+      updateScenesFromBackend,
+      toggleMobileSearch,
+      mobileSearchExpanded,
+      hasActiveFilters,
+      getActiveFiltersText,
+      toggleTileDetails,
+      isMobile
     };
   }
 };
@@ -1523,6 +1788,8 @@ const baseMaps = [
   padding: 16px;
   min-height: 100vh;
   background-color: #f5f5f5;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
 
 .cache-toolbar {
@@ -1538,6 +1805,7 @@ const baseMaps = [
 
 .toolbar-left {
   display: flex;
+  align-items: center;
   gap: 8px;
 }
 
@@ -1546,9 +1814,91 @@ const baseMaps = [
   align-items: center;
 }
 
+/* 确保上传按钮与其他按钮对齐 */
+.toolbar-left .el-upload {
+  display: inline-flex !important;
+  align-items: center;
+  vertical-align: top;
+  height: auto;
+
+}
+
+.toolbar-left .el-upload .el-button {
+  margin: 0;
+  vertical-align: top;
+  height: small;
+  line-height: normal;
+}
+
+/* 确保所有工具栏按钮的基础样式一致 */
+.toolbar-left .el-button {
+  vertical-align: top;
+  line-height: small;
+}
+
+.mobile-search-toggle {
+  display: none; /* 默认隐藏移动端搜索切换按钮 */
+  cursor: pointer;
+  padding: 8px 12px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  background-color: #f5f7fa;
+  color: #606266;
+  font-size: 14px;
+  align-items: center;
+  gap: 8px;
+  margin-left: 10px; /* 与搜索框保持一定间距 */
+  transition: all 0.3s ease;
+}
+
+.mobile-search-toggle:hover {
+  background-color: #ecf5ff;
+  border-color: #b3d8ff;
+  color: #409eff;
+}
+
+.mobile-search-toggle .toggle-icon {
+  transition: transform 0.3s ease;
+}
+
+.mobile-search-toggle .rotated {
+  transform: rotate(180deg);
+}
+
+.mobile-search-toggle .toggle-text {
+  flex-grow: 1;
+}
+
+.search-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-left: 10px; /* 与搜索框保持一定间距 */
+}
+
+.search-filters.mobile-collapsed {
+  display: none; /* 移动端折叠时隐藏搜索筛选区域 */
+}
+
+/* 确保桌面端搜索筛选区域始终显示 */
+@media (min-width: 769px) {
+  .search-filters {
+    display: flex !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    max-height: none !important;
+  }
+  
+  .mobile-search-toggle {
+    display: none !important;
+  }
+}
+
 .cache-stats-compact {
   display: flex;
   justify-content: center;
+  align-items: center;
   gap: 24px;
   background: white;
   padding: 12px 16px;
@@ -1561,18 +1911,22 @@ const baseMaps = [
   text-align: center;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 4px;
 }
 
 .stat-label {
   font-size: 12px;
   color: #666;
+  line-height: 1.4;
 }
 
 .stat-value {
   font-size: 16px;
   font-weight: bold;
   color: #409EFF;
+  line-height: 1.4;
 }
 
 .cache-content {
@@ -1580,10 +1934,217 @@ const baseMaps = [
   border-radius: 6px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   padding: 16px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-.cache-layers {
+.mobile-cache-cards {
+  display: none; /* 默认隐藏移动端卡片布局 */
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); /* 自适应卡片宽度 */
+  gap: 16px;
   margin-bottom: 16px;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.mobile-cache-card {
+  background-color: #f9f9f9;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-cache-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background-color: #f0f0f0;
+  border-bottom: 1px solid #eee;
+}
+
+.mobile-cache-title {
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-scene-name {
+  font-size: 14px;
+  color: #333;
+  font-weight: 600;
+}
+
+.mobile-layer-name {
+  font-size: 12px;
+  color: #666;
+}
+
+.mobile-cache-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.mobile-cache-info {
+  padding: 12px 16px;
+  border-top: 1px solid #eee;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mobile-info-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #555;
+}
+
+.mobile-info-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-info-label {
+  font-size: 11px;
+  color: #999;
+  margin-bottom: 4px;
+}
+
+.mobile-info-value {
+  font-weight: 500;
+  color: #333;
+}
+
+.mobile-tiles-section {
+  padding: 12px 16px;
+  border-top: 1px solid #eee;
+  background-color: #f9f9f9;
+}
+
+.mobile-tiles-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-bottom: 1px dashed #eee;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  background-color: #f9f9f9;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-tiles-header:hover {
+  background-color: #f0f0f0;
+}
+
+.mobile-tiles-header:active {
+  background-color: #e8e8e8;
+  transform: scale(0.98);
+}
+
+.mobile-tiles-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.mobile-tiles-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 200px; /* 控制展开内容的最大高度 */
+  overflow-y: auto;
+  padding-right: 10px; /* 滚动条占位 */
+  animation: expandIn 0.3s ease-out;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+}
+
+@keyframes expandIn {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 200px;
+  }
+}
+
+/* WebKit滚动条样式 */
+.mobile-tiles-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.mobile-tiles-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 2px;
+}
+
+.mobile-tiles-content::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 2px;
+}
+
+.mobile-tiles-content::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+.mobile-tile-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #fff;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.mobile-tile-info {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  color: #666;
+}
+
+.mobile-tile-coord {
+  font-weight: 500;
+  color: #333;
+}
+
+.mobile-tile-size {
+  font-size: 11px;
+  color: #999;
+}
+
+.mobile-tile-time {
+  font-size: 11px;
+  color: #999;
+}
+
+.mobile-tile-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.mobile-tiles-more {
+  font-size: 12px;
+  color: #999;
+  text-align: center;
+  padding-top: 8px;
+}
+
+.desktop-cache-table {
+  margin-top: 16px;
 }
 
 .expanded-content {
@@ -1774,7 +2335,15 @@ const baseMaps = [
   min-height: 0;
 }
 
-#cache-config-map {
+#cache-config-map-desktop {
+  width: 100%;
+  height: 100%;
+  border: 1px solid #e1e4e8;
+  border-radius: 8px;
+  background: #f8f9fa;
+}
+
+#cache-config-map-mobile {
   width: 100%;
   height: 100%;
   border: 1px solid #e1e4e8;
@@ -1848,6 +2417,260 @@ const baseMaps = [
   }
 }
 
+/* 桌面端布局 */
+.desktop-layout {
+  display: flex;
+}
+
+.mobile-layout {
+  display: none;
+}
+
+/* 移动端布局 */
+@media (max-width: 768px) {
+  .desktop-layout {
+    display: none !important;
+  }
+  
+  .mobile-layout {
+    display: flex !important;
+    flex-direction: column;
+    height: 100%;
+  }
+  
+  /* 顶部拖拽条和标题栏 */
+  .mobile-sheet-header {
+    padding: 12px 20px 8px;
+    background: #ffffff;
+    border-radius: 20px 20px 0 0;
+    flex-shrink: 0;
+  }
+  
+  .mobile-drag-handle {
+    width: 40px;
+    height: 4px;
+    background: #e1e4e8;
+    border-radius: 2px;
+    margin: 0 auto 16px;
+    transition: background-color 0.2s ease;
+  }
+  
+  .mobile-drag-handle:active {
+    background: #c0c4cc;
+  }
+  
+  .mobile-title-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .mobile-dialog-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #303133;
+    letter-spacing: -0.01em;
+  }
+  
+  .mobile-close-btn {
+    padding: 8px !important;
+    margin: 0 !important;
+    color: #909399 !important;
+    font-size: 18px !important;
+    background: #f5f7fa !important;
+    border-radius: 50% !important;
+    width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    transition: all 0.2s ease !important;
+  }
+  
+  .mobile-close-btn:hover {
+    background: #ecf5ff !important;
+    color: #409eff !important;
+  }
+  
+  .mobile-close-btn:active {
+    transform: scale(0.95) !important;
+  }
+  
+  /* 图层信息卡片 */
+  .mobile-layer-info-card {
+    margin: 0 20px 16px;
+    padding: 16px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    border: 1px solid #e4e7ed;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .mobile-layer-details {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .mobile-layer-title {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #303133;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  .mobile-layer-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  
+  .mobile-zoom-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    color: #606266;
+  }
+  
+  .mobile-zoom-info i {
+    color: #409eff;
+  }
+  
+  .mobile-cache-status-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  
+  .mobile-cache-status-badge.status-enabled {
+    color: #67c23a;
+  }
+  
+  .mobile-cache-status-badge.status-disabled {
+    color: #f56c6c;
+  }
+  
+  .mobile-cache-toggle {
+    flex-shrink: 0;
+    padding-top: 4px;
+  }
+  
+  .mobile-cache-toggle :deep(.el-switch) {
+    height: 24px;
+  }
+  
+  .mobile-cache-toggle :deep(.el-switch__core) {
+    min-width: 44px;
+    height: 24px;
+    border-radius: 12px;
+  }
+  
+  .mobile-cache-toggle :deep(.el-switch__action) {
+    width: 20px;
+    height: 20px;
+    top: 2px;
+  }
+  
+  .mobile-cache-toggle :deep(.el-switch__label) {
+    color: #606266;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  
+  .mobile-cache-toggle :deep(.el-switch__label.is-active) {
+    color: #13ce66;
+  }
+  
+  /* 地图区域 */
+  .mobile-map-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    margin: 0 20px 20px;
+    min-height: 0;
+  }
+  
+  .mobile-map-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  
+  .mobile-map-header h4 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #303133;
+  }
+  
+  .mobile-map-tips {
+    font-size: 12px;
+    color: #909399;
+  }
+  
+  .mobile-config-map {
+    flex: 1;
+    min-height: 280px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #f8f9fa;
+    border: 1px solid #e4e7ed;
+    position: relative;
+  }
+  
+  .mobile-config-map #cache-config-map-mobile {
+    width: 100%;
+    height: 100%;
+    border-radius: 12px;
+  }
+  
+  .mobile-config-map #cache-config-map-mobile .ol-viewport {
+    border-radius: 12px;
+  }
+  
+  .mobile-config-map #cache-config-map-mobile .ol-zoom {
+    left: 12px;
+    top: 12px;
+    background: rgba(255, 255, 255, 0.9) !important;
+    backdrop-filter: blur(8px);
+    border-radius: 8px !important;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1) !important;
+  }
+  
+  .mobile-config-map #cache-config-map-mobile .ol-attribution {
+    right: 12px;
+    bottom: 12px;
+    background: rgba(255, 255, 255, 0.9) !important;
+    backdrop-filter: blur(8px);
+    border-radius: 6px !important;
+    padding: 4px 8px !important;
+    font-size: 11px !important;
+  }
+}
+
+/* 瓦片预览对话框样式 */
+:deep(.tile-preview-dialog) {
+  .el-dialog__body {
+    padding: 20px;
+    text-align: center;
+  }
+  
+  .el-dialog__body img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+}
+
 /* 工具提示样式 */
 .tile-tooltip {
   background: rgba(0, 0, 0, 0.8);
@@ -1876,32 +2699,681 @@ const baseMaps = [
 
 @media (max-width: 768px) {
   .cache-manager {
-    padding: 12px;
+    padding: 8px;
   }
   
   .cache-toolbar {
     flex-direction: column;
-    gap: 12px;
-    padding: 12px;
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px;
   }
   
   .toolbar-left {
-    flex-wrap: wrap;
-    justify-content: center;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .toolbar-left .el-button {
+    font-size: 10px;
+    padding: 4px 6px;
+    flex: 1;
+    min-width: 60px;
+    max-width: none;
+    white-space: nowrap;
+  }
+
+  .toolbar-left .el-upload {
+    flex: 1;
+    min-width: 60px;
+    max-width: none;
+  }
+
+  .toolbar-left .el-upload {
+    display: inline-flex !important;
+    align-items: center;
+    vertical-align: top;
+  }
+
+  .toolbar-left .el-upload .el-button {
+    width: 100%;
+    margin: 0;
+    vertical-align: top;
+  }
+
+  /* 移动端工具栏滚动条样式 */
+  .toolbar-left::-webkit-scrollbar {
+    height: 3px;
+  }
+
+  .toolbar-left::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 2px;
+  }
+
+  .toolbar-left::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 2px;
+  }
+
+  .toolbar-left::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+  }
+
+  /* 移动端底部sheet对话框样式 */
+  :deep(.cache-config-dialog) {
+    .el-overlay {
+      background-color: rgba(0, 0, 0, 0.4) !important;
+    }
+    
+    .el-dialog__wrapper {
+      display: flex !important;
+      align-items: flex-end !important;
+      justify-content: center !important;
+    }
+    
+    .el-dialog {
+      position: fixed !important;
+      bottom: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      top: auto !important;
+      margin: 0 !important;
+      width: 100% !important;
+      height: 85vh !important;
+      max-width: none !important;
+      max-height: 85vh !important;
+      border-radius: 20px 20px 0 0 !important;
+      box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15) !important;
+      transform: translateY(0) !important;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+    
+    .el-dialog__header {
+      display: none !important;
+    }
+    
+    .el-dialog__body {
+      padding: 0 !important;
+      height: 85vh !important;
+      overflow: hidden !important;
+      border-radius: 20px 20px 0 0 !important;
+    }
+    
+    .cache-config-content {
+      height: 100% !important;
+      background: #ffffff !important;
+      border-radius: 20px 20px 0 0 !important;
+    }
+    
+    .mobile-layout {
+      height: 100% !important;
+      display: flex !important;
+      flex-direction: column !important;
+    }
+  }
+
+  :deep(.tile-preview-dialog) {
+    .el-dialog {
+      margin: 0 auto !important;
+      width: 95% !important;
+      max-width: none !important;
+    }
+    
+    .el-dialog__body {
+      padding: 15px !important;
+    }
+    
+    .el-dialog__body img {
+      max-width: 100% !important;
+      height: auto !important;
+    }
+  }
+
+  .mobile-search-toggle {
+    display: flex !important;
+    align-items: center;
+    margin-left: 0;
+    width: 100%;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background-color: #ffffff;
+    border: 1px solid #e4e7ed;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-search-toggle:hover {
+    background-color: #f8f9fa;
+    border-color: #409eff;
+  }
+
+  .mobile-search-toggle:active {
+    background-color: #ecf5ff;
+    transform: scale(0.98);
+  }
+
+  .mobile-search-toggle .toggle-icon {
+    font-size: 16px;
+    color: #409eff;
+    transition: transform 0.3s ease;
+  }
+
+  .mobile-search-toggle .toggle-icon.rotated {
+    transform: rotate(180deg);
+  }
+
+  .mobile-search-toggle .toggle-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: #303133;
+    margin-left: 8px;
+  }
+
+  .mobile-search-toggle .search-summary {
+    margin-left: auto;
+  }
+
+  .search-filters {
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    max-height: 200px;
+    flex-direction: column;
+    gap: 8px;
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .search-filters.mobile-collapsed {
+    max-height: 0;
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  .search-filters .toolbar-right {
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .search-filters .el-select,
+  .search-filters .el-input {
+    width: 100% !important;
   }
   
   .cache-stats-compact {
     flex-wrap: wrap;
-    gap: 16px;
-    padding: 12px;
+    gap: 8px;
+    padding: 8px;
   }
   
   .stat-item {
-    min-width: 120px;
+    min-width: 100px;
+    font-size: 12px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+  }
+
+  .stat-value {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  /* 移动端显示卡片布局 */
+  .mobile-cache-cards {
+    display: block !important;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .mobile-cache-card {
+    border-radius: 6px;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+    margin-bottom: 10px;
+    background: white;
+    border: 1px solid #e1e4e8;
+    transition: all 0.3s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-cache-card:hover {
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+  }
+
+  .mobile-cache-card:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+  }
+
+  .mobile-cache-card:last-child {
+    margin-bottom: 0;
+  }
+
+  .mobile-cache-card-header {
+    padding: 10px 12px;
+  }
+
+  .mobile-scene-name {
+    font-size: 13px;
+  }
+
+  .mobile-layer-name {
+    font-size: 11px;
+  }
+
+  .mobile-cache-actions {
+    gap: 6px;
+  }
+
+  .mobile-cache-actions .el-button {
+    font-size: 11px;
+    padding: 4px 8px;
+    min-height: 32px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-cache-actions .el-button:active {
+    transform: scale(0.95);
+  }
+
+  .mobile-cache-info {
+    padding: 10px 12px;
+    gap: 6px;
+  }
+
+  .mobile-info-row {
+    font-size: 12px;
+  }
+
+  .mobile-info-label {
+    font-size: 10px;
+  }
+
+  .mobile-info-value {
+    font-size: 11px;
+  }
+
+  .mobile-tiles-section {
+    padding: 10px 12px;
+  }
+
+  .mobile-tiles-title {
+    font-size: 13px;
+  }
+
+  .mobile-tile-item {
+    padding: 6px 8px;
+  }
+
+  .mobile-tile-info {
+    font-size: 11px;
+  }
+
+  .mobile-tile-coord {
+    font-size: 11px;
+  }
+
+  .mobile-tile-size,
+  .mobile-tile-time {
+    font-size: 10px;
+  }
+
+  .mobile-tile-actions .el-button {
+    font-size: 10px;
+    padding: 2px 6px;
+    min-height: 28px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-tile-actions .el-button:active {
+    transform: scale(0.95);
+  }
+
+  /* 移动端隐藏桌面端表格 */
+  .desktop-cache-table {
+    display: none !important;
   }
   
   .expanded-content {
-    padding: 12px;
+    padding: 10px;
+  }
+
+  /* 移动端标签样式优化 */
+  .mobile-cache-info .el-tag {
+    font-size: 10px !important;
+    padding: 1px 4px !important;
+    height: 16px !important;
+    line-height: 14px !important;
+    transform: scale(0.9);
+  }
+}
+
+/* 超小屏幕适配 */
+@media (max-width: 480px) {
+  .cache-manager {
+    padding: 6px;
+  }
+
+  .cache-toolbar {
+    padding: 6px;
+    gap: 6px;
+    align-items: stretch;
+  }
+
+  .toolbar-left {
+    gap: 2px;
+    align-items: center;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .toolbar-left .el-button {
+    font-size: 9px;
+    padding: 3px 4px;
+    min-height: 28px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    flex: 1;
+    min-width: 45px;
+    white-space: nowrap;
+  }
+
+  .toolbar-left .el-button:active {
+    transform: scale(0.95);
+  }
+
+  .toolbar-left .el-upload {
+    display: inline-flex !important;
+    align-items: center;
+    vertical-align: top;
+    flex: 1;
+    min-width: 45px;
+  }
+
+  .toolbar-left .el-upload .el-button {
+    margin: 0;
+    vertical-align: top;
+    width: 100%;
+    font-size: 9px;
+    padding: 3px 4px;
+    min-height: 28px;
+    white-space: nowrap;
+  }
+
+  /* 超小屏幕工具栏滚动条样式 */
+  .toolbar-left::-webkit-scrollbar {
+    height: 2px;
+  }
+
+  .toolbar-left::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 1px;
+  }
+
+  .toolbar-left::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 1px;
+  }
+
+  .toolbar-left::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+  }
+
+  .mobile-search-toggle {
+    padding: 8px 10px;
+  }
+
+  .mobile-search-toggle .toggle-text {
+    font-size: 13px;
+  }
+
+  .cache-stats-compact {
+    gap: 6px;
+    padding: 6px;
+    align-items: center;
+  }
+
+  .stat-item {
+    min-width: 80px;
+    font-size: 11px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .stat-label {
+    font-size: 10px;
+  }
+
+  .stat-value {
+    font-size: 12px;
+  }
+
+  .mobile-cache-cards {
+    gap: 8px;
+  }
+
+  .mobile-cache-card-header {
+    padding: 8px 10px;
+  }
+
+  .mobile-scene-name {
+    font-size: 12px;
+  }
+
+  .mobile-layer-name {
+    font-size: 10px;
+  }
+
+  .mobile-cache-actions {
+    gap: 4px;
+  }
+
+  .mobile-cache-actions .el-button {
+    font-size: 10px;
+    padding: 3px 6px;
+    min-height: 30px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-cache-actions .el-button:active {
+    transform: scale(0.95);
+  }
+
+  .mobile-cache-info {
+    padding: 8px 10px;
+    gap: 4px;
+  }
+
+  .mobile-info-row {
+    font-size: 11px;
+  }
+
+  .mobile-info-label {
+    font-size: 9px;
+  }
+
+  .mobile-info-value {
+    font-size: 10px;
+  }
+
+  .mobile-tiles-section {
+    padding: 8px 10px;
+  }
+
+  .mobile-tiles-title {
+    font-size: 12px;
+  }
+
+  .mobile-tile-item {
+    padding: 4px 6px;
+  }
+
+  .mobile-tile-info {
+    font-size: 10px;
+  }
+
+  .mobile-tile-coord {
+    font-size: 10px;
+  }
+
+  .mobile-tile-size,
+  .mobile-tile-time {
+    font-size: 9px;
+  }
+
+  .mobile-tile-actions .el-button {
+    font-size: 9px;
+    padding: 2px 4px;
+    min-height: 26px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-tile-actions .el-button:active {
+    transform: scale(0.95);
+  }
+
+  .mobile-cache-info .el-tag {
+    font-size: 9px !important;
+    padding: 1px 3px !important;
+    height: 14px !important;
+    line-height: 12px !important;
+    transform: scale(0.85);
+  }
+  
+  /* 超小屏幕缓存配置对话框适配 */
+  :deep(.cache-config-dialog) {
+    .el-dialog {
+      height: 90vh !important;
+      max-height: 90vh !important;
+    }
+    
+    .el-dialog__body {
+      height: 90vh !important;
+    }
+  }
+  
+  .mobile-sheet-header {
+    padding: 8px 16px 6px !important;
+  }
+  
+  .mobile-drag-handle {
+    margin-bottom: 12px !important;
+  }
+  
+  .mobile-dialog-title {
+    font-size: 16px !important;
+  }
+  
+  .mobile-close-btn {
+    width: 32px !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    font-size: 16px !important;
+  }
+  
+  .mobile-layer-info-card {
+    margin: 0 16px 12px !important;
+    padding: 12px !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+  
+  .mobile-layer-title {
+    font-size: 15px !important;
+  }
+  
+  .mobile-layer-meta {
+    gap: 4px !important;
+  }
+  
+  .mobile-zoom-info,
+  .mobile-cache-status-badge {
+    font-size: 13px !important;
+  }
+  
+  .mobile-cache-toggle {
+    align-self: flex-end !important;
+    padding-top: 0 !important;
+  }
+  
+  .mobile-cache-toggle :deep(.el-switch) {
+    height: 22px !important;
+  }
+  
+  .mobile-cache-toggle :deep(.el-switch__core) {
+    min-width: 40px !important;
+    height: 22px !important;
+  }
+  
+  .mobile-cache-toggle :deep(.el-switch__action) {
+    width: 18px !important;
+    height: 18px !important;
+  }
+  
+  .mobile-cache-toggle :deep(.el-switch__label) {
+    font-size: 11px !important;
+  }
+  
+  .mobile-map-section {
+    margin: 0 16px 16px !important;
+  }
+  
+  .mobile-map-header h4 {
+    font-size: 15px !important;
+  }
+  
+  .mobile-map-tips {
+    font-size: 11px !important;
+  }
+  
+  .mobile-config-map {
+    min-height: 220px !important;
+    border-radius: 10px !important;
+  }
+  
+  .mobile-config-map #cache-config-map-mobile {
+    border-radius: 10px !important;
+  }
+  
+  .mobile-config-map #cache-config-map-mobile .ol-viewport {
+    border-radius: 10px !important;
+  }
+  
+  .mobile-config-map #cache-config-map-mobile .ol-zoom {
+    left: 8px !important;
+    top: 8px !important;
+    border-radius: 6px !important;
+  }
+  
+  .mobile-config-map #cache-config-map-mobile .ol-attribution {
+    right: 8px !important;
+    bottom: 8px !important;
+    padding: 3px 6px !important;
+    font-size: 10px !important;
   }
 }
 
@@ -1995,5 +3467,114 @@ const baseMaps = [
   background-color: #fdf6ec;
   border-color: #f5dab1;
   color: #e6a23c;
+}
+
+/* 移动端极简底部弹窗风格 */
+@media (max-width: 768px) {
+  .cache-config-panel.mobile-layout {
+    position: relative;
+    height: 100%;
+    background: transparent;
+    border-radius: 20px 20px 0 0;
+    overflow: hidden;
+    padding: 0;
+  }
+  .mobile-map-info-bar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 38px;
+    background: rgba(255,255,255,0.92);
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 0 12px;
+    border-radius: 20px 20px 0 0;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .mobile-layer-title {
+    max-width: 40vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #222;
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .mobile-zoom-info {
+    color: #666;
+    font-size: 13px;
+  }
+  .mobile-cache-status-badge {
+    font-size: 15px;
+    margin-left: 4px;
+  }
+  .mobile-cache-status-badge.status-enabled { color: #13ce66; }
+  .mobile-cache-status-badge.status-disabled { color: #ff4949; }
+  .mobile-map-close-btn {
+    position: absolute;
+    right: 8px;
+    top: 6px;
+    background: none;
+    border: none;
+    outline: none;
+    color: #909399;
+    font-size: 20px;
+    z-index: 3;
+    padding: 2px;
+    border-radius: 50%;
+    transition: background 0.2s;
+  }
+  .mobile-map-close-btn:active {
+    background: #f2f2f2;
+  }
+  .mobile-map-fullscreen {
+    position: absolute;
+    top: 38px;
+    left: 0; right: 0; bottom: 0;
+    width: 100%; height: calc(100% - 38px);
+    background: #f8f9fa;
+    border-radius: 0 0 20px 20px;
+    overflow: hidden;
+  }
+  .mobile-map-fullscreen #cache-config-map-mobile {
+    width: 100%; height: 100%; border-radius: 0 0 20px 20px;
+  }
+  .mobile-map-fab {
+    position: absolute;
+    right: 16px;
+    bottom: 18px;
+    z-index: 10;
+    background: rgba(255,255,255,0.95);
+    border-radius: 18px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+    padding: 4px 12px;
+    display: flex;
+    align-items: center;
+  }
+  .mobile-map-fab :deep(.el-switch) {
+    height: 24px;
+  }
+  .mobile-map-fab :deep(.el-switch__core) {
+    min-width: 44px;
+    height: 24px;
+    border-radius: 12px;
+  }
+  .mobile-map-fab :deep(.el-switch__action) {
+    width: 20px;
+    height: 20px;
+    top: 2px;
+  }
+  .mobile-map-fab :deep(.el-switch__label) {
+    color: #606266;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .mobile-map-fab :deep(.el-switch__label.is-active) {
+    color: #13ce66;
+  }
 }
 </style>
