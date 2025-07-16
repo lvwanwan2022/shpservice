@@ -1,4 +1,7 @@
-Pillow>=9.0.0
-rembg>=2.0.0
-numpy>=1.20.0
-onnxruntime>=1.15.0 
+markdown>=3.4.4
+jinja2>=3.1.2
+python-docx>=0.8.11
+weasyprint>=59.0
+Pillow>=10.0.0 
+beautifulsoup4==4.12.2
+lxml==4.9.3 

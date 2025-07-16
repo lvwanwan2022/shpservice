@@ -1,22 +1,22 @@
 /*
  * @Author: Lvwan-793145268@qq.com
  * @Date: 2025-05-11 22:17:16
- * @LastEditors: Lvwan-793145268@qq.com
- * @LastEditTime: 2025-06-03 15:26:42
+ * @LastEditors: WangNing
+ * @LastEditTime: 2025-07-11 10:06:35
  * @FilePath: \shpservice\frontend\vue.config.js
  * @Description: 
  * Copyright (c) 2025 by Lvwan, All Rights Reserved. 
  */
 const { defineConfig } = require('@vue/cli-service')
-
+const base_url='http://192.168.54.3'
 // 从环境变量获取Martin服务的基础URL，默认为http://192.168.1.17:3000
 //const backend_url = 'http://192.168.1.17:5030'
-const backend_url = 'http://172.16.118.124:5030'
+const backend_url = base_url+':5030'
 //const MARTIN_BASE_URL = 'http://192.168.1.17:3000'
-const MARTIN_BASE_URL = 'http://172.16.118.124:3000'
+const MARTIN_BASE_URL = base_url+':3000'  
 //console.log('Vue配置中使用的 MARTIN_BASE_URL:', MARTIN_BASE_URL)
 //const GEOSERVER_BASE_URL = 'http://192.168.1.17:8083'
-const GEOSERVER_BASE_URL = 'http://172.16.118.124:8083'
+const GEOSERVER_BASE_URL = base_url+':8083'
 
 
 module.exports = defineConfig({
