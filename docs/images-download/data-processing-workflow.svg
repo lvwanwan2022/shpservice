@@ -43,13 +43,13 @@
   <line x1="640" y1="90" x2="655" y2="90" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
   
   <!-- 处理算法说明 -->
-  <rect x="20" y="160" width="750" height="120" fill="#fff" stroke="#ddd" stroke-width="1" rx="5"/>
+  <rect x="20" y="160" width="750" height="110" fill="#fff" stroke="#ddd" stroke-width="1" rx="5"/>
   <text x="400" y="185" text-anchor="middle" font-size="14" font-weight="bold" fill="#333">核心处理算法</text>
   
   <text x="30" y="210" font-size="12" fill="#333">• DXF样式智能提取：双重解析策略（GDAL + ezdxf），ACI颜色转换，图层映射</text>
   <text x="30" y="230" font-size="12" fill="#333">• 坐标系自适应转换：自动识别，多步转换，精度评估</text>
-  <text x="30" y="250" font-size="12" fill="#333">• 雪花算法ID生成：分布式唯一标识，时间戳+机器ID+序列号</text>
-  <text x="30" y="270" font-size="12" fill="#333">• 数据质量检查：完整性验证，一致性校验，错误修复</text>
+  
+  <text x="30" y="250" font-size="12" fill="#333">• 数据质量检查：完整性验证，一致性校验，错误修复</text>
   
   <!-- 箭头标记 -->
   <defs>

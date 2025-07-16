@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="900" height="700" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="headerGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="managerGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#4facfe;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00f2fe;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="engineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#43e97b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#38f9d7;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="predictGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#fa709a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#fee140;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="monitorGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#a8edea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#fed6e3;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#4A90E2"/>
+    </marker>
+  </defs>
+  
+  <!-- 背景 -->
+  <rect width="900" height="700" fill="#f8f9fa"/>
+  
+  <!-- 标题 -->
+  <rect x="50" y="20" width="800" height="50" rx="8" fill="url(#headerGradient)" filter="url(#shadow)"/>
+  <text x="450" y="50" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="white">IndexDB缓存系统架构图</text>
+  
+  <!-- 核心模块层 -->
+  <text x="450" y="110" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#333">核心模块层</text>
+  
+  <!-- 缓存管理器 -->
+  <rect x="80" y="130" width="160" height="100" rx="8" fill="url(#managerGradient)" filter="url(#shadow)"/>
+  <text x="160" y="155" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">缓存管理器</text>
+  <text x="90" y="175" font-family="Arial, sans-serif" font-size="10" fill="white">• 策略制定</text>
+  <text x="90" y="190" font-family="Arial, sans-serif" font-size="10" fill="white">• 统一调度</text>
+  <text x="90" y="205" font-family="Arial, sans-serif" font-size="10" fill="white">• 生命周期管理</text>
+  <text x="90" y="220" font-family="Arial, sans-serif" font-size="10" fill="white">• 空间分配</text>
+  
+  <!-- 存储引擎 -->
+  <rect x="270" y="130" width="160" height="100" rx="8" fill="url(#engineGradient)" filter="url(#shadow)"/>
+  <text x="350" y="155" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">存储引擎</text>
+  <text x="280" y="175" font-family="Arial, sans-serif" font-size="10" fill="white">• IndexDB操作</text>
+  <text x="280" y="190" font-family="Arial, sans-serif" font-size="10" fill="white">• 数据持久化</text>
+  <text x="280" y="205" font-family="Arial, sans-serif" font-size="10" fill="white">• 事务管理</text>
+  <text x="280" y="220" font-family="Arial, sans-serif" font-size="10" fill="white">• 索引优化</text>
+  
+  <!-- 预测引擎 -->
+  <rect x="460" y="130" width="160" height="100" rx="8" fill="url(#predictGradient)" filter="url(#shadow)"/>
+  <text x="540" y="155" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">预测引擎</text>
+  <text x="470" y="175" font-family="Arial, sans-serif" font-size="10" fill="white">• 行为分析</text>
+  <text x="470" y="190" font-family="Arial, sans-serif" font-size="10" fill="white">• 模式识别</text>
+  <text x="470" y="205" font-family="Arial, sans-serif" font-size="10" fill="white">• 预测算法</text>
+  <text x="470" y="220" font-family="Arial, sans-serif" font-size="10" fill="white">• 智能推荐</text>
+  
+  <!-- 性能监控 -->
+  <rect x="650" y="130" width="160" height="100" rx="8" fill="url(#monitorGradient)" filter="url(#shadow)"/>
+  <text x="730" y="155" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">性能监控</text>
+  <text x="660" y="175" font-family="Arial, sans-serif" font-size="10" fill="white">• 命中率统计</text>
+  <text x="660" y="190" font-family="Arial, sans-serif" font-size="10" fill="white">• 响应时间</text>
+  <text x="660" y="205" font-family="Arial, sans-serif" font-size="10" fill="white">• 存储使用率</text>
+  <text x="660" y="220" font-family="Arial, sans-serif" font-size="10" fill="white">• 性能报告</text>
+  
+  <!-- 连接线 -->
+  <line x1="240" y1="180" x2="270" y2="180" stroke="#4A90E2" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="430" y1="180" x2="460" y2="180" stroke="#4A90E2" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="620" y1="180" x2="650" y2="180" stroke="#4A90E2" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- 缓存层级 -->
+  <text x="450" y="280" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#333">分层缓存架构</text>
+  
+  <!-- 热点缓存层 -->
+  <rect x="100" y="300" width="200" height="80" rx="8" fill="#ffebee" stroke="#f44336" stroke-width="2" filter="url(#shadow)"/>
+  <text x="200" y="325" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#d32f2f">热点缓存层</text>
+  <text x="110" y="345" font-family="Arial, sans-serif" font-size="11" fill="#666">• 高频访问瓦片</text>
+  <text x="110" y="360" font-family="Arial, sans-serif" font-size="11" fill="#666">• 内存级别存储</text>
+  <text x="110" y="375" font-family="Arial, sans-serif" font-size="11" fill="#666">• 毫秒级响应</text>
+  
+  <!-- 常规缓存层 -->
+  <rect x="350" y="300" width="200" height="80" rx="8" fill="#fff3e0" stroke="#ff9800" stroke-width="2" filter="url(#shadow)"/>
+  <text x="450" y="325" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#f57c00">常规缓存层</text>
+  <text x="360" y="345" font-family="Arial, sans-serif" font-size="11" fill="#666">• 中频访问瓦片</text>
+  <text x="360" y="360" font-family="Arial, sans-serif" font-size="11" fill="#666">• IndexDB存储</text>
+  <text x="360" y="375" font-family="Arial, sans-serif" font-size="11" fill="#666">• 秒级响应</text>
+  
+  <!-- 长期存储层 -->
+  <rect x="600" y="300" width="200" height="80" rx="8" fill="#e8f5e8" stroke="#4caf50" stroke-width="2" filter="url(#shadow)"/>
+  <text x="700" y="325" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#388e3c">长期存储层</text>
+  <text x="610" y="345" font-family="Arial, sans-serif" font-size="11" fill="#666">• 低频访问瓦片</text>
+  <text x="610" y="360" font-family="Arial, sans-serif" font-size="11" fill="#666">• 压缩存储</text>
+  <text x="610" y="375" font-family="Arial, sans-serif" font-size="11" fill="#666">• 离线支持</text>
+  
+  <!-- Web Worker异步处理 -->
+  <rect x="200" y="420" width="500" height="80" rx="8" fill="#e3f2fd" stroke="#2196f3" stroke-width="2" filter="url(#shadow)"/>
+  <text x="450" y="445" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#1976d2">Web Worker异步处理</text>
+  <text x="220" y="465" font-family="Arial, sans-serif" font-size="11" fill="#666">• 非阻塞缓存操作</text>
+  <text x="220" y="480" font-family="Arial, sans-serif" font-size="11" fill="#666">• 后台预加载</text>
+  <text x="220" y="495" font-family="Arial, sans-serif" font-size="11" fill="#666">• 主线程性能保护</text>
+  
+  <text x="450" y="465" font-family="Arial, sans-serif" font-size="11" fill="#666">• 并发处理能力</text>
+  <text x="450" y="480" font-family="Arial, sans-serif" font-size="11" fill="#666">• 智能任务调度</text>
+  <text x="450" y="495" font-family="Arial, sans-serif" font-size="11" fill="#666">• 错误恢复机制</text>
+  
+  <!-- LRU淘汰算法 -->
+  <rect x="100" y="530" width="300" height="100" rx="8" fill="#ffffff" stroke="#ddd" stroke-width="2" filter="url(#shadow)"/>
+  <text x="250" y="555" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#333">LRU淘汰算法</text>
+  <text x="120" y="575" font-family="Arial, sans-serif" font-size="11" fill="#666">• 最近最少使用策略</text>
+  <text x="120" y="590" font-family="Arial, sans-serif" font-size="11" fill="#666">• 地理空间聚集优化</text>
+  <text x="120" y="605" font-family="Arial, sans-serif" font-size="11" fill="#666">• 智能权重计算</text>
+  <text x="120" y="620" font-family="Arial, sans-serif" font-size="11" fill="#666">• 动态阈值调整</text>
+  
+  <!-- 性能指标 -->
+  <rect x="450" y="530" width="350" height="100" rx="8" fill="#ffffff" stroke="#ddd" stroke-width="2" filter="url(#shadow)"/>
+  <text x="625" y="555" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#333">性能指标</text>
+  <text x="470" y="575" font-family="Arial, sans-serif" font-size="11" fill="#666">缓存命中率: <tspan font-weight="bold" fill="#4CAF50">87.3%</tspan></text>
+  <text x="470" y="590" font-family="Arial, sans-serif" font-size="11" fill="#666">首次加载时间: <tspan font-weight="bold" fill="#2196F3">890ms</tspan></text>
+  <text x="470" y="605" font-family="Arial, sans-serif" font-size="11" fill="#666">重复访问时间: <tspan font-weight="bold" fill="#FF9800">89ms</tspan></text>
+  <text x="470" y="620" font-family="Arial, sans-serif" font-size="11" fill="#666">离线访问支持: <tspan font-weight="bold" fill="#9C27B0">156ms</tspan></text>
+  
+  <!-- 数据流向箭头 -->
+  <path d="M 200 400 Q 450 390 700 400" fill="none" stroke="#4A90E2" stroke-width="2" marker-end="url(#arrowhead)" opacity="0.6"/>
+  <text x="450" y="385" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#666">数据流向</text>
+</svg>

@@ -10,9 +10,9 @@
 
 ### 1.1 研究背景
 
-随着地理信息技术的快速发展和应用领域的不断扩展，WebGIS平台已成为地理空间数据管理和可视化的重要工具。传统的WebGIS平台在处理多种数据格式、保持数据样式完整性和提供高性能服务方面面临诸多挑战。特别是在处理CAD格式数据（如DXF文件）时，现有解决方案往往无法有效保留原始设计意图中的图层结构、颜色配置和线型样式等关键信息[1]。
+随着地理信息技术的快速发展和应用领域的不断扩展，WebGIS平台已成为地理空间数据管理和可视化的重要工具。传统的WebGIS平台在处理多种数据格式、保持数据样式完整性和提供高性能服务方面面临诸多挑战。特别是在处理CAD格式数据（如DXF文件）时，现有解决方案往往无法有效保留原始设计意图中的图层结构、颜色配置和线型样式等关键信息[1,2]。
 
-当前主流的地图服务架构主要依赖WMS（Web Map Service）、WFS（Web Feature Service）、WMTS（Web Map Tile Service）等OGC标准，虽然在标准化和互操作性方面表现良好，但在大数据量处理和实时交互性能方面存在明显不足[2]。新兴的矢量瓦片技术（Vector Tiles）为解决这些问题提供了新的思路，但如何在保证数据完整性的前提下实现高效的矢量瓦片服务仍是一个技术难题[3]。
+当前主流的地图服务架构主要依赖WMS（Web Map Service）、WFS（Web Feature Service）、WMTS（Web Map Tile Service）等OGC标准，虽然在标准化和互操作性方面表现良好，但在大数据量处理和实时交互性能方面存在明显不足[7,9]。新兴的矢量瓦片技术（Vector Tiles）为解决这些问题提供了新的思路，但如何在保证数据完整性的前提下实现高效的矢量瓦片服务仍是一个技术难题[3,12]。
 
 前端地图显示在传统架构中面临诸多挑战，包括加载速度缓慢、网络请求次数过多、后端服务器压力巨大等问题。这些问题在移动设备和弱网络环境下尤为突出，严重影响用户体验和系统可用性。为解决这些问题，本研究提出了基于IndexDB的智能缓存策略和深度学习预测算法，有效改善了前端地图的加载性能和用户交互体验。
 
@@ -21,7 +21,7 @@
 ![传统WebGIS架构与本研究架构对比图](docs/images-download/traditional-vs-modern-webgis.svg)
 **[图1-1：传统WebGIS架构与本研究架构对比图]**
 
-近年来，学者们在WebGIS性能优化、多格式数据处理和样式保留等方面进行了大量研究。Chen等[4]提出了基于GPU加速的地图渲染算法，显著提升了大规模矢量数据的渲染性能；Li等[5]研究了DXF文件的语义信息提取方法，但在样式信息的完整保留方面仍存在不足；Zhang等[6]设计了分布式瓦片缓存策略，在一定程度上改善了地图服务的响应性能。
+近年来，学者们在WebGIS性能优化、多格式数据处理和样式保留等方面进行了大量研究。陈丕翔[6]提出了基于GPU并行计算和WebGIS的系统架构，显著提升了大规模地理数据的处理性能；石善忠[2]研究了利用FME进行CAD到GIS数据的无损转换方法，在样式信息保留方面取得了重要进展；王少萍[7]设计了基于云平台的高并发WebGIS系统，在一定程度上改善了地图服务的响应性能。
 
 然而，现有研究多集中在单一技术环节的优化，缺乏对多格式数据处理、样式保留和服务性能的综合考虑。特别是在构建支持多种坐标系统、多种数据格式且具备高并发处理能力的集成平台方面，仍缺乏系统性的解决方案。
 
@@ -54,7 +54,7 @@
 
 数据接入层负责处理多种格式的地理数据上传、验证和预处理。该层采用统一的文件处理接口，通过格式识别算法自动判断数据类型，并调用相应的数据处理模块。
 
-系统支持多种主流地理数据格式，包括矢量数据（SHP、DXF、GeoJSON、KML）、栅格数据（GeoTIFF、PNG、JPEG）和瓦片数据（MBTiles、PMTiles）。每种数据类型都有对应的处理策略：矢量数据通过GDAL/OGR库进行解析和转换，然后根据数据特征选择通过GeoServer发布WMS服务或通过Martin发布MVT服务；栅格数据主要通过GeoServer发布WMS和WMTS服务；瓦片数据可以直接通过静态文件服务器提供访问。
+系统支持多种主流地理数据格式，包括矢量数据（SHP、DXF、GeoJSON、KML）、栅格数据（GeoTIFF、PNG、JPEG）和瓦片数据（MBTiles、PMTiles）。每种数据类型都有对应的处理策略：矢量数据通过GDAL/OGR库进行解析和转换，然后根据数据特征选择通过GeoServer发布WMS服务或通过Martin发布MVT服务；矢量和栅格数据均通过GeoServer发布WMS和WMTS服务；瓦片数据可以直接通过martin将mbtiles静态文件或数据库表等发布成矢量瓦片或静态瓦片服务以供访问。
 
 #### 2.1.2 服务处理层
 
@@ -76,7 +76,7 @@
 
 #### 2.2.2 服务发布模块
 
-服务发布模块实现了智能化的服务选择策略。系统根据数据特征、用户需求和性能要求，自动选择最适合的服务发布方式：
+服务发布模块实现了两种不同思路的服务自动发布：GeoServer的RESTful API发布服务和Martin发布服务。GeoServer发布采用传统的企业级GIS服务架构，通过REST API自动创建工作空间、数据存储和图层，支持Shapefile、GeoJSON、GeoTIFF等多种格式的WMS/WFS服务发布。系统实现了完整的发布流程管理，包括数据验证、坐标系转换、样式配置和服务注册。Martin发布则采用现代化的矢量瓦片技术，将矢量数据导入PostGIS数据库后自动生成MVT服务，通过统一的表命名规则（vector_前缀）和自动索引创建，实现高性能的瓦片服务发布。两种发布方式形成互补：GeoServer提供标准化的OGC服务和丰富的样式支持，适用于传统GIS应用；Martin提供轻量级的矢量瓦片服务，支持客户端动态渲染，在大数据量和高并发场景下具有显著性能优势。系统通过智能路由机制根据数据特征和应用需求自动选择最适合的发布方式。
 
 
 #### 2.2.3 缓存优化模块
@@ -168,28 +168,16 @@ Martin服务的自动发布机制基于PostgreSQL的LISTEN/NOTIFY机制和表名
 
 #### 4.2.2 性能优化策略
 
-![MVT服务性能对比图](docs/images-download/mvt-performance-comparison.svg)
-**[图4-4：MVT服务性能对比图]**
-
 通过优化瓦片生成算法和缓存策略，MVT服务相比传统WMS服务在响应时间方面有明显提升。在实际测试中，MVT服务的平均响应时间约为WMS服务的1/3，在高并发场景下优势更加明显。
 
 
-### 4.3 多坐标系统自适应转换算法
 
-地理信息系统中的坐标系统转换是一个复杂的数学问题。本研究设计了自适应的坐标系转换算法，能够根据数据特征和应用需求自动选择最优的转换策略。
 
-#### 4.3.1 坐标系识别与转换
-
-坐标系自动识别算法通过分析几何数据的坐标范围和分布特征，智能判断数据所使用的坐标系统。对于中国地区的数据，系统能够自动识别常用的坐标系统，包括WGS84、GCJ02、BD09等。坐标转换算法采用多步转换策略，对于复杂的坐标系转换，系统选择合适的中间坐标系以提高转换精度。算法还实现了转换精度评估机制，确保转换结果的准确性。
-
-![坐标系转换精度对比图](docs/images-download/coordinate-transformation-accuracy.svg)
-**[图4-7：坐标系转换精度对比图]**
-
-### 4.4 前端IndexDB智能瓦片缓存算法
+### 4.3 前端IndexDB智能瓦片缓存算法
 
 传统的Web地图应用依赖网络请求获取瓦片数据，在网络环境差或高并发场景下容易出现加载缓慢的问题。本研究设计了基于IndexDB的智能瓦片缓存策略，通过预测性加载和智能淘汰算法，显著提升了地图的响应速度和用户体验。
 
-#### 4.4.1 IndexDB缓存架构设计
+#### 4.3.1 IndexDB缓存架构设计
 
 ![IndexDB缓存架构图](docs/images-download/indexdb-cache-architecture.svg)
 **[图4-8：IndexDB缓存架构图]**
@@ -202,11 +190,11 @@ IndexDB缓存系统采用分层存储架构，包括热点缓存层、常规缓�
 3. **LRU淘汰机制**：采用改进的LRU算法进行缓存空间管理
 4. **离线支持**：支持离线地图浏览和基本交互功能
 
-#### 4.4.2 智能缓存算法实现
+#### 4.3.2 智能缓存算法实现
 
 智能缓存算法结合了用户行为分析和地理空间相关性，通过多维度评估瓦片的缓存价值。算法实现包括缓存优先级计算、预测性加载策略和空间管理三个核心模块。缓存优先级基于访问频率、地理位置重要性和用户偏好进行加权计算。预测性加载通过分析用户的缩放、平移操作模式，提前加载可能访问的周边瓦片。空间管理模块采用改进的LRU算法，结合瓦片的地理空间聚集特性进行智能淘汰。
 
-#### 4.4.3 缓存性能优化
+#### 4.3.3 缓存性能优化
 
 ![缓存性能对比图](docs/images-download/cache-performance-comparison.svg)
 **[图4-9：缓存性能对比图]**
@@ -220,11 +208,11 @@ IndexDB缓存系统采用分层存储架构，包括热点缓存层、常规缓�
 | 离线访问(ms) | 超时 | 超时 | 156 |
 | 缓存命中率 | 0% | 56.3% | 87.3% |
 
-### 4.5 后端深度学习缓存范围预测算法
+### 4.4 后端深度学习缓存范围预测算法
 
 为了优化后端缓存策略，本研究引入深度学习技术，通过分析用户访问模式和地理空间特征，预测热点区域和缓存需求，实现智能化的缓存范围计算。
 
-#### 4.5.1 用户行为数据模型
+#### 4.4.1 用户行为数据模型
 
 ![用户行为数据模型图](docs/images-download/user-behavior-data-model.svg)
 **[图4-10：用户行为数据模型图]**
@@ -235,11 +223,11 @@ IndexDB缓存系统采用分层存储架构，包括热点缓存层、常规缓�
 - **操作维度**：缩放、平移、查询操作的频次和模式
 - **上下文维度**：用户类型、设备信息、网络状况
 
-#### 4.5.2 LSTM神经网络预测模型
+#### 4.4.2 LSTM神经网络预测模型
 
 基于长短期记忆网络(LSTM)构建时序预测模型，能够捕捉用户访问行为的时间依赖性和空间关联性。模型架构包括输入层、LSTM隐藏层、注意力机制层和输出层。输入层处理多维特征向量，LSTM层捕捉时序模式，注意力机制增强关键时段的权重，输出层生成热点区域的概率分布。训练过程采用时间窗口滑动策略，使用历史30天的访问数据预测未来7天的热点区域。
 
-#### 4.5.3 热点区域识别与缓存策略
+#### 4.4.3 热点区域识别与缓存策略
 
 ![热点区域预测结果图](docs/images-download/hotspot-prediction-results.svg)
 **[图4-11：热点区域预测结果图]**
@@ -251,11 +239,6 @@ IndexDB缓存系统采用分层存储架构，包括热点缓存层、常规缓�
 3. **预加载优化**：在访问高峰前预加载热点区域的瓦片数据
 4. **缓存淘汰决策**：基于预测结果优化缓存淘汰的优先级
 
-预测模型的性能评估结果显示：
-- **预测准确率**：91.2%
-- **覆盖率**：88.7%
-- **响应时间提升**：56.8%
-- **缓存命中率提升**：43.2%
 
 ## 5. 系统实现与优化
 
@@ -272,24 +255,25 @@ IndexDB缓存系统采用分层存储架构，包括热点缓存层、常规缓�
 
 
 #### 5.1.2 动态样式渲染系统
-
+![动态样式渲染流程图](docs/images-download/dynamic-style-rendering-flow.svg)
 **[图5-2：动态样式渲染流程图]**
 
 动态样式渲染系统实现了基于要素属性的实时样式计算，特别针对CAD数据的复杂样式需求进行了优化。系统通过样式缓存机制提高渲染性能，对相同图层和几何类型的要素重用样式对象。渲染算法支持多种样式配置方式，包括基于图层的统一样式、基于属性的分类样式和基于表达式的动态样式。
 
 
 #### 5.1.3 IndexDB智能缓存系统实现
-
+![IndexDB缓存系统架构图](docs/images-download/indexdb-cache-system-architecture.svg)
 **[图5-3：IndexDB缓存系统架构图]**
 
 前端IndexDB缓存系统采用模块化设计，包括缓存管理器、存储引擎、预测引擎和性能监控四个核心模块。缓存管理器负责统一的缓存策略制定和执行，存储引擎处理IndexDB的底层操作和数据持久化，预测引擎基于用户行为模式预测缓存需求，性能监控模块实时跟踪缓存命中率和响应时间。系统通过Web Worker技术实现了异步缓存处理，避免阻塞主线程的地图渲染。
-
+![IndexDB数据结构设计图](docs/images-download/indexdb-data-structure-design.svg)
 **[图5-4：IndexDB数据结构设计图]**
 
 IndexDB数据库采用分层存储结构，包含瓦片数据表、元数据表和统计信息表。瓦片数据表存储实际的瓦片图像数据，采用复合索引(layer_id, z, x, y)提高查询效率。元数据表记录瓦片的创建时间、访问次数、文件大小等信息，支持智能淘汰策略。统计信息表维护全局缓存统计数据，包括总存储空间、命中率、平均响应时间等指标。
 
 #### 5.1.4 预测性加载机制
 
+![预测性加载流程图](docs/images-download/predictive-loading-flow.svg)
 **[图5-5：预测性加载流程图]**
 
 预测性加载机制通过分析用户的交互行为模式，提前加载可能访问的瓦片数据。系统记录用户的缩放、平移操作序列，建立马尔科夫链模型预测下一步操作。当用户执行缩放操作时，系统根据历史模式预测目标缩放级别，提前加载对应的瓦片数据。对于平移操作，系统基于运动轨迹预测用户可能访问的地理区域，并优先加载这些区域的瓦片。该机制将预加载命中率提升至78.5%，显著改善了用户体验。
@@ -297,7 +281,7 @@ IndexDB数据库采用分层存储结构，包含瓦片数据表、元数据表�
 ### 5.2 后端性能优化
 
 #### 5.2.1 数据库连接池优化
-
+![数据库连接池架构图](docs/images-download/database-connection-pool-architecture.svg)
 **[图5-3：数据库连接池架构图]**
 
 实现了智能的数据库连接池管理，根据系统负载动态调整连接数量：
@@ -328,7 +312,6 @@ LSTM神经网络模型采用编码器-解码器架构，编码器处理历史时
 
 基于深度学习预测结果，系统实现了动态的缓存调度策略。预测模型每小时更新一次热点区域预测结果，缓存调度器根据预测概率动态调整缓存策略。对于高概率热点区域，系统提前生成并缓存多个缩放级别的瓦片数据。对于低概率区域，采用延迟加载策略以节省存储空间。系统还引入了负载均衡机制，根据服务器负载情况动态分配缓存任务，避免单点过载。
 
-**[图5-9：缓存命中率优化效果图]**
 
 通过深度学习优化的缓存策略，系统缓存性能得到显著提升：
 
@@ -412,32 +395,33 @@ LSTM神经网络模型采用编码器-解码器架构，编码器处理历史时
 
 ## 参考文献
 
-[1] Smith J, Wang L, Chen M. Advanced Techniques for CAD Data Integration in WebGIS Platforms[J]. International Journal of Geographical Information Science, 2023, 37(8): 1654-1678.
+[1] 陈能. AutoCAD地形图数据转换为GIS空间数据的技术研究与应用[D]. 华南理工大学, 2019.
 
-[2] Li X, Zhang Y, Kumar S. Performance Optimization Strategies for Large-Scale Vector Tile Services[J]. Computers & Geosciences, 2023, 171: 105287.
+[2] 石善忠. 利用FME对CAD到GIS数据带属性的无损转换研究[J]. 测绘与空间地理信息, 2018, 41(3): 156-159.
 
-[3] Chen W, Liu H, Brown A. Preserving Style Information in CAD to GIS Data Conversion[J]. ISPRS Journal of Photogrammetry and Remote Sensing, 2022, 194: 312-328.
+[3] 张伟伟. 基于CAD与GIS集成的规划编制辅助设计系统建设与应用[J]. 城市规划学刊, 2020, 15(2): 78-85.
 
-[4] Zhang Q, Thompson R, Anderson K. GPU-Accelerated Rendering Algorithms for Web-Based Geographic Information Systems[J]. IEEE Transactions on Visualization and Computer Graphics, 2023, 29(7): 3245-3258.
+[4] 戴望宇. 基于三维GIS引擎的CAD图元数据结构研究及基础绘图功能研发[D]. 华中科技大学, 2021.
 
-[5] Wang M, Garcia C, Johnson P. Semantic Information Extraction from DXF Files for Enhanced GIS Integration[J]. Computer-Aided Design, 2022, 152: 103371.
+[5] 薛梅. 面向建设工程全生命周期应用的CAD_GIS_BIM在线集成框架[J]. 土木工程学报, 2022, 55(4): 112-120.
 
-[6] Kumar A, Davis S, Wilson J. Distributed Tile Caching Strategies for High-Performance Web Map Services[J]. Future Generation Computer Systems, 2023, 145: 267-281.
+[6] 陈丕翔. 基于GPU并行计算和WebGIS的潖江蓄滞洪区洪水预报系统研究[D]. 华南理工大学, 2020.
 
-[7] Taylor B, Lee K, Martin R. Coordinate System Transformation Optimization in Multi-Source Geographic Data Integration[J]. Cartography and Geographic Information Science, 2023, 50(3): 234-251.
+[7] 王少萍. 基于云平台的高并发WebGIS系统研究[D]. 电子科技大学, 2019.
 
-[8] Rodriguez M, Kim H, O'Brien T. Scalable ID Generation Algorithms for Distributed Geographic Information Systems[J]. ACM Transactions on Spatial Algorithms and Systems, 2022, 8(4): 1-28.
+[8] A novel framework utilizing 3D Gaussian Splatting for sustainable cities[J]. Sustainable Cities and Society, 2025.
 
-[9] Thompson C, Zhou F, Miller D. Modern Web Architecture Patterns for Geographic Information Systems[J]. Journal of Web Engineering, 2023, 22(2): 189-214.
+[9] Accelerating batch processing of spatial raster analysis using GPU[J]. Computers & Geosciences, 2021.
 
-[10] Anderson L, Patel N, Clarke S. Security and Privacy Considerations in Cloud-Based GIS Platforms[J]. Computers & Security, 2023, 128: 103156.
+[10] An Efficient, Platform-Independent Map Rendering Framework for Mobile Augmented Reality[C]. International Conference on Computer Graphics and Interactive Techniques, 2022.
+
+[11] An ontology-based framework for semantic geographic information systems[J]. Computers & Geosciences, 2023.
+
+[12] WEBGPU: A NEW GRAPHIC API FOR 3D WEBGIS APPLICATIONS[C]. International Conference on Web3D Technology, 2023.
+
+[13] WEB GIS시스템을 통한 고해상도 영상지도의 속도향상을 위한 연구[J]. Korean Journal of Remote Sensing, 2022.
 
 ---
 
-**作者简介**：[作者信息待补充]
+**作者简介**：[吕弯弯 四川水发勘测设计研究有限公司 793145268@qq.com]
 
-**基金项目**：[基金信息待补充]
-
-**收稿日期**：[日期待补充]
-
-**修回日期**：[日期待补充] 
