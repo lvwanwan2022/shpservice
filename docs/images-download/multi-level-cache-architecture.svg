@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .title { font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; text-anchor: middle; }
+      .subtitle { font-family: Arial, sans-serif; font-size: 11px; text-anchor: middle; }
+      .box { fill: #f0f8ff; stroke: #333; stroke-width: 2; }
+      .cache1 { fill: #ff9999; stroke: #cc0000; stroke-width: 2; }
+      .cache2 { fill: #99ccff; stroke: #0066cc; stroke-width: 2; }
+      .cache3 { fill: #99ff99; stroke: #00cc00; stroke-width: 2; }
+      .manager { fill: #ffcc99; stroke: #ff6600; stroke-width: 2; }
+      .arrow { stroke: #333; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="8" markerHeight="5" refX="8" refY="2.5" orient="auto">
+      <polygon points="0 0, 8 2.5, 0 5" fill="#333" />
+    </marker>
+  </defs>
+  
+  <!-- 标题 -->
+  <text x="400" y="30" class="title">多级缓存架构图</text>
+  
+  <!-- 用户请求 -->
+  <rect x="350" y="50" width="100" height="40" class="box" />
+  <text x="400" y="75" class="subtitle">用户请求</text>
+  
+  <!-- 负载均衡器 -->
+  <rect x="330" y="120" width="140" height="40" class="manager" />
+  <text x="400" y="145" class="subtitle">负载均衡器</text>
+  
+  <!-- 缓存层级 -->
+  <!-- 一级缓存 Redis -->
+  <rect x="50" y="200" width="200" height="80" class="cache1" />
+  <text x="150" y="220" class="subtitle">一级缓存 (Redis)</text>
+  <text x="150" y="240" class="subtitle">内存缓存</text>
+  <text x="150" y="255" class="subtitle">响应时间: 5-10ms</text>
+  <text x="150" y="270" class="subtitle">热点瓦片数据</text>
+  
+  <!-- 二级缓存 本地磁盘 -->
+  <rect x="300" y="200" width="200" height="80" class="cache2" />
+  <text x="400" y="220" class="subtitle">二级缓存 (SSD)</text>
+  <text x="400" y="240" class="subtitle">本地磁盘缓存</text>
+  <text x="400" y="255" class="subtitle">响应时间: 50-100ms</text>
+  <text x="400" y="270" class="subtitle">常用瓦片数据</text>
+  
+  <!-- 三级缓存 分布式文件系统 -->
+  <rect x="550" y="200" width="200" height="80" class="cache3" />
+  <text x="650" y="220" class="subtitle">三级缓存 (DFS)</text>
+  <text x="650" y="240" class="subtitle">分布式文件系统</text>
+  <text x="650" y="255" class="subtitle">响应时间: 200-500ms</text>
+  <text x="650" y="270" class="subtitle">冷数据瓦片</text>
+  
+  <!-- 缓存管理器 -->
+  <rect x="320" y="320" width="160" height="60" class="manager" />
+  <text x="400" y="340" class="subtitle">缓存管理器</text>
+  <text x="400" y="355" class="subtitle">智能调度策略</text>
+  <text x="400" y="370" class="subtitle">LRU + 热点检测 + 预加载</text>
+  
+  <!-- 服务层 -->
+  <rect x="440" y="420" width="120" height="50" class="box" />
+  <text x="500" y="440" class="subtitle">Martin瓦片服务</text>
+  <text x="500" y="455" class="subtitle">MVT矢量瓦片</text>
+  
+  <rect x="580" y="420" width="120" height="50" class="box" />
+  <text x="640" y="440" class="subtitle">GeoServer服务</text>
+  <text x="640" y="455" class="subtitle">WMS栅格瓦片</text>
+  
+  <!-- 连接线 -->
+  <!-- 用户到负载均衡器 -->
+  <line x1="400" y1="90" x2="400" y2="120" class="arrow" />
+  
+  <!-- 负载均衡器到各级缓存 -->
+  <line x1="380" y1="160" x2="150" y2="200" class="arrow" />
+  <line x1="400" y1="160" x2="400" y2="200" class="arrow" />
+  <line x1="420" y1="160" x2="650" y2="200" class="arrow" />
+  
+  <!-- 缓存管理器到各级缓存 -->
+  <line x1="350" y1="320" x2="200" y2="280" class="arrow" />
+  <line x1="400" y1="320" x2="400" y2="280" class="arrow" />
+  <line x1="450" y1="320" x2="600" y2="280" class="arrow" />
+  
+  <!-- 服务层到三级缓存 -->
+  <line x1="560" y1="420" x2="600" y2="280" class="arrow" />
+  <line x1="580" y1="420" x2="620" y2="280" class="arrow" />
+  
+</svg> 
