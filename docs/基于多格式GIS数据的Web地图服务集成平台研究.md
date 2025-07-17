@@ -18,7 +18,7 @@
 
 ### 1.2 研究现状
 
-![传统WebGIS架构与本研究架构对比图](docs/images-download/traditional-vs-modern-webgis.svg)
+![传统WebGIS架构与本研究架构对比图](images-download/traditional-vs-modern-webgis.svg)
 **[图1-1：传统WebGIS架构与本研究架构对比图]**
 
 近年来，学者们在WebGIS性能优化、多格式数据处理和样式保留等方面进行了大量研究。陈丕翔[6]提出了基于GPU并行计算和WebGIS的系统架构，显著提升了大规模地理数据的处理性能；石善忠[2]研究了利用FME进行CAD到GIS数据的无损转换方法，在样式信息保留方面取得了重要进展；王少萍[7]设计了基于云平台的高并发WebGIS系统，在一定程度上改善了地图服务的响应性能。
@@ -34,18 +34,13 @@
 3. 设计双轨制服务发布机制，实现WMS和MVT服务的优势互补
 4. 提出分布式瓦片缓存优化策略，显著提升大规模数据的访问性能
 
-主要创新贡献：
-- 提出了基于Martin自动发布机制的MVT服务集成算法
-- 设计了CAD图层样式信息的智能提取与映射算法
-- 建立了多坐标系统的自适应转换与优化框架
-- 前端建立了基于IndexDB的缓存管理功能
-- 后端设计了基于深度学习的地图行为预测算法
+主要创新贡献：提出了基于Martin自动发布机制的MVT服务集成算法；设计了CAD图层样式信息的智能提取与映射算法；建立了多坐标系统的自适应转换与优化框架；前端建立了基于IndexDB的缓存管理功能；后端设计了基于深度学习的地图行为预测算法。
 
 ## 2. 系统架构设计
 
 ### 2.1 总体架构
 
-![系统总体架构图](docs/images-download/system-architecture.svg)
+![系统总体架构图](images-download/system-architecture.svg)
 **[图2-1：系统总体架构图]**
 
 本研究采用微服务架构设计，将整个平台分为数据接入层、服务处理层、缓存优化层和前端展示层四个主要层次。系统架构具有高内聚、低耦合的特点，支持水平扩展和模块化部署。
@@ -54,7 +49,7 @@
 
 数据接入层负责处理多种格式的地理数据上传、验证和预处理。该层采用统一的文件处理接口，通过格式识别算法自动判断数据类型，并调用相应的数据处理模块。
 
-系统支持多种主流地理数据格式，包括矢量数据（SHP、DXF、GeoJSON、KML）、栅格数据（GeoTIFF、PNG、JPEG）和瓦片数据（MBTiles、PMTiles）。每种数据类型都有对应的处理策略：矢量数据通过GDAL/OGR库进行解析和转换，然后根据数据特征选择通过GeoServer发布WMS服务或通过Martin发布MVT服务；矢量和栅格数据均通过GeoServer发布WMS和WMTS服务；瓦片数据可以直接通过martin将mbtiles静态文件或数据库表等发布成矢量瓦片或静态瓦片服务以供访问。
+系统支持多种主流地理数据格式，包括矢量数据（SHP、DXF、GeoJSON、KML）、栅格数据（GeoTIFF、PNG、JPEG）和瓦片数据（MBTiles、PMTiles）。每种数据类型都有对应的处理策略：矢量数据通过GDAL/OGR库进行解析和转换，然后根据数据特征选择通过GeoServer发布WMS服务或通过Martin发布MVT服务。
 
 #### 2.1.2 服务处理层
 
@@ -64,7 +59,7 @@
 
 #### 2.2.1 数据格式处理模块
 
-![数据格式处理流程图](docs/images-download/data-processing-workflow.svg)
+![数据格式处理流程图](images-download/data-processing-workflow.svg)
 **[图2-2：数据格式处理流程图]**
 
 数据格式处理模块采用插件式架构，每种数据格式对应一个专门的处理器。以DXF处理器为例，其核心功能包括：
@@ -81,7 +76,7 @@
 
 #### 2.2.3 缓存优化模块
 
-![分层缓存架构图](docs/images-download/cache-architecture.svg)
+![分层缓存架构图](images-download/cache-architecture.svg)
 **[图2-3：分层缓存架构图]**
 
 缓存优化模块采用多级缓存策略，包括：
@@ -93,23 +88,23 @@
 
 本研究开发的Web地图服务集成平台是一个面向多格式GIS数据的高性能地图服务系统，采用现代化的微服务架构设计，实现了从数据上传到服务发布的全流程自动化处理。系统核心组件包括数据处理服务、地图服务引擎、智能缓存系统和前端可视化模块。
 
-![系统总体界面展示](docs/images/项目首页.png)
+![系统总体界面展示](images/项目首页.png)
 **[图3-1：系统总体界面展示]**
 
 平台支持SHP、DXF、GeoJSON、MBTiles等主流地理数据格式，通过创新的双轨制服务发布机制，同时提供传统WMS服务和现代MVT矢量瓦片服务。系统特别针对CAD数据的样式保留进行了深度优化，能够智能提取和保持DXF文件中的图层、颜色、线型等原始设计信息。
 
-![数据上传与处理界面](docs/images/数据上传页.png)
+![数据上传与处理界面](images/数据上传页.png)
 **[图3-2：数据上传与处理界面]**
 
 前端采用Vue.js + OpenLayers/Leaflet双引擎架构，提供响应式的地图交互体验。系统实现了基于IndexDB的智能瓦片缓存机制，结合后端深度学习预测算法，能够显著提升地图加载速度和用户体验。平台支持多种坐标系统的自动识别和转换，具备完善的权限管理和数据安全保护机制。
 
-![地图可视化与交互界面](docs/images/地图浏览页-openlayers.png)
+![地图可视化与交互界面](images/地图浏览页-openlayers.png)
 **[图3-3：地图可视化与交互界面]**
 
 通过分布式部署架构，系统能够处理TB级别的地理数据，支持千级并发用户同时访问，广泛应用于城市规划、工程建设、环境监测等领域。
 
 
-![系统管理与监控界面](docs/images/缓存管理页.png)
+![系统管理与监控界面](images/缓存管理页.png)
 **[图3-4：系统管理与监控界面]**
 
 ### 3.1 移动端适配
@@ -119,12 +114,12 @@
 
 
 <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-  <img src="docs/images/手机端-首页.jpg" alt="移动端首页" style="width: 200px;">
-  <img src="docs/images/手机端-地图浏览.jpg" alt="移动端地图浏览" style="width: 200px;">
-  <img src="docs/images/手机端-数据上传页.jpg" alt="移动端数据上传" style="width: 200px;">
-  <img src="docs/images/手机端-缓存管理页.jpg" alt="移动端缓存管理" style="width: 200px;">
+  <img src="images/手机端-首页.jpg" alt="移动端首页" style="width: 200px;">
+  <img src="images/手机端-地图浏览.jpg" alt="移动端地图浏览" style="width: 200px;">
+  <img src="images/手机端-数据上传页.jpg" alt="移动端数据上传" style="width: 200px;">
+  <img src="images/手机端-缓存管理页.jpg" alt="移动端缓存管理" style="width: 200px;">
 </div>
-**[图3-5：移动端界面展示]**
+<div style="text-align:center;"><b>图3-5：移动端界面展示</b></div>
 
 移动端特色功能包括：
 - **响应式界面**：自适应不同屏幕尺寸的设备
@@ -140,7 +135,7 @@ DXF文件作为CAD行业的标准交换格式，包含丰富的图层、颜色�
 
 #### 4.1.1 算法设计思路
 
-![DXF样式提取算法流程图](docs/images-download/dxf-style-extraction-algorithm.svg)
+![DXF样式提取算法流程图](images-download/dxf-style-extraction-algorithm.svg)
 **[图4-1：DXF样式提取算法流程图]**
 
 本研究提出的DXF样式智能提取算法主要包括以下步骤：
@@ -161,7 +156,7 @@ MVT（Mapbox Vector Tiles）作为新一代矢量瓦片标准，在性能和交�
 
 #### 4.2.1 自动发布机制设计
 
-![Martin自动发布流程图](docs/images-download/martin-auto-publish-flow.svg)
+![Martin自动发布流程图](images-download/martin-auto-publish-flow.svg)
 **[图4-3：Martin自动发布流程图]**
 
 Martin服务的自动发布机制基于PostgreSQL的LISTEN/NOTIFY机制和表名规则识别。系统采用统一的命名规则，使用vector_前缀加上UUID生成的唯一标识符作为表名，确保表名的唯一性和可识别性。算法根据几何数据的特征自动优化瓦片生成参数，包括缓冲区大小、简化阈值和最小缩放级别等。同时，系统自动创建空间索引以优化瓦片生成性能，并支持并发索引创建以避免阻塞其他数据库操作。
@@ -179,7 +174,7 @@ Martin服务的自动发布机制基于PostgreSQL的LISTEN/NOTIFY机制和表名
 
 #### 4.3.1 IndexDB缓存架构设计
 
-![IndexDB缓存架构图](docs/images-download/indexdb-cache-architecture.svg)
+![IndexDB缓存架构图](images-download/indexdb-cache-architecture.svg)
 **[图4-8：IndexDB缓存架构图]**
 
 IndexDB缓存系统采用分层存储架构，包括热点缓存层、常规缓存层和长期存储层。系统通过用户行为分析和访问模式识别，实现智能化的缓存管理策略。
@@ -196,7 +191,7 @@ IndexDB缓存系统采用分层存储架构，包括热点缓存层、常规缓�
 
 #### 4.3.3 缓存性能优化
 
-![缓存性能对比图](docs/images-download/cache-performance-comparison.svg)
+![缓存性能对比图](images-download/cache-performance-comparison.svg)
 **[图4-9：缓存性能对比图]**
 
 通过优化存储结构和访问算法，IndexDB缓存系统实现了高效的数据存储和检索：
@@ -214,7 +209,7 @@ IndexDB缓存系统采用分层存储架构，包括热点缓存层、常规缓�
 
 #### 4.4.1 用户行为数据模型
 
-![用户行为数据模型图](docs/images-download/user-behavior-data-model.svg)
+![用户行为数据模型图](images-download/user-behavior-data-model.svg)
 **[图4-10：用户行为数据模型图]**
 
 系统收集多维度的用户行为数据，包括：
@@ -229,7 +224,7 @@ IndexDB缓存系统采用分层存储架构，包括热点缓存层、常规缓�
 
 #### 4.4.3 热点区域识别与缓存策略
 
-![热点区域预测结果图](docs/images-download/hotspot-prediction-results.svg)
+![热点区域预测结果图](images-download/hotspot-prediction-results.svg)
 **[图4-11：热点区域预测结果图]**
 
 深度学习模型输出的热点区域预测结果指导缓存策略的制定：
@@ -255,25 +250,25 @@ IndexDB缓存系统采用分层存储架构，包括热点缓存层、常规缓�
 
 
 #### 5.1.2 动态样式渲染系统
-![动态样式渲染流程图](docs/images-download/dynamic-style-rendering-flow.svg)
+![动态样式渲染流程图](images-download/dynamic-style-rendering-flow.svg)
 **[图5-2：动态样式渲染流程图]**
 
 动态样式渲染系统实现了基于要素属性的实时样式计算，特别针对CAD数据的复杂样式需求进行了优化。系统通过样式缓存机制提高渲染性能，对相同图层和几何类型的要素重用样式对象。渲染算法支持多种样式配置方式，包括基于图层的统一样式、基于属性的分类样式和基于表达式的动态样式。
 
 
 #### 5.1.3 IndexDB智能缓存系统实现
-![IndexDB缓存系统架构图](docs/images-download/indexdb-cache-system-architecture.svg)
+![IndexDB缓存系统架构图](images-download/indexdb-cache-system-architecture.svg)
 **[图5-3：IndexDB缓存系统架构图]**
 
 前端IndexDB缓存系统采用模块化设计，包括缓存管理器、存储引擎、预测引擎和性能监控四个核心模块。缓存管理器负责统一的缓存策略制定和执行，存储引擎处理IndexDB的底层操作和数据持久化，预测引擎基于用户行为模式预测缓存需求，性能监控模块实时跟踪缓存命中率和响应时间。系统通过Web Worker技术实现了异步缓存处理，避免阻塞主线程的地图渲染。
-![IndexDB数据结构设计图](docs/images-download/indexdb-data-structure-design.svg)
+![IndexDB数据结构设计图](images-download/indexdb-data-structure-design.svg)
 **[图5-4：IndexDB数据结构设计图]**
 
 IndexDB数据库采用分层存储结构，包含瓦片数据表、元数据表和统计信息表。瓦片数据表存储实际的瓦片图像数据，采用复合索引(layer_id, z, x, y)提高查询效率。元数据表记录瓦片的创建时间、访问次数、文件大小等信息，支持智能淘汰策略。统计信息表维护全局缓存统计数据，包括总存储空间、命中率、平均响应时间等指标。
 
 #### 5.1.4 预测性加载机制
 
-![预测性加载流程图](docs/images-download/predictive-loading-flow.svg)
+![预测性加载流程图](images-download/predictive-loading-flow.svg)
 **[图5-5：预测性加载流程图]**
 
 预测性加载机制通过分析用户的交互行为模式，提前加载可能访问的瓦片数据。系统记录用户的缩放、平移操作序列，建立马尔科夫链模型预测下一步操作。当用户执行缩放操作时，系统根据历史模式预测目标缩放级别，提前加载对应的瓦片数据。对于平移操作，系统基于运动轨迹预测用户可能访问的地理区域，并优先加载这些区域的瓦片。该机制将预加载命中率提升至78.5%，显著改善了用户体验。
@@ -281,7 +276,7 @@ IndexDB数据库采用分层存储结构，包含瓦片数据表、元数据表�
 ### 5.2 后端性能优化
 
 #### 5.2.1 数据库连接池优化
-![数据库连接池架构图](docs/images-download/database-connection-pool-architecture.svg)
+![数据库连接池架构图](images-download/database-connection-pool-architecture.svg)
 **[图5-3：数据库连接池架构图]**
 
 实现了智能的数据库连接池管理，根据系统负载动态调整连接数量：
@@ -290,7 +285,7 @@ IndexDB数据库采用分层存储结构，包含瓦片数据表、元数据表�
 
 #### 5.2.2 瓦片缓存优化策略
 
-![多级缓存架构图](docs/images-download/multi-level-cache-architecture.svg)
+![多级缓存架构图](images-download/multi-level-cache-architecture.svg)
 **[图5-4：多级缓存架构图]**
 
 实现了智能的瓦片缓存策略，显著提升了地图服务的响应性能。系统采用三级缓存架构：
@@ -305,14 +300,14 @@ IndexDB数据库采用分层存储结构，包含瓦片数据表、元数据表�
 
 #### 5.2.3 深度学习缓存预测系统
 
-![深度学习缓存预测系统架构图](docs/images-download/deep-learning-cache-prediction-system.svg)
+![深度学习缓存预测系统架构图](images-download/deep-learning-cache-prediction-system.svg)
 **[图5-6：深度学习缓存预测系统架构图]**
 
 后端深度学习缓存预测系统基于TensorFlow框架构建，包括数据采集模块、特征工程模块、模型训练模块和预测服务模块。数据采集模块实时收集用户访问日志、地理空间数据和系统性能指标，特征工程模块对原始数据进行清洗和特征提取，模型训练模块基于LSTM网络进行深度学习训练，预测服务模块提供实时的热点区域预测API接口。
 
 系统通过分析历史访问模式，识别用户行为规律和地理空间热点分布，生成动态的缓存策略。预测结果指导缓存调度器进行智能化的资源分配，包括动态缓存范围调整、分级缓存策略制定和预加载优化等功能。
 
-![LSTM模型结构图](docs/images-download/lstm-model-structure.svg)
+![LSTM模型结构图](images-download/lstm-model-structure.svg)
 **[图5-7：LSTM模型结构图]**
 
 LSTM神经网络模型采用编码器-解码器架构，编码器处理历史时间序列数据，解码器生成未来时段的预测结果。模型包含3层LSTM隐藏层，每层128个神经元，并引入注意力机制和Dropout层防止过拟合。输入特征包括时间戳、地理坐标、缩放级别、访问频次等32维向量，输出为网格化的热点概率分布矩阵。
@@ -354,7 +349,7 @@ LSTM神经网络模型采用编码器-解码器架构，编码器处理历史时
 
 ### 6.2 技术贡献
 
-![技术贡献框架图](docs/images-download/technical-contribution-framework.svg)
+![技术贡献框架图](images-download/technical-contribution-framework.svg)
 **[图6-1：技术贡献框架图]**
 
 本研究的主要技术贡献包括：
@@ -390,7 +385,7 @@ LSTM神经网络模型采用编码器-解码器架构，编码器处理历史时
 
 5. **增强现实集成**：结合AR/VR技术，提供沉浸式的地理信息可视化体验。
 
-![未来技术发展路线图](docs/images-download/future-technology-roadmap.svg)
+![未来技术发展路线图](images-download/future-technology-roadmap.svg)
 **[图6-2：未来技术发展路线图]**
 
 ### 6.5 产业应用前景
