@@ -1,60 +1,60 @@
 <svg width="800" height="300" xmlns="http://www.w3.org/2000/svg">
-  <!-- 背景 -->
+  <!-- Background -->
   <rect width="800" height="300" fill="#f8f9fa"/>
   
-  <!-- 标题 -->
-  <text x="400" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#333">数据格式处理流程图</text>
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" font-size="18" font-weight="bold" fill="#333">Data Format Processing Workflow</text>
   
-  <!-- 数据输入 -->
+  <!-- Data Input -->
   <rect x="20" y="60" width="100" height="60" fill="#e3f2fd" stroke="#1976d2" stroke-width="2" rx="5"/>
-  <text x="70" y="85" text-anchor="middle" font-size="12" font-weight="bold" fill="#1976d2">多格式数据</text>
+  <text x="70" y="85" text-anchor="middle" font-size="12" font-weight="bold" fill="#1976d2">Multi-format Data</text>
   <text x="70" y="105" text-anchor="middle" font-size="10" fill="#1976d2">SHP/DXF/GeoJSON</text>
   
-  <!-- 格式识别 -->
+  <!-- Format Recognition -->
   <rect x="150" y="60" width="100" height="60" fill="#e8f5e8" stroke="#388e3c" stroke-width="2" rx="5"/>
-  <text x="200" y="85" text-anchor="middle" font-size="12" font-weight="bold" fill="#388e3c">格式识别</text>
-  <text x="200" y="105" text-anchor="middle" font-size="10" fill="#388e3c">自动判断</text>
+  <text x="200" y="85" text-anchor="middle" font-size="12" font-weight="bold" fill="#388e3c">Format Recognition</text>
+  <text x="200" y="105" text-anchor="middle" font-size="10" fill="#388e3c">Auto Detection</text>
   
-  <!-- 样式提取 -->
+  <!-- Style Extraction -->
   <rect x="280" y="60" width="100" height="60" fill="#fff3e0" stroke="#f57c00" stroke-width="2" rx="5"/>
-  <text x="330" y="85" text-anchor="middle" font-size="12" font-weight="bold" fill="#f57c00">样式提取</text>
-  <text x="330" y="105" text-anchor="middle" font-size="10" fill="#f57c00">图层/颜色/线型</text>
+  <text x="330" y="85" text-anchor="middle" font-size="12" font-weight="bold" fill="#f57c00">Style Extraction</text>
+  <text x="330" y="105" text-anchor="middle" font-size="10" fill="#f57c00">Layer/Color/LineType</text>
   
-  <!-- 坐标转换 -->
+  <!-- Coordinate Transformation -->
   <rect x="410" y="60" width="100" height="60" fill="#fce4ec" stroke="#c2185b" stroke-width="2" rx="5"/>
-  <text x="460" y="85" text-anchor="middle" font-size="12" font-weight="bold" fill="#c2185b">坐标转换</text>
-  <text x="460" y="105" text-anchor="middle" font-size="10" fill="#c2185b">多坐标系支持</text>
+  <text x="460" y="85" text-anchor="middle" font-size="12" font-weight="bold" fill="#c2185b">Coordinate Transform</text>
+  <text x="460" y="105" text-anchor="middle" font-size="10" fill="#c2185b">Multi-CRS Support</text>
   
-  <!-- 数据验证 -->
+  <!-- Data Validation -->
   <rect x="540" y="60" width="100" height="60" fill="#f3e5f5" stroke="#7b1fa2" stroke-width="2" rx="5"/>
-  <text x="590" y="85" text-anchor="middle" font-size="12" font-weight="bold" fill="#7b1fa2">数据验证</text>
-  <text x="590" y="105" text-anchor="middle" font-size="10" fill="#7b1fa2">质量检查</text>
+  <text x="590" y="85" text-anchor="middle" font-size="12" font-weight="bold" fill="#7b1fa2">Data Validation</text>
+  <text x="590" y="105" text-anchor="middle" font-size="10" fill="#7b1fa2">Quality Check</text>
   
-  <!-- 服务发布 -->
+  <!-- Service Publishing -->
   <rect x="670" y="60" width="100" height="60" fill="#e0f2f1" stroke="#00796b" stroke-width="2" rx="5"/>
-  <text x="720" y="85" text-anchor="middle" font-size="12" font-weight="bold" fill="#00796b">服务发布</text>
+  <text x="720" y="85" text-anchor="middle" font-size="12" font-weight="bold" fill="#00796b">Service Publishing</text>
   <text x="720" y="105" text-anchor="middle" font-size="10" fill="#00796b">WMS/MVT</text>
   
-  <!-- 连接线 -->
+  <!-- Connection Lines -->
   <line x1="120" y1="90" x2="135" y2="90" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
   <line x1="250" y1="90" x2="265" y2="90" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
   <line x1="380" y1="90" x2="395" y2="90" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
   <line x1="510" y1="90" x2="525" y2="90" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
   <line x1="640" y1="90" x2="655" y2="90" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
   
-  <!-- 处理算法说明 -->
+  <!-- Processing Algorithm Description -->
   <rect x="20" y="160" width="750" height="110" fill="#fff" stroke="#ddd" stroke-width="1" rx="5"/>
-  <text x="400" y="185" text-anchor="middle" font-size="14" font-weight="bold" fill="#333">核心处理算法</text>
+  <text x="400" y="185" text-anchor="middle" font-size="14" font-weight="bold" fill="#333">Core Processing Algorithms</text>
   
-  <text x="30" y="210" font-size="12" fill="#333">• DXF样式智能提取：双重解析策略（GDAL + ezdxf），ACI颜色转换，图层映射</text>
-  <text x="30" y="230" font-size="12" fill="#333">• 坐标系自适应转换：自动识别，多步转换，精度评估</text>
+  <text x="30" y="210" font-size="12" fill="#333">• DXF Style Intelligent Extraction: Dual parsing strategy (GDAL + ezdxf), ACI color conversion, layer mapping</text>
+  <text x="30" y="230" font-size="12" fill="#333">• Adaptive Coordinate System Transformation: Auto recognition, multi-step conversion, accuracy assessment</text>
   
-  <text x="30" y="250" font-size="12" fill="#333">• 数据质量检查：完整性验证，一致性校验，错误修复</text>
+  <text x="30" y="250" font-size="12" fill="#333">• Data Quality Check: Integrity verification, consistency validation, error correction</text>
   
-  <!-- 箭头标记 -->
+  <!-- Arrow Marker -->
   <defs>
     <marker id="arrowhead" markerWidth="8" markerHeight="5" refX="0" refY="2.5" orient="auto">
       <polygon points="0 0, 8 2.5, 0 5" fill="#666"/>
     </marker>
   </defs>
-</svg> 
+</svg>

@@ -11,7 +11,7 @@
     </style>
   </defs>
   
-  <text x="300" y="30" class="title" text-anchor="middle">MVT vs WMS服务性能对比</text>
+  <text x="300" y="30" class="title" text-anchor="middle">MVT vs WMS Service Performance Comparison</text>
   
   <!-- Chart area -->
   <g transform="translate(80, 60)">
@@ -28,14 +28,14 @@
     <text x="-10" y="55" class="text" text-anchor="end">500</text>
     
     <!-- Y-axis title -->
-    <text x="-50" y="150" class="text" text-anchor="middle" transform="rotate(-90, -50, 150)">响应时间 (ms)</text>
+    <text x="-50" y="150" class="text" text-anchor="middle" transform="rotate(-90, -50, 150)">Response Time (ms)</text>
     
     <!-- X-axis labels -->
-    <text x="45" y="320" class="text" text-anchor="middle">10用户</text>
-    <text x="135" y="320" class="text" text-anchor="middle">50用户</text>
-    <text x="225" y="320" class="text" text-anchor="middle">100用户</text>
-    <text x="315" y="320" class="text" text-anchor="middle">200用户</text>
-    <text x="405" y="320" class="text" text-anchor="middle">500用户</text>
+    <text x="45" y="320" class="text" text-anchor="middle">10 Users</text>
+    <text x="135" y="320" class="text" text-anchor="middle">50 Users</text>
+    <text x="225" y="320" class="text" text-anchor="middle">100 Users</text>
+    <text x="315" y="320" class="text" text-anchor="middle">200 Users</text>
+    <text x="405" y="320" class="text" text-anchor="middle">500 Users</text>
     
     <!-- WMS bars -->
     <rect x="20" y="276" width="25" height="24" class="wms-bar"/>   <!-- 120ms -->
@@ -68,8 +68,8 @@
   <!-- Legend -->
   <g transform="translate(450, 100)">
     <rect x="0" y="0" width="15" height="15" class="wms-bar"/>
-    <text x="20" y="12" class="legend">WMS服务</text>
+    <text x="20" y="12" class="legend">WMS Service</text>
     <rect x="0" y="25" width="15" height="15" class="mvt-bar"/>
-    <text x="20" y="37" class="legend">MVT服务</text>
+    <text x="20" y="37" class="legend">MVT Service</text>
   </g>
-</svg> 
+</svg>

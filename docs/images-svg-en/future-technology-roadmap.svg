@@ -4,7 +4,8 @@
     <style>
       .title { font-family: Arial, sans-serif; font-size: 18px; font-weight: bold; }
       .phase-title { font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; }
-      .text { font-family: Arial, sans-serif; font-size: 11px; }
+      .text { font-family: Arial, sans-serif; font-size: 10px; }
+      .textlv { font-family: Arial, sans-serif; font-size: 9px; }
       .short-term { fill: #e8f5e8; stroke: #4caf50; stroke-width: 2; }
       .medium-term { fill: #e3f2fd; stroke: #2196f3; stroke-width: 2; }
       .long-term { fill: #f3e5f5; stroke: #9c27b0; stroke-width: 2; }
@@ -13,7 +14,7 @@
     </style>
   </defs>
   
-  <text x="400" y="30" class="title" text-anchor="middle">未来技术发展路线图</text>
+  <text x="400" y="30" class="title" text-anchor="middle">Future Technology Development Roadmap</text>
   
   <!-- Timeline -->
   <line x1="100" y1="80" x2="700" y2="80" class="timeline"/>
@@ -24,89 +25,89 @@
   <circle cx="600" cy="80" r="10" class="milestone"/>
   
   <!-- Time labels -->
-  <text x="200" y="110" class="phase-title" text-anchor="middle">1年内</text>
-  <text x="400" y="110" class="phase-title" text-anchor="middle">2-3年</text>
-  <text x="600" y="110" class="phase-title" text-anchor="middle">3-5年</text>
+  <text x="200" y="110" class="phase-title" text-anchor="middle">Within 1 Year</text>
+  <text x="400" y="110" class="phase-title" text-anchor="middle">2-3 Years</text>
+  <text x="600" y="110" class="phase-title" text-anchor="middle">3-5 Years</text>
   
   <!-- Short-term goals -->
   <g transform="translate(100, 130)">
     <rect x="0" y="0" width="200" height="30" class="short-term" rx="5"/>
-    <text x="100" y="20" class="phase-title" text-anchor="middle">短期目标</text>
+    <text x="100" y="20" class="phase-title" text-anchor="middle">Short-term Goals</text>
     
-    <rect x="10" y="40" width="80" height="60" class="short-term" rx="3"/>
-    <text x="50" y="55" class="text" text-anchor="middle" font-weight="bold">AI深度集成</text>
-    <text x="50" y="70" class="text" text-anchor="middle">Transformer模型</text>
-    <text x="50" y="85" class="text" text-anchor="middle">智能数据分类</text>
+    <rect x="5" y="40" width="90" height="60" class="short-term" rx="3"/>
+    <text x="50" y="55" class="text" text-anchor="middle" font-weight="bold">AI Integration</text>
+    <text x="50" y="70" class="text" text-anchor="middle">Transformer Models</text>
+    <text x="50" y="85" class="text" text-anchor="middle">Smart Classification</text>
     
-    <rect x="110" y="40" width="80" height="60" class="short-term" rx="3"/>
-    <text x="150" y="55" class="text" text-anchor="middle" font-weight="bold">边缘计算</text>
-    <text x="150" y="70" class="text" text-anchor="middle">边缘节点部署</text>
-    <text x="150" y="85" class="text" text-anchor="middle">分布式缓存</text>
+    <rect x="105" y="40" width="90" height="60" class="short-term" rx="3"/>
+    <text x="150" y="55" class="text" text-anchor="middle" font-weight="bold">Edge Computing</text>
+    <text x="150" y="70" class="text" text-anchor="middle">Edge Deployment</text>
+    <text x="150" y="85" class="text" text-anchor="middle">Distributed Cache</text>
   </g>
   
   <!-- Medium-term goals -->
   <g transform="translate(300, 130)">
     <rect x="0" y="0" width="200" height="30" class="medium-term" rx="5"/>
-    <text x="100" y="20" class="phase-title" text-anchor="middle">中期目标</text>
+    <text x="100" y="20" class="phase-title" text-anchor="middle">Medium-term Goals</text>
     
-    <rect x="10" y="40" width="80" height="60" class="medium-term" rx="3"/>
-    <text x="50" y="55" class="text" text-anchor="middle" font-weight="bold">时空数据</text>
-    <text x="50" y="70" class="text" text-anchor="middle">四维时空系统</text>
-    <text x="50" y="85" class="text" text-anchor="middle">动态可视化</text>
+    <rect x="5" y="40" width="90" height="60" class="medium-term" rx="3"/>
+    <text x="50" y="55" class="text" text-anchor="middle" font-weight="bold">Spatiotemporal</text>
+    <text x="50" y="70" class="text" text-anchor="middle">4D System</text>
+    <text x="50" y="85" class="textlv" text-anchor="middle">Dynamic Visualization</text>
     
-    <rect x="110" y="40" width="80" height="60" class="medium-term" rx="3"/>
-    <text x="150" y="55" class="text" text-anchor="middle" font-weight="bold">云原生</text>
-    <text x="150" y="70" class="text" text-anchor="middle">微服务架构</text>
-    <text x="150" y="85" class="text" text-anchor="middle">容器化部署</text>
+    <rect x="105" y="40" width="90" height="60" class="medium-term" rx="3"/>
+    <text x="150" y="55" class="text" text-anchor="middle" font-weight="bold">Cloud Native</text>
+    <text x="150" y="70" class="text" text-anchor="middle">Microservices</text>
+    <text x="150" y="85" class="text" text-anchor="middle">Containerized</text>
   </g>
   
   <!-- Long-term goals -->
   <g transform="translate(500, 130)">
     <rect x="0" y="0" width="200" height="30" class="long-term" rx="5"/>
-    <text x="100" y="20" class="phase-title" text-anchor="middle">长期目标</text>
+    <text x="100" y="20" class="phase-title" text-anchor="middle">Long-term Goals</text>
     
-    <rect x="10" y="40" width="80" height="60" class="long-term" rx="3"/>
-    <text x="50" y="55" class="text" text-anchor="middle" font-weight="bold">增强现实</text>
-    <text x="50" y="70" class="text" text-anchor="middle">AR/VR融合</text>
-    <text x="50" y="85" class="text" text-anchor="middle">沉浸式体验</text>
+    <rect x="5" y="40" width="90" height="60" class="long-term" rx="3"/>
+    <text x="50" y="55" class="text" text-anchor="middle" font-weight="bold">AR/VR</text>
+    <text x="50" y="70" class="text" text-anchor="middle">AR/VR Integration</text>
+    <text x="50" y="85" class="textlv" text-anchor="middle">Immersive Experience</text>
     
-    <rect x="110" y="40" width="80" height="60" class="long-term" rx="3"/>
-    <text x="150" y="55" class="text" text-anchor="middle" font-weight="bold">智能化</text>
-    <text x="150" y="70" class="text" text-anchor="middle">全自动处理</text>
-    <text x="150" y="85" class="text" text-anchor="middle">认知型GIS</text>
+    <rect x="105" y="40" width="90" height="60" class="long-term" rx="3"/>
+    <text x="150" y="55" class="text" text-anchor="middle" font-weight="bold">Intelligence</text>
+    <text x="150" y="70" class="text" text-anchor="middle">Auto Processing</text>
+    <text x="150" y="85" class="text" text-anchor="middle">Cognitive GIS</text>
   </g>
   
   <!-- Technology foundation -->
   <g transform="translate(150, 280)">
-    <text x="250" y="20" class="phase-title" text-anchor="middle">技术基础支撑</text>
+    <text x="250" y="20" class="phase-title" text-anchor="middle">Technology Foundation Support</text>
     
     <rect x="0" y="40" width="100" height="40" class="short-term" rx="3"/>
-    <text x="50" y="65" class="text" text-anchor="middle">机器学习/深度学习</text>
+    <text x="50" y="65" class="text" text-anchor="middle">ML/DL</text>
     
     <rect x="120" y="40" width="100" height="40" class="medium-term" rx="3"/>
-    <text x="170" y="65" class="text" text-anchor="middle">云计算/边缘计算</text>
+    <text x="170" y="65" class="text" text-anchor="middle">Cloud/Edge Computing</text>
     
     <rect x="240" y="40" width="100" height="40" class="long-term" rx="3"/>
-    <text x="290" y="65" class="text" text-anchor="middle">5G/6G/物联网</text>
+    <text x="290" y="65" class="text" text-anchor="middle">5G/6G/IoT</text>
     
     <rect x="360" y="40" width="100" height="40" class="milestone" rx="3"/>
-    <text x="410" y="65" class="text" text-anchor="middle">量子计算/区块链</text>
+    <text x="410" y="65" class="text" text-anchor="middle">Quantum/Blockchain</text>
   </g>
   
   <!-- Application scenarios -->
   <g transform="translate(200, 380)">
-    <text x="200" y="20" class="phase-title" text-anchor="middle">应用场景展望</text>
+    <text x="200" y="20" class="phase-title" text-anchor="middle">Application Scenario Outlook</text>
     
     <rect x="0" y="40" width="90" height="30" class="short-term" rx="3"/>
-    <text x="45" y="59" class="text" text-anchor="middle">智慧城市</text>
+    <text x="45" y="59" class="text" text-anchor="middle">Smart Cities</text>
     
     <rect x="110" y="40" width="90" height="30" class="medium-term" rx="3"/>
-    <text x="155" y="59" class="text" text-anchor="middle">数字地球</text>
+    <text x="155" y="59" class="text" text-anchor="middle">Digital Earth</text>
     
     <rect x="220" y="40" width="90" height="30" class="long-term" rx="3"/>
-    <text x="265" y="59" class="text" text-anchor="middle">元宇宙地理</text>
+    <text x="265" y="59" class="text" text-anchor="middle">Metaverse GIS</text>
     
     <rect x="330" y="40" width="90" height="30" class="milestone" rx="3"/>
-    <text x="375" y="59" class="text" text-anchor="middle">认知地理</text>
+    <text x="375" y="59" class="text" text-anchor="middle">Cognitive GIS</text>
   </g>
-</svg> 
+</svg>

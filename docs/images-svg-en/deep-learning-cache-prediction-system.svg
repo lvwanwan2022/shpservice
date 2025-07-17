@@ -17,105 +17,105 @@
     </marker>
   </defs>
   
-  <!-- 标题 -->
-  <text x="450" y="30" class="title">深度学习缓存预测系统架构图</text>
+  <!-- Title -->
+  <text x="450" y="30" class="title">Deep Learning Cache Prediction System Architecture</text>
   
-  <!-- 数据输入层 -->
+  <!-- Data Input Layer -->
   <rect x="50" y="70" width="140" height="80" class="input" />
-  <text x="120" y="90" class="subtitle">用户访问日志</text>
-  <text x="120" y="105" class="small-text">• 地理坐标</text>
-  <text x="120" y="118" class="small-text">• 缩放级别</text>
-  <text x="120" y="131" class="small-text">• 访问时间</text>
-  <text x="120" y="144" class="small-text">• 会话信息</text>
+  <text x="120" y="90" class="subtitle">User Access Logs</text>
+  <text x="120" y="105" class="small-text">• Geographic Coordinates</text>
+  <text x="120" y="118" class="small-text">• Zoom Level</text>
+  <text x="120" y="131" class="small-text">• Access Time</text>
+  <text x="120" y="144" class="small-text">• Session Information</text>
   
   <rect x="50" y="180" width="140" height="40" class="input" />
-  <text x="120" y="200" class="subtitle">系统性能指标</text>
-  <text x="120" y="215" class="small-text">响应时间、并发数等</text>
+  <text x="120" y="200" class="subtitle">System Performance Metrics</text>
+  <text x="120" y="215" class="small-text">Response time, concurrency, etc.</text>
   
-  <!-- 数据采集模块 -->
+  <!-- Data Collection Module -->
   <rect x="250" y="110" width="120" height="60" class="processing" />
-  <text x="310" y="135" class="subtitle">数据采集模块</text>
-  <text x="310" y="150" class="small-text">实时数据收集</text>
-  <text x="310" y="165" class="small-text">数据格式化</text>
+  <text x="310" y="135" class="subtitle">Data Collection Module</text>
+  <text x="310" y="150" class="small-text">Real-time Data Collection</text>
+  <text x="310" y="165" class="small-text">Data Formatting</text>
   
-  <!-- 特征工程模块 -->
+  <!-- Feature Engineering Module -->
   <rect x="420" y="70" width="120" height="120" class="processing" />
-  <text x="480" y="90" class="subtitle">特征工程模块</text>
-  <text x="480" y="110" class="small-text">数据清洗</text>
-  <text x="480" y="125" class="small-text">特征提取</text>
-  <text x="480" y="140" class="small-text">时序特征构建</text>
-  <text x="480" y="155" class="small-text">特征标准化</text>
-  <text x="480" y="175" class="subtitle">32维特征向量</text>
+  <text x="480" y="90" class="subtitle">Feature Engineering Module</text>
+  <text x="480" y="110" class="small-text">Data Cleaning</text>
+  <text x="480" y="125" class="small-text">Feature Extraction</text>
+  <text x="480" y="140" class="small-text">Time Series Feature Construction</text>
+  <text x="480" y="155" class="small-text">Feature Normalization</text>
+  <text x="480" y="175" class="subtitle">32-dimensional Feature Vector</text>
   
-  <!-- LSTM模型训练模块 -->
+  <!-- LSTM Model Training Module -->
   <rect x="600" y="70" width="180" height="120" class="model" />
-  <text x="690" y="90" class="subtitle">LSTM神经网络</text>
-  <text x="690" y="105" class="subtitle">模型训练模块</text>
-  <text x="650" y="125" class="small-text">编码器(3层LSTM)</text>
-  <text x="730" y="125" class="small-text">注意力机制</text>
-  <text x="650" y="140" class="small-text">128神经元/层</text>
-  <text x="730" y="140" class="small-text">时间权重分配</text>
-  <text x="690" y="160" class="small-text">解码器(热点概率输出)</text>
-  <text x="690" y="175" class="small-text">Dropout防过拟合</text>
+  <text x="690" y="90" class="subtitle">LSTM Neural Network</text>
+  <text x="690" y="105" class="subtitle">Model Training Module</text>
+  <text x="650" y="125" class="small-text">Encoder (3-layer LSTM)</text>
+  <text x="730" y="125" class="small-text">Attention Mechanism</text>
+  <text x="650" y="140" class="small-text">128 neurons/layer</text>
+  <text x="730" y="140" class="small-text">Time Weight Allocation</text>
+  <text x="690" y="160" class="small-text">Decoder (Hotspot Probability Output)</text>
+  <text x="690" y="175" class="small-text">Dropout Anti-overfitting</text>
   
-  <!-- 历史数据 -->
+  <!-- Historical Data -->
   <rect x="600" y="220" width="120" height="40" class="input" />
-  <text x="660" y="240" class="subtitle">历史缓存数据</text>
-  <text x="660" y="255" class="small-text">30天访问历史</text>
+  <text x="660" y="240" class="subtitle">Historical Cache Data</text>
+  <text x="660" y="255" class="small-text">30-day Access History</text>
   
-  <!-- 预测服务模块 -->
+  <!-- Prediction Service Module -->
   <rect x="300" y="300" width="140" height="80" class="output" />
-  <text x="370" y="320" class="subtitle">预测服务模块</text>
-  <text x="370" y="335" class="small-text">热点区域预测API</text>
-  <text x="370" y="350" class="small-text">缓存策略生成</text>
-  <text x="370" y="365" class="small-text">实时调度指令</text>
+  <text x="370" y="320" class="subtitle">Prediction Service Module</text>
+  <text x="370" y="335" class="small-text">Hotspot Area Prediction API</text>
+  <text x="370" y="350" class="small-text">Cache Strategy Generation</text>
+  <text x="370" y="365" class="small-text">Real-time Scheduling Commands</text>
   
-  <!-- 缓存调度器 -->
+  <!-- Cache Scheduler -->
   <rect x="500" y="420" width="160" height="80" class="cache" />
-  <text x="580" y="440" class="subtitle">缓存调度器</text>
-  <text x="580" y="455" class="small-text">智能化资源分配</text>
-  <text x="580" y="470" class="small-text">负载均衡机制</text>
-  <text x="580" y="485" class="small-text">动态策略调整</text>
+  <text x="580" y="440" class="subtitle">Cache Scheduler</text>
+  <text x="580" y="455" class="small-text">Intelligent Resource Allocation</text>
+  <text x="580" y="470" class="small-text">Load Balancing Mechanism</text>
+  <text x="580" y="485" class="small-text">Dynamic Strategy Adjustment</text>
   
-  <!-- 输出策略 -->
+  <!-- Output Strategies -->
   <rect x="50" y="540" width="140" height="60" class="cache" />
-  <text x="120" y="560" class="subtitle">动态缓存范围</text>
-  <text x="120" y="575" class="subtitle">调整</text>
-  <text x="120" y="590" class="small-text">热点区域扩展</text>
+  <text x="120" y="560" class="subtitle">Dynamic Cache Range</text>
+  <text x="120" y="575" class="subtitle">Adjustment</text>
+  <text x="120" y="590" class="small-text">Hotspot Area Expansion</text>
   
   <rect x="220" y="540" width="140" height="60" class="cache" />
-  <text x="290" y="560" class="subtitle">分级缓存策略</text>
-  <text x="290" y="575" class="small-text">高中低优先级</text>
-  <text x="290" y="590" class="small-text">差异化处理</text>
+  <text x="290" y="560" class="subtitle">Tiered Cache Strategy</text>
+  <text x="290" y="575" class="small-text">High-Medium-Low Priority</text>
+  <text x="290" y="590" class="small-text">Differentiated Processing</text>
   
   <rect x="390" y="540" width="140" height="60" class="cache" />
-  <text x="460" y="560" class="subtitle">预加载优化</text>
-  <text x="460" y="575" class="small-text">提前缓存</text>
-  <text x="460" y="590" class="small-text">预测性加载</text>
+  <text x="460" y="560" class="subtitle">Preloading Optimization</text>
+  <text x="460" y="575" class="small-text">Advance Caching</text>
+  <text x="460" y="590" class="small-text">Predictive Loading</text>
   
-  <!-- 连接线 -->
-  <!-- 数据输入到数据采集 -->
+  <!-- Connection Lines -->
+  <!-- Data Input to Data Collection -->
   <line x1="190" y1="120" x2="250" y2="140" class="arrow" />
   <line x1="190" y1="200" x2="250" y2="150" class="arrow" />
   
-  <!-- 数据采集到特征工程 -->
+  <!-- Data Collection to Feature Engineering -->
   <line x1="370" y1="140" x2="420" y2="130" class="arrow" />
   
-  <!-- 特征工程到LSTM模型 -->
+  <!-- Feature Engineering to LSTM Model -->
   <line x1="540" y1="130" x2="600" y2="130" class="arrow" />
   
-  <!-- 历史数据到LSTM模型 -->
+  <!-- Historical Data to LSTM Model -->
   <line x1="660" y1="220" x2="660" y2="190" class="arrow" />
   
-  <!-- LSTM模型到预测服务 -->
+  <!-- LSTM Model to Prediction Service -->
   <line x1="600" y1="160" x2="440" y2="300" class="arrow" />
   
-  <!-- 预测服务到缓存调度器 -->
+  <!-- Prediction Service to Cache Scheduler -->
   <line x1="440" y1="340" x2="500" y2="460" class="arrow" />
   
-  <!-- 缓存调度器到各个策略 -->
+  <!-- Cache Scheduler to Various Strategies -->
   <line x1="520" y1="500" x2="190" y2="540" class="arrow" />
   <line x1="560" y1="500" x2="290" y2="540" class="arrow" />
   <line x1="600" y1="500" x2="460" y2="540" class="arrow" />
   
-</svg> 
+</svg>

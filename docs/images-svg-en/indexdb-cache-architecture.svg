@@ -17,61 +17,61 @@
     </marker>
   </defs>
   
-  <text x="350" y="30" class="title" text-anchor="middle">IndexDB缓存架构</text>
+  <text x="350" y="30" class="title" text-anchor="middle">IndexDB Cache Architecture</text>
   
   <!-- Top level components -->
   <rect x="50" y="60" width="140" height="50" class="manager" rx="5"/>
-  <text x="120" y="85" class="text" text-anchor="middle" font-weight="bold">缓存管理器</text>
+  <text x="120" y="85" class="text" text-anchor="middle" font-weight="bold">Cache Manager</text>
   
   <rect x="220" y="60" width="140" height="50" class="engine" rx="5"/>
-  <text x="290" y="85" class="text" text-anchor="middle" font-weight="bold">存储引擎</text>
+  <text x="290" y="85" class="text" text-anchor="middle" font-weight="bold">Storage Engine</text>
   
   <rect x="390" y="60" width="140" height="50" class="engine" rx="5"/>
-  <text x="460" y="85" class="text" text-anchor="middle" font-weight="bold">预测引擎</text>
+  <text x="460" y="85" class="text" text-anchor="middle" font-weight="bold">Prediction Engine</text>
   
   <rect x="560" y="60" width="140" height="50" class="monitor" rx="5"/>
-  <text x="630" y="85" class="text" text-anchor="middle" font-weight="bold">性能监控</text>
+  <text x="630" y="85" class="text" text-anchor="middle" font-weight="bold">Performance Monitor</text>
   
   <!-- Storage engine details -->
   <g transform="translate(220, 140)">
-    <text x="70" y="20" class="subtitle" text-anchor="middle">存储引擎详细</text>
+    <text x="70" y="20" class="subtitle" text-anchor="middle">Storage Engine Details</text>
     
     <rect x="10" y="30" width="130" height="35" class="storage" rx="3"/>
-    <text x="75" y="52" class="text" text-anchor="middle">瓦片数据表</text>
+    <text x="75" y="52" class="text" text-anchor="middle">Tile Data Table</text>
     
     <rect x="10" y="75" width="130" height="35" class="storage" rx="3"/>
-    <text x="75" y="97" class="text" text-anchor="middle">元数据表</text>
+    <text x="75" y="97" class="text" text-anchor="middle">Metadata Table</text>
     
     <rect x="10" y="120" width="130" height="35" class="storage" rx="3"/>
-    <text x="75" y="142" class="text" text-anchor="middle">统计信息表</text>
+    <text x="75" y="142" class="text" text-anchor="middle">Statistics Table</text>
   </g>
   
   <!-- Prediction engine details -->
   <g transform="translate(390, 140)">
-    <text x="70" y="20" class="subtitle" text-anchor="middle">预测引擎详细</text>
+    <text x="70" y="20" class="subtitle" text-anchor="middle">Prediction Engine Details</text>
     
     <rect x="10" y="30" width="130" height="35" class="engine" rx="3"/>
-    <text x="75" y="52" class="text" text-anchor="middle">用户行为分析</text>
+    <text x="75" y="52" class="text" text-anchor="middle">User Behavior Analysis</text>
     
     <rect x="10" y="75" width="130" height="35" class="engine" rx="3"/>
-    <text x="75" y="97" class="text" text-anchor="middle">空间关联性分析</text>
+    <text x="75" y="97" class="text" text-anchor="middle">Spatial Correlation Analysis</text>
     
     <rect x="10" y="120" width="130" height="35" class="engine" rx="3"/>
-    <text x="75" y="142" class="text" text-anchor="middle">LRU淘汰算法</text>
+    <text x="75" y="142" class="text" text-anchor="middle">LRU Eviction Algorithm</text>
   </g>
   
   <!-- Performance monitoring details -->
   <g transform="translate(560, 140)">
-    <text x="70" y="20" class="subtitle" text-anchor="middle">性能监控详细</text>
+    <text x="70" y="20" class="subtitle" text-anchor="middle">Performance Monitor Details</text>
     
     <rect x="10" y="30" width="130" height="35" class="monitor" rx="3"/>
-    <text x="75" y="52" class="text" text-anchor="middle">命中率统计</text>
+    <text x="75" y="52" class="text" text-anchor="middle">Hit Rate Statistics</text>
     
     <rect x="10" y="75" width="130" height="35" class="monitor" rx="3"/>
-    <text x="75" y="97" class="text" text-anchor="middle">响应时间监控</text>
+    <text x="75" y="97" class="text" text-anchor="middle">Response Time Monitoring</text>
     
     <rect x="10" y="120" width="130" height="35" class="monitor" rx="3"/>
-    <text x="75" y="142" class="text" text-anchor="middle">存储空间管理</text>
+    <text x="75" y="142" class="text" text-anchor="middle">Storage Space Management</text>
   </g>
   
   <!-- Main connections -->
@@ -87,8 +87,8 @@
   
   <!-- Data flow labels -->
   <rect x="50" y="250" width="140" height="50" class="mapview" rx="3"/>
-  <text x="110" y="275" class="text" text-anchor="middle" font-weight="bold">地图显示</text>
-  <text x="290" y="320" class="text" text-anchor="middle">存储操作</text>
-  <text x="460" y="320" class="text" text-anchor="middle">智能预测</text>
-  <text x="630" y="320" class="text" text-anchor="middle">性能监控</text>
-</svg> 
+  <text x="110" y="275" class="text" text-anchor="middle" font-weight="bold">Map Display</text>
+  <text x="290" y="320" class="text" text-anchor="middle">Storage Operations</text>
+  <text x="460" y="320" class="text" text-anchor="middle">Intelligent Prediction</text>
+  <text x="630" y="320" class="text" text-anchor="middle">Performance Monitoring</text>
+</svg>

@@ -18,109 +18,109 @@
     </marker>
   </defs>
   
-  <!-- 标题 -->
-  <text x="500" y="30" class="title">LSTM神经网络模型结构图</text>
+  <!-- Title -->
+  <text x="500" y="30" class="title">LSTM Neural Network Model Structure</text>
   
-  <!-- 输入层标题 -->
-  <text x="80" y="70" class="section-title">输入层</text>
+  <!-- Input Layer Title -->
+  <text x="80" y="70" class="section-title">Input Layer</text>
   <rect x="20" y="75" width="120" height="2" fill="#333" />
   
-  <!-- 输入特征 -->
+  <!-- Input Features -->
   <rect x="30" y="90" width="100" height="40" class="input" />
-  <text x="80" y="105" class="subtitle">时间戳</text>
+  <text x="80" y="105" class="subtitle">Timestamp</text>
   <text x="80" y="120" class="small-text">t1, t2, ..., tn</text>
   
   <rect x="30" y="140" width="100" height="40" class="input" />
-  <text x="80" y="155" class="subtitle">地理坐标</text>
+  <text x="80" y="155" class="subtitle">Geographic Coordinates</text>
   <text x="80" y="170" class="small-text">lat, lng</text>
   
   <rect x="30" y="190" width="100" height="40" class="input" />
-  <text x="80" y="205" class="subtitle">缩放级别</text>
+  <text x="80" y="205" class="subtitle">Zoom Level</text>
   <text x="80" y="220" class="small-text">zoom level</text>
   
   <rect x="30" y="240" width="100" height="40" class="input" />
-  <text x="80" y="255" class="subtitle">访问频次</text>
+  <text x="80" y="255" class="subtitle">Visit Frequency</text>
   <text x="80" y="270" class="small-text">visit count</text>
   
   <rect x="30" y="290" width="100" height="40" class="input" />
-  <text x="80" y="305" class="subtitle">用户类型</text>
+  <text x="80" y="305" class="subtitle">User Type</text>
   <text x="80" y="320" class="small-text">user type</text>
   
   <rect x="30" y="340" width="100" height="40" class="input" />
-  <text x="80" y="355" class="subtitle">设备信息</text>
+  <text x="80" y="355" class="subtitle">Device Info</text>
   <text x="80" y="370" class="small-text">device info</text>
   
-  <!-- 编码器标题 -->
-  <text x="280" y="70" class="section-title">编码器 (Encoder)</text>
+  <!-- Encoder Title -->
+  <text x="280" y="70" class="section-title">Encoder</text>
   <rect x="200" y="75" width="160" height="2" fill="#333" />
   
-  <!-- LSTM层 -->
+  <!-- LSTM Layers -->
   <rect x="220" y="90" width="120" height="60" class="lstm" />
-  <text x="280" y="110" class="subtitle">LSTM层1</text>
-  <text x="280" y="125" class="small-text">128个神经元</text>
+  <text x="280" y="110" class="subtitle">LSTM Layer 1</text>
+  <text x="280" y="125" class="small-text">128 Neurons</text>
   <text x="280" y="140" class="small-text">Dropout=0.2</text>
   
   <rect x="220" y="170" width="120" height="60" class="lstm" />
-  <text x="280" y="190" class="subtitle">LSTM层2</text>
-  <text x="280" y="205" class="small-text">128个神经元</text>
+  <text x="280" y="190" class="subtitle">LSTM Layer 2</text>
+  <text x="280" y="205" class="small-text">128 Neurons</text>
   <text x="280" y="220" class="small-text">Dropout=0.2</text>
   
   <rect x="220" y="250" width="120" height="60" class="lstm" />
-  <text x="280" y="270" class="subtitle">LSTM层3</text>
-  <text x="280" y="285" class="small-text">128个神经元</text>
+  <text x="280" y="270" class="subtitle">LSTM Layer 3</text>
+  <text x="280" y="285" class="small-text">128 Neurons</text>
   <text x="280" y="300" class="small-text">Dropout=0.2</text>
   
-  <!-- 注意力机制标题 -->
-  <text x="500" y="70" class="section-title">注意力机制</text>
+  <!-- Attention Mechanism Title -->
+  <text x="500" y="70" class="section-title">Attention Mechanism</text>
   <rect x="420" y="75" width="160" height="2" fill="#333" />
   
-  <!-- 注意力机制 -->
+  <!-- Attention Mechanism -->
   <rect x="430" y="120" width="140" height="50" class="attention" />
-  <text x="500" y="140" class="subtitle">注意力权重计算</text>
+  <text x="500" y="140" class="subtitle">Attention Weight Calculation</text>
   <text x="500" y="155" class="small-text">α = softmax(score)</text>
   
   <rect x="430" y="190" width="140" height="50" class="attention" />
-  <text x="500" y="210" class="subtitle">上下文向量</text>
+  <text x="500" y="210" class="subtitle">Context Vector</text>
   <text x="500" y="225" class="small-text">c = Σ(αi × hi)</text>
   
-  <!-- 解码器标题 -->
-  <text x="720" y="70" class="section-title">解码器 (Decoder)</text>
+  <!-- Decoder Title -->
+  <text x="720" y="70" class="section-title">Decoder</text>
   <rect x="640" y="75" width="160" height="2" fill="#333" />
   
-  <!-- 全连接层 -->
+  <!-- Dense Layers -->
   <rect x="660" y="110" width="120" height="50" class="dense" />
-  <text x="720" y="130" class="subtitle">全连接层1</text>
-  <text x="720" y="145" class="small-text">256个神经元</text>
-  <text x="720" y="155" class="small-text">ReLU激活</text>
+  <text x="720" y="130" class="subtitle">Dense Layer 1</text>
+  <text x="720" y="145" class="small-text">256 Neurons</text>
+  <text x="720" y="155" class="small-text">ReLU Activation</text>
   
   <rect x="660" y="180" width="120" height="50" class="dense" />
-  <text x="720" y="200" class="subtitle">全连接层2</text>
-  <text x="720" y="215" class="small-text">128个神经元</text>
-  <text x="720" y="225" class="small-text">ReLU激活</text>
+  <text x="720" y="200" class="subtitle">Dense Layer 2</text>
+  <text x="720" y="215" class="small-text">128 Neurons</text>
+  <text x="720" y="225" class="small-text">ReLU Activation</text>
   
   <rect x="660" y="250" width="120" height="40" class="dense" />
-  <text x="720" y="270" class="subtitle">输出层</text>
-  <text x="720" y="285" class="small-text">Softmax激活</text>
+  <text x="720" y="270" class="subtitle">Output Layer</text>
+  <text x="720" y="285" class="small-text">Softmax Activation</text>
   
-  <!-- 输出层标题 -->
-  <text x="870" y="70" class="section-title">输出层</text>
+  <!-- Output Layer Title -->
+  <text x="870" y="70" class="section-title">Output Layer</text>
   <rect x="820" y="75" width="100" height="2" fill="#333" />
   
-  <!-- 输出结果 -->
+  <!-- Output Results -->
   <rect x="830" y="120" width="120" height="50" class="output" />
-  <text x="890" y="140" class="subtitle">热点概率分布</text>
-  <text x="890" y="155" class="small-text">网格化矩阵</text>
+  <text x="890" y="140" class="subtitle">Hotspot Probability Distribution</text>
+  <text x="890" y="155" class="small-text">Grid Matrix</text>
   
   <rect x="830" y="190" width="120" height="40" class="output" />
-  <text x="890" y="210" class="subtitle">缓存优先级</text>
+  <text x="890" y="210" class="subtitle">Cache Priority</text>
   <text x="890" y="225" class="small-text">Priority Score</text>
   
   <rect x="830" y="250" width="120" height="40" class="output" />
-  <text x="890" y="270" class="subtitle">预测置信度</text>
+  <text x="890" y="270" class="subtitle">Prediction Confidence</text>
   <text x="890" y="285" class="small-text">Confidence</text>
   
-  <!-- 连接线 -->
-  <!-- 输入层到LSTM层1 -->
+  <!-- Connection Lines -->
+  <!-- Input Layer to LSTM Layer 1 -->
   <line x1="130" y1="110" x2="220" y2="120" class="arrow" />
   <line x1="130" y1="160" x2="220" y2="120" class="arrow" />
   <line x1="130" y1="210" x2="220" y2="120" class="arrow" />
@@ -128,38 +128,38 @@
   <line x1="130" y1="310" x2="220" y2="120" class="arrow" />
   <line x1="130" y1="360" x2="220" y2="120" class="arrow" />
   
-  <!-- LSTM层间连接 -->
+  <!-- LSTM Layer Connections -->
   <line x1="280" y1="150" x2="280" y2="170" class="arrow" />
   <line x1="280" y1="230" x2="280" y2="250" class="arrow" />
   
-  <!-- LSTM层到注意力机制 -->
+  <!-- LSTM Layers to Attention Mechanism -->
   <line x1="340" y1="120" x2="430" y2="145" class="arrow" />
   <line x1="340" y1="200" x2="430" y2="145" class="arrow" />
   <line x1="340" y1="280" x2="430" y2="145" class="arrow" />
   
-  <!-- 注意力机制内部连接 -->
+  <!-- Attention Mechanism Internal Connection -->
   <line x1="500" y1="170" x2="500" y2="190" class="arrow" />
   
-  <!-- 注意力机制到解码器 -->
+  <!-- Attention Mechanism to Decoder -->
   <line x1="570" y1="215" x2="660" y2="135" class="arrow" />
   
-  <!-- 解码器内部连接 -->
+  <!-- Decoder Internal Connections -->
   <line x1="720" y1="160" x2="720" y2="180" class="arrow" />
   <line x1="720" y1="230" x2="720" y2="250" class="arrow" />
   
-  <!-- 解码器到输出层 -->
+  <!-- Decoder to Output Layer -->
   <line x1="780" y1="270" x2="830" y2="145" class="arrow" />
   <line x1="780" y1="270" x2="830" y2="210" class="arrow" />
   <line x1="780" y1="270" x2="830" y2="270" class="arrow" />
   
-  <!-- 模型参数说明 -->
+  <!-- Model Parameters Description -->
   <rect x="50" y="450" width="900" height="150" fill="#f0f8ff" stroke="#333" stroke-width="1" />
-  <text x="500" y="475" class="section-title">模型参数与训练策略</text>
+  <text x="500" y="475" class="section-title">Model Parameters and Training Strategy</text>
   
-  <text x="500" y="505" class="subtitle">• 输入特征维度：32维向量（时间戳、坐标、缩放级别、访问频次等）</text>
-  <text x="500" y="525" class="subtitle">• LSTM隐藏层：3层，每层128个神经元，双向LSTM结构</text>
-  <text x="500" y="545" class="subtitle">• 注意力机制：多头注意力，自动识别关键时间段和特征</text>
-  <text x="500" y="565" class="subtitle">• 训练策略：滑动时间窗口，历史30天数据预测未来7天热点</text>
-  <text x="500" y="585" class="subtitle">• 优化算法：Adam优化器，学习率0.001，批大小64，防过拟合Dropout=0.2</text>
+  <text x="500" y="505" class="subtitle">• Input Feature Dimension: 32-dimensional vector (timestamp, coordinates, zoom level, visit frequency, etc.)</text>
+  <text x="500" y="525" class="subtitle">• LSTM Hidden Layers: 3 layers, 128 neurons per layer, bidirectional LSTM structure</text>
+  <text x="500" y="545" class="subtitle">• Attention Mechanism: Multi-head attention, automatic identification of key time periods and features</text>
+  <text x="500" y="565" class="subtitle">• Training Strategy: Sliding time window, 30-day historical data to predict 7-day future hotspots</text>
+  <text x="500" y="585" class="subtitle">• Optimization Algorithm: Adam optimizer, learning rate 0.001, batch size 64, anti-overfitting Dropout=0.2</text>
   
-</svg> 
+</svg>

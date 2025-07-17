@@ -4,7 +4,7 @@
     <style>
       .title { font-family: Arial, sans-serif; font-size: 18px; font-weight: bold; }
       .category-title { font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; }
-      .text { font-family: Arial, sans-serif; font-size: 11px; }
+      .text { font-family: Arial, sans-serif; font-size: 10px; }
       .theory { fill: #e3f2fd; stroke: #1976d2; stroke-width: 2; }
       .algorithm { fill: #f3e5f5; stroke: #7b1fa2; stroke-width: 2; }
       .engineering { fill: #e8f5e8; stroke: #4caf50; stroke-width: 2; }
@@ -16,72 +16,72 @@
     </marker>
   </defs>
   
-  <text x="400" y="30" class="title" text-anchor="middle">技术贡献框架</text>
+  <text x="400" y="30" class="title" text-anchor="middle">Technical Contribution Framework</text>
   
   <!-- Theory contributions -->
   <g transform="translate(50, 80)">
     <rect x="0" y="0" width="150" height="40" class="theory" rx="5"/>
-    <text x="75" y="25" class="category-title" text-anchor="middle">理论贡献</text>
+    <text x="75" y="25" class="category-title" text-anchor="middle">Theoretical</text>
     
     <rect x="10" y="60" width="130" height="35" class="theory" rx="3"/>
-    <text x="75" y="82" class="text" text-anchor="middle">多格式数据统一处理理论</text>
+    <text x="75" y="82" class="text" text-anchor="middle">Multi-format Data Processing</text>
     
     <rect x="10" y="105" width="130" height="35" class="theory" rx="3"/>
-    <text x="75" y="127" class="text" text-anchor="middle">前后端协同缓存优化理论</text>
+    <text x="75" y="127" class="text" text-anchor="middle">Cache Optimization Theory</text>
   </g>
   
   <!-- Algorithm contributions -->
   <g transform="translate(250, 80)">
     <rect x="0" y="0" width="150" height="40" class="algorithm" rx="5"/>
-    <text x="75" y="25" class="category-title" text-anchor="middle">算法贡献</text>
+    <text x="75" y="25" class="category-title" text-anchor="middle">Algorithm</text>
     
     <rect x="10" y="60" width="130" height="30" class="algorithm" rx="3"/>
-    <text x="75" y="79" class="text" text-anchor="middle">CAD样式保留算法</text>
+    <text x="75" y="79" class="text" text-anchor="middle">CAD Style Preservation</text>
     
     <rect x="10" y="100" width="130" height="30" class="algorithm" rx="3"/>
-    <text x="75" y="119" class="text" text-anchor="middle">深度学习缓存预测算法</text>
+    <text x="75" y="119" class="text" text-anchor="middle">Deep Learning Prediction</text>
     
     <rect x="10" y="140" width="130" height="30" class="algorithm" rx="3"/>
-    <text x="75" y="159" class="text" text-anchor="middle">智能瓦片缓存算法</text>
+    <text x="75" y="159" class="text" text-anchor="middle">Intelligent Cache</text>
   </g>
   
   <!-- Engineering contributions -->
   <g transform="translate(450, 80)">
     <rect x="0" y="0" width="150" height="40" class="engineering" rx="5"/>
-    <text x="75" y="25" class="category-title" text-anchor="middle">工程贡献</text>
+    <text x="75" y="25" class="category-title" text-anchor="middle">Engineering</text>
     
     <rect x="10" y="60" width="130" height="30" class="engineering" rx="3"/>
-    <text x="75" y="79" class="text" text-anchor="middle">高性能WebGIS集成平台</text>
+    <text x="75" y="79" class="text" text-anchor="middle">WebGIS Platform</text>
     
     <rect x="10" y="100" width="130" height="30" class="engineering" rx="3"/>
-    <text x="75" y="119" class="text" text-anchor="middle">IndexDB缓存体系</text>
+    <text x="75" y="119" class="text" text-anchor="middle">IndexDB Cache</text>
     
     <rect x="10" y="140" width="130" height="30" class="engineering" rx="3"/>
-    <text x="75" y="159" class="text" text-anchor="middle">双轨制服务发布架构</text>
+    <text x="75" y="159" class="text" text-anchor="middle">Dual-Track Services</text>
   </g>
   
   <!-- Application contributions -->
   <g transform="translate(650, 80)">
     <rect x="0" y="0" width="130" height="40" class="application" rx="5"/>
-    <text x="65" y="25" class="category-title" text-anchor="middle">应用贡献</text>
+    <text x="65" y="25" class="category-title" text-anchor="middle">Application</text>
     
     <rect x="5" y="60" width="120" height="30" class="application" rx="3"/>
-    <text x="65" y="79" class="text" text-anchor="middle">行业技术解决方案</text>
+    <text x="65" y="79" class="text" text-anchor="middle">Industry Solutions</text>
     
     <rect x="5" y="100" width="120" height="30" class="application" rx="3"/>
-    <text x="65" y="119" class="text" text-anchor="middle">WebGIS技术推进</text>
+    <text x="65" y="119" class="text" text-anchor="middle">Technology Advancement</text>
     
     <rect x="5" y="140" width="120" height="30" class="application" rx="3"/>
-    <text x="65" y="159" class="text" text-anchor="middle">开源技术生态</text>
+    <text x="65" y="159" class="text" text-anchor="middle">Open Source Ecosystem</text>
   </g>
   
   <!-- Central integration area -->
   <g transform="translate(300, 350)">
     <circle cx="100" cy="50" r="80" fill="#fff8e1" stroke="#ff8f00" stroke-width="3"/>
-    <text x="100" y="40" class="category-title" text-anchor="middle">集成创新</text>
-    <text x="100" y="60" class="text" text-anchor="middle">多格式GIS数据</text>
-    <text x="100" y="75" class="text" text-anchor="middle">Web地图服务</text>
-    <text x="100" y="90" class="text" text-anchor="middle">集成平台</text>
+    <text x="100" y="40" class="category-title" text-anchor="middle">Integrated Innovation</text>
+    <text x="100" y="60" class="text" text-anchor="middle">Multi-format GIS</text>
+    <text x="100" y="75" class="text" text-anchor="middle">Web Map Service</text>
+    <text x="100" y="90" class="text" text-anchor="middle">Integration Platform</text>
   </g>
   
   <!-- Connection arrows -->
@@ -92,18 +92,18 @@
   
   <!-- Impact areas -->
   <g transform="translate(100, 500)">
-    <text x="300" y="20" class="category-title" text-anchor="middle">技术影响领域</text>
+    <text x="300" y="20" class="category-title" text-anchor="middle">Technical Impact Areas</text>
     
     <rect x="50" y="40" width="100" height="30" class="theory" rx="3"/>
-    <text x="100" y="59" class="text" text-anchor="middle">学术研究</text>
+    <text x="100" y="59" class="text" text-anchor="middle">Academic Research</text>
     
     <rect x="170" y="40" width="100" height="30" class="algorithm" rx="3"/>
-    <text x="220" y="59" class="text" text-anchor="middle">技术标准</text>
+    <text x="220" y="59" class="text" text-anchor="middle">Technical Standards</text>
     
     <rect x="290" y="40" width="100" height="30" class="engineering" rx="3"/>
-    <text x="340" y="59" class="text" text-anchor="middle">产业应用</text>
+    <text x="340" y="59" class="text" text-anchor="middle">Industrial Application</text>
     
     <rect x="410" y="40" width="100" height="30" class="application" rx="3"/>
-    <text x="460" y="59" class="text" text-anchor="middle">社会价值</text>
+    <text x="460" y="59" class="text" text-anchor="middle">Social Value</text>
   </g>
-</svg> 
+</svg>

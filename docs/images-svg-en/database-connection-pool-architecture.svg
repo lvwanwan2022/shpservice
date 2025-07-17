@@ -21,98 +21,98 @@
     </marker>
   </defs>
   
-  <!-- 背景 -->
+  <!-- Background -->
   <rect width="800" height="600" fill="#f8f9fa"/>
   
-  <!-- 标题 -->
+  <!-- Title -->
   <rect x="50" y="20" width="700" height="50" rx="8" fill="url(#headerGradient)" filter="url(#shadow)"/>
-  <text x="400" y="50" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="white">数据库连接池架构图</text>
+  <text x="400" y="50" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="white">Database Connection Pool Architecture</text>
   
-  <!-- 应用层 -->
-  <text x="400" y="100" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#333">应用服务层</text>
+  <!-- Application Layer -->
+  <text x="400" y="100" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#333">Application Service Layer</text>
   
-  <!-- 多个应用实例 -->
+  <!-- Multiple Application Instances -->
   <rect x="100" y="110" width="120" height="60" rx="5" fill="#e3f2fd" stroke="#2196f3" stroke-width="1"/>
-  <text x="160" y="135" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1976d2">Web服务</text>
-  <text x="160" y="155" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#666">Flask应用</text>
+  <text x="160" y="135" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#1976d2">Web Service</text>
+  <text x="160" y="155" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#666">Flask Application</text>
   
   <rect x="250" y="110" width="120" height="60" rx="5" fill="#fff3e0" stroke="#ff9800" stroke-width="1"/>
-  <text x="310" y="135" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#f57c00">API服务</text>
+  <text x="310" y="135" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#f57c00">API Service</text>
   <text x="310" y="155" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#666">RESTful API</text>
   
   <rect x="400" y="110" width="120" height="60" rx="5" fill="#e8f5e8" stroke="#4caf50" stroke-width="1"/>
-  <text x="460" y="135" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#388e3c">后台任务</text>
+  <text x="460" y="135" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#388e3c">Background Tasks</text>
   <text x="460" y="155" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#666">Celery Worker</text>
   
   <rect x="550" y="110" width="120" height="60" rx="5" fill="#fce4ec" stroke="#e91e63" stroke-width="1"/>
-  <text x="610" y="135" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#c2185b">缓存服务</text>
+  <text x="610" y="135" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#c2185b">Cache Service</text>
   <text x="610" y="155" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#666">Redis Cache</text>
   
-  <!-- 连接池管理器 -->
+  <!-- Connection Pool Manager -->
   <rect x="200" y="220" width="400" height="120" rx="8" fill="url(#poolGradient)" filter="url(#shadow)"/>
-  <text x="400" y="245" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white">智能连接池管理器</text>
+  <text x="400" y="245" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white">Intelligent Connection Pool Manager</text>
   
-  <!-- 连接池功能 -->
-  <text x="220" y="270" font-family="Arial, sans-serif" font-size="11" fill="white">• 动态连接数调整</text>
-  <text x="220" y="285" font-family="Arial, sans-serif" font-size="11" fill="white">• 负载均衡分配</text>
-  <text x="220" y="300" font-family="Arial, sans-serif" font-size="11" fill="white">• 连接健康检查</text>
-  <text x="220" y="315" font-family="Arial, sans-serif" font-size="11" fill="white">• 超时连接回收</text>
+  <!-- Connection Pool Features -->
+  <text x="220" y="270" font-family="Arial, sans-serif" font-size="11" fill="white">• Dynamic Connection Adjustment</text>
+  <text x="220" y="285" font-family="Arial, sans-serif" font-size="11" fill="white">• Load Balancing Distribution</text>
+  <text x="220" y="300" font-family="Arial, sans-serif" font-size="11" fill="white">• Connection Health Check</text>
+  <text x="220" y="315" font-family="Arial, sans-serif" font-size="11" fill="white">• Timeout Connection Recovery</text>
   
-  <text x="450" y="270" font-family="Arial, sans-serif" font-size="11" fill="white">• 并发控制管理</text>
-  <text x="450" y="285" font-family="Arial, sans-serif" font-size="11" fill="white">• 连接复用优化</text>
-  <text x="450" y="300" font-family="Arial, sans-serif" font-size="11" fill="white">• 性能监控统计</text>
-  <text x="450" y="315" font-family="Arial, sans-serif" font-size="11" fill="white">• 故障自动恢复</text>
+  <text x="450" y="270" font-family="Arial, sans-serif" font-size="11" fill="white">• Concurrency Control Management</text>
+  <text x="450" y="285" font-family="Arial, sans-serif" font-size="11" fill="white">• Connection Reuse Optimization</text>
+  <text x="450" y="300" font-family="Arial, sans-serif" font-size="11" fill="white">• Performance Monitoring Statistics</text>
+  <text x="450" y="315" font-family="Arial, sans-serif" font-size="11" fill="white">• Automatic Failure Recovery</text>
   
-  <!-- 连接箭头 -->
+  <!-- Connection Arrows -->
   <line x1="160" y1="170" x2="250" y2="220" stroke="#4A90E2" stroke-width="2" marker-end="url(#arrowhead)"/>
   <line x1="310" y1="170" x2="350" y2="220" stroke="#4A90E2" stroke-width="2" marker-end="url(#arrowhead)"/>
   <line x1="460" y1="170" x2="450" y2="220" stroke="#4A90E2" stroke-width="2" marker-end="url(#arrowhead)"/>
   <line x1="610" y1="170" x2="550" y2="220" stroke="#4A90E2" stroke-width="2" marker-end="url(#arrowhead)"/>
   
-  <!-- 连接池状态 -->
+  <!-- Connection Pool Status -->
   <rect x="100" y="380" width="250" height="120" rx="8" fill="#ffffff" stroke="#ddd" stroke-width="2" filter="url(#shadow)"/>
-  <text x="225" y="405" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#333">连接池状态监控</text>
+  <text x="225" y="405" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#333">Connection Pool Status Monitoring</text>
   
-  <!-- 连接状态图示 -->
+  <!-- Connection Status Indicators -->
   <circle cx="130" cy="430" r="8" fill="#4CAF50"/>
-  <text x="145" y="435" font-family="Arial, sans-serif" font-size="10" fill="#666">活跃连接 (8)</text>
+  <text x="145" y="435" font-family="Arial, sans-serif" font-size="10" fill="#666">Active Connections (8)</text>
   
   <circle cx="130" cy="450" r="8" fill="#2196F3"/>
-  <text x="145" y="455" font-family="Arial, sans-serif" font-size="10" fill="#666">空闲连接 (12)</text>
+  <text x="145" y="455" font-family="Arial, sans-serif" font-size="10" fill="#666">Idle Connections (12)</text>
   
   <circle cx="130" cy="470" r="8" fill="#FF9800"/>
-  <text x="145" y="475" font-family="Arial, sans-serif" font-size="10" fill="#666">等待连接 (3)</text>
+  <text x="145" y="475" font-family="Arial, sans-serif" font-size="10" fill="#666">Waiting Connections (3)</text>
   
-  <text x="250" y="430" font-family="Arial, sans-serif" font-size="10" fill="#666">最大连接数: 50</text>
-  <text x="250" y="445" font-family="Arial, sans-serif" font-size="10" fill="#666">最小连接数: 5</text>
-  <text x="250" y="460" font-family="Arial, sans-serif" font-size="10" fill="#666">当前连接数: 23</text>
-  <text x="250" y="475" font-family="Arial, sans-serif" font-size="10" fill="#666">连接利用率: 46%</text>
+  <text x="250" y="430" font-family="Arial, sans-serif" font-size="10" fill="#666">Max Connections: 50</text>
+  <text x="250" y="445" font-family="Arial, sans-serif" font-size="10" fill="#666">Min Connections: 5</text>
+  <text x="250" y="460" font-family="Arial, sans-serif" font-size="10" fill="#666">Current Connections: 23</text>
+  <text x="250" y="475" font-family="Arial, sans-serif" font-size="10" fill="#666">Connection Utilization: 46%</text>
   
-  <!-- 数据库集群 -->
+  <!-- Database Cluster -->
   <rect x="450" y="380" width="250" height="120" rx="8" fill="url(#dbGradient)" filter="url(#shadow)"/>
-  <text x="575" y="405" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">PostgreSQL数据库集群</text>
+  <text x="575" y="405" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">PostgreSQL Database Cluster</text>
   
-  <!-- 主从数据库 -->
+  <!-- Master-Slave Databases -->
   <rect x="470" y="420" width="80" height="30" rx="3" fill="#ffffff" opacity="0.9"/>
-  <text x="510" y="440" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#333">主库 (写)</text>
+  <text x="510" y="440" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#333">Master (Write)</text>
   
   <rect x="570" y="420" width="80" height="30" rx="3" fill="#ffffff" opacity="0.9"/>
-  <text x="610" y="440" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#333">从库1 (读)</text>
+  <text x="610" y="440" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#333">Slave1 (Read)</text>
   
   <rect x="470" y="460" width="80" height="30" rx="3" fill="#ffffff" opacity="0.9"/>
-  <text x="510" y="480" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#333">从库2 (读)</text>
+  <text x="510" y="480" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#333">Slave2 (Read)</text>
   
   <rect x="570" y="460" width="80" height="30" rx="3" fill="#ffffff" opacity="0.9"/>
-  <text x="610" y="480" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#333">备份库</text>
+  <text x="610" y="480" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#333">Backup DB</text>
   
-  <!-- 连接池到数据库的连接 -->
+  <!-- Connection Pool to Database Connection -->
   <line x1="400" y1="340" x2="575" y2="380" stroke="#4A90E2" stroke-width="3" marker-end="url(#arrowhead)"/>
   
-  <!-- 性能指标 -->
+  <!-- Performance Metrics -->
   <rect x="150" y="530" width="500" height="50" rx="5" fill="#f0f8ff" stroke="#4A90E2" stroke-width="1"/>
-  <text x="400" y="550" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#333">连接池性能指标</text>
-  <text x="170" y="570" font-family="Arial, sans-serif" font-size="10" fill="#666">平均响应时间: <tspan font-weight="bold" fill="#4CAF50">15ms</tspan></text>
-  <text x="320" y="570" font-family="Arial, sans-serif" font-size="10" fill="#666">连接获取时间: <tspan font-weight="bold" fill="#2196F3">2ms</tspan></text>
-  <text x="470" y="570" font-family="Arial, sans-serif" font-size="10" fill="#666">连接复用率: <tspan font-weight="bold" fill="#FF9800">92%</tspan></text>
-  <text x="580" y="570" font-family="Arial, sans-serif" font-size="10" fill="#666">故障恢复时间: <tspan font-weight="bold" fill="#9C27B0">3s</tspan></text>
+  <text x="400" y="550" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#333">Connection Pool Performance Metrics</text>
+  <text x="170" y="570" font-family="Arial, sans-serif" font-size="10" fill="#666">Average Response Time: <tspan font-weight="bold" fill="#4CAF50">15ms</tspan></text>
+  <text x="320" y="570" font-family="Arial, sans-serif" font-size="10" fill="#666">Connection Acquisition Time: <tspan font-weight="bold" fill="#2196F3">2ms</tspan></text>
+  <text x="470" y="570" font-family="Arial, sans-serif" font-size="10" fill="#666">Connection Reuse Rate: <tspan font-weight="bold" fill="#FF9800">92%</tspan></text>
+  <text x="580" y="570" font-family="Arial, sans-serif" font-size="10" fill="#666">Failure Recovery Time: <tspan font-weight="bold" fill="#9C27B0">3s</tspan></text>
 </svg>
