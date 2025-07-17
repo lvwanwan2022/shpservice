@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="headerGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#4A90E2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#357ABD;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="spatialGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#7ED321;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#5BA517;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="temporalGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#F5A623;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#D1891A;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="operationGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#BD10E0;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#9013FE;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="contextGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#50E3C2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4DD0E1;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  
+  <!-- 背景 -->
+  <rect width="800" height="600" fill="#f8f9fa"/>
+  
+  <!-- 标题 -->
+  <rect x="50" y="20" width="700" height="50" rx="8" fill="url(#headerGradient)" filter="url(#shadow)"/>
+  <text x="400" y="50" text-anchor="middle" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="white">用户行为数据模型</text>
+  
+  <!-- 中心圆形 - 用户行为数据 -->
+  <circle cx="400" cy="300" r="80" fill="#ffffff" stroke="#4A90E2" stroke-width="3" filter="url(#shadow)"/>
+  <text x="400" y="295" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#333">用户行为</text>
+  <text x="400" y="315" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#333">数据模型</text>
+  
+  <!-- 空间维度 -->
+  <rect x="80" y="120" width="180" height="120" rx="10" fill="url(#spatialGradient)" filter="url(#shadow)"/>
+  <text x="170" y="145" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white">空间维度</text>
+  <text x="90" y="170" font-family="Arial, sans-serif" font-size="12" fill="white">• 地理范围访问</text>
+  <text x="90" y="190" font-family="Arial, sans-serif" font-size="12" fill="white">• 缩放级别偏好</text>
+  <text x="90" y="210" font-family="Arial, sans-serif" font-size="12" fill="white">• 区域停留时间</text>
+  <text x="90" y="230" font-family="Arial, sans-serif" font-size="12" fill="white">• 空间移动轨迹</text>
+  
+  <!-- 时间维度 -->
+  <rect x="540" y="120" width="180" height="120" rx="10" fill="url(#temporalGradient)" filter="url(#shadow)"/>
+  <text x="630" y="145" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white">时间维度</text>
+  <text x="550" y="170" font-family="Arial, sans-serif" font-size="12" fill="white">• 访问时间模式</text>
+  <text x="550" y="190" font-family="Arial, sans-serif" font-size="12" fill="white">• 会话时长分布</text>
+  <text x="550" y="210" font-family="Arial, sans-serif" font-size="12" fill="white">• 重复访问间隔</text>
+  <text x="550" y="230" font-family="Arial, sans-serif" font-size="12" fill="white">• 时序行为模式</text>
+  
+  <!-- 操作维度 -->
+  <rect x="80" y="360" width="180" height="120" rx="10" fill="url(#operationGradient)" filter="url(#shadow)"/>
+  <text x="170" y="385" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white">操作维度</text>
+  <text x="90" y="410" font-family="Arial, sans-serif" font-size="12" fill="white">• 缩放操作频次</text>
+  <text x="90" y="430" font-family="Arial, sans-serif" font-size="12" fill="white">• 平移操作模式</text>
+  <text x="90" y="450" font-family="Arial, sans-serif" font-size="12" fill="white">• 查询操作类型</text>
+  <text x="90" y="470" font-family="Arial, sans-serif" font-size="12" fill="white">• 交互行为序列</text>
+  
+  <!-- 上下文维度 -->
+  <rect x="540" y="360" width="180" height="120" rx="10" fill="url(#contextGradient)" filter="url(#shadow)"/>
+  <text x="630" y="385" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white">上下文维度</text>
+  <text x="550" y="410" font-family="Arial, sans-serif" font-size="12" fill="white">• 用户类型标识</text>
+  <text x="550" y="430" font-family="Arial, sans-serif" font-size="12" fill="white">• 设备信息特征</text>
+  <text x="550" y="450" font-family="Arial, sans-serif" font-size="12" fill="white">• 网络状况记录</text>
+  <text x="550" y="470" font-family="Arial, sans-serif" font-size="12" fill="white">• 环境上下文</text>
+  
+  <!-- 连接线 -->
+  <!-- 空间维度到中心 -->
+  <line x1="260" y1="180" x2="340" y2="250" stroke="#4A90E2" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- 时间维度到中心 -->
+  <line x1="540" y1="180" x2="460" y2="250" stroke="#4A90E2" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- 操作维度到中心 -->
+  <line x1="260" y1="420" x2="340" y2="350" stroke="#4A90E2" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- 上下文维度到中心 -->
+  <line x1="540" y1="420" x2="460" y2="350" stroke="#4A90E2" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- 箭头标记 -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#4A90E2"/>
+    </marker>
+  </defs>
+  
+  <!-- 数据流向说明 -->
+  <rect x="300" y="520" width="200" height="60" rx="5" fill="#ffffff" stroke="#ddd" stroke-width="1" filter="url(#shadow)"/>
+  <text x="400" y="540" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#333">多维度数据融合</text>
+  <text x="400" y="555" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#666">支持LSTM神经网络</text>
+  <text x="400" y="570" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#666">时序预测分析</text>
+</svg>

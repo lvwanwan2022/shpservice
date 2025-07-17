@@ -1,0 +1,4 @@
+[WebGIS架构对比图]
+传统WebGIS架构 vs 本研究架构
+- 传统架构：Client -> Web Server -> GIS Server -> Database
+- 本研究架构：Client -> 双引擎前端 -> 双轨制服务 -> 智能缓存 -> 多格式数据 
