@@ -42,6 +42,11 @@ const routes = [
     component: () => import('@/views/MapViewOL.vue')
   },
   {
+    path: '/map-deckgl',
+    name: 'MapDeckGL',
+    component: () => import('@/views/MapViewDeckGL.vue')
+  },
+  {
     path: '/upload',
     name: 'Upload',
     component: () => import('@/views/UploadView.vue')

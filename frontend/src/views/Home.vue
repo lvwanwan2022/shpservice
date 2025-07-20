@@ -33,6 +33,13 @@
         <div class="card-title">地图浏览(OpenLayers)</div>
         <div class="card-desc">使用OpenLayers浏览地图服务和图层数据</div>
       </el-card>
+      <el-card class="home-card" @click="goToMapDeckGL">
+        <div class="card-icon">
+          <i class="el-icon-view"></i>
+        </div>
+        <div class="card-title">地图浏览(Deck.gl)</div>
+        <div class="card-desc">使用Deck.gl浏览地图服务和图层数据，支持3D可视化</div>
+      </el-card>
       <el-card class="home-card" @click="goToMap">
         <div class="card-icon">
           <i class="el-icon-map-location"></i>
@@ -71,6 +78,9 @@ export default {
     },
     goToMapOL() {
       this.$router.push('/map-ol')
+    },
+    goToMapDeckGL() {
+      this.$router.push('/map-deckgl')
     },
     goToUpload() {
       this.$router.push('/upload')
