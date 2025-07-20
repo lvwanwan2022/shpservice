@@ -85,6 +85,8 @@ import { BitmapLayer } from '@deck.gl/layers'
 import { MVTLayer } from '@deck.gl/geo-layers'
 // 导入地形支持
 import { TerrainLayer } from '@deck.gl/geo-layers'
+// 导入TerrainExtension用于将2D图层贴合到3D地形
+import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions'
 import BaseMapSwitcherDeckGL from './BaseMapSwitcherDeckGL.vue'
 // 导入Martin配置 - 参考OpenLayers的配置导入
 import { MARTIN_BASE_URL } from '@/config/index'
@@ -184,10 +186,20 @@ export default {
             emit('view-change', viewState)
           },
           onHover: (info) => {
-            updateMouseCoordinates(info)
+            try {
+              updateMouseCoordinates(info)
+            } catch (error) {
+              console.warn('鼠标悬停处理出错，已忽略:', error)
+              // 不抛出错误，避免视口锁定
+            }
           },
           onClick: (info) => {
-            handleMapClick(info)
+            try {
+              handleMapClick(info)
+            } catch (error) {
+              console.warn('地图点击处理出错，已忽略:', error)
+              // 不抛出错误，避免视口锁定
+            }
           },
           getTooltip: ({ object }) => object && {
             html: `<div>${object.properties?.name || 'Feature'}</div>`,
@@ -300,17 +312,17 @@ export default {
       })
     }
     
-    // 创建三维地形图层 - 使用免费的AWS Terrain Tiles和Esri卫星影像
+    // 创建三维地形图层 - 直接在TerrainLayer上设置底图纹理
     const create3DTerrainLayers = () => {
       const layers = []
       
-      // 地形高程图层 - 仅提供高程数据，不含纹理
+      // 🔑 简化方案：在TerrainLayer上直接设置底图作为纹理
       const terrainLayer = new TerrainLayer({
         id: 'terrain-layer',
         // AWS Terrain Tiles (免费) - Terrarium格式
         elevationData: 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png',
-        // 不设置texture，让底图图层来提供颜色
-        texture: null,
+        // 🎯 关键：直接使用当前底图作为地形纹理
+        texture: currentBaseMap.value.url,
         // Terrarium格式的高程解码器
         elevationDecoder: {
           rScaler: 256,
@@ -318,17 +330,18 @@ export default {
           bScaler: 1 / 256,
           offset: -32768
         },
-        // 地形材质设置 - 中性色调，让底图颜色主导
+        // 🎯 关键设置：operation为'terrain+draw'，既显示地形纹理又为其他图层提供3D表面
+        operation: 'terrain+draw',
+        // 地形材质设置 - 显示底图纹理
         material: {
-          ambient: 0.8,     // 提高环境光，减少阴影
-          diffuse: 0.4,     // 降低漫反射，减少地形自身颜色影响
-          shininess: 8,     // 降低高光
-          specularColor: [30, 30, 30]  // 减少镜面反射
+          ambient: 0.64,    // 环境光
+          diffuse: 0.6,     // 漫反射
+          shininess: 32,    // 高光
+          specularColor: [51, 51, 51]  // 镜面反射
         },
         // 地形渲染参数
         wireframe: false,
-        color: [120, 120, 120, 255],  // 中性灰色作为基底
-        opacity: 0.9,       // 稍微透明，让底图更突出
+        opacity: 1.0,       // 完全不透明
         // 瓦片参数
         minZoom: 0,
         maxZoom: 15,
@@ -337,42 +350,30 @@ export default {
         elevationScale: 2.0,
         // 更新触发器
         updateTriggers: {
-          elevationData: Date.now()
+          elevationData: Date.now(),
+          texture: currentBaseMap.value.url  // 底图变化时更新
         }
       })
       
       layers.push(terrainLayer)
       
-      console.log('🏔️ 已创建三维地形图层，使用AWS免费DEM + Esri卫星影像')
+      console.log('🏔️ 已创建三维地形图层，直接使用底图作为纹理')
+      console.log('🔧 地形图层配置:', {
+        elevationData: 'AWS Terrain Tiles',
+        texture: currentBaseMap.value.name,
+        elevationScale: 2.0,
+        opacity: 1.0,
+        operation: 'terrain+draw'
+      })
       return layers
     }
     
-    // 创建三维模式下的底图图层 - 覆盖在地形上
+    // 三维模式下不需要单独的底图图层，TerrainLayer已经包含纹理
+    // 这个函数现在返回空，因为底图已经直接设置在TerrainLayer的texture属性上
     const create3DBaseMapLayer = () => {
-      return new TileLayer({
-        id: 'base-map-3d',
-        data: currentBaseMap.value.url,
-        minZoom: 0,
-        maxZoom: 19,
-        tileSize: 256,
-        opacity: 0.8, // 稍微透明，让地形纹理也能显示
-        renderSubLayers: props => {
-          const {
-            bbox: { west, south, east, north }
-          } = props.tile
-          
-          return new BitmapLayer(props, {
-            data: null,
-            image: props.data,
-            bounds: [west, south, east, north],
-            // 设置混合模式，让底图与地形纹理融合
-            parameters: {
-              blend: true,
-              blendFunc: ['SRC_ALPHA', 'ONE_MINUS_SRC_ALPHA']
-            }
-          })
-        }
-      })
+      // 在简化的三维方案中，不需要额外的底图图层
+      // 底图已经作为TerrainLayer的纹理显示
+      return null
     }
     
 
@@ -460,11 +461,10 @@ export default {
         
         let layersToShow = []
         if (is3DModeEnabled.value) {
-          // 三维模式：显示地形 + 底图
+          // 三维模式：只显示地形（包含底图纹理）
           const terrainLayers = create3DTerrainLayers()
-          const baseMapLayer = create3DBaseMapLayer()
-          layersToShow = [...terrainLayers, baseMapLayer]
-          console.log('三维模式无数据：显示地形 + 底图')
+          layersToShow = [...terrainLayers]
+          console.log('三维模式无数据：显示地形（含底图纹理）')
         } else {
           // 二维模式：只显示底图
           const baseLayer = createBaseMapLayer()
@@ -485,12 +485,11 @@ export default {
         let allLayers = []
         
         if (is3DModeEnabled.value) {
-          // 三维模式：地形 + 底图 + 数据图层
+          // 三维模式：地形（含底图纹理） + 数据图层
           console.log('🏔️ 三维模式下更新图层')
           const terrainLayers = create3DTerrainLayers()
-          const baseMapLayer = create3DBaseMapLayer()
-          allLayers = [...terrainLayers, baseMapLayer, ...dataLayers]
-          console.log('三维模式图层结构: 地形(1) + 底图(1) + 数据(' + dataLayers.length + ') = ' + allLayers.length)
+          allLayers = [...terrainLayers, ...dataLayers]
+          console.log('三维模式图层结构: 地形（含纹理）(1) + 数据(' + dataLayers.length + ') = ' + allLayers.length)
         } else {
           // 二维模式：底图 + 数据图层
           console.log('🗺️ 二维模式下更新图层')
@@ -778,7 +777,7 @@ export default {
       // 获取样式函数
       const styleFunctions = createDxfStyleFunctions(layer)
       
-      return new MVTLayer({
+      const mvtLayerConfig = {
         id: `mvt-${layer.scene_layer_id || layer.layer_id || layer.id}`,
         data: mvtUrl,
         minZoom: layer.min_zoom || 0,
@@ -804,7 +803,20 @@ export default {
           fileType: layer.file_type,
           serviceType: layer.service_type
         }
-      })
+      }
+      
+      // 🔑 混合方案：在三维模式下，数据图层使用TerrainExtension贴合地形
+      if (is3DModeEnabled.value) {
+        mvtLayerConfig.extensions = [new TerrainExtension()]
+        // drape模式：将矢量数据作为纹理覆盖在地形表面
+        mvtLayerConfig.terrainDrawMode = 'drape'
+        // 🔧 修复拾取问题：在三维模式下禁用拾取功能
+        mvtLayerConfig.pickable = false
+        mvtLayerConfig.autoHighlight = false
+        console.log(`🏔️ MVT图层 ${layer.layer_name} 已启用TerrainExtension (drape模式，禁用拾取)`)
+      }
+      
+      return new MVTLayer(mvtLayerConfig)
     }
 
     // 创建WMS栅格图层 - 参考OpenLayers的实现
@@ -861,7 +873,7 @@ export default {
       
       console.log(`WMS图层URL: ${wmsTileUrl}`)
       
-      return new TileLayer({
+      const wmsLayerConfig = {
         id: `wms-${layer.scene_layer_id || layer.layer_id || layer.id}`,
         // 移除data属性，只使用getTileData
         minZoom: layer.min_zoom || 0,
@@ -899,22 +911,54 @@ export default {
             bbox: { west, south, east, north }
           } = props.tile
           
-          return new BitmapLayer(props, {
+          const bitmapConfig = {
             data: null,
             image: props.data,
             bounds: [west, south, east, north]
-          })
+          }
+          
+          // 🔑 混合方案：在三维模式下，WMS子图层使用TerrainExtension贴合地形
+          if (is3DModeEnabled.value) {
+            bitmapConfig.extensions = [new TerrainExtension()]
+            bitmapConfig.terrainDrawMode = 'drape'
+          }
+          
+          return new BitmapLayer(props, bitmapConfig)
         }
-      })
+      }
+      
+      // 🔑 混合方案：在三维模式下，WMS图层使用TerrainExtension贴合地形
+      if (is3DModeEnabled.value) {
+        wmsLayerConfig.extensions = [new TerrainExtension()]
+        // drape模式：将栅格数据作为纹理覆盖在地形表面
+        wmsLayerConfig.terrainDrawMode = 'drape'
+        // 🔧 修复拾取问题：在三维模式下禁用拾取功能
+        wmsLayerConfig.pickable = false
+        console.log(`🏔️ WMS图层 ${layer.layer_name} 已启用TerrainExtension (drape模式，禁用拾取)`)
+      }
+      
+      return new TileLayer(wmsLayerConfig)
     }
 
-    // 刷新地图 - 增强版，支持三维模式
+    // 刷新地图 - 增强版，支持三维模式，包含错误恢复
     const refreshMap = () => {
       refreshing.value = true
       console.log('🔄 开始刷新地图，当前模式:', is3DModeEnabled.value ? '三维' : '二维')
       
       try {
         if (deckgl.value) {
+          // 🔧 清除任何可能的错误状态
+          try {
+            deckgl.value.setProps({
+              onError: (error) => {
+                console.warn('Deck.gl错误已捕获:', error)
+                return true // 阻止错误传播
+              }
+            })
+          } catch (e) {
+            console.warn('设置错误处理器失败，忽略:', e)
+          }
+          
           // 1. 强制重新渲染Deck.gl
           deckgl.value.redraw()
           
@@ -926,21 +970,11 @@ export default {
             }, 100)
           }
           
-          // 3. 如果是三维模式，强制更新地形参数
+          // 3. 如果是三维模式，确保深度测试启用
           if (is3DModeEnabled.value) {
-            console.log('🏔️ 三维模式刷新：重新配置地形参数')
+            console.log('🏔️ 三维模式刷新：确保WebGL参数正确')
             setTimeout(() => {
               deckgl.value.setProps({
-                terrain: {
-                  elevationData: 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png',
-                  elevationDecoder: {
-                    rScaler: 256,
-                    gScaler: 1,
-                    bScaler: 1 / 256,
-                    offset: -32768
-                  },
-                  elevationScale: 2.0
-                },
                 parameters: {
                   depthTest: true,
                   depthMask: true
@@ -949,11 +983,34 @@ export default {
             }, 200)
           }
           
+          // 4. 强制释放viewState控制，确保交互可用
+          setTimeout(() => {
+            if (deckgl.value) {
+              deckgl.value.setProps({
+                viewState: undefined
+              })
+              console.log('🔓 已确保视口控制释放')
+            }
+          }, 1000)
+          
           ElMessage.success(is3DModeEnabled.value ? '三维地图刷新成功' : '地图刷新成功')
         }
       } catch (error) {
         console.error('❌ 地图刷新失败:', error)
-        ElMessage.error('地图刷新失败')
+        ElMessage.error('地图刷新失败，尝试重置地图')
+        
+        // 🆘 紧急重置：如果刷新失败，尝试重新初始化
+        setTimeout(() => {
+          try {
+            if (is3DModeEnabled.value) {
+              is3DModeEnabled.value = false
+              console.log('🆘 已强制退出三维模式进行重置')
+            }
+            initDeckGL()
+          } catch (resetError) {
+            console.error('❌ 重置也失败了:', resetError)
+          }
+        }, 1000)
       } finally {
         setTimeout(() => {
           refreshing.value = false
@@ -1113,19 +1170,9 @@ export default {
           touchRotate: true,
           keyboard: true
         },
-        // 使用分层结构：地形 + 底图 + 数据
+        // 使用分层结构：地形基础 + 贴合地形的底图 + 贴合地形的数据图层
         layers: allLayers,
-        // 配置地形覆盖
-        terrain: {
-          elevationData: 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png',
-          elevationDecoder: {
-            rScaler: 256,
-            gScaler: 1,
-            bScaler: 1 / 256,
-            offset: -32768
-          },
-          elevationScale: 2.0
-        },
+        // 不再需要全局terrain配置，使用TerrainExtension实现更精确的图层控制
         parameters: {
           depthTest: true,
           depthMask: true
@@ -1161,7 +1208,7 @@ export default {
         console.log('✅ 三维模式图层刷新完成')
       }, 500) // 等待地形图层完全加载后再刷新
       
-      ElMessage.success(`🌍 三维模式：地形+${currentBaseMap.value.name}+${dataLayers.length}个数据图层`)
+      ElMessage.success(`🌍 三维模式已启用：地形(${currentBaseMap.value.name}纹理) + ${dataLayers.length}个数据图层(TerrainExtension)`)
     }
     
     // 禁用三维模式 - 恢复二维视图
@@ -1211,10 +1258,8 @@ export default {
           touchRotate: true,
           keyboard: true
         },
-        // 恢复普通图层结构
+        // 恢复普通图层结构：普通底图 + 普通数据图层（无TerrainExtension）
         layers: allLayers,
-        // 移除地形配置
-        terrain: null,
         // 重置WebGL参数
         parameters: {
           depthTest: false,

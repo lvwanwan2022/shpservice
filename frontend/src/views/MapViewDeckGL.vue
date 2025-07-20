@@ -86,6 +86,20 @@
                       </span>
                     </el-button>
                     
+                    <!-- 样式设置 -->
+                    <el-button 
+                      link 
+                      @click.stop="showStyleDialog(layer)"
+                      class="style-btn"
+                      title="样式设置"
+                    >
+                      <span>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                          <path d="M12,2A2,2 0 0,1 14,4C14,4.74 13.6,5.39 13,5.73V7H14A7,7 0 0,1 21,14H22A1,1 0 0,1 23,15V18A1,1 0 0,1 22,19H21V20A2,2 0 0,1 19,22H5A2,2 0 0,1 3,20V19H2A1,1 0 0,1 1,18V15A1,1 0 0,1 2,14H3A7,7 0 0,1 10,7H11V5.73C10.4,5.39 10,4.74 10,4A2,2 0 0,1 12,2M7.5,13A2.5,2.5 0 0,0 5,15.5A2.5,2.5 0 0,0 7.5,18A2.5,2.5 0 0,0 10,15.5A2.5,2.5 0 0,0 7.5,13M16.5,13A2.5,2.5 0 0,0 14,15.5A2.5,2.5 0 0,0 16.5,18A2.5,2.5 0 0,0 19,15.5A2.5,2.5 0 0,0 16.5,13Z"/>
+                        </svg>
+                      </span>
+                    </el-button>
+                    
                     <!-- 删除图层 -->
                     <el-button 
                       link 
@@ -93,31 +107,51 @@
                       class="remove-btn"
                       title="删除图层"
                     >
-                      <i class="el-icon-delete"></i>
+                      <span>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                          <path d="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z"/>
+                        </svg>
+                      </span>
                     </el-button>
                   </div>
                 </div>
+                <div class="layer-card-info">
+                  <span class="tag">{{ layer.file_type }}</span>
+                  <span class="tag">{{ layer.discipline }}</span>
+                  <span class="tag">{{ layer.dimension }}</span>
+                  <!-- 显示服务类型 -->
+                  <span v-if="layer.service_type" class="tag" :class="getServiceTypeClass(layer.service_type)">
+                    {{ getServiceTypeText(layer) }}
+                  </span>
+                  <!-- 显示图层状态 -->
+                  <span class="tag" :class="getLayerStatusClass(layer)">
+                    {{ getLayerStatusText(layer) }}
+                  </span>
+                </div>
                 
-                <!-- 图层详细信息 -->
-                <div class="layer-card-body">
-                  <div class="layer-meta">
-                    <span class="layer-type">{{ getLayerTypeText(layer) }}</span>
-                    <span class="layer-service">{{ layer.service_type || layer.file_type }}</span>
+                <!-- 🔥 透明度控制 -->
+                <div 
+                  class="layer-opacity-control" 
+                  @click.stop
+                  @mousedown.stop
+                  @dragstart.stop="$event.preventDefault()"
+                  @drag.stop="$event.preventDefault()"
+                >
+                  <div class="opacity-row">
+                    <i class="el-icon-view opacity-icon"></i>
+                    <span class="opacity-label">透明度</span>
+                    <span class="opacity-value">{{ Math.round((layer.opacity || 1) * 100) }}%</span>
                   </div>
-                  
-                  <!-- 透明度控制 -->
-                  <div class="layer-opacity">
-                    <label class="opacity-label">透明度: {{ Math.round((layer.opacity || 1) * 100) }}%</label>
-                    <el-slider
-                      :model-value="layer.opacity || 1"
-                      @update:model-value="val => { layer.opacity = val; updateLayerOpacity(layer); }"
-                      :min="0"
-                      :max="1"
-                      :step="0.1"
-                      size="small"
-                      class="opacity-slider"
-                    />
-                  </div>
+                  <el-slider
+                    :model-value="layer.opacity || 1"
+                    @update:model-value="val => updateLayerOpacity(layer, val)"
+                    :min="0"
+                    :max="1"
+                    :step="0.01"
+                    size="small"
+                    class="opacity-slider"
+                    :show-tooltip="false"
+                  />
                 </div>
               </div>
             </div>
@@ -131,17 +165,65 @@
           </div>
         </div>
         
-        <!-- 收起状态的展开按钮 -->
-        <div v-show="layerPanelCollapsed" class="collapsed-toggle">
-          <el-button 
-            link 
-            size="small" 
-            @click="toggleLayerPanel"
-            class="expand-btn"
-            title="展开图层面板"
-          >
-            <span class="toggle-icon">》</span>
-          </el-button>
+        <!-- 收起状态下的内容 -->
+        <div class="collapsed-content" v-show="layerPanelCollapsed">
+          <!-- 展开按钮 -->
+          <div class="collapsed-toggle" @click="toggleLayerPanel">
+            <el-button 
+              link 
+              size="small"
+              class="expand-btn"
+              title="展开面板"
+            >
+              <span class="toggle-icon">》</span>
+            </el-button>
+          </div>
+          
+          <!-- 收起状态下的场景选择 -->
+          <div class="collapsed-scene-selector" v-if="sceneList && sceneList.length > 0">
+            <!-- 场景区域标题 -->
+            <div class="collapsed-section-title">场景</div>
+            <div 
+              v-for="scene in sceneList" 
+              :key="scene.id" 
+              class="collapsed-scene-item"
+              :class="{ 'active': selectedSceneId === scene.id }"
+              @click="onSceneChange(scene.id)"
+              :title="`场景: ${scene.name}
+👆 点击切换到此场景`"
+            >
+              <div class="scene-short-name">{{ scene.name.substring(0, 2) }}</div>
+              <div v-if="selectedSceneId === scene.id" class="scene-active-dot"></div>
+            </div>
+          </div>
+          
+          <!-- 分隔线 -->
+          <div class="collapsed-separator" v-if="sceneList && sceneList.length > 0 && layersList && layersList.length > 0"></div>
+          
+          <!-- 收起状态下的图层列表 -->
+          <div class="collapsed-layers" v-if="layersList && layersList.length > 0">
+            <!-- 图层区域标题 -->
+            <div class="collapsed-section-title">图层</div>
+            <div 
+              v-for="(layer) in sortedLayersList" 
+              :key="layer.scene_layer_id || layer.id" 
+              class="collapsed-layer-item"
+              :class="{ 
+                'active': currentActiveLayer && currentActiveLayer.scene_layer_id === layer.scene_layer_id,
+                'invisible': !layer.visibility
+              }"
+              @click="selectLayer(layer)"
+              :title="`图层: ${layer.layer_name || layer.name || '未命名图层'}
+类型: ${getLayerTypeText(layer)}
+👆 点击选中此图层
+🔄 双击展开面板查看详情`"
+              @dblclick="toggleLayerPanel"
+            >
+              <div class="layer-short-name">{{ (layer.layer_name || layer.name || '未命名').substring(0, 2) }}</div>
+              <div v-if="currentActiveLayer && currentActiveLayer.scene_layer_id === layer.scene_layer_id" class="layer-active-dot"></div>
+              <div v-if="!layer.visibility" class="layer-invisible-dot"></div>
+            </div>
+          </div>
         </div>
       </div>
       
@@ -424,7 +506,11 @@ export default {
     }
     
     // 更新图层透明度
-    const updateLayerOpacity = (layer) => {
+    const updateLayerOpacity = (layer, newOpacity = null) => {
+      if (newOpacity !== null) {
+        layer.opacity = newOpacity
+      }
+      
       console.log(`更新图层 ${layer.layer_name} 透明度: ${Math.round(layer.opacity * 100)}%`)
       
       // 确保透明度在有效范围内
@@ -435,6 +521,51 @@ export default {
         // 触发图层列表的响应式更新
         layersList.value = [...layersList.value]
       }
+    }
+    
+    // 显示样式设置对话框
+    const showStyleDialog = (layer) => {
+      console.log('显示样式设置对话框:', layer.layer_name)
+      ElMessage.info('样式设置功能开发中...')
+      // TODO: 实现样式设置对话框
+    }
+    
+    // 获取服务类型样式类
+    const getServiceTypeClass = (serviceType) => {
+      const classMap = {
+        'geoserver': 'service-geoserver',
+        'martin': 'service-martin',
+        'wms': 'service-wms',
+        'mvt': 'service-mvt'
+      }
+      return classMap[serviceType] || 'service-default'
+    }
+    
+    // 获取服务类型文本
+    const getServiceTypeText = (layer) => {
+      const textMap = {
+        'geoserver': 'GeoServer',
+        'martin': 'Martin',
+        'wms': 'WMS',
+        'mvt': 'MVT'
+      }
+      return textMap[layer.service_type] || layer.service_type || '未知'
+    }
+    
+    // 获取图层状态样式类
+    const getLayerStatusClass = (layer) => {
+      if (layer.visibility === false) {
+        return 'status-hidden'
+      }
+      return 'status-visible'
+    }
+    
+    // 获取图层状态文本
+    const getLayerStatusText = (layer) => {
+      if (layer.visibility === false) {
+        return '隐藏'
+      }
+      return '可见'
     }
     
     // 缩放到图层 - 适配Deck.gl
@@ -863,6 +994,11 @@ export default {
       getLayerTypeText,
       getLayerIcon,
       showAddLayerDialog,
+      showStyleDialog,
+      getServiceTypeClass,
+      getServiceTypeText,
+      getLayerStatusClass,
+      getLayerStatusText,
       searchLayers,
       resetSearch,
       
@@ -912,24 +1048,31 @@ export default {
 
 /* 左侧图层面板 */
 .layer-panel {
-  width: 320px;
-  background: #fff;
+  width: 350px;
+  background: #f8f9fa;
   border-right: 1px solid #e4e7ed;
-  transition: all 0.3s ease;
+  transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   z-index: 1000;
   position: relative;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08);
 }
 
 .layer-panel.collapsed {
-  width: 0;
-  border-right: none;
+  width: 48px;
+  min-width: 48px;
+  max-width: 48px;
+  background: #e8f4f8;
 }
 
 .panel-content {
-  width: 320px;
+  width: 350px;
   height: 100%;
   display: flex;
   flex-direction: column;
+  background: #fff;
+  border-radius: 0 8px 8px 0;
+  margin: 4px 0 4px 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
 }
 
 .panel-header {
@@ -938,6 +1081,8 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: linear-gradient(90deg, #fafbfc 0%, #f8f9fa 100%);
+  border-radius: 0 8px 0 0;
 }
 
 .panel-header h3 {
@@ -982,38 +1127,67 @@ export default {
 .layer-cards {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+  padding: 8px 0;
 }
 
 .layer-card {
   border: 1px solid #e4e7ed;
-  border-radius: 8px;
+  border-radius: 12px;
   background: #fff;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   cursor: pointer;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  position: relative;
+  overflow: hidden;
+}
+
+.layer-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: transparent;
+  transition: background 0.3s ease;
 }
 
 .layer-card:hover {
   border-color: #409eff;
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.2);
+  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+.layer-card:hover::before {
+  background: #409eff;
 }
 
 .layer-card.active {
   border-color: #409eff;
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.3);
-  background: linear-gradient(135deg, #ecf5ff, #f0f9ff);
+  box-shadow: 0 8px 25px rgba(64, 158, 255, 0.2);
+  background: linear-gradient(135deg, #f0f9ff 0%, #e1f3ff 100%);
+}
+
+.layer-card.active::before {
+  background: #409eff;
 }
 
 .layer-card.invisible {
   opacity: 0.6;
+  background: linear-gradient(135deg, #f8f9fa 0%, #f5f7fa 100%);
+  filter: grayscale(0.3);
 }
 
 .layer-card-header {
-  padding: 12px;
+  padding: 12px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  border-bottom: 1px solid #f5f7fa;
+  background: linear-gradient(90deg, #fafbfc 0%, #fff 100%);
+  border-radius: 12px 12px 0 0;
 }
 
 .layer-title {
@@ -1055,6 +1229,264 @@ export default {
 
 .remove-btn:hover {
   color: #f56c6c;
+}
+
+.layer-card-info {
+  padding: 8px 16px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-bottom: 1px solid #f5f7fa;
+}
+
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #f0f2f5;
+  color: #606266;
+  font-size: 11px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.tag.service-geoserver {
+  background: #e1f3d8;
+  color: #67c23a;
+}
+
+.tag.service-martin {
+  background: #fdf6ec;
+  color: #e6a23c;
+}
+
+.tag.service-wms {
+  background: #f0f9ff;
+  color: #409eff;
+}
+
+.tag.service-mvt {
+  background: #f5f2ff;
+  color: #9c88ff;
+}
+
+.tag.status-visible {
+  background: #e1f3d8;
+  color: #67c23a;
+}
+
+.tag.status-hidden {
+  background: #fef0f0;
+  color: #f56c6c;
+}
+
+/* 🔥 透明度控制样式 */
+.layer-opacity-control {
+  padding: 8px 16px 12px;
+  background: #fafbfc;
+  border-radius: 0 0 12px 12px;
+}
+
+.opacity-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.opacity-icon {
+  color: #909399;
+  font-size: 14px;
+}
+
+.opacity-label {
+  font-size: 12px;
+  color: #606266;
+  flex: 1;
+}
+
+.opacity-value {
+  font-size: 12px;
+  color: #409eff;
+  font-weight: 500;
+  min-width: 35px;
+  text-align: right;
+}
+
+.opacity-slider {
+  margin: 0;
+}
+
+.opacity-slider :deep(.el-slider__runway) {
+  height: 4px;
+  background: #e4e7ed;
+}
+
+.opacity-slider :deep(.el-slider__bar) {
+  height: 4px;
+  background: linear-gradient(90deg, #409eff, #67c23a);
+}
+
+.opacity-slider :deep(.el-slider__button) {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #409eff;
+  background: #fff;
+}
+
+/* 🔥 收起状态样式 */
+.collapsed-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 48px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.collapsed-toggle {
+  padding: 12px;
+  text-align: center;
+  border-bottom: 1px solid #e4e7ed;
+  cursor: pointer;
+}
+
+.collapsed-toggle:hover {
+  background: #ecf5ff;
+}
+
+.expand-btn {
+  font-size: 16px;
+  font-weight: bold;
+  color: #409eff !important;
+}
+
+.collapsed-section-title {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  padding: 8px 0;
+  text-align: center;
+  font-size: 12px;
+  color: #909399;
+  font-weight: 500;
+  background: #f0f2f5;
+  margin: 4px;
+  border-radius: 4px;
+}
+
+.collapsed-scene-selector {
+  padding: 8px 0;
+}
+
+.collapsed-scene-item {
+  margin: 4px;
+  padding: 8px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  position: relative;
+  text-align: center;
+}
+
+.collapsed-scene-item:hover {
+  background: #ecf5ff;
+  transform: translateX(2px);
+}
+
+.collapsed-scene-item.active {
+  background: #409eff;
+  color: white;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.3);
+}
+
+.scene-short-name {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  word-break: break-all;
+}
+
+.scene-active-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  background: #67c23a;
+  border-radius: 50%;
+  border: 1px solid white;
+}
+
+.collapsed-separator {
+  height: 1px;
+  background: #e4e7ed;
+  margin: 8px 4px;
+}
+
+.collapsed-layers {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.collapsed-layer-item {
+  margin: 4px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  position: relative;
+  text-align: center;
+}
+
+.collapsed-layer-item:hover {
+  background: #ecf5ff;
+  transform: translateX(2px);
+}
+
+.collapsed-layer-item.active {
+  background: #409eff;
+  color: white;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.3);
+}
+
+.collapsed-layer-item.invisible {
+  opacity: 0.5;
+  background: #f5f7fa;
+}
+
+.layer-short-name {
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+  word-break: break-all;
+}
+
+.layer-active-dot {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 6px;
+  height: 6px;
+  background: #67c23a;
+  border-radius: 50%;
+  border: 1px solid white;
+}
+
+.layer-invisible-dot {
+  position: absolute;
+  bottom: 1px;
+  right: 1px;
+  width: 6px;
+  height: 6px;
+  background: #f56c6c;
+  border-radius: 50%;
+  border: 1px solid white;
 }
 
 .layer-card-body {
@@ -1326,17 +1758,7 @@ export default {
   text-align: right;
 }
 
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .desktop-only {
-    display: none !important;
-  }
-  
-  .mobile-only {
-    display: block !important;
-  }
-}
-
+/* 🔥 桌面端面板收缩功能样式加强 */
 @media (min-width: 769px) {
   .desktop-only {
     display: block !important;
@@ -1344,6 +1766,221 @@ export default {
   
   .mobile-only {
     display: none !important;
+  }
+  
+  .layer-panel {
+    width: 350px !important;
+    transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+  }
+  
+  .layer-panel.collapsed {
+    width: 48px !important;
+    min-width: 48px !important;
+    max-width: 48px !important;
+  }
+  
+  .map-container-wrapper {
+    transition: margin-left 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  }
+  
+  /* 确保收起状态下内容正确显示 */
+  .layer-panel.collapsed .panel-content {
+    display: none !important;
+  }
+  
+  .layer-panel.collapsed .collapsed-content {
+    display: flex !important;
+    flex-direction: column;
+    height: 100%;
+  }
+  
+  /* 🔥 确保桌面端操作按钮始终可见 */
+  .layer-actions {
+    opacity: 1 !important;
+    display: flex !important;
+  }
+  
+  .layer-actions .el-button {
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+}
+
+/* 🔥 移动端浮动按钮样式 */
+.mobile-layer-toggle {
+  position: absolute;
+  bottom: 80px;
+  right: 20px;
+  z-index: 1000;
+  box-shadow: 0 4px 16px rgba(64, 158, 255, 0.3);
+}
+
+.mobile-layer-toggle .el-button {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, #409eff, #67c23a);
+  border: none;
+  box-shadow: 0 4px 16px rgba(64, 158, 255, 0.4);
+}
+
+.mobile-layer-toggle .el-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.5);
+}
+
+/* 🔥 移动端抽屉样式 */
+.mobile-layer-drawer {
+  z-index: 1500;
+}
+
+.mobile-layer-drawer :deep(.el-drawer) {
+  background: #f8f9fa;
+}
+
+.mobile-layer-drawer :deep(.el-drawer__header) {
+  margin-bottom: 0;
+  padding: 16px 20px;
+  background: linear-gradient(90deg, #fafbfc 0%, #f8f9fa 100%);
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.drawer-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.scene-selector.mobile {
+  padding: 16px 20px;
+  background: white;
+  margin: 0 0 16px 0;
+  border-radius: 8px;
+  margin: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.mobile-layer-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px;
+}
+
+.mobile-layer-item {
+  background: white;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.mobile-layer-item:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.mobile-layer-item .layer-header {
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(90deg, #fafbfc 0%, #fff 100%);
+}
+
+.mobile-layer-item .layer-info .layer-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.mobile-layer-item .layer-info .layer-type {
+  font-size: 12px;
+  color: #909399;
+}
+
+.mobile-layer-item .layer-controls {
+  padding: 16px;
+  border-top: 1px solid #f5f7fa;
+  background: #fafbfc;
+}
+
+.mobile-layer-item .opacity-control {
+  margin-bottom: 16px;
+}
+
+.mobile-layer-item .opacity-control span {
+  font-size: 12px;
+  color: #606266;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.mobile-layer-item .layer-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.mobile-layer-item .layer-actions .el-button {
+  flex: 1;
+}
+
+/* 🔥 手机端样式 */
+@media (max-width: 768px) {
+  /* 🔥 确保手机端没有白边和高度问题 */
+  .map-view {
+    height: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+  
+  .map-content {
+    height: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  .map-container-wrapper {
+    height: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  /* 隐藏桌面端侧边栏 */
+  .desktop-only {
+    display: none !important;
+  }
+  
+  /* 显示手机端组件 */
+  .mobile-only {
+    display: block !important;
+  }
+  
+  /* 🔥 确保Element Plus对话框在手机端能正确显示 */
+  :deep(.el-dialog__wrapper) {
+    z-index: 2000 !important;
+  }
+  
+  :deep(.el-overlay) {
+    z-index: 2000 !important;
+  }
+  
+  /* 地图容器占满全屏 */
+  .map-container-wrapper {
+    width: 100% !important;
+    margin-left: 0 !important;
   }
 }
 </style> 
