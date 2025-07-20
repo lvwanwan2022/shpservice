@@ -140,18 +140,18 @@
                   <div class="opacity-row">
                     <i class="el-icon-view opacity-icon"></i>
                     <span class="opacity-label">透明度</span>
+                    <el-slider
+                      :model-value="layer.opacity || 1"
+                      @update:model-value="val => updateLayerOpacity(layer, val)"
+                      :min="0"
+                      :max="1"
+                      :step="0.01"
+                      size="small"
+                      class="opacity-slider"
+                      :show-tooltip="false"
+                    />
                     <span class="opacity-value">{{ Math.round((layer.opacity || 1) * 100) }}%</span>
                   </div>
-                  <el-slider
-                    :model-value="layer.opacity || 1"
-                    @update:model-value="val => updateLayerOpacity(layer, val)"
-                    :min="0"
-                    :max="1"
-                    :step="0.01"
-                    size="small"
-                    class="opacity-slider"
-                    :show-tooltip="false"
-                  />
                 </div>
               </div>
             </div>
@@ -175,13 +175,14 @@
               class="expand-btn"
               title="展开面板"
             >
-              <span class="toggle-icon">》</span>
+            <span class="toggle-icon">》</span>
             </el-button>
           </div>
           
           <!-- 收起状态下的场景选择 -->
           <div class="collapsed-scene-selector" v-if="sceneList && sceneList.length > 0">
             <!-- 场景区域标题 -->
+             
             <div class="collapsed-section-title">场景</div>
             <div 
               v-for="scene in sceneList" 
@@ -216,8 +217,8 @@
               :title="`图层: ${layer.layer_name || layer.name || '未命名图层'}
 类型: ${getLayerTypeText(layer)}
 👆 点击选中此图层
-🔄 双击展开面板查看详情`"
-              @dblclick="toggleLayerPanel"
+🔄 双击缩放到图层范围`"
+              @dblclick="zoomToLayer(layer)"
             >
               <div class="layer-short-name">{{ (layer.layer_name || layer.name || '未命名').substring(0, 2) }}</div>
               <div v-if="currentActiveLayer && currentActiveLayer.scene_layer_id === layer.scene_layer_id" class="layer-active-dot"></div>
@@ -310,7 +311,7 @@
           
           <div v-if="layer.visible" class="layer-controls">
             <div class="opacity-control">
-              <span>透明度:</span>
+              <span>不透明度:</span>
               <el-slider
                 v-model="layer.opacity"
                 :min="0"
@@ -1103,13 +1104,181 @@ export default {
 }
 
 .panel-toggle-btn {
-  padding: 4px 8px;
-  min-height: auto;
+  padding: 4px 8px !important;
+  background: transparent;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.panel-toggle-btn:hover {
+  background: #ecf5ff;
+  border-color: #409eff;
 }
 
 .toggle-icon {
-  font-size: 12px;
+  font-size: 14px;
+  color: #606266;
   font-weight: bold;
+}
+
+.panel-toggle-btn:hover .toggle-icon {
+  color: #409eff;
+}
+
+/* 收起状态下的内容样式 */
+.collapsed-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #f8f9fa;
+}
+
+/* 收起状态下的场景选择样式 */
+.collapsed-scene-selector {
+  padding: 8px 0 5px 0;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.collapsed-section-title {
+  font-size: 8px;
+  color: #909399;
+  text-align: center;
+  margin-bottom: 4px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+.collapsed-scene-item {
+  position: relative;
+  height: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin: 1px 2px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 2px;
+  user-select: none;
+}
+
+.collapsed-scene-item:hover {
+  background: rgba(103, 194, 58, 0.1);
+  cursor: pointer;
+}
+
+.collapsed-scene-item:active {
+  transform: scale(0.95);
+  background: rgba(103, 194, 58, 0.2);
+}
+
+.collapsed-scene-item.active {
+  background: rgba(103, 194, 58, 0.15);
+  border-left: 3px solid #67c23a;
+}
+
+.scene-short-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #67c23a;
+  text-align: center;
+  line-height: 1.1;
+  max-width: 36px;
+  word-break: break-all;
+  padding: 0 2px;
+}
+
+.collapsed-scene-item.active .scene-short-name {
+  color: #5ca632;
+}
+
+.scene-active-dot {
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #67c23a;
+}
+
+/* 分隔线样式 */
+.collapsed-separator {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e4e7ed 20%, #e4e7ed 80%, transparent);
+  margin: 5px 4px;
+}
+
+.collapsed-layers {
+  flex: 1;
+  overflow-y: auto;
+  padding: 5px 0;
+}
+
+.collapsed-layer-item {
+  position: relative;
+  height: 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 1px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 2px;
+  margin: 1px 2px;
+  user-select: none; /* 防止双击时选中文本 */
+}
+
+.collapsed-layer-item:hover {
+  background: rgba(64, 158, 255, 0.1);
+  cursor: pointer;
+}
+
+/* 双击时的反馈效果 */
+.collapsed-layer-item:active {
+  transform: scale(0.95);
+  background: rgba(64, 158, 255, 0.2);
+}
+
+/* 双击动画效果 */
+@keyframes dblclick-zoom {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
+.collapsed-layer-item.zoom-animation {
+  animation: dblclick-zoom 0.2s ease-in-out;
+}
+
+.collapsed-layer-item.active {
+  background: rgba(64, 158, 255, 0.15);
+  border-left: 3px solid #409eff;
+}
+
+.collapsed-layer-item.invisible {
+  opacity: 0.5;
+}
+.collapsed-toggle {
+  height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  border-bottom: 1px solid #e4e7ed;
+  background: #f5f7fa;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.collapsed-toggle:hover {
+  background: #e6f1fc;
 }
 
 .scene-selector {
@@ -1132,62 +1301,45 @@ export default {
 }
 
 .layer-card {
+  /* CSS变量定义 - 与OpenLayers保持一致 */
+  --layer-card-spacing: 4px;
+  --layer-card-padding: 6px 10px;
+  --layer-card-border-radius: 6px;
+  --layer-info-spacing: 2px;
+  --tag-padding: 0px 4px;
+
+  background: white;
   border: 1px solid #e4e7ed;
-  border-radius: 12px;
-  background: #fff;
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  border-radius: var(--layer-card-border-radius);
+  margin-bottom: var(--layer-card-spacing);
   cursor: pointer;
-  margin-bottom: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: all 0.25s ease;
   position: relative;
-  overflow: hidden;
 }
 
-.layer-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 4px;
-  height: 100%;
-  background: transparent;
-  transition: background 0.3s ease;
-}
 
 .layer-card:hover {
-  border-color: #409eff;
-  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.15);
-  transform: translateY(-2px);
-}
-
-.layer-card:hover::before {
-  background: #409eff;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.08);
+  border-color: #c6e2ff;
 }
 
 .layer-card.active {
   border-color: #409eff;
-  box-shadow: 0 8px 25px rgba(64, 158, 255, 0.2);
-  background: linear-gradient(135deg, #f0f9ff 0%, #e1f3ff 100%);
-}
-
-.layer-card.active::before {
-  background: #409eff;
+  box-shadow: 0 1px 8px rgba(64, 158, 255, 0.15);
 }
 
 .layer-card.invisible {
   opacity: 0.6;
-  background: linear-gradient(135deg, #f8f9fa 0%, #f5f7fa 100%);
-  filter: grayscale(0.3);
 }
 
 .layer-card-header {
-  padding: 12px 16px;
+  padding: var(--layer-card-padding);
   display: flex;
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid #f5f7fa;
-  background: linear-gradient(90deg, #fafbfc 0%, #fff 100%);
-  border-radius: 12px 12px 0 0;
+  background: white;
+  border-radius: var(--layer-card-border-radius) var(--layer-card-border-radius) 0 0;
 }
 
 .layer-title {
@@ -1232,20 +1384,20 @@ export default {
 }
 
 .layer-card-info {
-  padding: 8px 16px 12px;
+  padding: var(--layer-card-padding);
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--layer-info-spacing);
   border-bottom: 1px solid #f5f7fa;
 }
 
 .tag {
   display: inline-block;
-  padding: 2px 8px;
-  background: #f0f2f5;
-  color: #606266;
-  font-size: 11px;
-  border-radius: 12px;
+  padding: var(--tag-padding);
+  background: #f5f7fa;
+  color: #4e5969;
+  font-size: 12px;
+  border-radius: 4px;
   white-space: nowrap;
 }
 
@@ -1281,39 +1433,43 @@ export default {
 
 /* 🔥 透明度控制样式 */
 .layer-opacity-control {
-  padding: 8px 16px 12px;
+  padding: var(--layer-card-padding);
   background: #fafbfc;
-  border-radius: 0 0 12px 12px;
+  border-radius: 0 0 var(--layer-card-border-radius) var(--layer-card-border-radius);
 }
 
 .opacity-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  width: 100%;
 }
 
 .opacity-icon {
   color: #909399;
-  font-size: 14px;
+  font-size: 12px;
+  flex-shrink: 0;
 }
 
 .opacity-label {
-  font-size: 12px;
+  font-size: 11px;
   color: #606266;
-  flex: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .opacity-value {
-  font-size: 12px;
+  font-size: 11px;
   color: #409eff;
   font-weight: 500;
-  min-width: 35px;
+  min-width: 30px;
   text-align: right;
+  flex-shrink: 0;
 }
 
 .opacity-slider {
-  margin: 0;
+  flex: 1;
+  margin: 0 8px;
 }
 
 .opacity-slider :deep(.el-slider__runway) {
@@ -1333,74 +1489,32 @@ export default {
   background: #fff;
 }
 
-/* 🔥 收起状态样式 */
-.collapsed-content {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  width: 48px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  margin: 4px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-}
 
-.collapsed-toggle {
-  padding: 12px;
-  text-align: center;
-  border-bottom: 1px solid #e4e7ed;
-  cursor: pointer;
-}
 
-.collapsed-toggle:hover {
-  background: #ecf5ff;
-}
-
-.expand-btn {
-  font-size: 16px;
-  font-weight: bold;
-  color: #409eff !important;
-}
 
 .collapsed-section-title {
-  writing-mode: vertical-rl;
+  writing-mode: horizontal-tb;
   text-orientation: mixed;
-  padding: 8px 0;
+  padding: 4px 2px;
   text-align: center;
-  font-size: 12px;
+  font-size: 10px;
   color: #909399;
   font-weight: 500;
   background: #f0f2f5;
-  margin: 4px;
+  margin: 1px;
   border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .collapsed-scene-selector {
   padding: 8px 0;
 }
 
-.collapsed-scene-item {
-  margin: 4px;
-  padding: 8px 4px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background: white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  position: relative;
-  text-align: center;
-}
 
-.collapsed-scene-item:hover {
-  background: #ecf5ff;
-  transform: translateX(2px);
-}
 
-.collapsed-scene-item.active {
-  background: #409eff;
-  color: white;
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.3);
-}
+
 
 .scene-short-name {
   font-size: 11px;
@@ -1560,19 +1674,30 @@ export default {
   font-size: 12px;
 }
 
-/* 收起状态 */
-.collapsed-toggle {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  transform: translateY(-50%);
-  z-index: 1001;
-}
+
 
 .expand-btn {
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  padding: 8px 4px;
+  padding: 8px 12px !important;
+  background: transparent;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.expand-btn:hover {
+  background: #ecf5ff;
+  border-color: #409eff;
+}
+
+.expand-btn .toggle-icon {
+  font-size: 16px;
+  color: #606266;
+  font-weight: bold;
+}
+
+.expand-btn:hover .toggle-icon {
+  color: #409eff;
 }
 
 /* 地图区域 */
@@ -1983,4 +2108,4 @@ export default {
     margin-left: 0 !important;
   }
 }
-</style> 
+</style>

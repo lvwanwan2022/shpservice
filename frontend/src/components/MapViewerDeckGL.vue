@@ -1336,7 +1336,9 @@ export default {
   height: 100%;
   position: relative;
 }
-
+.el-button+.el-button {
+    margin-left: 0px;
+}
 /* 确保Deck.gl生成的canvas元素正确定位在容器内 */
 .map-container canvas {
   position: relative !important;
