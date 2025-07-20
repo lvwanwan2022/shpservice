@@ -106,8 +106,9 @@ export default {
     initialView: {
       type: Object,
       default: () => ({
-        longitude: 116.4074,
-        latitude: 39.9042,
+        //[104.0667, 30.6667]), // 成都坐标
+        longitude: 104.0667,
+        latitude: 30.6667,
         zoom: 10
       })
     }
@@ -131,12 +132,21 @@ export default {
       lat: 0
     })
     
+    // 自定义tooltip状态
+    const tooltipState = ref({
+      visible: false,
+      content: '',
+      x: 0,
+      y: 0,
+      timeout: null
+    })
+    
     // 当前底图 - 参考OpenLayers的配置，支持三维模式
     const currentBaseMap = ref({
-      key: 'osm',
-      name: 'OpenStreetMap',
-      url: 'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      attribution: '© OpenStreetMap contributors',
+      key: 'gaode',
+      name: '高德地图',
+      url: 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+      attribution: '© 高德地图',
       is3D: false
     })
     
@@ -188,6 +198,85 @@ export default {
           onHover: (info) => {
             try {
               updateMouseCoordinates(info)
+              
+              // 清除之前的定时器
+              if (tooltipState.value.timeout) {
+                clearTimeout(tooltipState.value.timeout)
+                tooltipState.value.timeout = null
+              }
+              
+              if (info.object && info.object.properties) {
+                // 有要素时显示手型指针
+                document.body.style.cursor = 'pointer'
+                
+                // 构建tooltip内容
+                const layerInfo = info.object.layerInfo || {}
+                const properties = info.object.properties
+                
+                // 过滤有效的属性
+                const filteredProperties = Object.entries(properties)
+                  .filter(([key, value]) => {
+                    if (key === 'geometry' || key === 'geom') return false
+                    if (value == null || value === 'NULL' || value === '') return false
+                    if (typeof value === 'object') return false
+                    return true
+                  })
+                  .slice(0, 6)
+                
+                let content = `<div style="max-width: 300px; font-family: 'Microsoft YaHei', sans-serif;">
+                  <div style="margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.3);">
+                    <strong style="color: #fff;">${layerInfo.layerName || '图层'}</strong>
+                    <small style="background: rgba(255,255,255,0.2); padding: 1px 4px; border-radius: 2px; font-size: 10px; margin-left: 4px;">
+                      ${layerInfo.fileType?.toUpperCase() || 'MVT'}
+                    </small>
+                  </div>`
+                
+                if (filteredProperties.length === 0) {
+                  content += '<div style="color: rgba(255,255,255,0.7); font-style: italic; font-size: 12px;">暂无属性信息</div>'
+                } else {
+                  filteredProperties.forEach(([key, value]) => {
+                    let displayKey = key.length > 12 ? key.substring(0, 12) + '...' : key
+                    let displayValue = String(value).length > 20 ? String(value).substring(0, 20) + '...' : value
+                    
+                    if (typeof value === 'number' && value % 1 !== 0) {
+                      displayValue = Number(value).toFixed(3)
+                    }
+                    
+                    content += `
+                      <div style="margin-bottom: 4px; font-size: 12px; display: flex;">
+                        <span style="color: rgba(255,255,255,0.8); margin-right: 8px; min-width: 60px; font-weight: 500;">${displayKey}：</span>
+                        <span style="color: #fff; flex: 1;">${displayValue}</span>
+                      </div>
+                    `
+                  })
+                  
+                  const totalProperties = Object.keys(properties).length - 2
+                  if (totalProperties > 6) {
+                    content += `<div style="margin-top: 6px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.3); color: rgba(255,255,255,0.6); font-style: italic; font-size: 10px; text-align: center;">共 ${totalProperties} 个属性</div>`
+                  }
+                }
+                
+                content += '</div>'
+                
+                // 设置tooltip位置（靠近鼠标）
+                tooltipState.value = {
+                  visible: true,
+                  content: content,
+                  x: info.x + 15, // 向右偏移15px
+                  y: info.y - 10, // 向上偏移10px
+                  timeout: null
+                }
+                
+                // 设置3秒后自动隐藏
+                tooltipState.value.timeout = setTimeout(() => {
+                  tooltipState.value.visible = false
+                }, 3000)
+                
+              } else {
+                // 无要素时恢复默认指针并隐藏tooltip
+                document.body.style.cursor = 'default'
+                tooltipState.value.visible = false
+              }
             } catch (error) {
               console.warn('鼠标悬停处理出错，已忽略:', error)
               // 不抛出错误，避免视口锁定
@@ -201,13 +290,79 @@ export default {
               // 不抛出错误，避免视口锁定
             }
           },
-          getTooltip: ({ object }) => object && {
-            html: `<div>${object.properties?.name || 'Feature'}</div>`,
-            style: {
-              backgroundColor: 'rgba(0, 0, 0, 0.8)',
-              color: 'white',
-              padding: '8px',
-              borderRadius: '4px'
+          getTooltip: ({ object }) => {
+            if (!object || !object.properties) return null
+            
+            // 获取图层信息
+            const layerInfo = object.layerInfo || {}
+            const properties = object.properties
+            
+            // 过滤有效的属性
+            const filteredProperties = Object.entries(properties)
+              .filter(([key, value]) => {
+                // 排除几何相关和内部属性
+                if (key === 'geometry' || key === 'geom') return false
+                if (value == null || value === 'NULL' || value === '') return false
+                if (typeof value === 'object') return false
+                return true
+              })
+              .slice(0, 6) // 限制显示前6个属性
+            
+            // 构建tooltip内容
+            let content = `<div style="max-width: 300px; font-family: 'Microsoft YaHei', sans-serif;">
+              <div style="margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.3);">
+                <strong style="color: #fff;">${layerInfo.layerName || '图层'}</strong>
+                <small style="background: rgba(255,255,255,0.2); padding: 1px 4px; border-radius: 2px; font-size: 10px; margin-left: 4px;">
+                  ${layerInfo.fileType?.toUpperCase() || 'MVT'}
+                </small>
+              </div>`
+            
+            if (filteredProperties.length === 0) {
+              content += '<div style="color: rgba(255,255,255,0.7); font-style: italic; font-size: 12px;">暂无属性信息</div>'
+            } else {
+              filteredProperties.forEach(([key, value]) => {
+                // 格式化属性名和值
+                let displayKey = key.length > 12 ? key.substring(0, 12) + '...' : key
+                let displayValue = String(value).length > 20 ? String(value).substring(0, 20) + '...' : value
+                
+                // 特殊格式化数字
+                if (typeof value === 'number' && value % 1 !== 0) {
+                  displayValue = Number(value).toFixed(3)
+                }
+                
+                content += `
+                  <div style="margin-bottom: 4px; font-size: 12px; display: flex;">
+                    <span style="color: rgba(255,255,255,0.8); margin-right: 8px; min-width: 60px; font-weight: 500;">${displayKey}：</span>
+                    <span style="color: #fff; flex: 1;">${displayValue}</span>
+                  </div>
+                `
+              })
+              
+              const totalProperties = Object.keys(properties).length - 2 // 排除geometry等
+              if (totalProperties > 6) {
+                content += `<div style="margin-top: 6px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.3); color: rgba(255,255,255,0.6); font-style: italic; font-size: 10px; text-align: center;">共 ${totalProperties} 个属性</div>`
+              }
+            }
+            
+            content += '</div>'
+            
+            return {
+              html: content,
+              style: {
+                backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                color: 'white',
+                padding: '10px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                lineHeight: '1.4',
+                maxWidth: '320px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                border: '1px solid rgba(255,255,255,0.1)'
+              },
+              // 设置tooltip位置偏移，让弹出框更靠近鼠标
+              offset: [10, 10],
+              // 设置tooltip停留时间（毫秒）
+              timeout: 3000
             }
           }
         })
@@ -1038,33 +1193,43 @@ export default {
         })
         
         const { longitude, latitude } = position.coords
+        console.log('🔥 用户定位坐标:', { longitude, latitude })
         
         if (deckgl.value) {
           // 获取当前视图状态并保持三维模式的pitch
           const currentViewState = deckgl.value.viewState
+          console.log('🔥 当前视图状态:', currentViewState)
+          
           const pitch = is3DModeEnabled.value ? (currentViewState.pitch || 45) : 0
           
-          // 使用一次性视图变更到用户位置，不锁定视口
+          // 使用正确的viewState属性进行动画过渡
+          const targetViewState = {
+            longitude,
+            latitude,
+            zoom: 15,
+            pitch,
+            bearing: currentViewState.bearing || 0,
+            transitionDuration: 1500, // 增加动画时间，更平滑
+            transitionInterpolator: null
+          }
+          
+          console.log('🔥 目标视图状态:', targetViewState)
+          
+          // 设置目标视图状态，让DeckGL进行动画过渡
           deckgl.value.setProps({
-            viewState: {
-              longitude,
-              latitude,
-              zoom: 15,
-              pitch,
-              bearing: currentViewState.bearing || 0,
-              transitionDuration: 1000,
-              transitionInterpolator: null
-            }
+            viewState: targetViewState
           })
           
-          // 立即移除viewState控制，避免锁定
+          // 在动画完成后释放viewState控制，让用户可以自由交互
           setTimeout(() => {
             if (deckgl.value) {
+              console.log('🔥 定位动画完成，释放视图状态控制')
+              // 移除viewState控制，让控制器接管
               deckgl.value.setProps({
-                viewState: undefined // 移除viewState控制
+                viewState: undefined
               })
             }
-          }, 1100) // 稍晚于动画完成时间
+          }, 1600) // 等待动画完成
           
           userLocationVisible.value = true
           ElMessage.success('定位成功')

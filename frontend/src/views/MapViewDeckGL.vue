@@ -239,96 +239,170 @@
           @layers-cache-toggle="toggleLayersCache"
         />
         
-        <!-- 移动端图层管理按钮 -->
-        <div class="mobile-layer-toggle mobile-only">
-          <el-button 
-            type="primary" 
-            circle 
-            size="large"
-            @click="showMobileLayerPanel"
-          >
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-              <path d="M3,2H21V2H21V4H20V3H4V20H3V2M5,6V18H19V8H21V18A2,2 0 0,1 19,20H5A2,2 0 0,1 3,18V6A2,2 0 0,1 5,4H19A2,2 0 0,1 21,6H5M6,9H18V11H6V9M6,12H16V14H6V12M6,15H14V17H6V15Z"/>
-            </svg>
-          </el-button>
+        <!-- 🔥 手机端底部浮动按钮 -->
+        <div class="mobile-layer-fab" @click="toggleMobileDrawer">
+          <div class="fab-content">
+            <i class="el-icon-menu"></i>
+            <span class="fab-text">图层</span>
+            <div class="fab-badge" v-if="layersList && layersList.length > 0">
+              {{ layersList.length }}
+            </div>
+          </div>
         </div>
       </div>
     </div>
     
-    <!-- 移动端图层面板抽屉 -->
-    <el-drawer
-      v-model="mobileLayerPanelVisible"
-      direction="ltr"
-      :size="280"
-      :show-close="false"
-      class="mobile-layer-drawer"
-    >
-      <template #header>
-        <div class="drawer-header">
-          <h4>图层管理</h4>
-          <el-button size="small" @click="showAddLayerDialog">
-            <i class="el-icon-plus"></i> 添加
-          </el-button>
-        </div>
-      </template>
-      
-      <!-- 场景选择 -->
-      <div class="scene-selector mobile">
-        <el-select 
-          v-model="selectedSceneId" 
-          placeholder="选择场景" 
-          @change="onSceneChange"
-          style="width: 100%"
-          size="small"
-        >
-          <el-option
-            v-for="scene in sceneList"
-            :key="scene.id"
-            :label="scene.name"
-            :value="scene.id"
-          />
-        </el-select>
-      </div>
-      
-      <!-- 图层列表 - 移动端版本 -->
-      <div class="mobile-layer-list">
-        <div 
-          v-for="layer in sortedLayersList" 
-          :key="layer.id" 
-          class="mobile-layer-item"
-        >
-          <div class="layer-header">
-            <div class="layer-info">
-              <div class="layer-name">{{ layer.name || '未命名图层' }}</div>
-              <div class="layer-type">{{ getLayerTypeText(layer) }}</div>
+    <!-- 🔥 手机端抽屉式图层面板 -->
+    <div class="mobile-drawer-overlay mobile-only" :class="{ 'show': mobileDrawerVisible }" @click="closeMobileDrawer">
+      <div class="mobile-drawer" :class="{ 'show': mobileDrawerVisible }" @click.stop>
+        <!-- 抽屉头部 -->
+        <div class="mobile-drawer-header">
+          <div class="drawer-handle"></div>
+          <div class="drawer-title">
+            <h3>图层管理</h3>
+            <div class="drawer-actions">
+              <el-button type="primary" size="small" @click="showAddLayerDialog">
+                <i class="el-icon-plus"></i>
+                <span>添加图层</span>
+              </el-button>
             </div>
-            <el-switch
-              v-model="layer.visible"
-              size="small"
-              @change="toggleLayerVisibility(layer)"
-            />
+          </div>
+        </div>
+        
+        <!-- 抽屉内容 -->
+        <div class="mobile-drawer-content">
+          <!-- 场景选择标签页 -->
+          <div class="mobile-tabs">
+            <div 
+              class="mobile-tab" 
+              :class="{ 'active': mobileActiveTab === 'scene' }"
+              @click="mobileActiveTab = 'scene'"
+            >
+              <i class="el-icon-folder"></i>
+              <span>场景</span>
+            </div>
+            <div 
+              class="mobile-tab" 
+              :class="{ 'active': mobileActiveTab === 'layers' }"
+              @click="mobileActiveTab = 'layers'"
+            >
+              <i class="el-icon-menu"></i>
+              <span>图层</span>
+              <div class="tab-badge" v-if="layersList && layersList.length > 0">
+                {{ layersList.length }}
+              </div>
+            </div>
           </div>
           
-          <div v-if="layer.visible" class="layer-controls">
-            <div class="opacity-control">
-              <span>不透明度:</span>
-              <el-slider
-                v-model="layer.opacity"
-                :min="0"
-                :max="100"
-                :step="10"
-                size="small"
-                @change="updateLayerOpacity(layer)"
-              />
+          <!-- 场景选择内容 -->
+          <div class="mobile-tab-content" v-show="mobileActiveTab === 'scene'">
+            <div class="mobile-scene-list">
+              <div 
+                v-for="scene in sceneList" 
+                :key="scene.id"
+                class="mobile-scene-item"
+                :class="{ 'active': selectedSceneId === scene.id }"
+                @click="selectMobileScene(scene.id)"
+              >
+                <div class="scene-info">
+                  <h4>{{ scene.name }}</h4>
+                  <p>{{ scene.description || '暂无描述' }}</p>
+                </div>
+                <div class="scene-meta">
+                  <el-tag v-if="scene.is_public" type="success" size="small">公开</el-tag>
+                  <el-tag v-else type="warning" size="small">私有</el-tag>
+                </div>
+              </div>
+              
+              <!-- 场景空状态 -->
+              <div v-if="!sceneList || sceneList.length === 0" class="mobile-empty">
+                <i class="el-icon-folder"></i>
+                <p>暂无场景</p>
+              </div>
             </div>
-            <div class="layer-actions">
-              <el-button size="small" @click="zoomToLayer(layer)">定位</el-button>
-              <el-button size="small" type="danger" @click="removeLayer(layer)">删除</el-button>
+          </div>
+          
+          <!-- 图层列表内容 -->
+          <div class="mobile-tab-content" v-show="mobileActiveTab === 'layers'">
+            <div class="mobile-layer-list">
+              <div 
+                v-for="layer in sortedLayersList" 
+                :key="layer.scene_layer_id || layer.id"
+                class="mobile-layer-item"
+                :class="{ 
+                  'active': currentActiveLayer && currentActiveLayer.scene_layer_id === layer.scene_layer_id,
+                  'invisible': !layer.visibility
+                }"
+                @click="selectLayer(layer)"
+              >
+                <div class="layer-main-info">
+                  <div class="layer-header">
+                    <el-checkbox 
+                      v-model="layer.visibility" 
+                      @change="toggleLayerVisibility(layer)"
+                      @click.stop
+                    />
+                    <span class="layer-name">{{ layer.layer_name }}</span>
+                    <i v-if="currentActiveLayer && currentActiveLayer.scene_layer_id === layer.scene_layer_id" 
+                       class="el-icon-location active-indicator"></i>
+                  </div>
+                  
+                  <div class="layer-tags">
+                    <span class="tag">{{ layer.file_type }}</span>
+                    <span class="tag">{{ layer.discipline }}</span>
+                    <span v-if="layer.service_type" class="tag" :class="getServiceTypeClass(layer.service_type)">
+                      {{ getServiceTypeText(layer) }}
+                    </span>
+                  </div>
+                  
+                  <!-- 移动端透明度控制 -->
+                  <div class="mobile-opacity-control" @click.stop>
+                    <span class="opacity-label">透明度</span>
+                    <el-slider
+                      v-model="layer.opacity"
+                      :min="0"
+                      :max="1"
+                      :step="0.1"
+                      :show-tooltip="false"
+                      size="small"
+                      @input="updateLayerOpacity(layer)"
+                      class="mobile-opacity-slider"
+                    />
+                    <span class="opacity-value">{{ Math.round((layer.opacity || 1) * 100) }}%</span>
+                  </div>
+                </div>
+                
+                <div class="layer-actions">
+                  <el-button size="small" @click.stop="zoomToLayer(layer)" title="缩放到图层" class="action-btn zoom-btn">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                      <path d="M15.5 14h-.79l-.28-.27A6.5 6.5 0 1 0 13 15.5l.27.28v.79l5 4.99L19.49 20l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/>
+                      <path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/>
+                    </svg>
+                  </el-button>
+                  <el-button size="small" @click.stop="showStyleDialog(layer)" title="样式设置" class="action-btn style-btn">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                      <path d="M12,2A2,2 0 0,1 14,4C14,4.74 13.6,5.39 13,5.73V7H14A7,7 0 0,1 21,14H22A1,1 0 0,1 23,15V18A1,1 0 0,1 22,19H21V20A2,2 0 0,1 19,22H5A2,2 0 0,1 3,20V19H2A1,1 0 0,1 1,18V15A1,1 0 0,1 2,14H3A7,7 0 0,1 10,7H11V5.73C10.4,5.39 10,4.74 10,4A2,2 0 0,1 12,2M7.5,13A2.5,2.5 0 0,0 5,15.5A2.5,2.5 0 0,0 7.5,18A2.5,2.5 0 0,0 10,15.5A2.5,2.5 0 0,0 7.5,13M16.5,13A2.5,2.5 0 0,0 14,15.5A2.5,2.5 0 0,0 16.5,18A2.5,2.5 0 0,0 19,15.5A2.5,2.5 0 0,0 16.5,13Z"/>
+                    </svg>
+                  </el-button>
+                  <el-button size="small" @click.stop="removeLayer(layer)" title="删除图层" class="action-btn delete-btn">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                      <path d="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z"/>
+                    </svg>
+                  </el-button>
+                </div>
+              </div>
+              
+              <!-- 图层空状态 -->
+              <div v-if="!layersList || layersList.length === 0" class="mobile-empty">
+                <i class="el-icon-map-location"></i>
+                <p>当前场景暂无图层</p>
+                <el-button type="primary" @click="showAddLayerDialog">添加图层</el-button>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </el-drawer>
+    </div>
     
     <!-- 添加图层对话框 -->
     <el-dialog title="添加图层" v-model="addLayerDialogVisible" :width="isMobile ? '95%' : '800px'" :fullscreen="isMobile">
@@ -438,7 +512,14 @@ export default {
     const mapViewer = ref(null)
     const deckglMap = ref(null)
     const layerPanelCollapsed = ref(false)
-    const mobileLayerPanelVisible = ref(false)
+    // 🔥 手机端抽屉相关状态
+    const mobileDrawerVisible = ref(false)
+    const mobileActiveTab = ref('layers') // 'scene' or 'layers'
+    
+    // 🔥 拖拽手柄相关状态
+    const isDragging = ref(false)
+    const dragStartY = ref(0)
+    const drawerStartY = ref(0)
     const addLayerDialogVisible = ref(false)
     const loadingLayers = ref(false)
     const layersCacheEnabled = ref(true)
@@ -489,8 +570,129 @@ export default {
     }
     
     // 显示移动端图层面板
-    const showMobileLayerPanel = () => {
-      mobileLayerPanelVisible.value = true
+    // 🔥 手机端抽屉控制方法
+    const toggleMobileDrawer = () => {
+      mobileDrawerVisible.value = !mobileDrawerVisible.value
+      // 默认显示图层标签页
+      if (mobileDrawerVisible.value) {
+        mobileActiveTab.value = 'layers'
+      }
+    }
+    
+    const closeMobileDrawer = () => {
+      mobileDrawerVisible.value = false
+      // 重置拖拽状态
+      isDragging.value = false
+      dragStartY.value = 0
+      drawerStartY.value = 0
+    }
+    
+    const selectMobileScene = (sceneId) => {
+      // 选择场景后自动切换到图层标签页
+      onSceneChange(sceneId)
+      mobileActiveTab.value = 'layers'
+    }
+    
+    // 🔥 拖拽手柄事件处理
+    const handleDrawerHandleClick = () => {
+      // 点击拖拽手柄直接关闭抽屉
+      closeMobileDrawer()
+    }
+    
+    const handleDrawerDragStart = (event) => {
+      isDragging.value = true
+      
+      // 支持触摸和鼠标事件
+      const clientY = event.touches ? event.touches[0].clientY : event.clientY
+      dragStartY.value = clientY
+      
+      // 获取抽屉当前位置
+      const drawer = event.target.closest('.mobile-drawer')
+      if (drawer) {
+        const rect = drawer.getBoundingClientRect()
+        drawerStartY.value = rect.top
+      }
+      
+      // 阻止默认行为和事件冒泡
+      event.preventDefault()
+      event.stopPropagation()
+      
+      // 添加全局事件监听器
+      if (event.touches) {
+        document.addEventListener('touchmove', handleDrawerDragMove, { passive: false })
+        document.addEventListener('touchend', handleDrawerDragEnd, { once: true })
+      } else {
+        document.addEventListener('mousemove', handleDrawerDragMove)
+        document.addEventListener('mouseup', handleDrawerDragEnd, { once: true })
+      }
+    }
+    
+    const handleDrawerDragMove = (event) => {
+      if (!isDragging.value) return
+      
+      // 支持触摸和鼠标事件
+      const clientY = event.touches ? event.touches[0].clientY : event.clientY
+      const deltaY = clientY - dragStartY.value
+      
+      // 只有向下拖拽才有效果
+      if (deltaY > 10) {
+        // 计算透明度，越往下拖越透明
+        const opacity = Math.max(0.3, 1 - (deltaY / 200))
+        
+        // 获取抽屉元素并应用样式
+        const drawer = document.querySelector('.mobile-drawer')
+        if (drawer) {
+          drawer.style.transform = `translateY(${deltaY}px)`
+          drawer.style.opacity = opacity.toString()
+        }
+        
+        // 如果拖拽距离超过阈值，准备关闭
+        if (deltaY > 100) {
+          const overlay = document.querySelector('.mobile-drawer-overlay')
+          if (overlay) {
+            overlay.style.opacity = (1 - (deltaY - 100) / 100).toString()
+          }
+        }
+      }
+      
+      // 阻止默认行为
+      event.preventDefault()
+    }
+    
+    const handleDrawerDragEnd = (event) => {
+      if (!isDragging.value) return
+      
+      // 支持触摸和鼠标事件
+      const clientY = event.touches ? 
+        (event.changedTouches ? event.changedTouches[0].clientY : dragStartY.value) : 
+        event.clientY
+      const deltaY = clientY - dragStartY.value
+      
+      // 移除全局事件监听器
+      document.removeEventListener('touchmove', handleDrawerDragMove)
+      document.removeEventListener('mousemove', handleDrawerDragMove)
+      
+      // 重置样式
+      const drawer = document.querySelector('.mobile-drawer')
+      if (drawer) {
+        drawer.style.transform = ''
+        drawer.style.opacity = ''
+      }
+      
+      const overlay = document.querySelector('.mobile-drawer-overlay')
+      if (overlay) {
+        overlay.style.opacity = ''
+      }
+      
+      // 如果向下拖拽距离足够，关闭抽屉
+      if (deltaY > 80) {
+        closeMobileDrawer()
+      }
+      
+      // 重置拖拽状态
+      isDragging.value = false
+      dragStartY.value = 0
+      drawerStartY.value = 0
     }
     
     // 切换图层可见性
@@ -527,6 +729,12 @@ export default {
     // 显示样式设置对话框
     const showStyleDialog = (layer) => {
       console.log('显示样式设置对话框:', layer.layer_name)
+      
+      // 🔥 手机端：样式设置后自动关闭图层管理抽屉
+      if (isMobile.value && mobileDrawerVisible.value) {
+        closeMobileDrawer()
+      }
+      
       ElMessage.info('样式设置功能开发中...')
       // TODO: 实现样式设置对话框
     }
@@ -689,6 +897,11 @@ export default {
           
           // 设置当前活动图层
           currentActiveLayer.value = layer
+          
+          // 🔥 手机端：缩放后自动关闭图层管理抽屉
+          if (isMobile.value && mobileDrawerVisible.value) {
+            closeMobileDrawer()
+          }
           
           ElMessage.success(`已缩放到图层"${layer.layer_name}"范围 (${originalCRS})`)
         }
@@ -963,7 +1176,17 @@ export default {
       
       // 响应式数据
       layerPanelCollapsed,
-      mobileLayerPanelVisible,
+      // 🔥 手机端抽屉相关
+      mobileDrawerVisible,
+      mobileActiveTab,
+      toggleMobileDrawer,
+      closeMobileDrawer,
+      selectMobileScene,
+      
+      // 🔥 拖拽手柄相关
+      isDragging,
+      handleDrawerHandleClick,
+      handleDrawerDragStart,
       addLayerDialogVisible,
       loadingLayers,
       layersCacheEnabled,
@@ -987,7 +1210,7 @@ export default {
       onMapReady,
       onLayerClick,
       toggleLayerPanel,
-      showMobileLayerPanel,
+
       toggleLayerVisibility,
       updateLayerOpacity,
       zoomToLayer,
@@ -1719,79 +1942,563 @@ export default {
   /* 当面板展开时不需要额外的margin */
 }
 
-/* 移动端图层按钮 */
-.mobile-layer-toggle {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  z-index: 1000;
+/* 🔥 手机端专用样式 - 桌面端隐藏移动端组件 */
+.mobile-layer-fab,
+.mobile-drawer-overlay {
+  display: none;
 }
 
-/* 移动端图层抽屉 */
-.drawer-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+/* 桌面端显示侧边栏，手机端隐藏 */
+.desktop-only {
+  display: block;
 }
 
-.drawer-header h4 {
-  margin: 0;
-  font-size: 16px;
+
+
+/* 手机端样式 */
+@media (max-width: 768px) {
+  /* 隐藏桌面端组件 */
+  .desktop-only {
+    display: none !important;
+  }
+
+  /* 显示手机端组件 */
+  .mobile-only {
+    display: block !important;
+  }
+
+  /* 手机端抽屉样式 */
+  .mobile-drawer-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+  }
+
+  .mobile-drawer-overlay.show {
+    opacity: 1;
+    visibility: visible;
+  }
+/* 🔥 抽屉面板 */
+.mobile-drawer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    border-radius: 20px 20px 0 0;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    max-height: 75vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    /* 🔥 为拖拽准备的变量 */
+    --drawer-opacity: 1;
+    opacity: var(--drawer-opacity);
+  }
+  
+  .mobile-drawer.show {
+    transform: translateY(0);
+  }
+  
+  /* 抽屉头部 */
+  .mobile-drawer-header {
+    padding: 15px 20px 10px;
+    border-bottom: 1px solid #f0f0f0;
+    flex-shrink: 0;
+    background: white;
+  }
+  
+  .drawer-handle {
+    width: 50px; /* 🔥 手机应用常见的短横线宽度 */
+    height: 4px; /* 🔥 适中的高度 */
+    background: #e4e7ed; /* 🔥 更淡的颜色，低调不显眼 */
+    border-radius: 2px; /* 🔥 圆润的圆角 */
+    margin: 8px auto 16px; /* 🔥 上下间距，居中 */
+    cursor: grab; /* 🔥 显示拖拽光标 */
+    transition: all 0.15s ease; /* 🔥 更快的过渡 */
+    position: relative;
+    user-select: none; /* 🔥 防止选中文本 */
+    opacity: 0.6; /* 🔥 更透明，更低调 */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); /* 🔥 微妙的阴影 */
+  }
+
+  /* 🔥 为了增加点击区域，使用伪元素 */
+  .drawer-handle::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: -8px;
+    right: -8px;
+    bottom: -8px;
+    cursor: grab;
+  }
+  
+  .drawer-handle:hover {
+    background: #d3d4d6; /* 🔥 悬停时稍微深一点，但仍然低调 */
+    opacity: 1; /* 🔥 悬停时不透明 */
+    cursor: grab;
+  }
+  
+  .drawer-handle:active,
+  .drawer-handle.dragging {
+    background: #c0c4cc; /* 🔥 拖拽时稍微深一点 */
+    opacity: 1; /* 🔥 拖拽时不透明 */
+    cursor: grabbing; /* 🔥 拖拽光标 */
+  }
+
+  .drawer-handle:active::before,
+  .drawer-handle.dragging::before {
+    cursor: grabbing; /* 🔥 伪元素也要改变光标 */
+  }
+  
+  .drawer-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .drawer-title h3 {
+    margin: 0;
+    font-size: 18px;
+    color: #303133;
+    font-weight: 600;
+  }
+  
+  .drawer-actions {
+    display: flex;
+    gap: 8px;
+  }
+  
+  .drawer-actions .el-button {
+    border-radius: 8px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 4px; /* 🔥 图标和文字间距 */
+    padding: 8px 12px; /* 🔥 调整内边距适应文字 */
+  }
+  
+  .drawer-actions .el-button i {
+    font-size: 14px; /* 🔥 确保图标大小合适 */
+  }
+  
+  .drawer-actions .el-button span {
+    font-size: 13px; /* 🔥 文字大小 */
+    white-space: nowrap; /* 🔥 防止文字换行 */
+  }
+  
+  /* 抽屉内容 */
+  .mobile-drawer-content {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: white;
+  }
+
+  .mobile-drawer-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: #909399;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-drawer-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+  }
+
+  /* 手机端标签页 */
+  .mobile-tabs {
+    display: flex;
+    border-bottom: 1px solid #e4e7ed;
+    background: #f8f9fa;
+  }
+
+  .mobile-tab {
+    flex: 1;
+    padding: 16px;
+    text-align: center;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #606266;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    position: relative;
+  }
+
+  .mobile-tab.active {
+    color: #409eff;
+    border-bottom-color: #409eff;
+    background: white;
+  }
+
+  .tab-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #f56c6c;
+    color: white;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    min-width: 16px;
+    text-align: center;
+  }
+
+  .mobile-tab-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+  }
+
+  /* 手机端场景列表 */
+  .mobile-scene-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .mobile-scene-item {
+    border: 1px solid #e4e7ed;
+    border-radius: 12px;
+    padding: 16px;
+    background: white;
+    transition: all 0.3s;
+    cursor: pointer;
+  }
+
+  .mobile-scene-item:hover {
+    border-color: #409eff;
+    box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
+  }
+
+  .mobile-scene-item.active {
+    border-color: #409eff;
+    background: #f0f9ff;
+  }
+
+  .scene-info h4 {
+    margin: 0 0 4px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #303133;
+  }
+
+  .scene-info p {
+    margin: 0;
+    font-size: 13px;
+    color: #909399;
+  }
+
+  .scene-meta {
+    margin-top: 8px;
+  }
+
+  /* 手机端图层列表 */
+  .mobile-layer-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .mobile-layer-item {
+    border: 1px solid #e4e7ed;
+    border-radius: 12px;
+    padding: 16px;
+    background: white;
+    transition: all 0.3s;
+  }
+
+  .mobile-layer-item:hover {
+    border-color: #409eff;
+    box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
+  }
+
+  .mobile-layer-item.active {
+    border-color: #409eff;
+    background: #f0f9ff;
+  }
+
+  .mobile-layer-item.invisible {
+    opacity: 0.6;
+  }
+
+  .layer-main-info {
+    margin-bottom: 12px;
+  }
+
+  .layer-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .layer-name {
+    font-weight: 600;
+    font-size: 15px;
+    color: #303133;
+    flex: 1;
+  }
+
+  .active-indicator {
+    color: #409eff;
+    font-size: 16px;
+  }
+
+  .layer-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #f0f0f0;
+    color: #606266;
+  }
+
+  .mobile-opacity-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .opacity-label {
+    font-size: 13px;
+    color: #606266;
+    min-width: 60px;
+  }
+
+  .mobile-opacity-slider {
+    flex: 1;
+  }
+
+  .opacity-value {
+    font-size: 13px;
+    color: #409eff;
+    min-width: 40px;
+    text-align: right;
+  }
+
+  .layer-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  .action-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid #dcdfe6;
+    background: white;
+    color: #606266;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .action-btn:hover {
+    border-color: #409eff;
+    color: #409eff;
+  }
+
+  .action-btn.zoom-btn:hover {
+    border-color: #67c23a;
+    color: #67c23a;
+  }
+
+  .action-btn.style-btn:hover {
+    border-color: #e6a23c;
+    color: #e6a23c;
+  }
+
+  .action-btn.delete-btn:hover {
+    border-color: #f56c6c;
+    color: #f56c6c;
+  }
+
+  .mobile-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: #909399;
+  }
+
+  .mobile-empty i {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+  }
+
+  .mobile-empty p {
+    margin: 0 0 16px 0;
+    font-size: 14px;
+  }
+
+  /* 手机端浮动按钮 */
+  .mobile-layer-fab {
+    position: fixed;
+    left: 50%;
+    bottom: 5px;
+    transform: translateX(-50%);
+    z-index: 2000;
+    background: #409EFF;
+    color: #fff;
+    border-radius: 24px;
+    box-shadow: 0 4px 16px rgba(64,158,255,0.18);
+    padding: 0 5px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: box-shadow 0.2s, background 0.2s;
+    border: none;
+    outline: none;
+    user-select: none;
+    will-change: transform;
+    opacity: 0.96;
+  }
+  .mobile-layer-fab:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(64, 158, 255, 0.5);
+  }
+  
+  .mobile-layer-fab:active {
+    transform: scale(0.95);
+  }
+  
+  .fab-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 20px;
+    color: white;
+    font-weight: 500;
+    position: relative;
+  }
+  
+  .fab-content i {
+    font-size: 18px;
+  }
+  
+  .fab-text {
+    font-size: 14px;
+    font-weight: 600;
+    
+  }
+  
+  .fab-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: #f56c6c;
+    color: white;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: bold;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  /* 手机端地图容器 */
+  .map-container {
+    height: 100vh;
+    width: 100vw;
+  }
+
+  /* 手机端按钮样式 */
+  .mobile-btn {
+    padding: 8px 16px;
+    font-size: 13px;
+    border-radius: 6px;
+    border: 1px solid #dcdfe6;
+    background: white;
+    color: #606266;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+
+  .mobile-btn:hover {
+    border-color: #409eff;
+    color: #409eff;
+  }
+
+  .mobile-btn.primary {
+    background: #409eff;
+    border-color: #409eff;
+    color: white;
+  }
+
+  .mobile-btn.primary:hover {
+    background: #337ecc;
+    border-color: #337ecc;
+  }
+
+  .mobile-btn.danger {
+    background: #f56c6c;
+    border-color: #f56c6c;
+    color: white;
+  }
+
+  .mobile-btn.danger:hover {
+    background: #e74c3c;
+    border-color: #e74c3c;
+  }
 }
 
-.scene-selector.mobile {
-  margin: 16px 0;
+/* 桌面端样式 */
+.desktop-only {
+  display: block;
 }
 
-.mobile-layer-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.mobile-layer-item {
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
-  padding: 12px;
-}
-
-.layer-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.layer-name {
-  font-weight: 500;
-  font-size: 14px;
-}
-
-.layer-type {
-  font-size: 12px;
-  color: #909399;
-}
-
-.layer-controls {
-  border-top: 1px solid #f0f0f0;
-  padding-top: 8px;
-}
-
-.opacity-control {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.opacity-control span {
-  font-size: 12px;
-  min-width: 50px;
-}
-
-.layer-actions {
-  display: flex;
-  gap: 8px;
+.mobile-only {
+  display: none;
 }
 
 /* 添加图层对话框 */

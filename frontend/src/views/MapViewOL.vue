@@ -3206,13 +3206,8 @@ export default {
     max-height: 80vh;
   }
   
-  .fab-content {
-    padding: 12px 18px;
-  }
   
-  .fab-text {
-    font-size: 13px;
-  }
+ 
   
   .mobile-layer-item,
   .mobile-scene-item {

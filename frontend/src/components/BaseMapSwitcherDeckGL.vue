@@ -21,9 +21,7 @@
             <el-dropdown-item command="esriSatellite" :class="{ active: currentBaseMap.key === 'esriSatellite' }">
               Esri 世界影像
             </el-dropdown-item>
-            <el-dropdown-item command="terrain" :class="{ active: currentBaseMap.key === 'terrain' }">
-              地形图
-            </el-dropdown-item>
+            
             <el-dropdown-item command="3d" :class="{ active: currentBaseMap.key === '3d' }">
               <span style="color: #67C23A; font-weight: bold;">🌍 三维模式</span>
             </el-dropdown-item>
@@ -74,12 +72,7 @@ export default {
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         attribution: '© Esri, Maxar, Earthstar Geographics'
       },
-      terrain: {
-        key: 'terrain',
-        name: '地形图',
-        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}',
-        attribution: '© Esri'
-      },
+      
       '3d': {
         key: '3d',
         name: '三维模式',
