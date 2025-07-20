@@ -8,7 +8,7 @@
  * Copyright (c) 2025 by Lvwan, All Rights Reserved. 
  */
 const { defineConfig } = require('@vue/cli-service')
-const base_url='http://192.168.54.3'
+const base_url='http://172.16.118.124'
 // 从环境变量获取Martin服务的基础URL，默认为http://192.168.1.17:3000
 //const backend_url = 'http://192.168.1.17:5030'
 const backend_url = base_url+':5030'

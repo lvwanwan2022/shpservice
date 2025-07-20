@@ -1,0 +1,1471 @@
+{
+  "gdal_functions": {
+    "coordinate_operations": {
+      "projection": {
+        "gdal_transform": {
+          "function_name": "gdaltransform",
+          "description": "坐标转换",
+          "category": "坐标变换",
+          "input_types": ["坐标点"],
+          "parameters": {
+            "source_srs": {
+              "type": "string",
+              "description": "源坐标系",
+              "required": true,
+              "example": "EPSG:4326"
+            },
+            "target_srs": {
+              "type": "string",
+              "description": "目标坐标系",
+              "required": true,
+              "example": "EPSG:3857"
+            },
+            "coordinates": {
+              "type": "array",
+              "description": "坐标点 [x, y, z]",
+              "required": true,
+              "example": [116.3974, 39.9093]
+            }
+          },
+          "python_template": "from osgeo import osr\nsource = osr.SpatialReference()\nsource.ImportFromEPSG({source_epsg})\ntarget = osr.SpatialReference()\ntarget.ImportFromEPSG({target_epsg})\ntransform = osr.CoordinateTransformation(source, target)\nresult = transform.TransformPoint({x}, {y})",
+          "command_template": "gdaltransform -s_srs {source_srs} -t_srs {target_srs}",
+          "examples": [
+            {
+              "description": "WGS84转Web墨卡托",
+              "code": "echo \"116.3974 39.9093\" | gdaltransform -s_srs EPSG:4326 -t_srs EPSG:3857"
+            }
+          ]
+        },
+        "coordinate_query": {
+          "function_name": "coordinate_query",
+          "description": "坐标查询功能",
+          "category": "坐标查询",
+          "input_types": ["坐标点", "栅格文件", "矢量文件"],
+          "parameters": {
+            "x": {
+              "type": "number",
+              "description": "X坐标",
+              "required": true,
+              "example": 116.3974
+            },
+            "y": {
+              "type": "number",
+              "description": "Y坐标",
+              "required": true,
+              "example": 39.9093
+            },
+            "data_source": {
+              "type": "string",
+              "description": "数据源文件",
+              "required": true,
+              "example": "data.tif"
+            },
+            "srs": {
+              "type": "string",
+              "description": "坐标系",
+              "required": false,
+              "default": "EPSG:4326",
+              "example": "EPSG:4326"
+            }
+          },
+          "python_template": "from osgeo import gdal\nds = gdal.Open('{data_source}')\ngt = ds.GetGeoTransform()\ninv_gt = gdal.InvGeoTransform(gt)\ncol, row = gdal.ApplyGeoTransform(inv_gt, {x}, {y})\nband = ds.GetRasterBand(1)\nvalue = band.ReadAsArray(int(col), int(row), 1, 1)[0,0]",
+          "command_template": "gdallocationinfo -wgs84 {data_source} {x} {y}",
+          "examples": [
+            {
+              "description": "查询栅格像素值",
+              "code": "gdallocationinfo -wgs84 dem.tif 116.3974 39.9093"
+            }
+          ]
+        }
+      }
+    },
+    "vector_analysis": {
+      "buffer": {
+        "buffer_analysis": {
+          "function_name": "buffer",
+          "description": "构建缓冲区分析",
+          "category": "缓冲区分析",
+          "input_types": ["点", "线", "面"],
+          "parameters": {
+            "input": {
+              "type": "string",
+              "description": "输入矢量文件",
+              "required": true,
+              "example": "points.shp"
+            },
+            "output": {
+              "type": "string",
+              "description": "输出缓冲区文件",
+              "required": true,
+              "example": "buffer.shp"
+            },
+            "distance": {
+              "type": "number",
+              "description": "缓冲区距离",
+              "required": true,
+              "example": 1000
+            },
+            "unit": {
+              "type": "string",
+              "description": "距离单位",
+              "required": false,
+              "default": "meters",
+              "options": ["meters", "kilometers", "degrees"]
+            },
+            "dissolve": {
+              "type": "boolean",
+              "description": "是否融合重叠缓冲区",
+              "required": false,
+              "default": false
+            }
+          },
+          "python_template": "from osgeo import ogr\ndriver = ogr.GetDriverByName('ESRI Shapefile')\nds_in = driver.Open('{input}', 0)\nlayer_in = ds_in.GetLayer()\nds_out = driver.CreateDataSource('{output}')\nlayer_out = ds_out.CreateLayer('buffer', geom_type=ogr.wkbPolygon)\nfor feature in layer_in:\n    geom = feature.GetGeometryRef()\n    buffer = geom.Buffer({distance})\n    out_feature = ogr.Feature(layer_out.GetLayerDefn())\n    out_feature.SetGeometry(buffer)\n    layer_out.CreateFeature(out_feature)",
+          "command_template": "ogr2ogr -dialect sqlite -sql \"SELECT ST_Buffer(geometry, {distance}) as geometry FROM '{layer_name}'\" {output} {input}",
+          "examples": [
+            {
+              "description": "点缓冲区分析",
+              "code": "ogr2ogr -dialect sqlite -sql \"SELECT ST_Buffer(geometry, 1000) FROM points\" buffer.shp points.shp"
+            },
+            {
+              "description": "线缓冲区分析", 
+              "code": "ogr2ogr -dialect sqlite -sql \"SELECT ST_Buffer(geometry, 500) FROM roads\" road_buffer.shp roads.shp"
+            }
+          ]
+        }
+      },
+      "clip": {
+        "clip_analysis": {
+          "function_name": "clip",
+          "description": "裁剪分析",
+          "category": "叠加分析",
+          "input_types": ["线->面", "线->线", "面->面"],
+          "parameters": {
+            "input": {
+              "type": "string",
+              "description": "输入要素文件",
+              "required": true,
+              "example": "features.shp"
+            },
+            "clip_layer": {
+              "type": "string",
+              "description": "裁剪边界文件",
+              "required": true,
+              "example": "boundary.shp"
+            },
+            "output": {
+              "type": "string",
+              "description": "输出裁剪结果",
+              "required": true,
+              "example": "clipped.shp"
+            },
+            "keep_attributes": {
+              "type": "boolean",
+              "description": "保留原始属性",
+              "required": false,
+              "default": true
+            }
+          },
+          "python_template": "from osgeo import gdal\ngdal.VectorTranslate('{output}', '{input}', clipSrc='{clip_layer}', clipSrcLayer='{clip_layer_name}')",
+          "command_template": "ogr2ogr -clipsrc {clip_layer} {output} {input}",
+          "examples": [
+            {
+              "description": "面裁剪面",
+              "code": "ogr2ogr -clipsrc boundary.shp clipped_polygons.shp input_polygons.shp"
+            },
+            {
+              "description": "线裁剪线",
+              "code": "ogr2ogr -clipsrc study_area.shp clipped_roads.shp roads.shp"
+            }
+          ]
+        }
+      },
+      "intersect": {
+        "intersect_analysis": {
+          "function_name": "intersect",
+          "description": "相交分析",
+          "category": "叠加分析",
+          "input_types": ["线->面", "线->线", "面->面"],
+          "parameters": {
+            "input1": {
+              "type": "string",
+              "description": "第一个输入文件",
+              "required": true,
+              "example": "layer1.shp"
+            },
+            "input2": {
+              "type": "string",
+              "description": "第二个输入文件",
+              "required": true,
+              "example": "layer2.shp"
+            },
+            "output": {
+              "type": "string",
+              "description": "相交结果文件",
+              "required": true,
+              "example": "intersection.shp"
+            },
+            "keep_all_attributes": {
+              "type": "boolean",
+              "description": "保留所有属性",
+              "required": false,
+              "default": true
+            }
+          },
+          "python_template": "# 使用SQLite方言进行空间相交\nimport os\nos.system('ogr2ogr -dialect sqlite -sql \"SELECT a.*, b.* FROM layer1 a, layer2 b WHERE ST_Intersects(a.geometry, b.geometry)\" {output} {input1}')",
+          "command_template": "ogr2ogr -dialect sqlite -sql \"SELECT a.*, b.* FROM '{layer1}' a, '{layer2}' b WHERE ST_Intersects(a.geometry, b.geometry)\" {output} {input1}",
+          "examples": [
+            {
+              "description": "线线相交得到点",
+              "code": "ogr2ogr -dialect sqlite -sql \"SELECT ST_Intersection(a.geometry, b.geometry) FROM roads a, railways b WHERE ST_Intersects(a.geometry, b.geometry)\" crossings.shp roads.shp"
+            },
+            {
+              "description": "面面相交",
+              "code": "ogr2ogr -dialect sqlite -sql \"SELECT a.*, b.*, ST_Intersection(a.geometry, b.geometry) FROM polygons1 a, polygons2 b WHERE ST_Intersects(a.geometry, b.geometry)\" result.shp polygons1.shp"
+            }
+          ]
+        }
+      },
+      "difference": {
+        "difference_analysis": {
+          "function_name": "difference",
+          "description": "差集分析",
+          "category": "叠加分析",
+          "input_types": ["面->面", "线->线", "点->点"],
+          "parameters": {
+            "input": {
+              "type": "string",
+              "description": "输入要素文件",
+              "required": true,
+              "example": "layer1.shp"
+            },
+            "difference_layer": {
+              "type": "string",
+              "description": "差集对象文件",
+              "required": true,
+              "example": "layer2.shp"
+            },
+            "output": {
+              "type": "string",
+              "description": "差集结果文件",
+              "required": true,
+              "example": "difference.shp"
+            }
+          },
+          "python_template": "import os\nos.system('ogr2ogr -dialect sqlite -sql \"SELECT ST_Difference(a.geometry, ST_Union(b.geometry)) FROM layer1 a, layer2 b\" {output} {input}')",
+          "command_template": "ogr2ogr -dialect sqlite -sql \"SELECT ST_Difference(a.geometry, b.geometry) FROM '{layer1}' a, '{layer2}' b\" {output} {input}",
+          "examples": [
+            {
+              "description": "面差集分析",
+              "code": "ogr2ogr -dialect sqlite -sql \"SELECT ST_Difference(a.geometry, b.geometry) FROM area1 a, area2 b\" difference.shp area1.shp"
+            }
+          ]
+        }
+      },
+      "dissolve": {
+        "dissolve_analysis": {
+          "function_name": "dissolve",
+          "description": "融合分析",
+          "category": "融合分析",
+          "input_types": ["点", "线", "面"],
+          "parameters": {
+            "input": {
+              "type": "string",
+              "description": "输入要素文件",
+              "required": true,
+              "example": "polygons.shp"
+            },
+            "output": {
+              "type": "string",
+              "description": "融合结果文件",
+              "required": true,
+              "example": "dissolved.shp"
+            },
+            "dissolve_field": {
+              "type": "string",
+              "description": "融合字段",
+              "required": false,
+              "example": "CLASS_CODE"
+            },
+            "statistics": {
+              "type": "object",
+              "description": "统计字段设置",
+              "required": false,
+              "example": {"AREA": "SUM", "POP": "SUM"}
+            }
+          },
+          "python_template": "import os\nif '{dissolve_field}':\n    sql = 'SELECT {dissolve_field}, ST_Union(geometry) FROM {layer} GROUP BY {dissolve_field}'\nelse:\n    sql = 'SELECT ST_Union(geometry) FROM {layer}'\nos.system(f'ogr2ogr -dialect sqlite -sql \"{sql}\" {output} {input}')",
+          "command_template": "ogr2ogr -dialect sqlite -sql \"SELECT {dissolve_field}, ST_Union(geometry) FROM {layer} GROUP BY {dissolve_field}\" {output} {input}",
+          "examples": [
+            {
+              "description": "按字段融合",
+              "code": "ogr2ogr -dialect sqlite -sql \"SELECT CLASS, ST_Union(geometry) FROM polygons GROUP BY CLASS\" dissolved.shp polygons.shp"
+            },
+            {
+              "description": "全部融合",
+              "code": "ogr2ogr -dialect sqlite -sql \"SELECT ST_Union(geometry) FROM polygons\" merged.shp polygons.shp"
+            }
+          ]
+        }
+      },
+      "union": {
+        "union_analysis": {
+          "function_name": "union",
+          "description": "联合分析",
+          "category": "叠加分析",
+          "input_types": ["面->面", "线->线", "点->点"],
+          "parameters": {
+            "input1": {
+              "type": "string",
+              "description": "第一个输入文件",
+              "required": true,
+              "example": "layer1.shp"
+            },
+            "input2": {
+              "type": "string",
+              "description": "第二个输入文件",
+              "required": true,
+              "example": "layer2.shp"
+            },
+            "output": {
+              "type": "string",
+              "description": "联合结果文件",
+              "required": true,
+              "example": "union.shp"
+            }
+          },
+          "python_template": "import os\nos.system('ogr2ogr -dialect sqlite -sql \"SELECT ST_Union(a.geometry, b.geometry) FROM layer1 a, layer2 b\" {output} {input1}')",
+          "command_template": "ogr2ogr -dialect sqlite -sql \"SELECT ST_Union(a.geometry, b.geometry) FROM '{layer1}' a, '{layer2}' b\" {output} {input1}",
+          "examples": [
+            {
+              "description": "面联合分析",
+              "code": "ogr2ogr -dialect sqlite -sql \"SELECT ST_Union(a.geometry, b.geometry) FROM counties a, cities b\" union.shp counties.shp"
+            }
+          ]
+        }
+      },
+      "merge": {
+        "merge_layers": {
+          "function_name": "merge_layers",
+          "description": "合并图层",
+          "category": "数据合并",
+          "input_types": ["点", "线", "面"],
+          "parameters": {
+            "inputs": {
+              "type": "array",
+              "description": "输入文件列表",
+              "required": true,
+              "example": ["layer1.shp", "layer2.shp", "layer3.shp"]
+            },
+            "output": {
+              "type": "string",
+              "description": "合并结果文件",
+              "required": true,
+              "example": "merged.shp"
+            },
+            "schema_match": {
+              "type": "boolean",
+              "description": "是否匹配字段结构",
+              "required": false,
+              "default": true
+            }
+          },
+          "python_template": "# 首先创建输出文件\nimport os\nos.system('ogr2ogr {output} {first_input}')\n# 然后追加其他文件\nfor input_file in {other_inputs}:\n    os.system(f'ogr2ogr -update -append {output} {input_file} -nln merged')",
+          "command_template": "ogr2ogr {output} {first_input} && ogr2ogr -update -append {output} {other_inputs} -nln merged",
+          "examples": [
+            {
+              "description": "合并多个Shapefile",
+              "code": "ogr2ogr merged.shp layer1.shp && ogr2ogr -update -append merged.shp layer2.shp -nln merged"
+            }
+          ]
+        }
+      },
+      "join": {
+        "attribute_join": {
+          "function_name": "attribute_join",
+          "description": "按属性字段连接图层",
+          "category": "属性连接",
+          "input_types": ["点", "线", "面"],
+          "parameters": {
+            "input_layer": {
+              "type": "string",
+              "description": "主图层文件",
+              "required": true,
+              "example": "main_layer.shp"
+            },
+            "join_table": {
+              "type": "string",
+              "description": "连接表文件",
+              "required": true,
+              "example": "attributes.csv"
+            },
+            "output": {
+              "type": "string",
+              "description": "连接结果文件",
+              "required": true,
+              "example": "joined.shp"
+            },
+            "join_field": {
+              "type": "string",
+              "description": "连接字段",
+              "required": true,
+              "example": "ID"
+            },
+            "target_field": {
+              "type": "string",
+              "description": "目标字段",
+              "required": true,
+              "example": "CODE"
+            }
+          },
+          "python_template": "import os\nos.system('ogr2ogr -dialect sqlite -sql \"SELECT a.*, b.* FROM main_layer a LEFT JOIN attributes b ON a.{join_field} = b.{target_field}\" {output} {input_layer}')",
+          "command_template": "ogr2ogr -dialect sqlite -sql \"SELECT a.*, b.* FROM '{main_layer}' a LEFT JOIN '{join_table}' b ON a.{join_field} = b.{target_field}\" {output} {input_layer}",
+          "examples": [
+            {
+              "description": "按ID字段连接",
+              "code": "ogr2ogr -dialect sqlite -sql \"SELECT a.*, b.* FROM polygons a LEFT JOIN data b ON a.ID = b.POLY_ID\" result.shp polygons.shp"
+            }
+          ]
+        }
+      },
+      "select": {
+        "attribute_select": {
+          "function_name": "attribute_select",
+          "description": "按属性字段选择要素",
+          "category": "属性查询",
+          "input_types": ["点", "线", "面"],
+          "parameters": {
+            "input": {
+              "type": "string",
+              "description": "输入要素文件",
+              "required": true,
+              "example": "features.shp"
+            },
+            "output": {
+              "type": "string",
+              "description": "选择结果文件",
+              "required": true,
+              "example": "selected.shp"
+            },
+            "where_clause": {
+              "type": "string",
+              "description": "查询条件",
+              "required": true,
+              "example": "POP > 100000"
+            },
+            "fields": {
+              "type": "array",
+              "description": "选择字段",
+              "required": false,
+              "example": ["NAME", "POP", "AREA"]
+            }
+          },
+          "python_template": "from osgeo import gdal\ngdal.VectorTranslate('{output}', '{input}', where='{where_clause}', selectFields={fields})",
+          "command_template": "ogr2ogr -where \"{where_clause}\" -select \"{fields}\" {output} {input}",
+          "examples": [
+            {
+              "description": "按人口筛选城市",
+              "code": "ogr2ogr -where \"POP > 1000000\" -select \"NAME,POP\" large_cities.shp cities.shp"
+            },
+            {
+              "description": "按类型筛选要素",
+              "code": "ogr2ogr -where \"TYPE = 'highway'\" highways.shp roads.shp"
+            }
+          ]
+        }
+      }
+    },
+    "raster_analysis": {
+      "dem_analysis": {
+        "elevation_analysis": {
+          "function_name": "gdaldem",
+          "description": "DEM高程分析",
+          "category": "地形分析",
+          "input_types": ["DEM栅格"],
+          "parameters": {
+            "processing": {
+              "type": "string",
+              "description": "处理类型",
+              "required": true,
+              "options": ["hillshade", "slope", "aspect", "color-relief", "TRI", "TPI", "roughness"]
+            },
+            "input_dem": {
+              "type": "string",
+              "description": "输入DEM文件",
+              "required": true,
+              "example": "dem.tif"
+            },
+            "output": {
+              "type": "string",
+              "description": "输出文件",
+              "required": true,
+              "example": "hillshade.tif"
+            },
+            "z_factor": {
+              "type": "number",
+              "description": "高程放大系数",
+              "required": false,
+              "default": 1.0
+            },
+            "azimuth": {
+              "type": "number",
+              "description": "光照方位角(度)",
+              "required": false,
+              "default": 315
+            },
+            "altitude": {
+              "type": "number",
+              "description": "光照高度角(度)",
+              "required": false,
+              "default": 45
+            },
+            "color_file": {
+              "type": "string",
+              "description": "颜色配置文件(color-relief用)",
+              "required": false,
+              "example": "colors.txt"
+            }
+          },
+          "python_template": "from osgeo import gdal\ngdal.DEMProcessing('{output}', '{input_dem}', '{processing}', azimuth={azimuth}, altitude={altitude}, zFactor={z_factor})",
+          "command_template": "gdaldem {processing} {input_dem} {output} -z {z_factor} -az {azimuth} -alt {altitude}",
+          "examples": [
+            {
+              "description": "生成山体阴影",
+              "code": "gdaldem hillshade -z 2 -az 315 -alt 45 dem.tif hillshade.tif"
+            },
+            {
+              "description": "计算坡度",
+              "code": "gdaldem slope dem.tif slope.tif"
+            },
+            {
+              "description": "生成坡向",
+              "code": "gdaldem aspect dem.tif aspect.tif"
+            },
+            {
+              "description": "计算平整度(TRI)",
+              "code": "gdaldem TRI dem.tif roughness.tif"
+            }
+          ]
+        },
+        "contour_extraction": {
+          "function_name": "gdal_contour",
+          "description": "提取等高线",
+          "category": "矢量化",
+          "input_types": ["DEM栅格"],
+          "parameters": {
+            "input_dem": {
+              "type": "string",
+              "description": "输入DEM文件",
+              "required": true,
+              "example": "dem.tif"
+            },
+            "output": {
+              "type": "string",
+              "description": "输出等高线文件",
+              "required": true,
+              "example": "contours.shp"
+            },
+            "interval": {
+              "type": "number",
+              "description": "等高线间距",
+              "required": true,
+              "example": 10
+            },
+            "attribute_name": {
+              "type": "string",
+              "description": "高程字段名",
+              "required": false,
+              "default": "ELEV",
+              "example": "elevation"
+            },
+            "base_level": {
+              "type": "number",
+              "description": "基准高程",
+              "required": false,
+              "default": 0
+            },
+            "fixed_levels": {
+              "type": "array",
+              "description": "固定高程值列表",
+              "required": false,
+              "example": [100, 200, 500, 1000]
+            }
+          },
+          "python_template": "from osgeo import gdal\ngdal.Contour('{output}', '{input_dem}', interval={interval}, elevationName='{attribute_name}', fixedLevels={fixed_levels})",
+          "command_template": "gdal_contour -a {attribute_name} -i {interval} {input_dem} {output}",
+          "examples": [
+            {
+              "description": "生成10米间距等高线",
+              "code": "gdal_contour -a ELEV -i 10 dem.tif contours.shp"
+            },
+            {
+              "description": "固定高程等高线",
+              "code": "gdal_contour -a height -fl 100 200 500 1000 dem.tif key_contours.shp"
+            }
+          ]
+        }
+      },
+      "image_analysis": {
+        "image_mosaic": {
+          "function_name": "gdal_merge",
+          "description": "DOM影像拼接",
+          "category": "影像处理",
+          "input_types": ["影像文件"],
+          "parameters": {
+            "inputs": {
+              "type": "array",
+              "description": "输入影像文件列表",
+              "required": true,
+              "example": ["image1.tif", "image2.tif", "image3.tif"]
+            },
+            "output": {
+              "type": "string",
+              "description": "拼接结果文件",
+              "required": true,
+              "example": "mosaic.tif"
+            },
+            "nodata": {
+              "type": "number",
+              "description": "无效值",
+              "required": false,
+              "example": 0
+            },
+            "compress": {
+              "type": "string",
+              "description": "压缩方式",
+              "required": false,
+              "options": ["LZW", "JPEG", "DEFLATE"],
+              "default": "LZW"
+            },
+            "color_match": {
+              "type": "boolean",
+              "description": "是否进行色彩匹配",
+              "required": false,
+              "default": false
+            }
+          },
+          "python_template": "import os\nos.system('gdal_merge.py -o {output} -n {nodata} -co COMPRESS={compress} {inputs}')",
+          "command_template": "gdal_merge.py -o {output} -n {nodata} -co COMPRESS={compress} {inputs}",
+          "examples": [
+            {
+              "description": "影像拼接",
+              "code": "gdal_merge.py -o mosaic.tif -n 0 -co COMPRESS=LZW image1.tif image2.tif image3.tif"
+            },
+            {
+              "description": "高质量拼接",
+              "code": "gdalwarp -srcnodata 0 -dstnodata 0 -co COMPRESS=JPEG -co PHOTOMETRIC=RGB image*.tif mosaic.tif"
+            }
+          ]
+        },
+        "image_comparison": {
+          "function_name": "image_difference",
+          "description": "多期影像叠加分析",
+          "category": "变化检测",
+          "input_types": ["影像文件"],
+          "parameters": {
+            "image1": {
+              "type": "string",
+              "description": "第一期影像",
+              "required": true,
+              "example": "image_2020.tif"
+            },
+            "image2": {
+              "type": "string",
+              "description": "第二期影像",
+              "required": true,
+              "example": "image_2025.tif"
+            },
+            "output": {
+              "type": "string",
+              "description": "差值影像",
+              "required": true,
+              "example": "difference.tif"
+            },
+            "method": {
+              "type": "string",
+              "description": "比较方法",
+              "required": false,
+              "options": ["difference", "ratio", "ndvi_difference"],
+              "default": "difference"
+            }
+          },
+          "python_template": "import os\nif '{method}' == 'difference':\n    os.system('gdal_calc.py -A {image1} -B {image2} --calc=\"B-A\" --outfile={output}')\nelif '{method}' == 'ratio':\n    os.system('gdal_calc.py -A {image1} -B {image2} --calc=\"B/A\" --outfile={output}')",
+          "command_template": "gdal_calc.py -A {image1} -B {image2} --calc=\"{calc_expression}\" --outfile={output}",
+          "examples": [
+            {
+              "description": "影像差值分析",
+              "code": "gdal_calc.py -A image_2020.tif -B image_2025.tif --calc=\"B-A\" --outfile=change.tif"
+            },
+            {
+              "description": "NDVI变化检测",
+              "code": "gdal_calc.py -A ndvi_2020.tif -B ndvi_2025.tif --calc=\"(B-A)/A\" --outfile=ndvi_change.tif"
+            }
+          ]
+        }
+      },
+      "remote_sensing": {
+        "ndvi_calculation": {
+          "function_name": "ndvi_calc",
+          "description": "NDVI植被指数计算",
+          "category": "植被分析",
+          "input_types": ["多光谱影像"],
+          "parameters": {
+            "red_band": {
+              "type": "string",
+              "description": "红光波段文件",
+              "required": true,
+              "example": "red.tif"
+            },
+            "nir_band": {
+              "type": "string",
+              "description": "近红外波段文件",
+              "required": true,
+              "example": "nir.tif"
+            },
+            "output": {
+              "type": "string",
+              "description": "NDVI结果文件",
+              "required": true,
+              "example": "ndvi.tif"
+            },
+            "scale_factor": {
+              "type": "number",
+              "description": "缩放因子",
+              "required": false,
+              "default": 1.0
+            }
+          },
+          "python_template": "import os\nos.system('gdal_calc.py -A {nir_band} -B {red_band} --calc=\"(A.astype(float)-B)/(A+B)\" --outfile={output} --type=Float32')",
+          "command_template": "gdal_calc.py -A {nir_band} -B {red_band} --calc=\"(A.astype(float)-B)/(A+B)\" --outfile={output} --type=Float32",
+          "examples": [
+            {
+              "description": "计算NDVI",
+              "code": "gdal_calc.py -A nir.tif -B red.tif --calc=\"(A.astype(float)-B)/(A+B)\" --outfile=ndvi.tif --type=Float32"
+            },
+            {
+              "description": "带掩膜的NDVI",
+              "code": "gdal_calc.py -A nir.tif -B red.tif -M mask.tif --calc=\"((A.astype(float)-B)/(A+B))*(M>0)\" --outfile=ndvi_masked.tif"
+            }
+          ]
+        }
+      }
+    },
+    "table_analysis": {
+      "csv_to_points": {
+        "csv_to_shapefile": {
+          "function_name": "csv_to_points",
+          "description": "带地理坐标的CSV添加到页面并可视化",
+          "category": "数据转换",
+          "input_types": ["CSV文件"],
+          "parameters": {
+            "input_csv": {
+              "type": "string",
+              "description": "输入CSV文件",
+              "required": true,
+              "example": "points.csv"
+            },
+            "output": {
+              "type": "string",
+              "description": "输出点要素文件",
+              "required": true,
+              "example": "points.shp"
+            },
+            "x_field": {
+              "type": "string",
+              "description": "X坐标字段名",
+              "required": true,
+              "example": "longitude"
+            },
+            "y_field": {
+              "type": "string",
+              "description": "Y坐标字段名",
+              "required": true,
+              "example": "latitude"
+            },
+            "crs": {
+              "type": "string",
+              "description": "坐标系",
+              "required": false,
+              "default": "EPSG:4326",
+              "example": "EPSG:4326"
+            }
+          },
+          "python_template": "from osgeo import gdal\ngdal.VectorTranslate('{output}', '{input_csv}', \n    layerCreationOptions=['GEOMETRY=AS_XY'], \n    options=['-oo', f'X_POSSIBLE_NAMES={x_field}', '-oo', f'Y_POSSIBLE_NAMES={y_field}'])",
+          "command_template": "ogr2ogr -f \"ESRI Shapefile\" {output} {input_csv} -oo X_POSSIBLE_NAMES={x_field} -oo Y_POSSIBLE_NAMES={y_field} -a_srs {crs}",
+          "examples": [
+            {
+              "description": "CSV转点要素",
+              "code": "ogr2ogr -f \"ESRI Shapefile\" points.shp points.csv -oo X_POSSIBLE_NAMES=lon -oo Y_POSSIBLE_NAMES=lat -a_srs EPSG:4326"
+            },
+            {
+              "description": "带属性的CSV转换",
+              "code": "ogr2ogr -f \"GeoJSON\" points.json data.csv -oo X_POSSIBLE_NAMES=x -oo Y_POSSIBLE_NAMES=y -select \"id,name,value\""
+            }
+          ]
+        }
+      }
+    },
+    "raster_operations": {
+      "information": {
+        "gdalinfo": {
+          "function_name": "gdalinfo",
+          "description": "获取栅格数据集信息",
+          "category": "信息查询",
+          "input_types": ["栅格文件"],
+          "parameters": {
+            "source": {
+              "type": "string",
+              "description": "输入栅格文件路径",
+              "required": true,
+              "example": "input.tif"
+            },
+            "format": {
+              "type": "string", 
+              "description": "输出格式 (json/text)",
+              "required": false,
+              "default": "text",
+              "options": ["json", "text"]
+            },
+            "checksum": {
+              "type": "boolean",
+              "description": "计算校验和",
+              "required": false,
+              "default": false
+            },
+            "stats": {
+              "type": "boolean", 
+              "description": "显示统计信息",
+              "required": false,
+              "default": false
+            }
+          },
+          "python_template": "from osgeo import gdal\nds = gdal.Open('{source}')\ninfo = gdal.Info(ds, format='{format}', computeChecksum={checksum}, stats={stats})\nprint(info)",
+          "command_template": "gdalinfo {source} {options}",
+          "examples": [
+            {
+              "description": "获取基本栅格信息",
+              "code": "gdalinfo input.tif"
+            },
+            {
+              "description": "获取JSON格式详细信息",
+              "code": "gdalinfo -json -stats input.tif"
+            }
+          ]
+        }
+      },
+      "format_conversion": {
+        "gdal_translate": {
+          "function_name": "gdal_translate",
+          "description": "栅格格式转换和数据处理",
+          "category": "格式转换",
+          "input_types": ["栅格文件"],
+          "parameters": {
+            "source": {
+              "type": "string",
+              "description": "输入栅格文件",
+              "required": true,
+              "example": "input.tif"
+            },
+            "dest": {
+              "type": "string", 
+              "description": "输出栅格文件",
+              "required": true,
+              "example": "output.tif"
+            },
+            "format": {
+              "type": "string",
+              "description": "输出格式",
+              "required": false,
+              "default": "GTiff",
+              "options": ["GTiff", "PNG", "JPEG", "NetCDF", "HDF5"]
+            },
+            "bands": {
+              "type": "array",
+              "description": "选择波段",
+              "required": false,
+              "example": [1, 2, 3]
+            },
+            "data_type": {
+              "type": "string",
+              "description": "输出数据类型",
+              "required": false,
+              "options": ["Byte", "UInt16", "Int16", "UInt32", "Int32", "Float32", "Float64"]
+            },
+            "scale": {
+              "type": "array",
+              "description": "数值缩放 [src_min, src_max, dst_min, dst_max]",
+              "required": false,
+              "example": [0, 255, 0, 1]
+            },
+            "nodata": {
+              "type": "number",
+              "description": "无效值",
+              "required": false,
+              "example": -9999
+            }
+          },
+          "python_template": "from osgeo import gdal\ngdal.Translate('{dest}', '{source}', format='{format}', bandList={bands}, outputType=gdal.{data_type})",
+          "command_template": "gdal_translate -of {format} {bands} {scale} {source} {dest}",
+          "examples": [
+            {
+              "description": "TIF转PNG",
+              "code": "gdal_translate -of PNG input.tif output.png"
+            },
+            {
+              "description": "提取RGB波段",
+              "code": "gdal_translate -b 1 -b 2 -b 3 input.tif rgb.tif"
+            },
+            {
+              "description": "数据类型转换",
+              "code": "gdal_translate -ot Byte -scale 0 65535 0 255 input.tif output.tif"
+            }
+          ]
+        }
+      },
+      "geometric_operations": {
+        "gdalwarp": {
+          "function_name": "gdalwarp",
+          "description": "栅格重投影、裁剪和重采样",
+          "category": "几何操作",
+          "input_types": ["栅格文件"],
+          "parameters": {
+            "source": {
+              "type": "string",
+              "description": "输入栅格文件",
+              "required": true,
+              "example": "input.tif"
+            },
+            "dest": {
+              "type": "string",
+              "description": "输出栅格文件", 
+              "required": true,
+              "example": "output.tif"
+            },
+            "target_srs": {
+              "type": "string",
+              "description": "目标坐标系",
+              "required": false,
+              "example": "EPSG:4326"
+            },
+            "source_srs": {
+              "type": "string",
+              "description": "源坐标系",
+              "required": false,
+              "example": "EPSG:3857"
+            },
+            "extent": {
+              "type": "array",
+              "description": "裁剪范围 [xmin, ymin, xmax, ymax]",
+              "required": false,
+              "example": [100, 30, 120, 50]
+            },
+            "resolution": {
+              "type": "array",
+              "description": "目标分辨率 [x_res, y_res]",
+              "required": false,
+              "example": [0.01, 0.01]
+            },
+            "resample_alg": {
+              "type": "string",
+              "description": "重采样算法",
+              "required": false,
+              "default": "near",
+              "options": ["near", "bilinear", "cubic", "cubicspline", "lanczos", "average"]
+            },
+            "cutline": {
+              "type": "string",
+              "description": "裁剪矢量文件",
+              "required": false,
+              "example": "polygon.shp"
+            }
+          },
+          "python_template": "from osgeo import gdal\ngdal.Warp('{dest}', '{source}', dstSRS='{target_srs}', outputBounds={extent}, xRes={x_res}, yRes={y_res}, resampleAlg='{resample_alg}')",
+          "command_template": "gdalwarp -t_srs {target_srs} -te {extent} -tr {resolution} -r {resample_alg} {source} {dest}",
+          "examples": [
+            {
+              "description": "重投影到WGS84",
+              "code": "gdalwarp -t_srs EPSG:4326 input.tif wgs84.tif"
+            },
+            {
+              "description": "按范围裁剪",
+              "code": "gdalwarp -te 100 30 120 50 input.tif clipped.tif"
+            },
+            {
+              "description": "按矢量裁剪",
+              "code": "gdalwarp -cutline polygon.shp -crop_to_cutline input.tif masked.tif"
+            }
+          ]
+        }
+      },
+      "analysis": {
+        "gdal_calc": {
+          "function_name": "gdal_calc.py",
+          "description": "栅格计算和代数运算",
+          "category": "分析计算",
+          "input_types": ["栅格文件"],
+          "parameters": {
+            "inputs": {
+              "type": "object",
+              "description": "输入栅格文件，键为变量名",
+              "required": true,
+              "example": {"A": "input1.tif", "B": "input2.tif"}
+            },
+            "calc": {
+              "type": "string",
+              "description": "计算表达式",
+              "required": true,
+              "example": "(A+B)/2"
+            },
+            "outfile": {
+              "type": "string",
+              "description": "输出文件",
+              "required": true,
+              "example": "result.tif"
+            },
+            "data_type": {
+              "type": "string",
+              "description": "输出数据类型",
+              "required": false,
+              "options": ["Byte", "UInt16", "Int16", "Float32", "Float64"]
+            },
+            "nodata": {
+              "type": "number",
+              "description": "无效值",
+              "required": false,
+              "example": -9999
+            }
+          },
+          "python_template": "import os\nos.system('gdal_calc.py -A {A} -B {B} --calc=\"{calc}\" --outfile={outfile}')",
+          "command_template": "gdal_calc.py -A {A} -B {B} --calc=\"{calc}\" --outfile={outfile}",
+          "examples": [
+            {
+              "description": "两个栅格相加",
+              "code": "gdal_calc.py -A input1.tif -B input2.tif --calc=\"A+B\" --outfile=sum.tif"
+            },
+            {
+              "description": "计算平均值",
+              "code": "gdal_calc.py -A input1.tif -B input2.tif --calc=\"(A+B)/2\" --outfile=avg.tif"
+            },
+            {
+              "description": "条件运算",
+              "code": "gdal_calc.py -A input.tif --calc=\"A*(A>100)\" --outfile=filtered.tif"
+            }
+          ]
+        }
+      }
+    },
+    "utility_operations": {
+      "merge": {
+        "gdal_merge": {
+          "function_name": "gdal_merge.py",
+          "description": "栅格数据合并",
+          "category": "数据合并",
+          "input_types": ["栅格文件"],
+          "parameters": {
+            "inputs": {
+              "type": "array",
+              "description": "输入栅格文件列表",
+              "required": true,
+              "example": ["tile1.tif", "tile2.tif", "tile3.tif"]
+            },
+            "output": {
+              "type": "string",
+              "description": "输出文件",
+              "required": true,
+              "example": "merged.tif"
+            },
+            "separate": {
+              "type": "boolean",
+              "description": "分离波段",
+              "required": false,
+              "default": false
+            },
+            "nodata": {
+              "type": "number",
+              "description": "无效值",
+              "required": false,
+              "example": -9999
+            }
+          },
+          "python_template": "import os\nos.system('gdal_merge.py -o {output} {inputs}')",
+          "command_template": "gdal_merge.py -o {output} {inputs}",
+          "examples": [
+            {
+              "description": "合并多个栅格",
+              "code": "gdal_merge.py -o merged.tif tile1.tif tile2.tif tile3.tif"
+            },
+            {
+              "description": "分离波段合并",
+              "code": "gdal_merge.py -separate -o rgb.tif red.tif green.tif blue.tif"
+            }
+          ]
+        },
+        "buildvrt": {
+          "function_name": "gdalbuildvrt",
+          "description": "构建虚拟栅格数据集",
+          "category": "虚拟数据集",
+          "input_types": ["栅格文件"],
+          "parameters": {
+            "inputs": {
+              "type": "array",
+              "description": "输入栅格文件列表",
+              "required": true,
+              "example": ["tile1.tif", "tile2.tif"]
+            },
+            "output": {
+              "type": "string",
+              "description": "输出VRT文件",
+              "required": true,
+              "example": "mosaic.vrt"
+            },
+            "separate": {
+              "type": "boolean",
+              "description": "分离波段",
+              "required": false,
+              "default": false
+            },
+            "resolution": {
+              "type": "string",
+              "description": "分辨率处理方式",
+              "required": false,
+              "options": ["highest", "lowest", "average", "user"]
+            }
+          },
+          "python_template": "from osgeo import gdal\ngdal.BuildVRT('{output}', {inputs}, separate={separate})",
+          "command_template": "gdalbuildvrt {separate} {output} {inputs}",
+          "examples": [
+            {
+              "description": "创建栅格镶嵌",
+              "code": "gdalbuildvrt mosaic.vrt *.tif"
+            },
+            {
+              "description": "波段分离VRT",
+              "code": "gdalbuildvrt -separate bands.vrt band1.tif band2.tif band3.tif"
+            }
+          ]
+        }
+      },
+      "tiling": {
+        "gdal2tiles": {
+          "function_name": "gdal2tiles.py",
+          "description": "生成瓦片地图",
+          "category": "瓦片生成",
+          "input_types": ["栅格文件"],
+          "parameters": {
+            "input": {
+              "type": "string",
+              "description": "输入栅格文件",
+              "required": true,
+              "example": "input.tif"
+            },
+            "output_dir": {
+              "type": "string",
+              "description": "输出目录",
+              "required": true,
+              "example": "tiles"
+            },
+            "zoom_levels": {
+              "type": "string",
+              "description": "缩放级别范围",
+              "required": false,
+              "example": "1-10"
+            },
+            "profile": {
+              "type": "string",
+              "description": "瓦片方案",
+              "required": false,
+              "default": "mercator",
+              "options": ["mercator", "geodetic", "raster"]
+            },
+            "tile_size": {
+              "type": "integer",
+              "description": "瓦片大小",
+              "required": false,
+              "default": 256,
+              "options": [256, 512]
+            }
+          },
+          "python_template": "import os\nos.system('gdal2tiles.py --zoom={zoom_levels} --profile={profile} {input} {output_dir}')",
+          "command_template": "gdal2tiles.py --zoom={zoom_levels} --profile={profile} {input} {output_dir}",
+          "examples": [
+            {
+              "description": "生成Web墨卡托瓦片",
+              "code": "gdal2tiles.py --zoom=1-15 --profile=mercator input.tif tiles/"
+            },
+            {
+              "description": "生成地理坐标瓦片",
+              "code": "gdal2tiles.py --zoom=1-10 --profile=geodetic input.tif tiles/"
+            }
+          ]
+        }
+      }
+    },
+    "specialized_operations": {
+      "contour": {
+        "gdal_contour": {
+          "function_name": "gdal_contour",
+          "description": "从DEM生成等高线",
+          "category": "矢量化",
+          "input_types": ["DEM栅格"],
+          "parameters": {
+            "input_dem": {
+              "type": "string",
+              "description": "输入DEM文件",
+              "required": true,
+              "example": "dem.tif"
+            },
+            "output": {
+              "type": "string",
+              "description": "输出矢量文件",
+              "required": true,
+              "example": "contours.shp"
+            },
+            "interval": {
+              "type": "number",
+              "description": "等高线间距",
+              "required": true,
+              "example": 10
+            },
+            "attribute_name": {
+              "type": "string",
+              "description": "高程字段名",
+              "required": false,
+              "default": "ELEV",
+              "example": "elevation"
+            },
+            "base_level": {
+              "type": "number",
+              "description": "基准高程",
+              "required": false,
+              "default": 0
+            }
+          },
+          "python_template": "from osgeo import gdal\ngdal.Contour('{output}', '{input_dem}', interval={interval}, elevationName='{attribute_name}')",
+          "command_template": "gdal_contour -a {attribute_name} -i {interval} {input_dem} {output}",
+          "examples": [
+            {
+              "description": "生成10米间距等高线",
+              "code": "gdal_contour -a ELEV -i 10 dem.tif contours.shp"
+            },
+            {
+              "description": "指定基准高程",
+              "code": "gdal_contour -a height -i 5 -b 100 dem.tif contours.shp"
+            }
+          ]
+        }
+      },
+      "polygonize": {
+        "gdal_polygonize": {
+          "function_name": "gdal_polygonize.py",
+          "description": "栅格矢量化",
+          "category": "矢量化",
+          "input_types": ["栅格文件"],
+          "parameters": {
+            "input_raster": {
+              "type": "string",
+              "description": "输入栅格文件",
+              "required": true,
+              "example": "classified.tif"
+            },
+            "output": {
+              "type": "string",
+              "description": "输出矢量文件",
+              "required": true,
+              "example": "polygons.shp"
+            },
+            "band": {
+              "type": "integer",
+              "description": "处理波段",
+              "required": false,
+              "default": 1
+            },
+            "field_name": {
+              "type": "string",
+              "description": "像素值字段名",
+              "required": false,
+              "default": "DN",
+              "example": "pixel_val"
+            },
+            "mask_band": {
+              "type": "string",
+              "description": "掩膜波段文件",
+              "required": false,
+              "example": "mask.tif"
+            }
+          },
+          "python_template": "import os\nos.system('gdal_polygonize.py {input_raster} -f \"ESRI Shapefile\" {output} layer {field_name}')",
+          "command_template": "gdal_polygonize.py {input_raster} -f \"ESRI Shapefile\" {output} layer {field_name}",
+          "examples": [
+            {
+              "description": "栅格转多边形",
+              "code": "gdal_polygonize.py classified.tif -f \"ESRI Shapefile\" polygons.shp layer VALUE"
+            },
+            {
+              "description": "使用掩膜",
+              "code": "gdal_polygonize.py input.tif -f \"GeoJSON\" output.json layer DN -mask mask.tif"
+            }
+          ]
+        }
+      },
+      "rasterize": {
+        "gdal_rasterize": {
+          "function_name": "gdal_rasterize",
+          "description": "矢量栅格化",
+          "category": "栅格化",
+          "input_types": ["矢量文件"],
+          "parameters": {
+            "input_vector": {
+              "type": "string",
+              "description": "输入矢量文件",
+              "required": true,
+              "example": "polygons.shp"
+            },
+            "output_raster": {
+              "type": "string",
+              "description": "输出栅格文件",
+              "required": true,
+              "example": "rasterized.tif"
+            },
+            "burn_values": {
+              "type": "array",
+              "description": "烧录值",
+              "required": false,
+              "example": [1]
+            },
+            "attribute": {
+              "type": "string",
+              "description": "属性字段名",
+              "required": false,
+              "example": "CLASS_ID"
+            },
+            "pixel_size": {
+              "type": "array",
+              "description": "像素大小 [x_size, y_size]",
+              "required": false,
+              "example": [30, 30]
+            },
+            "extent": {
+              "type": "array",
+              "description": "输出范围 [xmin, ymin, xmax, ymax]",
+              "required": false,
+              "example": [100, 30, 120, 50]
+            },
+            "data_type": {
+              "type": "string",
+              "description": "输出数据类型",
+              "required": false,
+              "default": "Byte",
+              "options": ["Byte", "UInt16", "Int16", "Float32"]
+            }
+          },
+          "python_template": "from osgeo import gdal\ngdal.Rasterize('{output_raster}', '{input_vector}', burnValues={burn_values}, xRes={x_res}, yRes={y_res}, outputBounds={extent})",
+          "command_template": "gdal_rasterize -burn {burn_value} -tr {pixel_size} -te {extent} {input_vector} {output_raster}",
+          "examples": [
+            {
+              "description": "按固定值栅格化",
+              "code": "gdal_rasterize -burn 1 -tr 30 30 polygons.shp output.tif"
+            },
+            {
+              "description": "按属性栅格化",
+              "code": "gdal_rasterize -a CLASS_ID -tr 10 10 -te 100 30 120 50 classes.shp classified.tif"
+            }
+          ]
+        }
+      }
+    },
+    "common_patterns": {
+      "batch_processing": {
+        "description": "批处理模式",
+        "examples": [
+          {
+            "description": "批量格式转换",
+            "bash_code": "for file in *.tif; do gdal_translate -of PNG \"$file\" \"${file%.tif}.png\"; done",
+            "python_code": "import glob\nfrom osgeo import gdal\nfor tif_file in glob.glob('*.tif'):\n    png_file = tif_file.replace('.tif', '.png')\n    gdal.Translate(png_file, tif_file, format='PNG')"
+          },
+          {
+            "description": "批量重投影",
+            "bash_code": "for file in *.shp; do ogr2ogr -t_srs EPSG:4326 \"wgs84_$file\" \"$file\"; done",
+            "python_code": "import glob\nfrom osgeo import gdal\nfor shp_file in glob.glob('*.shp'):\n    output_file = f'wgs84_{shp_file}'\n    gdal.VectorTranslate(output_file, shp_file, dstSRS='EPSG:4326')"
+          }
+        ]
+      },
+      "gis_analysis_workflows": {
+        "description": "GIS分析工作流",
+        "examples": [
+          {
+            "description": "矢量叠加分析流程",
+            "workflow": [
+              "1. 数据准备: 统一坐标系",
+              "2. 缓冲区分析: 构建分析范围",
+              "3. 叠加分析: 相交、联合、差集",
+              "4. 属性连接: 关联业务数据",
+              "5. 结果筛选: 按条件提取要素"
+            ],
+            "code_example": "# 完整矢量分析流程\n# 1. 坐标转换\nogr2ogr -t_srs EPSG:4326 roads_wgs84.shp roads.shp\n# 2. 缓冲区分析\nogr2ogr -dialect sqlite -sql \"SELECT ST_Buffer(geometry, 1000) FROM roads_wgs84\" road_buffer.shp roads_wgs84.shp\n# 3. 相交分析\nogr2ogr -dialect sqlite -sql \"SELECT a.*, b.* FROM buildings a, road_buffer b WHERE ST_Intersects(a.geometry, b.geometry)\" near_roads.shp buildings.shp"
+          },
+          {
+            "description": "栅格分析流程",
+            "workflow": [
+              "1. DEM预处理: 投影转换和裁剪",
+              "2. 地形分析: 坡度、坡向、山体阴影",
+              "3. 水文分析: 流向、汇流累积",
+              "4. 可视性分析: 视域分析",
+              "5. 专题制图: 等高线提取"
+            ],
+            "code_example": "# DEM综合分析流程\n# 1. 重投影DEM\ngdalwarp -t_srs EPSG:4326 -r bilinear dem_utm.tif dem_wgs84.tif\n# 2. 生成坡度\ngdaldem slope dem_wgs84.tif slope.tif\n# 3. 生成山体阴影\ngdaldem hillshade -z 2 -az 315 -alt 45 dem_wgs84.tif hillshade.tif\n# 4. 提取等高线\ngdal_contour -a ELEV -i 50 dem_wgs84.tif contours.shp"
+          }
+        ]
+      }
+    }
+  },
+  "metadata": {
+    "version": "2.0",
+    "created_date": "2025-01-16",
+    "updated_date": "2025-01-16",
+    "description": "GDAL/OGR 完整GIS分析功能库",
+    "total_functions": 45,
+    "categories": [
+      "坐标操作",
+      "矢量分析", 
+      "栅格分析",
+      "表格分析",
+      "实用工具",
+      "专业分析"
+    ],
+    "analysis_types": {
+      "vector_analysis": [
+        "缓冲区分析",
+        "叠加分析(裁剪、相交、差集、联合)",
+        "融合分析",
+        "属性连接",
+        "空间查询"
+      ],
+      "raster_analysis": [
+        "DEM地形分析",
+        "影像处理",
+        "遥感分析",
+        "栅格计算"
+      ],
+      "coordinate_operations": [
+        "坐标转换",
+        "坐标查询",
+        "投影变换"
+      ]
+    },
+    "supported_formats": {
+      "raster": ["GTiff", "PNG", "JPEG", "NetCDF", "HDF5", "GeoTIFF"],
+      "vector": ["ESRI Shapefile", "GeoJSON", "KML", "GPKG", "PostGIS", "CSV"]
+    },
+    "coordinate_systems": [
+      "EPSG:4326 (WGS84)",
+      "EPSG:3857 (Web Mercator)", 
+      "EPSG:2154 (RGF93 Lambert 93)",
+      "EPSG:32633 (UTM Zone 33N)"
+    ],
+    "analysis_capabilities": {
+      "常规分析": "缓冲区、裁剪、相交、差集、融合、联合等",
+      "地形分析": "坡度、坡向、山体阴影、等高线、地形指数",
+      "影像分析": "拼接、变化检测、植被指数、分类",
+      "数据转换": "格式转换、坐标转换、CSV转点要素"
+    }
+  }
+} 
