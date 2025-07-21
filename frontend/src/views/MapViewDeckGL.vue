@@ -179,7 +179,7 @@
             </el-button>
           </div>
           
-          <!-- 收起状态下的场景选择 -->
+          <!-- 收起状态下的场景选择样式 -->
           <div class="collapsed-scene-selector" v-if="sceneList && sceneList.length > 0">
             <!-- 场景区域标题 -->
              
@@ -438,7 +438,6 @@
             v-for="layer in availableLayers" 
             :key="layer.id"
             class="available-layer-item"
-            @click="selectLayer(layer)"
             :class="{ 'selected': selectedLayers.includes(layer.id) }"
           >
             <div class="layer-preview">
@@ -447,18 +446,46 @@
               </div>
             </div>
             <div class="layer-details">
-              <div class="layer-name">{{ layer.name }}</div>
+              <div class="layer-name">{{ layer.layer_name || layer.file_name || layer.original_name || '未命名图层' }}</div>
               <div class="layer-description">{{ layer.description || getLayerTypeText(layer) }}</div>
               <div class="layer-meta">
                 <span class="meta-item">{{ layer.file_type?.toUpperCase() }}</span>
-                <span class="meta-item">{{ layer.service_type }}</span>
+                <span class="meta-item">专业: {{ layer.discipline || '未知' }}</span>
               </div>
-            </div>
-            <div class="layer-actions">
-              <el-checkbox 
-                :model-value="selectedLayers.includes(layer.id)"
-                @change="toggleLayerSelection(layer)"
-              />
+              
+              <!-- 服务状态和操作按钮 -->
+              <div class="layer-services">
+                <!-- GeoServer服务 -->
+                <div v-if="layer.geoserver_service?.is_published" class="service-item">
+                  <el-tag type="success" size="small">GeoServer已发布</el-tag>
+                  <el-button 
+                    size="small" 
+                    type="primary" 
+                    @click="addLayerToScene(layer, 'geoserver')"
+                    :disabled="isLayerInScene(layer.id, 'geoserver')"
+                  >
+                    {{ isLayerInScene(layer.id, 'geoserver') ? '已添加' : '添加GeoServer' }}
+                  </el-button>
+                </div>
+                
+                <!-- Martin服务 -->
+                <div v-if="layer.martin_service?.is_published" class="service-item">
+                  <el-tag type="primary" size="small">Martin已发布</el-tag>
+                  <el-button 
+                    size="small" 
+                    type="success" 
+                    @click="addLayerToScene(layer, 'martin')"
+                    :disabled="isLayerInScene(layer.id, 'martin')"
+                  >
+                    {{ isLayerInScene(layer.id, 'martin') ? '已添加' : '添加Martin' }}
+                  </el-button>
+                </div>
+                
+                <!-- 未发布状态 -->
+                <div v-if="!hasAnyPublishedService(layer)" class="service-item">
+                  <el-tag type="warning" size="small">服务未发布</el-tag>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -979,29 +1006,33 @@ export default {
     const loadAvailableLayers = async () => {
       loadingLayers.value = true
       try {
-        // 这里调用实际的API
-        const response = await fetch('/api/layers/search', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            ...layerSearchForm,
-            page: currentPage.value,
-            pageSize: pageSize.value
+        // 参考OpenLayers版本的实现 - 使用正确的API
+        const params = { ...layerSearchForm }
+        Object.keys(params).forEach(key => params[key] === '' && delete params[key])
+
+        const response = await gisApi.getFiles(params)
+        let filteredFiles = response.data.files || []
+
+        if (layerSearchForm.service_type) {
+          filteredFiles = filteredFiles.filter(file => {
+            if (layerSearchForm.service_type === 'geoserver') {
+              return file.geoserver_service?.is_published
+            } else if (layerSearchForm.service_type === 'martin') {
+              return file.martin_service?.is_published
+            }
+            return false
           })
-        })
-        
-        if (response.ok) {
-          const data = await response.json()
-          availableLayers.value = data.layers || []
-          totalLayers.value = data.total || 0
-        } else {
-          ElMessage.error('加载图层列表失败')
         }
+
+        availableLayers.value = filteredFiles.map(file => ({
+          ...file,
+          layer_name: file.layer_name || file.file_name || file.original_name || '未命名图层'
+        }))
+        totalLayers.value = availableLayers.value.length
       } catch (error) {
         console.error('加载图层失败:', error)
-        // 使用模拟数据
+        ElMessage.error('加载图层列表失败')
+        // 使用模拟数据作为降级处理
         availableLayers.value = [
           {
             id: 1,
@@ -1044,8 +1075,6 @@ export default {
       searchLayers()
     }
     
-
-    
     // 切换图层选择
     const toggleLayerSelection = (layer) => {
       const index = selectedLayers.value.indexOf(layer.id)
@@ -1055,6 +1084,86 @@ export default {
         selectedLayers.value.push(layer.id)
       }
     }
+
+    // 检查图层是否已在场景中
+    const isLayerInScene = (fileId, serviceType) => {
+      return layersList.value.some(layer => layer.file_id === fileId && layer.service_type === serviceType)
+    }
+
+    // 检查文件是否有任何已发布的服务
+    const hasAnyPublishedService = (file) => {
+      return (file.geoserver_service?.is_published) || (file.martin_service?.is_published)
+    }
+
+    // 添加图层到场景 - 参考OpenLayers版本实现
+    const addLayerToScene = async (file, serviceType) => {
+      try {
+        if (!selectedSceneId.value) {
+          ElMessage.error('缺少场景ID，无法添加图层')
+          return
+        }
+        
+        const serviceInfo = serviceType === 'martin' ? file.martin_service : file.geoserver_service
+        
+        if (!serviceInfo?.is_published) {
+          ElMessage.error('服务未发布或不存在')
+          return
+        }
+        
+        let layerData = {
+          layer_name: file.file_name,
+          visible: true,
+          service_type: serviceType,
+          file_id: file.id,
+          file_type: file.file_type,
+          discipline: file.discipline
+        }
+        
+        if (serviceType === 'martin') {
+          const martinServices = await gisApi.searchMartinServices({ file_id: serviceInfo.file_id })
+          
+          const martinService = martinServices.data.services.find(service => service.file_id === serviceInfo.file_id)
+          
+          if (!martinService) {
+            ElMessage.error('未找到对应的Martin服务')
+            return
+          }
+          
+          layerData = {
+            ...layerData,
+            layer_id: String(martinService.database_record_id || martinService.id),
+            martin_service_id: String(martinService.database_record_id || martinService.id),
+            mvt_url: serviceInfo.mvt_url,
+            tilejson_url: serviceInfo.tilejson_url
+          }
+        } else {
+          const geoserverLayerId = serviceInfo.layer_id
+          if (!geoserverLayerId) {
+            ElMessage.error('GeoServer服务缺少图层ID')
+            return
+          }
+          
+          layerData = {
+            ...layerData,
+            layer_id: String(geoserverLayerId),
+            geoserver_layer_name: serviceInfo.layer_name,
+            wms_url: serviceInfo.wms_url,
+            wfs_url: serviceInfo.wfs_url
+          }
+        }
+        
+        await gisApi.addLayerToScene(selectedSceneId.value, layerData)
+        
+        ElMessage.success(`图层 "${file.file_name}" 添加成功`)
+        
+        addLayerDialogVisible.value = false
+        fetchSceneLayers(selectedSceneId.value)
+        
+      } catch (error) {
+        const errorMessage = error.response?.data?.error || error.message || '添加图层失败'
+        ElMessage.error(`添加图层失败: ${errorMessage}`)
+      }
+    }
     
     // 添加选中图层
     const addSelectedLayers = () => {
@@ -1062,21 +1171,17 @@ export default {
         selectedLayers.value.includes(layer.id)
       )
       
-      layersToAdd.forEach(layer => {
-        // 检查图层是否已存在
-        if (!layersList.value.find(l => l.id === layer.id)) {
-          layersList.value.push({
-            ...layer,
-            visible: true,
-            opacity: 100,
-            zIndex: layersList.value.length
-          })
+      layersToAdd.forEach(async (layer) => {
+        // 检查是否有可用的服务
+        if (layer.martin_service?.is_published) {
+          await addLayerToScene(layer, 'martin')
+        } else if (layer.geoserver_service?.is_published) {
+          await addLayerToScene(layer, 'geoserver')
         }
       })
       
       selectedLayers.value = []
       addLayerDialogVisible.value = false
-      ElMessage.success(`已添加 ${layersToAdd.length} 个图层`)
     }
     
     // 处理分页变化
@@ -1228,6 +1333,10 @@ export default {
       
       toggleLayerSelection,
       addSelectedLayers,
+      addLayerToScene,
+      isLayerInScene,
+      hasAnyPublishedService,
+      loadAvailableLayers,
       handlePageChange,
       onSceneChange,
       toggleLayersCache,
@@ -2502,92 +2611,127 @@ export default {
 }
 
 /* 添加图层对话框 */
+.add-layer-dialog-content {
+  height: 600px;
+  display: flex;
+  flex-direction: column;
+}
+
 .layer-search-section {
   margin-bottom: 20px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid #e4e7ed;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #ebeef5;
 }
 
 .available-layers {
-  max-height: 400px;
+  flex: 1;
   overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 15px;
+  padding: 10px 0;
 }
 
 .available-layer-item {
-  display: flex;
-  align-items: center;
-  padding: 12px;
   border: 1px solid #e4e7ed;
   border-radius: 8px;
-  margin-bottom: 8px;
+  padding: 15px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .available-layer-item:hover {
   border-color: #409eff;
-  background-color: #f0f9ff;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
 }
 
 .available-layer-item.selected {
   border-color: #409eff;
-  background-color: #e1f3ff;
+  background-color: #f0f9ff;
 }
 
 .layer-preview {
-  width: 40px;
-  height: 40px;
-  margin-right: 12px;
-  flex-shrink: 0;
-}
-
-.preview-placeholder {
-  width: 100%;
-  height: 100%;
-  background: #f5f7fa;
-  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  height: 40px;
+  background: #f5f7fa;
+  border-radius: 4px;
+}
+
+.preview-placeholder {
+  font-size: 20px;
+  color: #909399;
 }
 
 .layer-details {
   flex: 1;
-  min-width: 0;
 }
 
-.layer-details .layer-name {
-  font-weight: 500;
-  margin-bottom: 4px;
+.layer-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #303133;
+  margin-bottom: 5px;
+  word-break: break-word;
 }
 
 .layer-description {
   font-size: 12px;
-  color: #909399;
-  margin-bottom: 4px;
+  color: #606266;
+  margin-bottom: 8px;
+  line-height: 1.4;
 }
 
 .layer-meta {
   display: flex;
   gap: 8px;
+  margin-bottom: 10px;
 }
 
 .meta-item {
+  font-size: 11px;
+  color: #909399;
   background: #f0f2f5;
-  color: #606266;
-  font-size: 10px;
   padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.layer-services {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.service-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px;
+  background: #fafbfc;
   border-radius: 4px;
+  border: 1px solid #e4e7ed;
+}
+
+.service-item .el-tag {
+  flex-shrink: 0;
+}
+
+.service-item .el-button {
+  flex-shrink: 0;
 }
 
 .pagination-wrapper {
   margin-top: 20px;
-  text-align: center;
-}
-
-.dialog-footer {
-  text-align: right;
+  display: flex;
+  justify-content: center;
+  padding: 15px 0;
+  border-top: 1px solid #ebeef5;
 }
 
 /* 🔥 桌面端面板收缩功能样式加强 */
