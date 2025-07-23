@@ -1,0 +1,95 @@
+
+<svg width="800" height="550" xmlns="http://www.w3.org/2000/svg">
+  <!-- 定义渐变和阴影 -->
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A90E2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#357ABD;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#5BC0DE;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#46B8DA;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad3" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#5CB85C;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#449D44;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad4" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#F0AD4E;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#EC971F;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="3" dy="3" stdDeviation="2" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- 主要组件层 -->
+  <!-- 前端上传模块 -->
+  <rect x="50" y="50" width="150" height="80" rx="10" fill="url(#grad1)" filter="url(#shadow)"/>
+  <text x="125" y="80" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="14" font-weight="bold">前端上传</text>
+  <text x="125" y="100" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="12">Web界面</text>
+
+  <!-- 后端处理模块 -->
+  <rect x="325" y="50" width="150" height="80" rx="10" fill="url(#grad2)" filter="url(#shadow)"/>
+  <text x="400" y="80" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="14" font-weight="bold">后端处理</text>
+  <text x="400" y="100" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="12">转换服务</text>
+
+  <!-- 数据存储模块 -->
+  <rect x="600" y="50" width="150" height="80" rx="10" fill="url(#grad3)" filter="url(#shadow)"/>
+  <text x="675" y="80" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="14" font-weight="bold">数据存储</text>
+  <text x="675" y="100" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="12">PostGIS DB</text>
+
+  <!-- 消息队列模块 -->
+  <rect x="325" y="200" width="150" height="80" rx="10" fill="url(#grad4)" filter="url(#shadow)"/>
+  <text x="400" y="230" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="14" font-weight="bold">消息队列</text>
+  <text x="400" y="250" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="12">异步处理</text>
+
+  <!-- 3D Tiles服务模块 -->
+  <rect x="325" y="350" width="150" height="80" rx="10" fill="url(#grad1)" filter="url(#shadow)"/>
+  <text x="400" y="380" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="14" font-weight="bold">3D Tiles</text>
+  <text x="400" y="400" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="12">服务接口</text>
+
+  <!-- 连接箭头 -->
+  <!-- 前端到后端 -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#333" />
+    </marker>
+  </defs>
+
+  <!-- 主流程箭头 -->
+  <line x1="200" y1="90" x2="325" y2="90" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+  <line x1="475" y1="90" x2="600" y2="90" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+  <!-- 异步处理箭头 -->
+  <line x1="400" y1="130" x2="400" y2="200" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+  <!-- 服务接口箭头 -->
+  <line x1="400" y1="280" x2="400" y2="350" stroke="#333" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+  <!-- 反馈连接线 -->
+  <path d="M 675 130 Q 675 160 650 160 L 150 160 Q 125 160 125 130" stroke="#666" stroke-width="2" fill="none" stroke-dasharray="5,5"/>
+  <line x1="125" y1="160" x2="125" y2="130" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>
+
+  <!-- 服务到所有组件的连接 -->
+  <path d="M 325 390 Q 200 390 200 300 L 200 160 Q 200 130 125 130" stroke="#666" stroke-width="2" fill="none" stroke-dasharray="5,5"/>
+  <path d="M 475 390 Q 600 390 600 300 L 600 160 Q 600 130 675 130" stroke="#666" stroke-width="2" fill="none" stroke-dasharray="5,5"/>
+
+  <!-- 流程标签 -->
+  <text x="260" y="85" text-anchor="middle" fill="#333" font-family="Arial, sans-serif" font-size="11">数据上传</text>
+  <text x="535" y="85" text-anchor="middle" fill="#333" font-family="Arial, sans-serif" font-size="11">数据存储</text>
+  <text x="415" y="165" text-anchor="middle" fill="#333" font-family="Arial, sans-serif" font-size="11">异步处理</text>
+  <text x="415" y="320" text-anchor="middle" fill="#333" font-family="Arial, sans-serif" font-size="11">服务发布</text>
+
+  <!-- 数据流说明 -->
+  <text x="50" y="480" fill="#666" font-family="Arial, sans-serif" font-size="12">
+    <tspan x="50" dy="0">数据流向：</tspan>
+    <tspan x="50" dy="15">1. 用户通过Web界面上传三维数据文件</tspan>
+    <tspan x="50" dy="15">2. 后端转换服务处理并转换为3D Tiles格式</tspan>
+    <tspan x="50" dy="15">3. 转换结果存储到PostGIS数据库中</tspan>
+    <tspan x="50" dy="15">4. 通过3D Tiles服务接口对外提供数据访问</tspan>
+  </text>
+
+  <!-- 标题 -->
+  <text x="400" y="30" text-anchor="middle" fill="#333" font-family="Arial, sans-serif" font-size="18" font-weight="bold">三维数据发布服务整体架构</text>
+</svg>

@@ -1,0 +1,11 @@
+Chiao-Ling Kuo, Han-Chuan Chou,
+An ontology-based framework for semantic geographic information systems development and understanding,
+Computers & Geosciences,
+Volume 181,
+2023,
+105462,
+ISSN 0098-3004,
+https://doi.org/10.1016/j.cageo.2023.105462.
+(https://www.sciencedirect.com/science/article/pii/S0098300423001668)
+Abstract: Geographic information systems (GIS) are a widely used approach for geodata manipulation, analysis, and geoinformation visualization. Although the issue of semantic heterogeneity for GIS applications has been widely addressed, the development of flexible semantic GIS systems can still be improved, and GIS interfaces can be further unified to enhance system understanding among users of various GIS systems. This study proposes an ontology-based semantic GIS conceptual framework that can seamlessly combine ontology models, GIS elements and user actions for semantic GIS application development. In addition, a GIS components ontology that encompasses the five fundamental components of GIS is proposed to integrate GIS elements that can perceive GIS operations and processes semantically and to support customized GIS system designs. Moreover, a semantic WebGIS implementation framework is designed on the basis of the proposed conceptual framework to facilitate semantic WebGIS development. The implementation uses two common application scenarios regarding urban change analysis and user interaction. The former performs semantic retrieval for urban change analysis with system understanding, whereas the latter conducts online thematic mapping with semantic interpretation. The study contributes in terms of innovation in the design of a unified GIS components ontology and successful implementation of a semantic GIS system using the ontology-driven approach, thereby providing a convincing demonstration of the latter and showing the potential for semantic GIS application paradigms.
+Keywords: Ontology; GIS components; Semantic GIS development; System comprehensibility; WebGIS; Online thematic mapping

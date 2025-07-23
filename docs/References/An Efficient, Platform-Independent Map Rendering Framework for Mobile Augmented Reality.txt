@@ -1,0 +1,44 @@
+An Efficient, Platform-Independent Map Rendering Framework for Mobile Augmented Reality
+by Kejia Huang 1,†
+ 
+,Chenliang Wang 2,†
+ 
+,Shaohua Wang 3,*,Runying Liu 1,Guoxiong Chen 1 andXianglong Li 1
+1
+SuperMap Software Co., Ltd., Beijing 100015, China
+2
+Institute of Geographic Sciences and Natural Resources Research, Chinese Academy of Sciences, Beijing 100101, China
+3
+State Key Laboratory of Remote Sensing Science, Aerospace Information Research Institute, Chinese Academy of Sciences, Beijing 100094, China
+*
+Author to whom correspondence should be addressed.
+†
+Co-first author, these authors contributed equally to this work.
+ISPRS Int. J. Geo-Inf. 2021, 10(9), 593; https://doi.org/10.3390/ijgi10090593
+Submission received: 22 June 2021 / Revised: 21 August 2021 / Accepted: 3 September 2021 / Published: 8 September 2021
+(This article belongs to the Special Issue Geovisualization and Map Design)
+Download
+keyboard_arrow_down
+Browse Figures
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Versions Notes
+Abstract
+With the extensive application of big spatial data and the emergence of spatial computing, augmented reality (AR) map rendering has attracted significant attention. A common issue in existing solutions is that AR-GIS systems rely on different platform-specific graphics libraries on different operating systems, and rendering implementations can vary across various platforms. This causes performance degradation and rendering styles that are not consistent across environments. However, high-performance rendering consistency across devices is critical in AR-GIS, especially for edge collaborative computing. In this paper, we present a high-performance, platform-independent AR-GIS rendering engine; the augmented reality universal graphics library (AUGL) engine. A unified cross-platform interface is proposed to preserve AR-GIS rendering style consistency across platforms. High-performance AR-GIS map symbol drawing models are defined and implemented based on a unified algorithm interface. We also develop a pre-caching strategy, optimized spatial-index querying, and a GPU-accelerated vector drawing algorithm that minimizes IO latency throughout the rendering process. Comparisons to existing AR-GIS visualization engines indicate that the performance of the AUGL engine is two times higher than that of the AR-GIS rendering engine on the Android, iOS, and Vuforia platforms. The drawing efficiency for vector polygons is improved significantly. The rendering performance is more than three times better than the average performances of existing Android and iOS systems.
+Keywords: AR-GIS; spatial computing; geovisualization; mobile augmented reality; GPU; parallel technology

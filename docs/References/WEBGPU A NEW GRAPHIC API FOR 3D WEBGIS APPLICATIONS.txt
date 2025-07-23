@@ -1,0 +1,20 @@
+The International Archives of the Photogrammetry, Remote Sensing and Spatial Information Sciences, Volume XLVIII-4/W9-2024 
+GeoAdvances 2024 – 8th International Conference on GeoInformation Advances, 11–12 January 2024, Istanbul, Türkiye
+ WEBGPU: A NEW GRAPHIC API FOR 3D WEBGIS APPLICATIONS 
+Z. Usta 
+Department of Geomatic Engineering, Engineering Faculty, Artvin Çoruh University, Artvin, Turkey - ziyausta@artvin.edu.tr 
+KEY WORDS: WebGPU, Visualization, 3D Graphics, 3D Rendering, 3D City Model, WebGIS, Digital Twins. 
+ABSTRACT: 
+As smart city applications increase today, the importance of web-based representations of data that serve as inputs for these 
+applications, such as 3D city models and digital twins, is growing. Since 2011, GPU hardware has greatly advanced, and detailed 
+3DCMs and digital twins have increased the size of the data to be displayed, which in turn increases performance requirements. 
+WebGL, which couldn’t fully harness the capabilities and power of modern GPUs, began to struggle to meet the increasing performance 
+demands over time and become a bit outdated. Consequently, a new graphic API named WebGPU was developed by W3C as a response 
+to limitations of WebGL and went live with Chrome 113. Now, we have a brand-new graphic API called WebGPU which harness the 
+full power of modern GPUs and more performant than WebGL. As WebGPU is a new graphic API, its potential enhancements and 
+what it can bring over WebGL in the terms of WebGIS have not been examined yet. Hence, the main idea and contribution of this 
+work is to investigate WebGPU in real-world use cases for WebGIS applications and discuss what it brings over WebGL. For this 
+purpose, a side-by-side performance comparison has been made. The comparisons have been made in the terms of API differences and 
+performance. And finally, an experiment has been carried out how much data can be rendered can be rendered at minimum 60fps in 
+both APIs. The experiments show that WebGPU is more low-level and way more performant than WebGL and it has a lot to offer in 
+the terms of WebGIS applications. 
