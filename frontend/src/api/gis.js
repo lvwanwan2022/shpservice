@@ -139,7 +139,7 @@ export default {
       if (file.name.endsWith('.zip')) {
         maxSize = 500; // ZIP文件500MB
       } else if (file.name.toLowerCase().endsWith('.tif') || file.name.toLowerCase().endsWith('.tiff') || file.name.toLowerCase().endsWith('.mbtiles')) {
-        maxSize = 10000; // TIF和MBTiles文件允许10GB
+        maxSize = 50000; // TIF和MBTiles文件允许50GB
       }
       
       // 检查文件类型与表单选择是否匹配

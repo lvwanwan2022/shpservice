@@ -87,6 +87,8 @@ import { MVTLayer } from '@deck.gl/geo-layers'
 import { TerrainLayer } from '@deck.gl/geo-layers'
 // 导入TerrainExtension用于将2D图层贴合到3D地形
 import { _TerrainExtension as TerrainExtension } from '@deck.gl/extensions'
+// 导入ScatterplotLayer用于用户位置标记
+import { ScatterplotLayer } from '@deck.gl/layers'
 import BaseMapSwitcherDeckGL from './BaseMapSwitcherDeckGL.vue'
 // 导入Martin配置 - 参考OpenLayers的配置导入
 import { MARTIN_BASE_URL } from '@/config/index'
@@ -125,6 +127,7 @@ export default {
     const locationLoading = ref(false) // 定位加载状态
     const userLocationVisible = ref(false) // 用户位置可见状态
     const currentBaseMapAttribution = ref('') // 底图版权信息
+    const userLocationCoords = ref(null) // 用户位置坐标
     
     // 鼠标坐标
     const mouseCoordinates = reactive({
@@ -555,6 +558,39 @@ export default {
     // 三维模式状态
     const is3DModeEnabled = ref(false)
     
+    // 创建用户位置标记图层
+    const createUserLocationLayer = () => {
+      if (!userLocationCoords.value || !userLocationVisible.value) return null
+      
+      const layerConfig = {
+        id: 'user-location',
+        data: [{ position: userLocationCoords.value, name: '我的位置' }],
+        pickable: true,
+        opacity: 0.9,
+        stroked: true,
+        filled: true,
+        radiusScale: 1,
+        radiusMinPixels: 10,
+        radiusMaxPixels: 25,
+        lineWidthMinPixels: 3,
+        getPosition: d => d.position,
+        getRadius: 15,
+        getFillColor: [64, 158, 255, 200], // 蓝色填充
+        getLineColor: [255, 255, 255, 255], // 白色边框
+        // 确保在最上层显示
+        renderOrder: 1000
+      }
+      
+      // 在三维模式下贴合地形
+      if (is3DModeEnabled.value) {
+        layerConfig.extensions = [new TerrainExtension()]
+        layerConfig.terrainDrawMode = 'drape'
+        console.log('📍 用户位置标记已启用三维地形贴合')
+      }
+      
+      return new ScatterplotLayer(layerConfig)
+    }
+    
     // 底图切换 - 参考OpenLayers的实现，支持三维模式
     const onBaseMapChange = (baseMap) => {
       console.log('切换底图:', baseMap)
@@ -627,6 +663,13 @@ export default {
           console.log('二维模式无数据：只显示底图')
         }
         
+        // 添加用户位置图层（如果存在）
+        const userLocationLayer = createUserLocationLayer()
+        if (userLocationLayer) {
+          layersToShow.push(userLocationLayer)
+          console.log('📍 已添加用户位置标记图层（无数据模式）')
+        }
+        
         deckgl.value.setProps({
           layers: layersToShow
         })
@@ -651,6 +694,13 @@ export default {
           const baseLayer = createBaseMapLayer()
           allLayers = [baseLayer, ...dataLayers]
           console.log('二维模式图层结构: 底图(1) + 数据(' + dataLayers.length + ') = ' + allLayers.length)
+        }
+        
+        // 添加用户位置图层（如果存在）
+        const userLocationLayer = createUserLocationLayer()
+        if (userLocationLayer) {
+          allLayers.push(userLocationLayer)
+          console.log('📍 已添加用户位置标记图层')
         }
         
         deckgl.value.setProps({
@@ -1195,6 +1245,9 @@ export default {
         const { longitude, latitude } = position.coords
         console.log('🔥 用户定位坐标:', { longitude, latitude })
         
+        // 保存用户位置坐标
+        userLocationCoords.value = [longitude, latitude]
+        
         if (deckgl.value) {
           // 获取当前视图状态并保持三维模式的pitch
           const currentViewState = deckgl.value.viewState
@@ -1202,29 +1255,33 @@ export default {
           
           const pitch = is3DModeEnabled.value ? (currentViewState.pitch || 45) : 0
           
-          // 使用正确的viewState属性进行动画过渡
+          // 使用控制器的animateToViewState方法，避免锁定视口
           const targetViewState = {
             longitude,
             latitude,
             zoom: 15,
             pitch,
             bearing: currentViewState.bearing || 0,
-            transitionDuration: 1500, // 增加动画时间，更平滑
+            transitionDuration: 1500,
             transitionInterpolator: null
           }
           
           console.log('🔥 目标视图状态:', targetViewState)
           
-          // 设置目标视图状态，让DeckGL进行动画过渡
+          // 先更新图层以显示位置标记
+          updateMapLayers(props.layers || [])
+          
+          // 使用控制器的过渡方法而不是直接设置viewState
           deckgl.value.setProps({
+            initialViewState: targetViewState,
             viewState: targetViewState
           })
           
-          // 在动画完成后释放viewState控制，让用户可以自由交互
+          // 短暂延迟后释放viewState控制，保持位置标记显示
           setTimeout(() => {
             if (deckgl.value) {
-              console.log('🔥 定位动画完成，释放视图状态控制')
-              // 移除viewState控制，让控制器接管
+              console.log('🔥 定位动画完成，释放视图状态控制，保持位置标记')
+              // 移除viewState控制，让控制器接管，但保持位置坐标
               deckgl.value.setProps({
                 viewState: undefined
               })
@@ -1253,6 +1310,9 @@ export default {
     // 隐藏用户位置
     const hideUserLocation = () => {
       userLocationVisible.value = false
+      userLocationCoords.value = null // 清除位置坐标
+      // 更新图层以移除位置标记
+      updateMapLayers(props.layers || [])
       ElMessage.info('已关闭位置显示')
     }
     
@@ -1310,8 +1370,15 @@ export default {
       console.log('2. 底图覆盖:', currentBaseMap.value.name)
       console.log('3. 数据图层:', dataLayers.length, '个')
       
-      // 图层顺序：地形（底） -> 底图（中） -> 数据图层（上）
-      const allLayers = [...terrainLayers, baseMapLayer, ...dataLayers]
+      // 图层顺序：地形（底） -> 底图（中） -> 数据图层（上） -> 用户位置（最上）
+      let allLayers = [...terrainLayers, baseMapLayer, ...dataLayers]
+      
+      // 添加用户位置图层（如果存在）
+      const userLocationLayer = createUserLocationLayer()
+      if (userLocationLayer) {
+        allLayers.push(userLocationLayer)
+        console.log('📍 已添加用户位置标记图层（三维模式）')
+      }
       
       // 设置三维视图，确保控制器完全启用
       deckgl.value.setProps({
@@ -1394,8 +1461,15 @@ export default {
       // 创建普通底图图层
       const baseLayer = createBaseMapLayer()
       
-      // 图层顺序：底图 + 数据图层
-      const allLayers = [baseLayer, ...dataLayers]
+      // 图层顺序：底图 + 数据图层 + 用户位置
+      let allLayers = [baseLayer, ...dataLayers]
+      
+      // 添加用户位置图层（如果存在）
+      const userLocationLayer = createUserLocationLayer()
+      if (userLocationLayer) {
+        allLayers.push(userLocationLayer)
+        console.log('📍 已添加用户位置标记图层（二维模式）')
+      }
       
       console.log('🎯 二维模式图层顺序:')
       console.log('1. 底图:', currentBaseMap.value.name)

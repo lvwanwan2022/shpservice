@@ -92,7 +92,7 @@ FILE_STORAGE = {
     'upload_folder': 'F:/PluginDevelopment/shpservice/FilesData',#os.path.join(os.path.dirname(os.path.dirname(__file__)), 'FilesData'),
     'temp_folder': os.path.join(os.path.dirname(os.path.dirname(__file__)), 'temp'),  # 临时文件目录
     'allowed_extensions': ['zip', 'shp', 'geojson', 'json', 'kml', 'gpkg', 'tif', 'tiff', 'dxf', 'mbtiles'],
-    'max_content_length': 10 * 1024 * 1024 * 1024,  # 10GB
+    'max_content_length': 50 * 1024 * 1024 * 1024,  # 50GB
     'chunk_size': 10 * 1024 * 1024,  # 分片大小: 10MB
     'chunk_cleanup_hours': 24,  # 分片文件清理时间: 24小时
 }

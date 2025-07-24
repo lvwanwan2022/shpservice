@@ -39,7 +39,7 @@ except ImportError:
     app.config.update({
         'SECRET_KEY': 'shpservice-secret-key',
         'DEBUG': True,
-        'MAX_CONTENT_LENGTH': 10 * 1024 * 1024 * 1024  # 10GB
+        'MAX_CONTENT_LENGTH': 50 * 1024 * 1024 * 1024  # 50GB
     })
 
 # 启用CORS

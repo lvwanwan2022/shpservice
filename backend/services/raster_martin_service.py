@@ -7,7 +7,7 @@ import uuid
 import zipfile
 import tempfile
 import shutil
-import geopandas as gpd
+#import geopandas as gpd
 from pathlib import Path
 from models.db import execute_query, insert_with_snowflake_id
 from sqlalchemy import create_engine, text
@@ -59,7 +59,7 @@ class RasterMartinService:
             # 确定vector_type，默认为mbtiles，但如果指定了类型则使用指定类型
             vector_type = 'mbtiles'
             if mbtiles_type:
-                vector_type = f"{mbtiles_type}_mbtiles"
+                vector_type = mbtiles_type
             
             # 保存服务信息到数据库,共用vector_martin_services表，vector_type为raster
             params = {

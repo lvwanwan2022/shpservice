@@ -582,7 +582,7 @@ def init_database():
             file_id VARCHAR(36) NOT NULL UNIQUE,
             original_filename VARCHAR(255) NOT NULL,
             file_path TEXT NOT NULL,
-            vector_type VARCHAR(20) NOT NULL, -- 'geojson' 或 'shp'
+            vector_type VARCHAR(40) NOT NULL, -- 'geojson' 或 'shp'
             table_name VARCHAR(100) NOT NULL,
             service_url TEXT,
             mvt_url TEXT,

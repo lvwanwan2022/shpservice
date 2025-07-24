@@ -582,7 +582,7 @@
             <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
             <template #tip>
               <div class="el-upload__tip">
-                支持格式：dem.tif(最大10GB), dom.tif(最大10GB), vector.mbtiles(矢量瓦片,最大10GB), raster.mbtiles(栅格瓦片,最大10GB), dxf, geojson, zip(最大500MB, shp需打包成zip上传)<br>
+                支持格式：dem.tif(最大10GB), dom.tif(最大10GB), vector.mbtiles(矢量瓦片,最大50GB), raster.mbtiles(栅格瓦片,最大50GB), dxf, geojson, zip(最大500MB, shp需打包成zip上传)<br>
                 <span style="color: #67C23A; font-size: 12px;">
                   💡 大文件(>500MB)将自动使用分片上传，网络中断时会自动重试，确保上传成功
                 </span>
