@@ -33,38 +33,38 @@
         <span class="toggle-text">搜索筛选</span>
         <div class="search-summary" v-if="!mobileSearchExpanded && hasActiveFilters">
           <el-tag size="small" type="primary">{{ getActiveFiltersText() }}</el-tag>
-        </div>
+      </div>
       </div>
 
       <!-- 搜索筛选区域 -->
       <div class="search-filters" :class="{ 'mobile-collapsed': !mobileSearchExpanded }">
-        <div class="toolbar-right">
-          <el-select
-            v-model="selectedSceneFilter"
-            placeholder="按场景筛选"
-            clearable
-            size="small"
-            style="width: 160px; margin-right: 8px;"
-            @change="filterCacheData"
-          >
-            <el-option
-              v-for="scene in sceneList"
-              :key="scene.id"
-              :label="scene.name"
-              :value="scene.id"
-            />
-          </el-select>
-          <el-input
-            v-model="cacheSearchText"
-            placeholder="搜索场景名或图层名"
-            size="small"
-            style="width: 200px"
-            @input="filterCacheData"
-          >
-            <template #prefix>
-              <i class="el-icon-search"></i>
-            </template>
-          </el-input>
+      <div class="toolbar-right">
+        <el-select
+          v-model="selectedSceneFilter"
+          placeholder="按场景筛选"
+          clearable
+          size="small"
+          style="width: 160px; margin-right: 8px;"
+          @change="filterCacheData"
+        >
+          <el-option
+            v-for="scene in sceneList"
+            :key="scene.id"
+            :label="scene.name"
+            :value="scene.id"
+          />
+        </el-select>
+        <el-input
+          v-model="cacheSearchText"
+          placeholder="搜索场景名或图层名"
+          size="small"
+          style="width: 200px"
+          @input="filterCacheData"
+        >
+          <template #prefix>
+            <i class="el-icon-search"></i>
+          </template>
+        </el-input>
         </div>
       </div>
     </div>
@@ -287,9 +287,9 @@
           <el-table-column prop="layerName" label="图层名称" min-width="150" show-overflow-tooltip />
           <el-table-column  label="服务类型" min-width="150">
             <template #default="{ row }">
-              <span>{{ row.originalLayer && row.originalLayer.service_type ? row.originalLayer.service_type : row.layerType }}</span>
-            </template>
-          </el-table-column>
+    <span>{{ row.originalLayer && row.originalLayer.service_type ? row.originalLayer.service_type : row.layerType }}</span>
+  </template>
+  </el-table-column>
           
           <!-- 缓存状态 -->
           <el-table-column label="缓存状态" width="100" align="center">
@@ -466,7 +466,7 @@
         </div>
       </div>
     </el-dialog>
-
+    
     
 
     <!-- 瓦片预览对话框 -->
@@ -477,13 +477,13 @@
       :top="isMobile ? '10vh' : '15vh'"
       custom-class="tile-preview-dialog"
     >
-      <div v-if="tileImageUrl">
-        <img :src="tileImageUrl" style="max-width:100%;" />
-      </div>
-      <div v-else>
-        <span>该瓦片不是图片类型或无法预览。</span>
-      </div>
-    </el-dialog>
+  <div v-if="tileImageUrl">
+    <img :src="tileImageUrl" style="max-width:100%;" />
+  </div>
+  <div v-else>
+    <span>该瓦片不是图片类型或无法预览。</span>
+  </div>
+</el-dialog>
   </div>
 </template>
 
@@ -1600,7 +1600,7 @@ const baseMaps = [
             setTimeout(() => {
               configMap.updateSize();
               console.log('移动端地图尺寸二次更新完成');
-            }, 100);
+      }, 100);
           }
         }
       }, delay);

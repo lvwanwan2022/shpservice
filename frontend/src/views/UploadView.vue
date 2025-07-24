@@ -111,12 +111,14 @@
                   </el-button>
                 </div>
                 <div v-else class="mobile-coordinate-edit">
-                  <el-input 
-                    v-model="file.temp_coordinate_system"
-                    size="small"
-                    placeholder="如: EPSG:4326"
-                    @keyup.enter="saveCoordinate(file)"
-                  />
+                  <div class="mobile-coordinate-edit-row">
+                    <el-input 
+                      v-model="file.temp_coordinate_system"
+                      size="small"
+                      placeholder="如: EPSG:4326"
+                      @keyup.enter="saveCoordinate(file)"
+                    />
+                  </div>
                   <div class="mobile-coordinate-edit-buttons">
                     <el-button 
                       size="small" 
@@ -126,7 +128,12 @@
                       class="mobile-search-coordinate-btn"
                       circle
                     >
-                      <i class="el-icon-search"></i>
+                    <svg class="coordinate-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <path d="m21 21-4.35-4.35"></path>
+                      <path d="M11 7v8"></path>
+                      <path d="M7 11h8"></path>
+                    </svg>
                     </el-button>
                     <el-button 
                       size="small" 
@@ -136,7 +143,12 @@
                       class="mobile-save-coordinate-btn"
                       circle
                     >
-                      <i class="el-icon-check"></i>
+                    <svg class="coordinate-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                      <polyline points="17,21 17,13 7,13 7,21"></polyline>
+                      <polyline points="7,3 7,8 15,8"></polyline>
+                      <path d="M9 17h6"></path>
+                    </svg>
                     </el-button>
                     <el-button 
                       size="small" 
@@ -146,7 +158,11 @@
                       class="mobile-cancel-coordinate-btn"
                       circle
                     >
-                      <i class="el-icon-close"></i>
+                    <svg class="coordinate-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="m15 9-6 6"></path>
+                      <path d="m9 9 6 6"></path>
+                    </svg>
                     </el-button>
                   </div>
                 </div>
@@ -455,43 +471,61 @@
                 </el-button>
               </div>
               <div v-else class="coordinate-edit">
-                <el-input 
-                  v-model="scope.row.temp_coordinate_system"
-                  size="small"
-                  placeholder="如: EPSG:4326"
-                  style="width: 110px;"
-                  @keyup.enter="saveCoordinate(scope.row)"
-                />
-                <el-button 
-                  size="small" 
-                  type="success"
-                  link
-                  @click="openCoordinateSearchForFile(scope.row)"
-                  title="搜索坐标系"
-                  class="search-coordinate-btn"
-                >
-                  <i class="el-icon-search"></i>
-                </el-button>
-                <el-button 
-                  size="small" 
-                  type="primary"
-                  link
-                  @click="saveCoordinate(scope.row)"
-                  title="保存"
-                  class="save-coordinate-btn"
-                >
-                  <i class="el-icon-check"></i>
-                </el-button>
-                <el-button 
-                  size="small" 
-                  type="info"
-                  link
-                  @click="cancelEditCoordinate(scope.row)"
-                  title="取消"
-                  class="cancel-coordinate-btn"
-                >
-                  <i class="el-icon-close"></i>
-                </el-button>
+                <div class="coordinate-edit-row">
+                  <el-input 
+                    v-model="scope.row.temp_coordinate_system"
+                    size="small"
+                    placeholder="如: EPSG:4326"
+                    style="width: 110px;"
+                    @keyup.enter="saveCoordinate(scope.row)"
+                  />
+                </div>
+                <div class="coordinate-edit-buttons">
+                  <el-button 
+                    size="small" 
+                    type="success"
+                    link
+                    @click="openCoordinateSearchForFile(scope.row)"
+                    title="搜索坐标系"
+                    class="search-coordinate-btn"
+                  >
+                    <svg class="coordinate-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <path d="m21 21-4.35-4.35"></path>
+                      <path d="M11 7v8"></path>
+                      <path d="M7 11h8"></path>
+                    </svg>
+                  </el-button>
+                  <el-button 
+                    size="small" 
+                    type="primary"
+                    link
+                    @click="saveCoordinate(scope.row)"
+                    title="保存"
+                    class="save-coordinate-btn"
+                  >
+                    <svg class="coordinate-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                      <polyline points="17,21 17,13 7,13 7,21"></polyline>
+                      <polyline points="7,3 7,8 15,8"></polyline>
+                      <path d="M9 17h6"></path>
+                    </svg>
+                  </el-button>
+                  <el-button 
+                    size="small" 
+                    type="info"
+                    link
+                    @click="cancelEditCoordinate(scope.row)"
+                    title="取消"
+                    class="cancel-coordinate-btn"
+                  >
+                    <svg class="coordinate-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="m15 9-6 6"></path>
+                      <path d="m9 9 6 6"></path>
+                    </svg>
+                  </el-button>
+                </div>
               </div>
             </div>
             <div v-else class="coordinate-not-applicable">
@@ -2063,7 +2097,7 @@ export default {
 
 .coordinate-edit {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 6px;
   width: 100%;
   padding: 4px;
@@ -2072,52 +2106,21 @@ export default {
   border: 1px solid #e9ecef;
 }
 
-.coordinate-not-applicable {
+.coordinate-edit-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  height: 32px;
+  width: 100%;
 }
 
-.not-applicable-text {
-  font-size: 12px;
-  color: #c0c4cc;
-  font-style: italic;
-}
-
-.edit-coordinate-btn {
-  margin-left: 8px;
-  font-weight: 500;
-  color: #ffffff !important;
-  background-color: #409eff !important;
-  border: 1px solid #409eff;
-  border-radius: 50% !important;
-  padding: 0 !important;
-  font-size: 10px;
-  min-width: 20px !important;
-  width: 20px !important;
-  height: 20px !important;
-  cursor: pointer;
-  transition: all 0.3s ease;
+.coordinate-edit-buttons {
   display: flex;
   align-items: center;
-  justify-content: center;
-}
-
-.edit-coordinate-btn:hover {
-  background-color: #337ecc !important;
-  border-color: #337ecc;
-  transform: scale(1.2);
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.3);
-}
-
-.edit-coordinate-btn .el-icon-edit {
-  font-size: 10px;
-  margin: 0;
+  gap: 2px;
+  justify-content: flex-start;
 }
 
 .search-coordinate-btn {
-  margin-right: 4px;
+  margin-right: 2px;
   font-weight: 500;
   color: #67c23a !important;
   background-color: #f0f9ff;
@@ -2132,7 +2135,7 @@ export default {
 }
 
 .save-coordinate-btn {
-  margin-right: 4px;
+  margin-right: 2px;
   font-weight: 500;
   color: #409eff !important;
   background-color: #ecf5ff;
@@ -2158,6 +2161,19 @@ export default {
 .cancel-coordinate-btn:hover {
   background-color: #fde2e2;
   transform: scale(1.05);
+}
+
+.coordinate-not-applicable {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+}
+
+.not-applicable-text {
+  font-size: 12px;
+  color: #c0c4cc;
+  font-style: italic;
 }
 
 /* 移动端特定样式 */
@@ -2312,7 +2328,7 @@ export default {
 
 .mobile-coordinate-edit {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 4px;
   width: 100%;
   padding: 3px;
@@ -2321,9 +2337,20 @@ export default {
   border: 1px solid #e9ecef;
 }
 
+.mobile-coordinate-edit-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.mobile-coordinate-edit .el-input {
+  width: 100% !important;
+}
+
 .mobile-coordinate-edit-buttons {
   display: flex;
-  gap: 3px;
+  gap: 2px;
+  justify-content: flex-start;
 }
 
 .mobile-edit-coordinate-btn {
@@ -2369,6 +2396,13 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-right: 2px;
+}
+
+.mobile-search-coordinate-btn:last-child,
+.mobile-save-coordinate-btn:last-child,
+.mobile-cancel-coordinate-btn:last-child {
+  margin-right: 0;
 }
 
 .mobile-search-coordinate-btn {
@@ -2558,6 +2592,10 @@ export default {
     gap: 6px;
   }
 
+  .coordinate-icon {
+    width: 12px;
+    height: 12px;
+  }
 }
 
 /* 超小屏幕适配 */
@@ -2632,5 +2670,83 @@ export default {
     line-height: 12px !important;
     transform: scale(0.85);
   }
+}
+
+/* SVG图标样式 */
+.coordinate-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.search-coordinate-btn .coordinate-icon {
+  color: #67c23a;
+}
+
+.save-coordinate-btn .coordinate-icon {
+  color: #409eff;
+}
+
+.cancel-coordinate-btn .coordinate-icon {
+  color: #909399;
+}
+
+/* 按钮悬停效果 */
+.search-coordinate-btn:hover .coordinate-icon {
+  color: #85ce61;
+}
+
+.save-coordinate-btn:hover .coordinate-icon {
+  color: #66b1ff;
+}
+
+.cancel-coordinate-btn:hover .coordinate-icon {
+  color: #a6a9ad;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .coordinate-icon {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+.not-applicable-text {
+  font-size: 12px;
+  color: #c0c4cc;
+  font-style: italic;
+}
+
+.edit-coordinate-btn {
+  margin-left: 8px;
+  font-weight: 500;
+  color: #ffffff !important;
+  background-color: #409eff !important;
+  border: 1px solid #409eff;
+  border-radius: 50% !important;
+  padding: 0 !important;
+  font-size: 10px;
+  min-width: 20px !important;
+  width: 20px !important;
+  height: 20px !important;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-coordinate-btn:hover {
+  background-color: #337ecc !important;
+  border-color: #337ecc;
+  transform: scale(1.2);
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.3);
+}
+
+.edit-coordinate-btn .el-icon-edit {
+  font-size: 10px;
+  margin: 0;
 }
 </style>

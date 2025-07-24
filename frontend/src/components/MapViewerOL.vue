@@ -79,28 +79,28 @@
           <!-- 搜索表单 -->
           <div class="search-form-container" :class="{ 'mobile-collapsed': !mobileLayerSearchExpanded }">
             <el-form :inline="!isMobile" :model="layerSearchForm" class="layer-search-form">
-              <el-form-item label="服务类型">
-                <el-select v-model="layerSearchForm.service_type" placeholder="请选择服务类型" clearable>
-                  <el-option label="全部" value="" />
-                  <el-option label="GeoServer服务" value="geoserver" />
-                  <el-option label="Martin服务" value="martin" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="专业">
-                <el-select v-model="layerSearchForm.discipline" placeholder="请选择专业" clearable>
-                  <el-option v-for="item in disciplines" :key="item" :label="item" :value="item" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="数据类型">
-                <el-select v-model="layerSearchForm.file_type" placeholder="请选择数据类型" clearable>
-                  <el-option v-for="item in fileTypes" :key="item" :label="item" :value="item" />
-                </el-select>
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" @click="searchLayers">搜索</el-button>
+          <el-form-item label="服务类型">
+            <el-select v-model="layerSearchForm.service_type" placeholder="请选择服务类型" clearable>
+              <el-option label="全部" value="" />
+              <el-option label="GeoServer服务" value="geoserver" />
+              <el-option label="Martin服务" value="martin" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="专业">
+            <el-select v-model="layerSearchForm.discipline" placeholder="请选择专业" clearable>
+              <el-option v-for="item in disciplines" :key="item" :label="item" :value="item" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="数据类型">
+            <el-select v-model="layerSearchForm.file_type" placeholder="请选择数据类型" clearable>
+              <el-option v-for="item in fileTypes" :key="item" :label="item" :value="item" />
+            </el-select>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" @click="searchLayers">搜索</el-button>
                 <el-button @click="resetLayerSearch">清空</el-button>
-              </el-form-item>
-            </el-form>
+          </el-form-item>
+        </el-form>
           </div>
         </div>
         
@@ -192,44 +192,44 @@
           
           <!-- 桌面端表格布局 -->
           <div class="desktop-layer-table">
-            <el-table :data="availableLayers" style="width: 100%" max-height="400">
-              <el-table-column prop="layer_name" label="图层名称" min-width="150" />
-              <el-table-column prop="file_type" label="数据类型" width="100" />
-              <el-table-column prop="discipline" label="专业" width="100" />
-              <el-table-column label="服务状态" width="120">
-                <template #default="scope">
-                  <div class="service-status">
-                    <el-tag v-if="scope.row.geoserver_service?.is_published" type="success" size="small">GeoServer已发布</el-tag>
-                    <el-tag v-if="scope.row.martin_service?.is_published" type="primary" size="small">Martin已发布</el-tag>
-                    <el-tag v-if="!hasAnyPublishedService(scope.row)" type="warning" size="small">未发布</el-tag>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column label="操作" width="150" fixed="right">
-                <template #default="scope">
-                  <div class="layer-actions">
-                    <el-button 
-                      v-if="scope.row.geoserver_service?.is_published"
-                      size="small" 
-                      type="primary" 
-                      @click="addLayerToScene(scope.row, 'geoserver')"
-                      :disabled="isLayerInScene(scope.row.id, 'geoserver')"
-                    >
-                      {{ isLayerInScene(scope.row.id, 'geoserver') ? '已添加' : '添加GeoServer' }}
-                    </el-button>
-                    <el-button 
-                      v-if="scope.row.martin_service?.is_published"
-                      size="small" 
-                      type="success" 
-                      @click="addLayerToScene(scope.row, 'martin')"
-                      :disabled="isLayerInScene(scope.row.id, 'martin')"
-                    >
-                      {{ isLayerInScene(scope.row.id, 'martin') ? '已添加' : '添加Martin' }}
-                    </el-button>
-                  </div>
-                </template>
-              </el-table-column>
-            </el-table>
+        <el-table :data="availableLayers" style="width: 100%" max-height="400">
+          <el-table-column prop="layer_name" label="图层名称" min-width="150" />
+          <el-table-column prop="file_type" label="数据类型" width="100" />
+          <el-table-column prop="discipline" label="专业" width="100" />
+          <el-table-column label="服务状态" width="120">
+            <template #default="scope">
+              <div class="service-status">
+                <el-tag v-if="scope.row.geoserver_service?.is_published" type="success" size="small">GeoServer已发布</el-tag>
+                <el-tag v-if="scope.row.martin_service?.is_published" type="primary" size="small">Martin已发布</el-tag>
+                <el-tag v-if="!hasAnyPublishedService(scope.row)" type="warning" size="small">未发布</el-tag>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="150" fixed="right">
+            <template #default="scope">
+              <div class="layer-actions">
+                <el-button 
+                  v-if="scope.row.geoserver_service?.is_published"
+                  size="small" 
+                  type="primary" 
+                  @click="addLayerToScene(scope.row, 'geoserver')"
+                  :disabled="isLayerInScene(scope.row.id, 'geoserver')"
+                >
+                  {{ isLayerInScene(scope.row.id, 'geoserver') ? '已添加' : '添加GeoServer' }}
+                </el-button>
+                <el-button 
+                  v-if="scope.row.martin_service?.is_published"
+                  size="small" 
+                  type="success" 
+                  @click="addLayerToScene(scope.row, 'martin')"
+                  :disabled="isLayerInScene(scope.row.id, 'martin')"
+                >
+                  {{ isLayerInScene(scope.row.id, 'martin') ? '已添加' : '添加Martin' }}
+                </el-button>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
           </div>
         </div>
       </div>
