@@ -912,6 +912,44 @@ export default {
     })
   },
 
+  // ========== TIF转MBTiles相关 ==========
+  
+  // 将TIF文件转换为MBTiles并发布Martin服务
+  convertTifToMbtilesAndPublish(fileId, params = {}) {
+    return authHttp({
+      url: `/tif-martin/convert-and-publish/${fileId}`,
+      method: 'post',
+      data: params,
+      timeout: 600000  // 10分钟超时
+    })
+  },
+
+  // 批量转换TIF文件为MBTiles
+  batchConvertTifFiles(params = {}) {
+    return authHttp({
+      url: '/tif-martin/batch-convert',
+      method: 'post',
+      data: params
+    })
+  },
+
+  // 获取TIF转换状态
+  getTifConversionStatus(fileId) {
+    return authHttp({
+      url: `/tif-martin/conversion-status/${fileId}`,
+      method: 'get'
+    })
+  },
+
+  // 获取TIF转换记录列表
+  getTifConversions(params = {}) {
+    return authHttp({
+      url: '/tif-martin/list-conversions',
+      method: 'get',
+      params
+    })
+  },
+
   // ========== DXF相关 ==========
   
   // 发布DXF的Martin服务

@@ -411,7 +411,7 @@
                   <i class="el-icon-upload2"></i> 发布
                 </el-button>
                 <div v-if="!canPublishMartin(scope.row)" class="publish-tip">
-                  <el-tooltip content="Martin服务仅支持GeoJSON、SHP和DXF文件" placement="top">
+                  <el-tooltip content="Martin服务支持GeoJSON、SHP、DXF、MBTiles和TIF文件" placement="top">
                     <i class="el-icon-warning-outline"></i>
                     <span class="tip-text">不支持</span>
                   </el-tooltip>
@@ -684,7 +684,7 @@
 
 <script>
 import { ref, reactive, onMounted, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import { Search, ArrowDown } from '@element-plus/icons-vue'
 import gisApi from '@/api/gis'
 import CoordinateSystemSearch from '@/components/CoordinateSystemSearch.vue'
@@ -1187,7 +1187,7 @@ export default {
 
     // 判断文件是否可以发布Martin服务
     const canPublishMartin = (file) => {
-      const martinSupportedTypes = ['geojson', 'shp', 'dxf', 'mbtiles', 'vector.mbtiles', 'raster.mbtiles']
+      const martinSupportedTypes = ['geojson', 'shp', 'dxf', 'mbtiles', 'vector.mbtiles', 'raster.mbtiles', 'tif', 'tiff', 'dem.tif', 'dom.tif']
       return martinSupportedTypes.includes(file.file_type.toLowerCase())
     }
 
@@ -1266,6 +1266,137 @@ export default {
         } else if (file.file_type.toLowerCase() === 'mbtiles' || file.file_type.toLowerCase() === 'vector.mbtiles' || file.file_type.toLowerCase() === 'raster.mbtiles') {
           // 使用MBTiles专用的Martin发布接口
           result = await gisApi.publishMbtilesMartinService(file.id, publishParams)
+        } else if (['tif', 'tiff', 'dem.tif', 'dom.tif'].includes(file.file_type.toLowerCase())) {
+          // TIF文件需要转换为MBTiles再发布Martin服务
+          
+          // 询问用户是否确认转换
+          try {
+            await ElMessageBox.confirm(
+              `TIF文件需要先转换为MBTiles格式才能发布Martin服务。\n\n转换过程可能需要几分钟到几十分钟，具体取决于文件大小。\n\n确认开始转换并发布吗？`,
+              '确认TIF转换',
+              {
+                confirmButtonText: '确定转换',
+                cancelButtonText: '取消',
+                type: 'info',
+                dangerouslyUseHTMLString: true
+              }
+            )
+          } catch {
+            return // 用户取消操作
+          }
+          
+          // 获取转换参数
+          let maxZoom = 20 // 默认最大缩放级别
+          
+          try {
+            const { value } = await ElMessageBox.prompt(
+              '请设置最大缩放级别（1-25）：\n\n建议值：\n- 小文件(<50MB): 18级\n- 中等文件(50-200MB): 20级\n- 大文件(>200MB): 16级',
+              '设置缩放级别',
+              {
+                confirmButtonText: '确定',
+                cancelButtonText: '使用默认值(20)',
+                inputPattern: /^([1-9]|1[0-9]|2[0-5])$/,
+                inputErrorMessage: '请输入1-25之间的数字',
+                inputValue: '20',
+                dangerouslyUseHTMLString: true
+              }
+            )
+            maxZoom = parseInt(value) || 20
+          } catch {
+            // 用户取消或使用默认值
+            maxZoom = 20
+          }
+          
+          publishParams.max_zoom = maxZoom
+          
+          // 显示转换进度弹窗，防止页面跳转
+          const loadingInstance = ElLoading.service({
+            lock: true,
+            text: `正在转换TIF文件为MBTiles（最大级别${maxZoom}）\n\n这可能需要几分钟时间，请耐心等待...`,
+            background: 'rgba(0, 0, 0, 0.85)',
+            customClass: 'tif-conversion-loading'
+          })
+          
+          // 防止页面跳转的事件处理
+          const preventNavigation = (e) => {
+            e.preventDefault()
+            e.returnValue = '正在进行TIF文件转换，确定要离开吗？'
+            return '正在进行TIF文件转换，确定要离开吗？'
+          }
+          
+          // 添加页面刷新和关闭的确认
+          window.addEventListener('beforeunload', preventNavigation)
+          
+          // 添加进度提示更新
+          let progressCounter = 0
+          const progressSteps = [
+            '🔍 分析TIF文件信息...',
+            '🔄 转换坐标系到Web Mercator...',
+            '🎯 预处理影像数据...',
+            '🧩 生成瓦片中...',
+            '📦 打包为MBTiles格式...',
+            '🚀 发布到Martin服务...',
+            '✅ 转换即将完成...'
+          ]
+          
+          const updateProgress = () => {
+            progressCounter += 3
+            const stepIndex = Math.floor((progressCounter / 15) % progressSteps.length)
+            const dots = '.'.repeat((progressCounter / 3) % 4)
+            
+            loadingInstance.setText(
+              `${progressSteps[stepIndex]}${dots}\n\n` +
+              `转换中... (${progressCounter}秒)\n` +
+              `请勿关闭浏览器或刷新页面\n` +
+              `大文件转换可能需要较长时间，请耐心等待`
+            )
+          }
+          
+          // 每3秒更新一次进度
+          const progressInterval = setInterval(updateProgress, 3000)
+          
+          try {
+            // 使用TIF转MBTiles的Martin发布接口
+            result = await gisApi.convertTifToMbtilesAndPublish(file.id, publishParams)
+            
+            // 清理资源
+            clearInterval(progressInterval)
+            window.removeEventListener('beforeunload', preventNavigation)
+            loadingInstance.close()
+            
+            if (result.success) {
+              // 显示转换成功的详细信息
+              const conversionInfo = result.data.conversion
+              const serviceInfo = result.data.martin_service
+              
+              ElMessageBox.alert(
+                `<div style="text-align: left;">
+                  <h4>🎉 TIF转换并发布成功！</h4>
+                  <p><strong>原始文件：</strong>${result.data.original_file.name}</p>
+                  <p><strong>MBTiles文件：</strong>${conversionInfo.mbtiles_filename}</p>
+                  <p><strong>缩放级别：</strong>0-${conversionInfo.max_zoom}</p>
+                  <p><strong>瓦片数量：</strong>${conversionInfo.mbtiles_info.tile_count}</p>
+                  <p><strong>文件大小：</strong>${conversionInfo.stats.file_size_mb}MB</p>
+                  <hr/>
+                  <p><strong>Martin服务：</strong></p>
+                  <p><code>${serviceInfo.service_url}</code></p>
+                  <p><strong>MVT地址：</strong></p>
+                  <p><code>${serviceInfo.mvt_url}</code></p>
+                </div>`,
+                '转换完成',
+                {
+                  dangerouslyUseHTMLString: true,
+                  confirmButtonText: '确定'
+                }
+              )
+            }
+          } catch (conversionError) {
+            // 清理资源
+            clearInterval(progressInterval)
+            window.removeEventListener('beforeunload', preventNavigation)
+            loadingInstance.close()
+            throw conversionError
+          }
         } else {
           // 使用通用的Martin发布接口
           result = await gisApi.publishMartinService(file.id, publishParams)
@@ -1369,6 +1500,8 @@ export default {
         file.unpublishingMartin = false
       }
     }
+
+
 
     // 复制服务地址
     const copyServiceUrl = async (url) => {
@@ -1597,6 +1730,28 @@ export default {
 <style scoped>
 .upload-page {
   padding: 20px;
+}
+
+/* TIF转换进度加载样式 */
+:deep(.tif-conversion-loading) {
+  z-index: 9999 !important;
+}
+
+:deep(.tif-conversion-loading .el-loading-text) {
+  color: #ffffff !important;
+  font-size: 16px !important;
+  line-height: 1.6 !important;
+  white-space: pre-line !important;
+  text-align: center !important;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5) !important;
+}
+
+:deep(.tif-conversion-loading .el-loading-spinner) {
+  margin-top: -40px !important;
+}
+
+:deep(.tif-conversion-loading .el-loading-spinner .path) {
+  stroke: #409EFF !important;
 }
 
 .page-header {

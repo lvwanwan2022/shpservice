@@ -204,6 +204,16 @@ except ImportError:
 except Exception as e:
     logger.warning(f"⚠️ MBTiles 服务路由注册失败: {str(e)}")
 
+# TIF Martin 服务路由
+try:
+    from routes.tif_martin_routes import tif_martin_bp
+    app.register_blueprint(tif_martin_bp)
+    logger.info("✅ TIF Martin 服务路由注册成功")
+except ImportError:
+    logger.info("TIF Martin 服务路由不存在，跳过")
+except Exception as e:
+    logger.warning(f"⚠️ TIF Martin 服务路由注册失败: {str(e)}")
+
 # GIS 通用路由
 try:
     from routes.gis import gis_bp
