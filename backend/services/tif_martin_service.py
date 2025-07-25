@@ -40,16 +40,63 @@ class TifMartinService:
         print("✅ TIF Martin服务初始化完成")
     
     def get_file_coordinate_system(self, file_id):
-        """从数据库获取文件的坐标系信息"""
+        """从数据库获取文件的坐标系信息，如果没有则尝试从文件中读取"""
         try:
-            sql = "SELECT coordinate_system FROM files WHERE id = %s"
+            # 首先从数据库获取
+            sql = "SELECT coordinate_system, file_path FROM files WHERE id = %s"
             result = execute_query(sql, (file_id,))
-            if result and result[0]['coordinate_system']:
-                return result[0]['coordinate_system']
+            
+            if result:
+                db_coordinate_system = result[0]['coordinate_system']
+                file_path = result[0]['file_path']
+                
+                # 如果数据库中有坐标系信息，直接返回
+                if db_coordinate_system:
+                    print(f"📊 从数据库获取坐标系: {db_coordinate_system}")
+                    return db_coordinate_system
+                
+                # 如果数据库中没有，尝试从文件中读取
+                if file_path and os.path.exists(file_path):
+                    coordinate_system = self._extract_coordinate_system_from_file(file_path)
+                    if coordinate_system:
+                        print(f"📊 从文件提取坐标系: {coordinate_system}")
+                        return coordinate_system
+            
+            print("⚠️ 未找到坐标系信息，使用默认WGS84")
             return 'EPSG:4326'  # 默认坐标系
+            
         except Exception as e:
             print(f"⚠️ 获取坐标系信息失败: {str(e)}")
             return 'EPSG:4326'
+    
+    def _extract_coordinate_system_from_file(self, file_path):
+        """从TIF文件中提取坐标系信息"""
+        try:
+            from osgeo import gdal, osr
+            gdal.UseExceptions()
+            
+            dataset = gdal.Open(file_path, gdal.GA_ReadOnly)
+            if dataset:
+                projection = dataset.GetProjection()
+                if projection:
+                    srs = osr.SpatialReference()
+                    srs.ImportFromWkt(projection)
+                    
+                    # 获取EPSG代码
+                    epsg_code = srs.GetAuthorityCode(None)
+                    if epsg_code:
+                        return f"EPSG:{epsg_code}"
+                
+                dataset = None
+            
+            return None
+            
+        except ImportError:
+            print("⚠️ Python GDAL不可用，无法从文件提取坐标系")
+            return None
+        except Exception as e:
+            print(f"⚠️ 从文件提取坐标系失败: {str(e)}")
+            return None
     
     def tif_to_mbtiles_and_publish(self, file_id, file_path, original_filename, user_id=None, max_zoom=18, min_zoom=2):
         """将TIF文件转换为MBTiles并发布为Martin服务"""
