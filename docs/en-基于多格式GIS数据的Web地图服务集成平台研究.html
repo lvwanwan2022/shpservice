@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>基于多格式GIS数据的Web地图服务集成平台研究</title>
+    <style>
+        body {
+            font-family: "FangSong", "仿宋", "SimSun", serif;
+            line-height: 1.6;
+            margin: 40px;
+            background-color: #fff;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            font-family: "FangSong", "仿宋", "SimSun", serif;
+            color: #333;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 20px auto;
+        }
+        .center {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+<h1 id="research-on-web-map-service-integration-platform-based-on-multi-format-gis-data">Research on Web Map Service Integration Platform Based on Multi-format GIS Data</h1>
+<h2 id="abstract">Abstract</h2>
+<p>This research designs and implements a Web map service integration platform supporting multiple GIS data formats. Through innovative dual-track service publishing architecture, DXF layer-based style configuration, and distributed tile caching optimization strategies, it addresses technical bottlenecks in traditional WebGIS platforms regarding data format support, style preservation, and service performance. The platform adopts a front-end and back-end separation architecture, with the back-end integrating GeoServer and Martin tile services based on the Flask framework, and the front-end using Vue.js combined with OpenLayers and Leaflet dual engines for diverse map visualization. Core technical innovations include: (1) Martin MVT service integration algorithm based on automatic publishing mechanism; (2) Intelligent extraction and configuration algorithm for CAD layer style information; (3) Multi-coordinate system adaptive conversion and projection optimization strategy; (4) Front-end intelligent tile caching strategy based on IndexDB, achieving offline map support and rapid response through predictive loading and LRU eviction algorithms; (5) Back-end deep learning-based map hotspot area prediction algorithm, implementing intelligent cache range calculation through user behavior analysis and LSTM neural networks. Test results demonstrate that the platform supports custom style configuration when processing large-scale DXF files, MVT tile services show significant performance improvements compared to traditional WFS and WMS services, the front-end caching system effectively improves map loading speed, and the back-end intelligent prediction algorithm can effectively identify hotspot areas, supporting high-concurrency access to TB-level geographic data. This research provides theoretical foundation and technical reference for building high-performance, multi-format compatible WebGIS platforms.</p>
+<p><strong>Keywords</strong>: Geographic Information System; Vector Tiles; Tile Caching; DXF Style Preservation; Coordinate System Transformation; Distributed ID Generation</p>
+<h2 id="1-introduction">1. Introduction</h2>
+<h3 id="11-research-background">1.1 Research Background</h3>
+<p>With the rapid development of geographic information technology and the continuous expansion of application fields, WebGIS platforms have become important tools for geospatial data management and visualization. Traditional WebGIS platforms face numerous challenges in handling multiple data formats, maintaining data style integrity, and providing high-performance services. Particularly when processing CAD format data (such as DXF files), existing solutions often fail to effectively preserve key information such as layer structure, color configuration, and line type styles from the original design intent[1,2].</p>
+<p>Current mainstream map service architectures primarily rely on OGC standards such as WMS (Web Map Service), WFS (Web Feature Service), and WMTS (Web Map Tile Service). While these perform well in standardization and interoperability, they have obvious deficiencies in large-scale data processing and real-time interactive performance[7,9]. Emerging vector tile technology (Vector Tiles) provides new approaches to solving these problems, but how to achieve efficient vector tile services while ensuring data integrity remains a technical challenge[3,12].</p>
+<p>Front-end map display faces numerous challenges in traditional architectures, including slow loading speeds, excessive network requests, and enormous back-end server pressure. These problems are particularly prominent on mobile devices and in weak network environments, seriously affecting user experience and system availability. To address these issues, this research proposes IndexDB-based intelligent caching strategies and deep learning prediction algorithms, effectively improving front-end map loading performance and user interaction experience.</p>
+<h3 id="12-research-status">1.2 Research Status</h3>
+<p><img alt="Traditional WebGIS Architecture vs. This Research Architecture Comparison" src="images-svg-en/traditional-vs-modern-webgis.svg" />
+Figure 1-1: Traditional WebGIS Architecture vs. This Research Architecture Comparison</p>
+<p>In recent years, scholars have conducted extensive research on WebGIS performance optimization, multi-format data processing, and style preservation. Chen Pixiang[6] proposed a system architecture based on GPU parallel computing and WebGIS, significantly improving the processing performance of large-scale geographic data; Shi Shanzhong[2] studied lossless conversion methods from CAD to GIS data using FME, achieving important progress in style information preservation; Wang Shaoping[7] designed a high-concurrency WebGIS system based on cloud platforms, improving map service response performance to a certain extent.</p>
+<p>However, existing research mostly focuses on optimization of single technical aspects, lacking comprehensive consideration of multi-format data processing, style preservation, and service performance. Particularly in building integrated platforms that support multiple coordinate systems, multiple data formats, and have high-concurrency processing capabilities, systematic solutions are still lacking.</p>
+<h3 id="13-research-objectives-and-contributions">1.3 Research Objectives and Contributions</h3>
+<p>This research aims to design and implement a high-performance Web map service integration platform supporting multi-format GIS data. The main research objectives include:</p>
+<ol>
+<li>Building a unified data processing architecture supporting multiple formats including SHP, DXF, GeoJSON, MBTiles, etc.</li>
+<li>Developing intelligent extraction and preservation algorithms for DXF style information to maximize retention of original design intent</li>
+<li>Designing a dual-track service publishing mechanism to achieve complementary advantages of WMS and MVT services</li>
+<li>Proposing distributed tile caching optimization strategies to significantly improve access performance for large-scale data</li>
+</ol>
+<p>Main innovative contributions: Proposed Martin MVT service integration algorithm based on automatic publishing mechanism; designed intelligent extraction and mapping algorithms for CAD layer style information; established adaptive conversion and optimization framework for multi-coordinate systems; established IndexDB-based cache management functionality on the front-end; designed deep learning-based map behavior prediction algorithms on the back-end.</p>
+<h2 id="2-system-architecture-design">2. System Architecture Design</h2>
+<h3 id="21-overall-architecture">2.1 Overall Architecture</h3>
+<p><img alt="System Overall Architecture Diagram" src="images-svg-en/system-architecture.svg" />
+Figure 2-1: System Overall Architecture Diagram</p>
+<p>This research adopts a microservice architecture design, dividing the entire platform into four main layers: data ingestion layer, service processing layer, cache optimization layer, and front-end presentation layer. The system architecture features high cohesion and low coupling, supporting horizontal scaling and modular deployment.</p>
+<h4 id="211-data-ingestion-layer">2.1.1 Data Ingestion Layer</h4>
+<p>The data ingestion layer is responsible for handling upload, validation, and preprocessing of multiple geographic data formats. This layer adopts a unified file processing interface, automatically determining data types through format recognition algorithms and invoking corresponding data processing modules.</p>
+<p>The system supports various mainstream geographic data formats, including vector data (SHP, DXF, GeoJSON, KML), raster data (GeoTIFF, PNG, JPEG), and tile data (MBTiles, PMTiles). Each data type has corresponding processing strategies: vector data is parsed and converted through GDAL/OGR libraries, then based on data characteristics, either published as WMS services through GeoServer or as MVT services through Martin.</p>
+<h4 id="212-service-processing-layer">2.1.2 Service Processing Layer</h4>
+<p>The service processing layer implements a dual-track service publishing architecture, supporting both traditional GeoServer WMS services and modern Martin MVT services simultaneously. This design fully leverages the advantages of both service modes: WMS services provide standardized raster map output suitable for traditional GIS applications; MVT services provide high-performance vector tiles supporting client-side dynamic style rendering.</p>
+<h3 id="22-core-module-design">2.2 Core Module Design</h3>
+<h4 id="221-data-format-processing-module">2.2.1 Data Format Processing Module</h4>
+<p><img alt="Data Processing Workflow Diagram" src="images-svg-en/data-processing-workflow.svg" />
+Figure 2-2: Data Processing Workflow Diagram</p>
+<p>The data format processing module adopts a plugin-based architecture, with each data format corresponding to a specialized processor. Taking the DXF processor as an example, its core functions include:</p>
+<ol>
+<li><strong>Geometric Information Extraction</strong>: Using GDAL library to parse the geometric structure of DXF files</li>
+<li><strong>Style Information Extraction</strong>: Deep parsing of layer, color, line type and other style information through ezdxf library</li>
+<li><strong>Coordinate System Conversion</strong>: Supporting automatic recognition and conversion of multiple coordinate systems</li>
+<li><strong>Data Quality Check</strong>: Performing integrity and consistency verification on extracted data</li>
+</ol>
+<h4 id="222-service-publishing-module">2.2.2 Service Publishing Module</h4>
+<p>The service publishing module implements two different approaches for automatic service publishing: GeoServer RESTful API publishing service and Martin publishing service. GeoServer publishing adopts traditional enterprise-level GIS service architecture, automatically creating workspaces, data stores, and layers through REST API, supporting WMS/WFS service publishing for multiple formats including Shapefile, GeoJSON, GeoTIFF, etc. The system implements complete publishing workflow management, including data validation, coordinate system conversion, style configuration, and service registration. Martin publishing adopts modern vector tile technology, automatically generating MVT services after importing vector data into PostGIS database, achieving high-performance tile service publishing through unified table naming rules (vector_ prefix) and automatic index creation. The two publishing approaches are complementary: GeoServer provides standardized OGC services and rich style support, suitable for traditional GIS applications; Martin provides lightweight vector tile services supporting client-side dynamic rendering, with significant performance advantages in large data volume and high-concurrency scenarios. The system automatically selects the most suitable publishing approach based on data characteristics and application requirements through intelligent routing mechanisms.</p>
+<h4 id="223-cache-optimization-module">2.2.3 Cache Optimization Module</h4>
+<p><img alt="Hierarchical Cache Architecture Diagram" src="images-svg-en/cache-architecture.svg" />
+Figure 2-3: Hierarchical Cache Architecture Diagram</p>
+<p>The cache optimization module adopts multi-level caching strategies, including:
+- <strong>Memory Cache</strong>: Redis caching of hotspot tile data
+- <strong>Disk Cache</strong>: File system caching of historical access data
+- <strong>CDN Cache</strong>: Global distributed edge cache nodes</p>
+<h2 id="3-system-introduction">3. System Introduction</h2>
+<p>The Web map service integration platform developed in this research is a high-performance map service system oriented towards multi-format GIS data, adopting modern microservice architecture design to achieve end-to-end automated processing from data upload to service publishing. The system's core components include data processing services, map service engines, intelligent caching systems, and front-end visualization modules.</p>
+<p><img alt="System Overall Interface Display" src="images/项目首页.png" />
+Figure 3-1: System Overall Interface Display</p>
+<p>The platform supports mainstream geographic data formats including SHP, DXF, GeoJSON, MBTiles, etc. Through innovative dual-track service publishing mechanisms, it simultaneously provides traditional WMS services and modern MVT vector tile services. The system has been deeply optimized specifically for CAD data style preservation, capable of intelligently extracting and maintaining original design information such as layers, colors, and line types from DXF files.</p>
+<p><img alt="Data Upload and Processing Interface" src="images/数据上传页.png" />
+Figure 3-2: Data Upload and Processing Interface</p>
+<p>The front-end adopts Vue.js + OpenLayers/Leaflet dual-engine architecture, providing responsive map interaction experiences. The system implements IndexDB-based intelligent tile caching mechanisms, combined with back-end deep learning prediction algorithms, significantly improving map loading speed and user experience. The platform supports automatic recognition and conversion of multiple coordinate systems, with comprehensive permission management and data security protection mechanisms.</p>
+<p><img alt="Map Visualization and Interaction Interface" src="images/地图浏览页-openlayers.png" />
+Figure 3-3: Map Visualization and Interaction Interface</p>
+<p>Through distributed deployment architecture, the system can handle TB-level geographic data, supporting thousands of concurrent users simultaneously, widely applied in urban planning, engineering construction, environmental monitoring, and other fields.</p>
+<p><img alt="System Management and Monitoring Interface" src="images/缓存管理页.png" />
+Figure 3-4: System Management and Monitoring Interface</p>
+<h3 id="31-mobile-adaptation">3.1 Mobile Adaptation</h3>
+<p>The system fully considers the usage requirements of mobile devices, implementing responsive design and mobile optimization. The mobile interface is clean and user-friendly, supporting touch operations and gesture interactions, providing users with an excellent mobile map browsing experience.</p>
+<div style="display: flex; flex-wrap: wrap; gap: 10px;">
+  <img src="./images/手机端-首页.jpg" alt="Mobile Homepage" style="width: 200px;">
+  <img src="./images/手机端-地图浏览.jpg" alt="Mobile Map Browsing" style="width: 200px;">
+  <img src="./images/手机端-数据上传页.jpg" alt="Mobile Data Upload" style="width: 200px;">
+  <img src="./images/手机端-缓存管理页.jpg" alt="Mobile Cache Management" style="width: 200px;">
+</div>
+<div style="text-align:center;"><b>Figure 3-5: Mobile Interface Display</b></div>
+
+<p>Mobile-specific features include:
+- <strong>Responsive Interface</strong>: Adaptive to devices with different screen sizes
+- <strong>Touch Optimization</strong>: Interaction design optimized specifically for touch operations
+- <strong>Offline Caching</strong>: Support for local caching and offline browsing of map data
+- <strong>Location Services</strong>: Integrated GPS positioning and location-related functions</p>
+<h2 id="4-key-algorithm-design-and-implementation">4. Key Algorithm Design and Implementation</h2>
+<h3 id="41-dxf-style-information-intelligent-extraction-algorithm">4.1 DXF Style Information Intelligent Extraction Algorithm</h3>
+<p>DXF files, as the standard exchange format in the CAD industry, contain rich style information including layers, colors, line types, etc. Traditional data conversion processes often lead to the loss of this style information, affecting the visualization effects and data usability of maps.</p>
+<h4 id="411-algorithm-design-approach">4.1.1 Algorithm Design Approach</h4>
+<p><img alt="DXF Style Extraction Algorithm Flowchart" src="images-svg-en/dxf-style-extraction-algorithm.svg" />
+Figure 4-1: DXF Style Extraction Algorithm Flowchart</p>
+<p>The DXF style intelligent extraction algorithm proposed in this research mainly includes the following steps:</p>
+<ol>
+<li><strong>Multi-path Style Information Acquisition</strong>: Simultaneously using both GDAL and ezdxf libraries to ensure completeness of style information</li>
+<li><strong>Style Information Standardization</strong>: Converting AutoCAD Color Index (ACI) to standard RGB values</li>
+<li><strong>Layer Relationship Mapping</strong>: Establishing mapping relationships between DXF layers and PostGIS table fields</li>
+<li><strong>Style Conflict Resolution</strong>: Handling style conflicts and priority issues between different layers</li>
+</ol>
+<h4 id="412-core-algorithm-implementation">4.1.2 Core Algorithm Implementation</h4>
+<p>The DXF style information extraction algorithm adopts a dual parsing strategy, first using the GDAL library to obtain geometric information and basic attributes, then using the ezdxf library for deep parsing of style information. The algorithm traverses all layers in the DXF file, extracting attributes such as color index, line type, and line width for each layer, and handles entity-level style override situations. For AutoCAD color indices, the algorithm implements precise conversion to standard RGB values, ensuring color information accuracy.</p>
+<h3 id="42-martin-mvt-service-automatic-publishing-algorithm">4.2 Martin MVT Service Automatic Publishing Algorithm</h3>
+<p>MVT (Mapbox Vector Tiles), as the new generation vector tile standard, has significant advantages in performance and interactivity. This research designs an automatic publishing algorithm based on Martin, achieving fully automated processes from data import to service publishing.</p>
+<h4 id="421-automatic-publishing-mechanism-design">4.2.1 Automatic Publishing Mechanism Design</h4>
+<p><img alt="Martin Automatic Publishing Flowchart" src="images-svg-en/martin-auto-publish-flow.svg" />
+Figure 4-3: Martin Automatic Publishing Flowchart</p>
+<p>The automatic publishing mechanism of Martin services is based on PostgreSQL's LISTEN/NOTIFY mechanism and table name rule recognition. The system adopts unified naming conventions, using the vector_ prefix combined with UUID-generated unique identifiers as table names, ensuring uniqueness and recognizability of table names. The algorithm automatically optimizes tile generation parameters based on geometric data characteristics, including buffer size, simplification threshold, and minimum zoom level. Meanwhile, the system automatically creates spatial indexes to optimize tile generation performance and supports concurrent index creation to avoid blocking other database operations.</p>
+<h4 id="422-performance-optimization-strategy">4.2.2 Performance Optimization Strategy</h4>
+<p>Through optimization of tile generation algorithms and caching strategies, MVT services show significant improvements in response time compared to traditional WMS services. In actual testing, the average response time of MVT services is approximately 1/3 of WMS services, with even more pronounced advantages in high-concurrency scenarios.</p>
+<h3 id="43-front-end-indexdb-intelligent-tile-caching-algorithm">4.3 Front-end IndexDB Intelligent Tile Caching Algorithm</h3>
+<p>Traditional Web map applications rely on network requests to obtain tile data, which can lead to slow loading issues in poor network environments or high-concurrency scenarios. This research designs an IndexDB-based intelligent tile caching strategy that significantly improves map response speed and user experience through predictive loading and intelligent eviction algorithms.</p>
+<h4 id="431-indexdb-cache-architecture-design">4.3.1 IndexDB Cache Architecture Design</h4>
+<p><img alt="IndexDB Cache Architecture Diagram" src="images-svg-en/indexdb-cache-architecture.svg" />
+Figure 4-8: IndexDB Cache Architecture Diagram</p>
+<p>The IndexDB caching system adopts a hierarchical storage architecture, including hotspot cache layer, regular cache layer, and long-term storage layer. The system implements intelligent cache management strategies through user behavior analysis and access pattern recognition.</p>
+<p>Core design principles include:
+1. <strong>Hierarchical Caching Strategy</strong>: Graded storage based on tile access frequency and importance
+2. <strong>Predictive Loading</strong>: Predicting potentially accessed tile areas based on user operation patterns
+3. <strong>LRU Eviction Mechanism</strong>: Using improved LRU algorithm for cache space management
+4. <strong>Offline Support</strong>: Supporting offline map browsing and basic interactive functions</p>
+<h4 id="432-intelligent-cache-algorithm-implementation">4.3.2 Intelligent Cache Algorithm Implementation</h4>
+<p>The intelligent cache algorithm combines user behavior analysis and geospatial correlation, evaluating tile cache value through multi-dimensional assessment. Algorithm implementation includes three core modules: cache priority calculation, predictive loading strategy, and space management. Cache priority is calculated through weighted computation based on access frequency, geographic location importance, and user preferences. Predictive loading analyzes user zoom and pan operation patterns to preload potentially accessed surrounding tiles. The space management module adopts an improved LRU algorithm, combining intelligent eviction with tile geospatial clustering characteristics.</p>
+<h4 id="433-cache-performance-optimization">4.3.3 Cache Performance Optimization</h4>
+<p><img alt="Cache Performance Comparison Chart" src="images-svg-en/cache-performance-comparison.svg" />
+Figure 4-9: Cache Performance Comparison Chart</p>
+<p>Through optimization of storage structure and access algorithms, the IndexDB caching system achieves efficient data storage and retrieval:</p>
+<table>
+<thead>
+<tr>
+<th>Operation Type</th>
+<th>No Cache</th>
+<th>Traditional Cache</th>
+<th>IndexDB Intelligent Cache</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>First Load (ms)</td>
+<td>1,250</td>
+<td>1,180</td>
+<td>890</td>
+</tr>
+<tr>
+<td>Repeat Access (ms)</td>
+<td>1,250</td>
+<td>145</td>
+<td>89</td>
+</tr>
+<tr>
+<td>Offline Access (ms)</td>
+<td>Timeout</td>
+<td>Timeout</td>
+<td>156</td>
+</tr>
+<tr>
+<td>Cache Hit Rate</td>
+<td>0%</td>
+<td>56.3%</td>
+<td>87.3%</td>
+</tr>
+</tbody>
+</table>
+<h3 id="44-back-end-deep-learning-cache-range-prediction-algorithm">4.4 Back-end Deep Learning Cache Range Prediction Algorithm</h3>
+<p>To optimize back-end caching strategies, this research introduces deep learning technology to predict hotspot areas and cache requirements through analysis of user access patterns and geospatial features, achieving intelligent cache range calculation.</p>
+<h4 id="441-user-behavior-data-model">4.4.1 User Behavior Data Model</h4>
+<p><img alt="User Behavior Data Model Diagram" src="images-svg-en/user-behavior-data-model.svg" />
+Figure 4-10: User Behavior Data Model Diagram</p>
+<p>The system collects multi-dimensional user behavior data, including:
+- <strong>Spatial Dimension</strong>: Geographic range accessed by users, zoom levels, dwell time
+- <strong>Temporal Dimension</strong>: Access time, session duration, repeat access intervals
+- <strong>Operational Dimension</strong>: Frequency and patterns of zoom, pan, and query operations
+- <strong>Contextual Dimension</strong>: User type, device information, network conditions</p>
+<h4 id="442-lstm-neural-network-prediction-model">4.4.2 LSTM Neural Network Prediction Model</h4>
+<p>Based on Long Short-Term Memory (LSTM) networks, a temporal prediction model is constructed that can capture temporal dependencies and spatial correlations in user access behavior. The model architecture includes input layer, LSTM hidden layers, attention mechanism layer, and output layer. The input layer processes multi-dimensional feature vectors, LSTM layers capture temporal patterns, attention mechanisms enhance weights for key time periods, and the output layer generates probability distributions of hotspot areas. The training process adopts a sliding time window strategy, using 30 days of historical access data to predict hotspot areas for the next 7 days.</p>
+<h4 id="443-hotspot-area-identification-and-cache-strategy">4.4.3 Hotspot Area Identification and Cache Strategy</h4>
+<p>The hotspot area prediction results output by the deep learning model guide cache strategy formulation:</p>
+<ol>
+<li><strong>Dynamic Cache Range Adjustment</strong>: Dynamically adjusting cache coverage range based on predicted hotspot areas</li>
+<li><strong>Hierarchical Cache Strategy</strong>: Adopting different cache strategies for areas with different heat levels</li>
+<li><strong>Preloading Optimization</strong>: Preloading tile data for hotspot areas before access peaks</li>
+<li><strong>Cache Eviction Decision</strong>: Optimizing cache eviction priorities based on prediction results</li>
+</ol>
+<h2 id="5-system-implementation-and-optimization">5. System Implementation and Optimization</h2>
+<h3 id="51-front-end-architecture-implementation">5.1 Front-end Architecture Implementation</h3>
+<h4 id="511-dual-engine-map-architecture">5.1.1 Dual-Engine Map Architecture</h4>
+<p>The front-end adopts a dual-engine architecture of OpenLayers and Leaflet to provide the most suitable map solutions for different application scenarios:</p>
+<p><img alt="Front-end Dual-Engine Architecture Diagram" src="images-svg-en/frontend-dual-engine-architecture.svg" />
+Figure 5-1: Front-end Dual-Engine Architecture Diagram</p>
+<ul>
+<li><strong>OpenLayers Engine</strong>: Professional-grade GIS functionality supporting complex coordinate systems and advanced spatial analysis</li>
+<li><strong>Leaflet Engine</strong>: Lightweight interactive experience suitable for mobile devices and rapid prototyping</li>
+</ul>
+<h4 id="512-dynamic-style-rendering-system">5.1.2 Dynamic Style Rendering System</h4>
+<p><img alt="Dynamic Style Rendering Flowchart" src="images-svg-en/dynamic-style-rendering-flow.svg" />
+Figure 5-2: Dynamic Style Rendering Flowchart</p>
+<p>The dynamic style rendering system implements real-time style calculation based on feature attributes, specifically optimized for complex style requirements of CAD data. The system improves rendering performance through a style caching mechanism, reusing style objects for features with the same layer and geometry type. The rendering algorithm supports multiple style configuration methods, including uniform layer-based styles, attribute-based classification styles, and expression-based dynamic styles.</p>
+<h4 id="513-implementation-of-indexdb-intelligent-cache-system">5.1.3 Implementation of IndexDB Intelligent Cache System</h4>
+<p><img alt="IndexDB Cache System Architecture Diagram" src="images-svg-en/indexdb-cache-system-architecture.svg" />
+Figure 5-3: IndexDB Cache System Architecture Diagram</p>
+<p>The front-end IndexDB cache system adopts a modular design, including four core modules: cache manager, storage engine, prediction engine, and performance monitoring. The cache manager is responsible for unified cache strategy formulation and execution, the storage engine handles low-level IndexDB operations and data persistence, the prediction engine predicts cache requirements based on user behavior patterns, and the performance monitoring module tracks cache hit rates and response times in real-time. The system implements asynchronous cache processing through Web Worker technology to avoid blocking main thread map rendering.</p>
+<p><img alt="IndexDB Data Structure Design Diagram" src="images-svg-en/indexdb-data-structure-design.svg" />
+Figure 5-4: IndexDB Data Structure Design Diagram</p>
+<p>The IndexDB database adopts a hierarchical storage structure, containing tile data tables, metadata tables, and statistical information tables. The tile data table stores actual tile image data, using composite indexes (layer_id, z, x, y) to improve query efficiency. The metadata table records tile creation time, access count, file size, and other information, supporting intelligent eviction strategies. The statistical information table maintains global cache statistics, including total storage space, hit rate, average response time, and other metrics.</p>
+<h4 id="514-predictive-loading-mechanism">5.1.4 Predictive Loading Mechanism</h4>
+<p><img alt="Predictive Loading Flowchart" src="images-svg-en/predictive-loading-flow.svg" />
+Figure 5-5: Predictive Loading Flowchart</p>
+<p>The predictive loading mechanism preloads potentially accessed tile data by analyzing user interaction behavior patterns. The system records user zoom and pan operation sequences, establishing a Markov chain model to predict next operations. When users perform zoom operations, the system predicts target zoom levels based on historical patterns and preloads corresponding tile data. For pan operations, the system predicts geographic areas users may access based on movement trajectories and prioritizes loading tiles for these areas. This mechanism increases preloading hit rate to 78.5%, significantly improving user experience.</p>
+<h3 id="52-back-end-performance-optimization">5.2 Back-end Performance Optimization</h3>
+<h4 id="521-database-connection-pool-optimization">5.2.1 Database Connection Pool Optimization</h4>
+<p><img alt="Database Connection Pool Architecture Diagram" src="images-svg-en/database-connection-pool-architecture.svg" />
+Figure 5-5: Database Connection Pool Architecture Diagram</p>
+<p>Intelligent database connection pool management was implemented, dynamically adjusting connection numbers based on system load.</p>
+<h4 id="522-tile-cache-optimization-strategy">5.2.2 Tile Cache Optimization Strategy</h4>
+<p><img alt="Multi-level Cache Architecture Diagram" src="images-svg-en/multi-level-cache-architecture.svg" />
+Figure 5-4: Multi-level Cache Architecture Diagram</p>
+<p>An intelligent tile caching strategy was implemented, significantly improving the response performance of map services. The system adopts a three-level caching architecture:</p>
+<ol>
+<li>
+<p><strong>Level 1 Cache (Redis Memory Cache)</strong>: Stores the most frequently accessed tile data with response time of 5-10ms, mainly caching areas currently being browsed by users and high-frequency access tiles.</p>
+</li>
+<li>
+<p><strong>Level 2 Cache (Local Disk Cache)</strong>: Stores commonly used tile data with response time of 50-100ms, using SSD storage to improve read speed and caching recently accessed tile data.</p>
+</li>
+<li>
+<p><strong>Level 3 Cache (Distributed File System)</strong>: Stores cold data tiles with response time of 200-500ms, providing complete tile data backup and long-term storage.</p>
+</li>
+</ol>
+<p>The cache manager adopts intelligent scheduling strategies, including LRU eviction algorithm, hotspot detection algorithm, and preloading strategy, dynamically adjusting cache content according to user access patterns to ensure that the most frequently accessed data is always maintained in the fastest cache layer.</p>
+<h4 id="523-deep-learning-cache-prediction-system">5.2.3 Deep Learning Cache Prediction System</h4>
+<p><img alt="Deep Learning Cache Prediction System Architecture Diagram" src="images-svg-en/deep-learning-cache-prediction-system.svg" />
+Figure 5-6: Deep Learning Cache Prediction System Architecture Diagram</p>
+<p>The back-end deep learning cache prediction system is built based on the TensorFlow framework, including data collection module, feature engineering module, model training module, and prediction service module. The data collection module collects user access logs, geospatial data, and system performance indicators in real-time. The feature engineering module cleans and extracts features from raw data. The model training module conducts deep learning training based on LSTM networks. The prediction service module provides real-time hotspot area prediction API interfaces.</p>
+<p>The system generates dynamic cache strategies by analyzing historical access patterns and identifying user behavior patterns and geospatial hotspot distributions. Prediction results guide the cache scheduler for intelligent resource allocation, including dynamic cache range adjustment, hierarchical cache strategy formulation, and preloading optimization.</p>
+<p><img alt="LSTM Model Structure Diagram" src="images-svg-en/lstm-model-structure.svg" />
+Figure 5-7: LSTM Model Structure Diagram</p>
+<p>The LSTM neural network model adopts an encoder-decoder architecture, with the encoder processing historical time series data and the decoder generating prediction results for future periods. The model contains 3 LSTM hidden layers with 128 neurons each, and introduces attention mechanisms and Dropout layers to prevent overfitting. Input features include 32-dimensional vectors such as timestamps, geographic coordinates, zoom levels, and access frequency, with output as gridded hotspot probability distribution matrices.</p>
+<p>The model adopts a sliding time window training strategy, using 30 days of historical access data to predict hotspot areas for the next 7 days. The attention mechanism can automatically identify time periods and feature dimensions that have the greatest impact on prediction results, improving prediction accuracy and interpretability.</p>
+<h4 id="524-intelligent-cache-scheduling-strategy">5.2.4 Intelligent Cache Scheduling Strategy</h4>
+<p>Based on deep learning prediction results, the system implements a dynamic cache scheduling strategy. The prediction model updates hotspot area prediction results hourly, and the cache scheduler dynamically adjusts caching strategies based on prediction probabilities. For high-probability hotspot areas, the system pre-generates and caches tile data at multiple zoom levels. For low-probability areas, a lazy loading strategy is adopted to save storage space. The system also introduces a load balancing mechanism to dynamically allocate caching tasks based on server load conditions, avoiding single-point overload.</p>
+<p>Through deep learning-optimized caching strategies, system cache performance has been significantly improved:</p>
+<table>
+<thead>
+<tr>
+<th>Time Period</th>
+<th>Traditional Cache Hit Rate</th>
+<th>Deep Learning Cache Hit Rate</th>
+<th>Improvement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Workday Morning</td>
+<td>67.3%</td>
+<td>89.4%</td>
+<td>+22.1%</td>
+</tr>
+<tr>
+<td>Workday Afternoon</td>
+<td>71.8%</td>
+<td>92.1%</td>
+<td>+20.3%</td>
+</tr>
+<tr>
+<td>Weekend</td>
+<td>59.2%</td>
+<td>85.7%</td>
+<td>+26.5%</td>
+</tr>
+<tr>
+<td>Holidays</td>
+<td>52.4%</td>
+<td>81.3%</td>
+<td>+28.9%</td>
+</tr>
+<tr>
+<td>Average</td>
+<td>62.7%</td>
+<td>87.1%</td>
+<td>+24.4%</td>
+</tr>
+</tbody>
+</table>
+<h2 id="6-conclusions-and-future-work">6. Conclusions and Future Work</h2>
+<h3 id="61-research-summary">6.1 Research Summary</h3>
+<p>This research successfully designed and implemented a Web map service integration platform supporting multi-format GIS data. The main achievements include:</p>
+<ol>
+<li>
+<p><strong>Technical Innovation</strong>: Proposed a dual-track service publishing architecture that simultaneously supports WMS and MVT services, achieving complementary advantages of two technical approaches.</p>
+</li>
+<li>
+<p><strong>Algorithm Breakthrough</strong>: Developed DXF style intelligent extraction algorithms with style retention rates exceeding 90%, significantly surpassing traditional methods.</p>
+</li>
+<li>
+<p><strong>Cache Optimization</strong>: Innovatively introduced front-end IndexDB intelligent caching and back-end deep learning prediction technologies, significantly improving map loading performance and user experience.</p>
+</li>
+<li>
+<p><strong>Performance Enhancement</strong>: Through multi-level caching and distributed ID generation technologies, the system maintains good performance in high-concurrency scenarios, with MVT services showing significant improvements over WMS services.</p>
+</li>
+<li>
+<p><strong>Engineering Practice</strong>: Established a complete multi-format data processing pipeline supporting efficient processing and service publishing of TB-level data, with the system demonstrating good stability.</p>
+</li>
+</ol>
+<h3 id="62-technical-contributions">6.2 Technical Contributions</h3>
+<p><img alt="Technical Contribution Framework Diagram" src="images-svg-en/technical-contribution-framework.svg" />
+Figure 6-1: Technical Contribution Framework Diagram</p>
+<p>The main technical contributions of this research include:</p>
+<ul>
+<li><strong>Theoretical Contributions</strong>: Established a theoretical framework for unified processing of multi-format GIS data and proposed front-end and back-end collaborative intelligent cache optimization theory</li>
+<li><strong>Algorithm Contributions</strong>: Proposed new algorithms for CAD style information preservation and innovatively applied deep learning technology to map cache prediction</li>
+<li><strong>Engineering Contributions</strong>: Implemented a high-performance WebGIS service integration platform and established a complete front-end IndexDB caching system</li>
+<li><strong>Application Contributions</strong>: Provided referenceable technical solutions for the industry and promoted the development of WebGIS technology</li>
+</ul>
+<h3 id="63-limitations-analysis">6.3 Limitations Analysis</h3>
+<p>Current research still has some limitations:</p>
+<ol>
+<li>
+<p><strong>Data Format Support</strong>: Although supporting mainstream formats, support for some professional CAD formats (such as DGN, DWG) still needs improvement.</p>
+</li>
+<li>
+<p><strong>3D Data Processing</strong>: Currently mainly optimized for 2D data, 3D data processing capabilities need strengthening.</p>
+</li>
+<li>
+<p><strong>Real-time Data Streams</strong>: Support for real-time updated dynamic data still needs further optimization.</p>
+</li>
+<li>
+<p><strong>Deep Learning Models</strong>: LSTM model prediction accuracy for abnormal access patterns still has room for improvement.</p>
+</li>
+</ol>
+<h3 id="64-future-work-directions">6.4 Future Work Directions</h3>
+<p>Based on current research achievements, future work can continue in the following directions:</p>
+<ol>
+<li>
+<p><strong>Deep AI Integration</strong>: Introduce more advanced machine learning algorithms such as Transformer models to achieve more accurate cache prediction and intelligent data classification.</p>
+</li>
+<li>
+<p><strong>Edge Computing Support</strong>: Combine edge computing technology to deploy cache prediction models to edge nodes, further improving map service response speed.</p>
+</li>
+<li>
+<p><strong>Spatio-temporal Data Support</strong>: Extend support for temporal dimension data, construct four-dimensional spatio-temporal information systems, and support visualization of dynamic geographic phenomena.</p>
+</li>
+<li>
+<p><strong>Cloud-Native Architecture</strong>: Evolve toward cloud-native architecture, support larger-scale distributed deployment, and improve system elasticity and scalability.</p>
+</li>
+<li>
+<p><strong>Augmented Reality Integration</strong>: Combine AR/VR technology to provide immersive geographic information visualization experiences.</p>
+</li>
+</ol>
+<p><img alt="Future Technology Development Roadmap" src="images-svg-en/future-technology-roadmap.svg" />
+Figure 6-2: Future Technology Development Roadmap</p>
+<h3 id="65-industry-application-prospects">6.5 Industry Application Prospects</h3>
+<p>The research achievements have broad application prospects in multiple fields:</p>
+<ul>
+<li><strong>Urban Planning</strong>: Support visualization and analysis of large-scale urban design data, providing real-time planning scheme evaluation</li>
+<li><strong>Engineering Construction</strong>: Provide Web-based display and collaboration platforms for engineering drawings, supporting multi-party collaborative design</li>
+<li><strong>Environmental Monitoring</strong>: Construct real-time monitoring and analysis systems for environmental data, supporting early warning and decision support</li>
+<li><strong>Emergency Response</strong>: Support rapid spatial information processing and decision support for emergency events, improving emergency response efficiency</li>
+<li><strong>Smart Transportation</strong>: Provide real-time traffic data visualization and analysis platforms for transportation management departments</li>
+</ul>
+<p>Through the innovative application of front-end IndexDB caching and back-end deep learning prediction technologies, this research provides important theoretical foundation and technical reference for building next-generation high-performance, multi-format compatible WebGIS platforms, which is significant for promoting the development of geographic information technology toward intelligence and efficiency.</p>
+<h2 id="references">References</h2>
+<p>[1] 陈能. AutoCAD地形图数据转换为GIS空间数据的技术研究与应用[D]. 华南理工大学, 2019.</p>
+<p>[2] 石善忠. 利用FME对CAD到GIS数据带属性的无损转换研究[J]. 测绘与空间地理信息, 2018, 41(3): 156-159.</p>
+<p>[3] 张伟伟. 基于CAD与GIS集成的规划编制辅助设计系统建设与应用[J]. 城市规划学刊, 2020, 15(2): 78-85.</p>
+<p>[4] 戴望宇. 基于三维GIS引擎的CAD图元数据结构研究及基础绘图功能研发[D]. 华中科技大学, 2021.</p>
+<p>[5] 薛梅. 面向建设工程全生命周期应用的CAD_GIS_BIM在线集成框架[J]. 土木工程学报, 2022, 55(4): 112-120.</p>
+<p>[6] 陈丕翔. 基于GPU并行计算和WebGIS的潖江蓄滞洪区洪水预报系统研究[D]. 华南理工大学, 2020.</p>
+<p>[7] 王少萍. 基于云平台的高并发WebGIS系统研究[D]. 电子科技大学, 2019.</p>
+<p>[8] A novel framework utilizing 3D Gaussian Splatting for sustainable cities[J]. Sustainable Cities and Society, 2025.</p>
+<p>[9] Accelerating batch processing of spatial raster analysis using GPU[J]. Computers &amp; Geosciences, 2021.</p>
+<p>[10] An Efficient, Platform-Independent Map Rendering Framework for Mobile Augmented Reality[C]. International Conference on Computer Graphics and Interactive Techniques, 2022.</p>
+<p>[11] An ontology-based framework for semantic geographic information systems[J]. Computers &amp; Geosciences, 2023.</p>
+<p>[12] WEBGPU: A NEW GRAPHIC API FOR 3D WEBGIS APPLICATIONS[C]. International Conference on Web3D Technology, 2023.</p>
+<p>[13] WEB GIS시스템을 통한 고해상도 영상지도의 속도향상을 위한 연구[J]. Korean Journal of Remote Sensing, 2022.</p>
+<hr />
+<p><strong>Author Profile</strong>: [Lv Wanwan, Sichuan Water Development Investigation, Design &amp; Research Co., Ltd., 793145268@qq.com]</p>
+</body>
+</html>
