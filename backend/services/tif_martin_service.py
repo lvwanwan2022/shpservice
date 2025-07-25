@@ -316,6 +316,7 @@ class TifMartinService:
     
     def _get_tile_bounds(self, min_x, max_x, min_y, max_y, zoom):
         """计算指定缩放级别的瓦片边界"""
+        import math
         # Web Mercator 范围
         EARTH_RADIUS = 6378137
         EARTH_CIRCUMFERENCE = 2 * math.pi * EARTH_RADIUS
