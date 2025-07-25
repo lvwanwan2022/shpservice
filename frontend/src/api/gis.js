@@ -1162,6 +1162,11 @@ export default {
       url: `/gis/coordinate-systems/${epsgCode}/proj4`,
       method: 'get'
     })
+  },
+
+  // 获取文件的原始坐标系信息
+  getFileCoordinateInfo(fileId) {
+    return authHttp.get(`/files/${fileId}/coordinate-info`)
   }
 }
 

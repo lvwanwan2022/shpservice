@@ -30,7 +30,10 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 class TifMartinService:
-    """TIF Martin服务类，提供TIF到MBTiles转换和Martin服务发布功能"""
+    """TIF Martin服务类，提供TIF到MBTiles转换和Martin服务发布功能
+    
+    注意：保持原始坐标系，不强制转换为Web Mercator
+    """
     
     def __init__(self):
         """初始化服务"""
@@ -42,7 +45,187 @@ class TifMartinService:
         os.makedirs(self.mbtiles_folder, exist_ok=True)
         os.makedirs(self.temp_folder, exist_ok=True)
         
-        print("✅ TIF Martin服务初始化完成")
+        print("✅ TIF Martin服务初始化完成（智能坐标系模式）")
+    
+    def _get_file_coordinate_system(self, file_id):
+        """从数据库获取文件的坐标系信息"""
+        try:
+            sql = "SELECT coordinate_system FROM files WHERE id = %s"
+            result = execute_query(sql, (file_id,))
+            if result and result[0]['coordinate_system']:
+                return result[0]['coordinate_system']
+            return None
+        except Exception as e:
+            print(f"⚠️ 获取数据库坐标系信息失败: {str(e)}")
+            return None
+    
+    def _determine_profile_and_conversion(self, tif_info, db_coordinate_system):
+        """根据坐标系信息确定GDAL2Tiles profile和是否需要转换"""
+        try:
+            # 获取文件中的坐标系信息
+            file_coord_system = tif_info['info'].get('coordinate_system', {})
+            file_epsg = file_coord_system.get('epsg')
+            
+            print(f"🔍 分析坐标系信息:")
+            print(f"  - 文件EPSG: {file_epsg}")
+            print(f"  - 数据库坐标系: {db_coordinate_system}")
+            
+            # 支持的坐标系列表
+            supported_coordinates = {
+                'EPSG:4326': 'geodetic',  # WGS84地理坐标系
+                'EPSG:3857': 'mercator',   # Web Mercator投影
+                'EPSG:900913': 'mercator', # Google Mercator (旧版本)
+                'EPSG:4490': 'geodetic',   # CGCS2000地理坐标系
+                'EPSG:4214': 'geodetic',   # 北京54地理坐标系
+                'EPSG:4610': 'geodetic',   # 西安80地理坐标系
+            }
+            
+            # 确定目标坐标系
+            target_coordinate = None
+            if db_coordinate_system:
+                # 优先使用数据库中的坐标系
+                target_coordinate = db_coordinate_system
+                print(f"✅ 使用数据库中的坐标系: {target_coordinate}")
+            elif file_epsg:
+                # 如果数据库没有，使用文件中的坐标系
+                target_coordinate = f"EPSG:{file_epsg}"
+                print(f"✅ 使用文件中的坐标系: {target_coordinate}")
+            else:
+                # 默认使用WGS84
+                target_coordinate = 'EPSG:4326'
+                print(f"⚠️ 未检测到坐标系，使用默认WGS84: {target_coordinate}")
+            
+            # 确定profile
+            profile = supported_coordinates.get(target_coordinate, 'raster')
+            
+            # 判断是否需要坐标系转换
+            needs_conversion = False
+            conversion_reason = ""
+            
+            if file_epsg and target_coordinate:
+                file_epsg_full = f"EPSG:{file_epsg}" if not file_epsg.startswith('EPSG:') else file_epsg
+                if file_epsg_full != target_coordinate:
+                    needs_conversion = True
+                    conversion_reason = f"文件坐标系({file_epsg_full})与目标坐标系({target_coordinate})不匹配"
+            
+            # 特殊处理：如果目标坐标系不在支持列表中，使用raster profile
+            if target_coordinate not in supported_coordinates:
+                profile = 'raster'
+                conversion_reason = f"目标坐标系({target_coordinate})不在标准支持列表中，使用raster profile保持原始投影"
+            
+            result = {
+                'profile': profile,
+                'target_coordinate': target_coordinate,
+                'needs_conversion': needs_conversion,
+                'conversion_reason': conversion_reason,
+                'file_epsg': file_epsg,
+                'db_coordinate_system': db_coordinate_system
+            }
+            
+            print(f"📋 坐标系分析结果:")
+            print(f"  - Profile: {profile}")
+            print(f"  - 目标坐标系: {target_coordinate}")
+            print(f"  - 需要转换: {needs_conversion}")
+            if conversion_reason:
+                print(f"  - 转换原因: {conversion_reason}")
+            
+            return result
+            
+        except Exception as e:
+            print(f"❌ 坐标系分析失败: {str(e)}")
+            # 返回默认配置
+            return {
+                'profile': 'raster',
+                'target_coordinate': 'EPSG:4326',
+                'needs_conversion': False,
+                'conversion_reason': f"分析失败，使用默认配置: {str(e)}",
+                'file_epsg': None,
+                'db_coordinate_system': db_coordinate_system
+            }
+    
+    def _smart_preprocess_tif(self, input_path, temp_dir, tif_info, db_coordinate_system):
+        """智能预处理TIF文件，根据坐标系信息决定是否转换"""
+        try:
+            # 分析坐标系和确定处理策略
+            analysis = self._determine_profile_and_conversion(tif_info, db_coordinate_system)
+            
+            info = tif_info['info']
+            processed_path = os.path.join(temp_dir, 'processed.tif')
+            
+            # 检查是否有地理参考信息
+            has_georeference = info.get('has_georeference', False)
+            
+            if not has_georeference:
+                print("⚠️ 文件缺少地理参考信息，进行基本优化")
+                if GDAL_AVAILABLE:
+                    translate_options = gdal.TranslateOptions(
+                        creationOptions=['TILED=YES', 'COMPRESS=LZW']
+                    )
+                    gdal.Translate(processed_path, input_path, options=translate_options)
+                else:
+                    cmd = [
+                        'gdal_translate',
+                        '-co', 'TILED=YES',
+                        '-co', 'COMPRESS=LZW',
+                        input_path,
+                        processed_path
+                    ]
+                    subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+                return processed_path
+            
+            # 如果需要坐标系转换
+            if analysis['needs_conversion']:
+                print(f"🔄 执行坐标系转换: {analysis['conversion_reason']}")
+                
+                if GDAL_AVAILABLE:
+                    # 使用Python GDAL进行坐标系转换
+                    warp_options = gdal.WarpOptions(
+                        dstSRS=analysis['target_coordinate'],
+                        resampleAlg=gdal.GRA_Bilinear,
+                        creationOptions=['TILED=YES', 'COMPRESS=LZW']
+                    )
+                    gdal.Warp(processed_path, input_path, options=warp_options)
+                else:
+                    # 使用命令行工具进行坐标系转换
+                    cmd = [
+                        'gdalwarp',
+                        '-t_srs', analysis['target_coordinate'],
+                        '-r', 'bilinear',
+                        '-co', 'TILED=YES',
+                        '-co', 'COMPRESS=LZW',
+                        input_path,
+                        processed_path
+                    ]
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+                    if result.returncode != 0:
+                        print(f"⚠️ 坐标系转换失败: {result.stderr}")
+                        return input_path
+                
+                print(f"✅ 坐标系转换完成: {analysis['target_coordinate']}")
+                return processed_path
+            else:
+                # 不需要转换，进行基本优化
+                print(f"📋 保持原始坐标系，进行基本优化")
+                if GDAL_AVAILABLE:
+                    translate_options = gdal.TranslateOptions(
+                        creationOptions=['TILED=YES', 'COMPRESS=LZW']
+                    )
+                    gdal.Translate(processed_path, input_path, options=translate_options)
+                else:
+                    cmd = [
+                        'gdal_translate',
+                        '-co', 'TILED=YES',
+                        '-co', 'COMPRESS=LZW',
+                        input_path,
+                        processed_path
+                    ]
+                    subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+                
+                return processed_path
+                
+        except Exception as e:
+            print(f"⚠️ 智能预处理失败，使用原始文件: {str(e)}")
+            return input_path
         
     def tif_to_mbtiles_and_publish(self, file_id, file_path, original_filename, user_id=None, max_zoom=20):
         """将TIF文件转换为MBTiles并发布为Martin服务
@@ -75,6 +258,10 @@ class TifMartinService:
                     'error': 'GDAL工具不可用，请确保已安装GDAL并添加到PATH'
                 }
             
+            # 获取数据库中的坐标系信息
+            db_coordinate_system = self._get_file_coordinate_system(file_id)
+            print(f"📊 数据库中的坐标系信息: {db_coordinate_system}")
+            
             # 生成MBTiles文件名
             file_uuid = uuid.uuid4().hex
             mbtiles_filename = f"{file_uuid}.mbtiles"
@@ -94,15 +281,21 @@ class TifMartinService:
             
             print(f"📊 TIF文件信息: {tif_info['info']}")
             
-            # 第二步：预处理TIF文件（如果需要）
-            processed_tif_path = self._preprocess_tif(file_path, temp_dir, tif_info)
+            # 第二步：智能坐标系处理
+            processed_tif_path = self._smart_preprocess_tif(
+                file_path, temp_dir, tif_info, db_coordinate_system
+            )
             
             # 第三步：使用GDAL将TIF转换为MBTiles
+            # 获取坐标系分析结果
+            analysis = self._determine_profile_and_conversion(tif_info, db_coordinate_system)
+            
             conversion_result = self._convert_tif_to_mbtiles(
                 processed_tif_path, 
                 mbtiles_path, 
                 max_zoom,
-                temp_dir
+                temp_dir,
+                analysis['profile']  # 传递分析得到的profile
             )
             
             if not conversion_result['success']:
@@ -129,7 +322,8 @@ class TifMartinService:
                 user_id=user_id,
                 tif_info=tif_info,
                 mbtiles_info=mbtiles_info,
-                conversion_stats=conversion_result['stats']
+                conversion_stats=conversion_result['stats'],
+                coordinate_analysis=analysis  # 传递坐标系分析结果
             )
             
             if not publish_result['success']:
@@ -148,6 +342,7 @@ class TifMartinService:
                 'tif_info': tif_info['info'],
                 'mbtiles_info': mbtiles_info['info'],
                 'conversion_stats': conversion_result['stats'],
+                'coordinate_analysis': analysis,  # 添加坐标系分析结果
                 'martin_service': publish_result
             }
             
@@ -298,38 +493,35 @@ class TifMartinService:
             }
     
     def _preprocess_tif(self, input_path, temp_dir, tif_info):
-        """预处理TIF文件（投影转换、数据类型转换等）"""
+        """预处理TIF文件（数据类型转换等，保持原始坐标系）"""
         try:
             info = tif_info['info']
             processed_path = os.path.join(temp_dir, 'processed.tif')
             
-            # 检查是否需要投影转换
+            # 检查是否有地理参考信息
+            has_georeference = info.get('has_georeference', False)
             coord_system = info.get('coordinate_system', {})
             
-            # 如果没有地理参考信息或不是Web Mercator，进行转换
-            needs_reprojection = (
-                not info.get('has_georeference') or
-                ('3857' not in str(coord_system) and '900913' not in str(coord_system))
-            )
+            print(f"📊 文件坐标系信息: {coord_system}")
+            print(f"📊 是否有地理参考: {has_georeference}")
+            
+            # 不强制转换坐标系，保持原始投影
+            # 只在没有地理参考信息时进行基本的数据类型转换
+            needs_processing = not has_georeference
             
             if GDAL_AVAILABLE:
                 # 使用Python GDAL进行处理
-                if needs_reprojection:
-                    print("🔄 转换投影到Web Mercator (EPSG:3857)")
-                    # 使用gdal.Warp进行投影转换
-                    warp_options = gdal.WarpOptions(
-                        dstSRS='EPSG:3857',
-                        resampleAlg=gdal.GRA_Bilinear,
-                        creationOptions=['TILED=YES', 'COMPRESS=LZW']
-                    )
-                    gdal.Warp(processed_path, input_path, options=warp_options)
-                else:
-                    print("📋 复制文件（已具备正确投影）")
-                    # 使用gdal.Translate进行格式转换
+                if needs_processing:
+                    print("🔄 进行数据优化处理（保持原始坐标系）")
+                    # 使用gdal.Translate进行格式优化，不改变坐标系
                     translate_options = gdal.TranslateOptions(
                         creationOptions=['TILED=YES', 'COMPRESS=LZW']
                     )
                     gdal.Translate(processed_path, input_path, options=translate_options)
+                else:
+                    print("📋 使用原始文件（已具备地理参考）")
+                    # 直接使用原始文件，不进行任何转换
+                    return input_path
                 
                 # 检查输出文件是否存在
                 if os.path.exists(processed_path):
@@ -341,19 +533,8 @@ class TifMartinService:
                     
             else:
                 # 使用命令行工具
-                if needs_reprojection:
-                    print("🔄 转换投影到Web Mercator (EPSG:3857)")
-                    cmd = [
-                        'gdalwarp',
-                        '-t_srs', 'EPSG:3857',
-                        '-r', 'bilinear',  # 重采样方法
-                        '-co', 'TILED=YES',
-                        '-co', 'COMPRESS=LZW',
-                        input_path,
-                        processed_path
-                    ]
-                else:
-                    print("📋 复制文件（已具备正确投影）")
+                if needs_processing:
+                    print("🔄 进行数据优化处理（保持原始坐标系）")
                     cmd = [
                         'gdal_translate',
                         '-co', 'TILED=YES',
@@ -361,6 +542,10 @@ class TifMartinService:
                         input_path,
                         processed_path
                     ]
+                else:
+                    print("📋 使用原始文件（已具备地理参考）")
+                    # 直接使用原始文件，不进行任何转换
+                    return input_path
                 
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
                 
@@ -375,10 +560,10 @@ class TifMartinService:
             print(f"⚠️ TIF预处理失败，使用原始文件: {str(e)}")
             return input_path
     
-    def _convert_tif_to_mbtiles(self, tif_path, mbtiles_path, max_zoom, temp_dir):
-        """使用GDAL将TIF转换为MBTiles"""
+    def _convert_tif_to_mbtiles(self, tif_path, mbtiles_path, max_zoom, temp_dir, profile='raster'):
+        """使用GDAL将TIF转换为MBTiles（智能坐标系处理）"""
         try:
-            print(f"🔄 开始转换TIF为MBTiles，最大级别: {max_zoom}")
+            print(f"🔄 开始转换TIF为MBTiles，最大级别: {max_zoom}，Profile: {profile}")
             
             # 定义进度回调函数
             def progress_callback(complete, message=""):
@@ -396,7 +581,7 @@ class TifMartinService:
             if GDAL_AVAILABLE:
                 # 方法1：如果有Python GDAL，尝试使用gdal2tiles（如果系统中有脚本）
                 print("💡 尝试使用Python gdal2tiles...")
-                if self._try_gdal2tiles_python(tif_path, mbtiles_path, max_zoom, temp_dir, progress_callback):
+                if self._try_gdal2tiles_python(tif_path, mbtiles_path, max_zoom, temp_dir, progress_callback, profile):
                     return self._get_conversion_stats(mbtiles_path)
             
                 # 方法2：使用Python GDAL生成瓦片
@@ -406,7 +591,7 @@ class TifMartinService:
             else:
                 # 方法3：尝试使用命令行gdal2tiles.py
                 print("💡 尝试使用命令行gdal2tiles...")
-                if self._try_gdal2tiles(tif_path, mbtiles_path, max_zoom):
+                if self._try_gdal2tiles(tif_path, mbtiles_path, max_zoom, profile):
                     return self._get_conversion_stats(mbtiles_path)
             
             # 方法4：使用手动瓦片生成（最后的备选方案）
@@ -442,8 +627,8 @@ class TifMartinService:
                 'error': f'转换过程失败: {str(e)}'
             }
     
-    def _try_gdal2tiles_python(self, tif_path, mbtiles_path, max_zoom, temp_dir, progress_callback=None):
-        """尝试使用Python调用gdal2tiles进行转换"""
+    def _try_gdal2tiles_python(self, tif_path, mbtiles_path, max_zoom, temp_dir, progress_callback=None, profile='raster'):
+        """尝试使用Python调用gdal2tiles进行转换（智能坐标系处理）"""
         try:
             # 如果有gdal2tiles模块，直接调用
             try:
@@ -453,9 +638,9 @@ class TifMartinService:
                 temp_tiles_dir = os.path.join(temp_dir, 'temp_tiles')
                 os.makedirs(temp_tiles_dir, exist_ok=True)
                 
-                # 设置参数
+                # 设置参数 - 使用分析得到的profile
                 argv = [
-                    '--profile=mercator',
+                    f'--profile={profile}',  # 使用分析得到的profile
                     '--webviewer=none',
                     f'--zoom=0-{max_zoom}',
                     '--quiet',
@@ -580,32 +765,39 @@ class TifMartinService:
             return False
 
     def _generate_single_tile_python(self, dataset, tile_path, z, x, y):
-        """使用Python GDAL生成单个瓦片"""
+        """使用Python GDAL生成单个瓦片（保持原始坐标系）"""
         try:
-            # 计算瓦片边界
-            import math
+            # 简化的瓦片生成，使用原始坐标系
+            tile_size = 256
+            scale = 2 ** z
             
-            def tile_to_bbox(z, x, y):
-                n = 2.0 ** z
-                lon_min = x / n * 360.0 - 180.0
-                lat_max = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / n))))
-                lon_max = (x + 1) / n * 360.0 - 180.0
-                lat_min = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * (y + 1) / n))))
-                
-                return [lon_min, lat_min, lon_max, lat_max]
+            # 计算源图像中的像素范围
+            src_x = x * tile_size
+            src_y = y * tile_size
+            src_width = tile_size
+            src_height = tile_size
             
-            bbox = tile_to_bbox(z, x, y)
+            # 检查边界
+            dataset_width = dataset.RasterXSize
+            dataset_height = dataset.RasterYSize
             
-            # 使用gdal.Warp生成瓦片
-            warp_options = gdal.WarpOptions(
-                outputBounds=bbox,
+            if src_x >= dataset_width or src_y >= dataset_height:
+                return False
+            
+            # 调整边界以适应数据集
+            actual_width = min(src_width, dataset_width - src_x)
+            actual_height = min(src_height, dataset_height - src_y)
+            
+            # 使用gdal.Translate生成瓦片
+            translate_options = gdal.TranslateOptions(
+                srcWin=[src_x, src_y, actual_width, actual_height],
                 width=256,
                 height=256,
                 resampleAlg=gdal.GRA_Bilinear,
                 format='PNG'
             )
             
-            gdal.Warp(tile_path, dataset, options=warp_options)
+            gdal.Translate(tile_path, dataset, options=translate_options)
             
             return os.path.exists(tile_path)
             
@@ -613,16 +805,17 @@ class TifMartinService:
             print(f"⚠️ 生成瓦片 {z}/{x}/{y} 失败: {str(e)}")
             return False
 
-    def _try_gdal2tiles(self, tif_path, mbtiles_path, max_zoom):
-        """尝试使用gdal2tiles.py进行转换"""
+    def _try_gdal2tiles(self, tif_path, mbtiles_path, max_zoom, profile='raster'):
+        """尝试使用gdal2tiles.py进行转换（智能坐标系处理）"""
         try:
             # 创建临时瓦片目录
             temp_tiles_dir = os.path.join(os.path.dirname(mbtiles_path), 'temp_tiles')
             os.makedirs(temp_tiles_dir, exist_ok=True)
             
+            # 使用分析得到的profile
             cmd = [
                 'gdal2tiles.py',
-                '--profile=mercator',
+                f'--profile={profile}',  # 使用分析得到的profile
                 '--webviewer=none',
                 f'--zoom=0-{max_zoom}',
                 '--format=png',
@@ -682,27 +875,27 @@ class TifMartinService:
             return False
     
     def _generate_single_tile(self, tif_path, tile_path, z, x, y):
-        """生成单个瓦片"""
+        """生成单个瓦片（保持原始坐标系）"""
         try:
-            # Web Mercator瓦片边界计算
-            import math
+            # 简化的瓦片生成方法，使用原始坐标系
+            # 使用gdal_translate提取瓦片区域
             
-            def tile_to_bbox(z, x, y):
-                n = 2.0 ** z
-                lon_min = x / n * 360.0 - 180.0
-                lat_max = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * y / n))))
-                lon_max = (x + 1) / n * 360.0 - 180.0
-                lat_min = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * (y + 1) / n))))
-                
-                return [lon_min, lat_min, lon_max, lat_max]
+            # 计算瓦片在原始坐标系中的位置
+            # 这里使用简化的方法，将图像分割成瓦片
+            tile_size = 256
+            scale = 2 ** z
             
-            bbox = tile_to_bbox(z, x, y)
+            # 计算源图像中的像素范围
+            src_x = x * tile_size
+            src_y = y * tile_size
+            src_width = tile_size
+            src_height = tile_size
             
-            # 使用gdalwarp生成瓦片
+            # 使用gdal_translate提取瓦片
             cmd = [
-                'gdalwarp',
-                '-te', str(bbox[0]), str(bbox[1]), str(bbox[2]), str(bbox[3]),
-                '-ts', '256', '256',
+                'gdal_translate',
+                '-srcwin', str(src_x), str(src_y), str(src_width), str(src_height),
+                '-outsize', '256', '256',
                 '-r', 'bilinear',
                 '-of', 'PNG',
                 tif_path,
@@ -742,8 +935,9 @@ class TifMartinService:
                 ('name', 'Generated from TIF'),
                 ('type', 'overlay'),
                 ('version', '1.0'),
-                ('description', 'Tiles generated from TIF file'),
+                ('description', f'Tiles generated from TIF file using {profile} profile'),
                 ('format', 'png'),
+                ('profile', profile),  # 记录使用的profile
                 ('minzoom', '0'),
                 ('maxzoom', str(max_zoom))
             ]
@@ -877,7 +1071,7 @@ class TifMartinService:
             }
     
     def _publish_mbtiles_to_martin(self, file_id, mbtiles_path, original_filename, 
-                                 user_id, tif_info, mbtiles_info, conversion_stats):
+                                 user_id, tif_info, mbtiles_info, conversion_stats, coordinate_analysis=None):
         """将MBTiles文件发布为Martin服务"""
         try:
             from services.raster_martin_service import RasterMartinService
@@ -903,7 +1097,8 @@ class TifMartinService:
                     'original_tif': original_filename,
                     'tif_info': tif_info,
                     'mbtiles_info': mbtiles_info,
-                    'conversion_stats': conversion_stats
+                    'conversion_stats': conversion_stats,
+                    'coordinate_analysis': coordinate_analysis  # 添加坐标系分析信息
                 }
             
             return result

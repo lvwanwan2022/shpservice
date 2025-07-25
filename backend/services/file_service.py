@@ -462,3 +462,442 @@ class FileService:
         except Exception as e:
             print(f"获取文件统计信息失败: {str(e)}")
             raise 
+    
+    def get_file_coordinate_info_with_gdal(self, file_path, file_type):
+        """使用GDAL获取文件的坐标系信息"""
+        import subprocess
+        import json
+        import zipfile
+        import tempfile
+        import shutil
+        
+        try:
+            coordinate_info = {
+                'source': 'gdal',
+                'file_type': file_type,
+                'wkt': None,
+                'epsg_code': None,
+                'proj4': None,
+                'authority': None,
+                'geotransform': None,
+                'extent': None,
+                'error': None
+            }
+            
+            actual_file_path = file_path
+            temp_dir = None
+            
+            # 处理shapefile（zip文件）
+            if file_type == 'shp' and file_path.endswith('.zip'):
+                try:
+                    temp_dir = tempfile.mkdtemp()
+                    with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                        zip_ref.extractall(temp_dir)
+                    
+                    # 获取zip文件中的所有文件列表
+                    zip_files = []
+                    shp_file_path = None
+                    prj_file_path = None
+                    
+                    for root, dirs, files in os.walk(temp_dir):
+                        for file in files:
+                            full_path = os.path.join(root, file)
+                            relative_path = os.path.relpath(full_path, temp_dir)
+                            zip_files.append(relative_path)
+                            
+                            # 查找.shp文件
+                            if file.endswith('.shp'):
+                                shp_file_path = full_path
+                                actual_file_path = full_path
+                            
+                            # 查找.prj文件
+                            elif file.endswith('.prj'):
+                                prj_file_path = full_path
+                    
+                    coordinate_info['zip_contents'] = zip_files
+                    
+                    # 如果找到.prj文件，直接读取其内容
+                    if prj_file_path and os.path.exists(prj_file_path):
+                        try:
+                            with open(prj_file_path, 'r', encoding='utf-8') as prj_file:
+                                prj_content = prj_file.read().strip()
+                                coordinate_info['prj_file_content'] = prj_content
+                                coordinate_info['wkt'] = prj_content
+                                
+                                # 尝试从WKT中提取EPSG代码
+                                import re
+                                epsg_match = re.search(r'ID\[\"EPSG\",(\d+)\]', prj_content)
+                                if epsg_match:
+                                    epsg_code = epsg_match.group(1)
+                                    coordinate_info['epsg_code'] = f"EPSG:{epsg_code}"
+                                    coordinate_info['authority'] = 'EPSG'
+                                    
+                        except Exception as e:
+                            coordinate_info['prj_read_error'] = f'读取.prj文件失败: {str(e)}'
+                    
+                    if not shp_file_path:
+                        coordinate_info['error'] = 'ZIP文件中未找到.shp文件'
+                        return coordinate_info
+                        
+                except Exception as e:
+                    coordinate_info['error'] = f'解压ZIP文件失败: {str(e)}'
+                    return coordinate_info
+            
+            # 对于shapefile使用ogrinfo，对于栅格使用gdalinfo
+            if file_type == 'shp':
+                # 使用ogrinfo读取矢量数据信息
+                cmd = ['ogrinfo', '-json', '-so', actual_file_path]
+                coordinate_info['gdal_command'] = 'ogrinfo'
+            else:
+                # 使用gdalinfo读取栅格数据信息
+                cmd = ['gdalinfo', '-json', actual_file_path]
+                coordinate_info['gdal_command'] = 'gdalinfo'
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode != 0:
+                # 如果ogrinfo/gdalinfo失败，尝试获取基本的几何信息
+                if file_type == 'shp':
+                    # 尝试使用ogrinfo获取边界信息
+                    try:
+                        extent_cmd = ['ogrinfo', '-al', '-so', actual_file_path]
+                        extent_result = subprocess.run(extent_cmd, capture_output=True, text=True, timeout=30)
+                        
+                        if extent_result.returncode == 0:
+                            coordinate_info['ogrinfo_output'] = extent_result.stdout
+                            # 解析extent信息来推测坐标系
+                            coordinate_info.update(self._analyze_shapefile_extent(extent_result.stdout))
+                        else:
+                            coordinate_info['error'] = f'ogrinfo执行失败: {result.stderr}'
+                    except Exception as e:
+                        coordinate_info['error'] = f'读取shapefile信息失败: {str(e)}'
+                else:
+                    coordinate_info['error'] = f'gdalinfo执行失败: {result.stderr}'
+                
+                # 如果没有.prj文件且GDAL失败，提供推测建议
+                if file_type == 'shp' and not coordinate_info.get('prj_file_content'):
+                    coordinate_info['suggestions'] = self._get_coordinate_system_suggestions()
+                
+                return coordinate_info
+            
+            gdal_info = json.loads(result.stdout)
+            
+            # 存储GDAL信息用于对比
+            gdal_coordinate_info = {}
+            
+            # 提取坐标系信息
+            if 'coordinateSystem' in gdal_info:
+                coord_sys = gdal_info['coordinateSystem']
+                
+                # WKT格式坐标系（如果没有从.prj文件获取到，则使用GDAL的）
+                if 'wkt' in coord_sys:
+                    gdal_coordinate_info['gdal_wkt'] = coord_sys['wkt']
+                    
+                    # 如果之前没有从.prj文件获取到WKT，则使用GDAL的
+                    if not coordinate_info.get('wkt'):
+                        coordinate_info['wkt'] = coord_sys['wkt']
+                    
+                    # 尝试从GDAL的WKT中提取EPSG代码（如果之前没有获取到）
+                    if not coordinate_info.get('epsg_code'):
+                        import re
+                        epsg_match = re.search(r'ID\["EPSG",(\d+)\]', coord_sys['wkt'])
+                        if epsg_match:
+                            epsg_code = epsg_match.group(1)
+                            coordinate_info['epsg_code'] = f"EPSG:{epsg_code}"
+                            coordinate_info['authority'] = 'EPSG'
+                
+                # PROJ4格式
+                if 'proj4' in coord_sys:
+                    coordinate_info['proj4'] = coord_sys['proj4']
+            
+            # 对于shp文件，比较.prj文件和GDAL信息
+            if file_type == 'shp' and coordinate_info.get('prj_file_content'):
+                comparison = {
+                    'prj_wkt': coordinate_info.get('prj_file_content'),
+                    'gdal_wkt': gdal_coordinate_info.get('gdal_wkt'),
+                    'match': False
+                }
+                
+                # 简单的字符串比较（去除空白字符）
+                if (coordinate_info.get('prj_file_content') and 
+                    gdal_coordinate_info.get('gdal_wkt')):
+                    prj_normalized = ''.join(coordinate_info['prj_file_content'].split())
+                    gdal_normalized = ''.join(gdal_coordinate_info['gdal_wkt'].split())
+                    comparison['match'] = prj_normalized == gdal_normalized
+                
+                coordinate_info['prj_gdal_comparison'] = comparison
+            
+            # 地理转换参数
+            if 'geoTransform' in gdal_info:
+                coordinate_info['geotransform'] = gdal_info['geoTransform']
+            
+            # 空间范围
+            if 'wgs84Extent' in gdal_info:
+                extent = gdal_info['wgs84Extent']
+                coordinate_info['extent'] = {
+                    'type': 'wgs84',
+                    'coordinates': extent.get('coordinates', [])
+                }
+            elif 'cornerCoordinates' in gdal_info:
+                corner_coords = gdal_info['cornerCoordinates']
+                coordinate_info['extent'] = {
+                    'type': 'corner',
+                    'coordinates': corner_coords
+                }
+            
+            # 文件大小和像素信息（针对栅格文件）
+            if 'size' in gdal_info:
+                coordinate_info['raster_size'] = gdal_info['size']
+            
+            if 'bands' in gdal_info:
+                coordinate_info['band_count'] = len(gdal_info['bands'])
+                if gdal_info['bands']:
+                    coordinate_info['data_type'] = gdal_info['bands'][0].get('type')
+            
+            return coordinate_info
+            
+        except Exception as e:
+            coordinate_info['error'] = f'获取坐标系信息失败: {str(e)}'
+            return coordinate_info
+        finally:
+            # 清理临时目录
+            if temp_dir and os.path.exists(temp_dir):
+                try:
+                    shutil.rmtree(temp_dir)
+                except:
+                    pass
+    
+    def get_mbtiles_coordinate_info(self, file_path):
+        """从MBTiles文件的metadata表中获取坐标系信息"""
+        import sqlite3
+        
+        try:
+            coordinate_info = {
+                'source': 'mbtiles_metadata',
+                'file_type': 'mbtiles',
+                'wkt': None,
+                'epsg_code': None,
+                'proj4': None,
+                'authority': None,
+                'metadata': {},
+                'error': None
+            }
+            
+            # 连接SQLite数据库
+            conn = sqlite3.connect(file_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # 查询metadata表
+            cursor.execute("SELECT name, value FROM metadata")
+            metadata_rows = cursor.fetchall()
+            
+            metadata = {}
+            for row in metadata_rows:
+                metadata[row['name']] = row['value']
+            
+            coordinate_info['metadata'] = metadata
+            
+            # 从metadata中提取坐标系信息
+            # MBTiles通常使用Web Mercator (EPSG:3857)
+            if 'projection' in metadata:
+                projection = metadata['projection']
+                if projection == 'mercator' or projection == '900913':
+                    coordinate_info['epsg_code'] = 'EPSG:3857'
+                    coordinate_info['authority'] = 'EPSG'
+                elif projection.startswith('EPSG:'):
+                    coordinate_info['epsg_code'] = projection
+                    coordinate_info['authority'] = 'EPSG'
+            else:
+                # 默认情况下，MBTiles使用Web Mercator
+                coordinate_info['epsg_code'] = 'EPSG:3857 or EPSG:4326'
+                coordinate_info['authority'] = 'EPSG'
+                coordinate_info['note'] = 'MBTiles默认使用WGS84投影(EPSG:3857 or EPSG:4326)'
+            
+            # 提取其他有用信息
+            useful_keys = ['bounds', 'center', 'minzoom', 'maxzoom', 'format', 'type', 'version', 'description', 'attribution']
+            extracted_info = {}
+            for key in useful_keys:
+                if key in metadata:
+                    extracted_info[key] = metadata[key]
+            
+            coordinate_info['tile_info'] = extracted_info
+            
+            # 解析bounds信息
+            if 'bounds' in metadata:
+                try:
+                    bounds_str = metadata['bounds']
+                    bounds = [float(x) for x in bounds_str.split(',')]
+                    if len(bounds) == 4:
+                        coordinate_info['extent'] = {
+                            'type': 'bounds',
+                            'coordinates': {
+                                'west': bounds[0],
+                                'south': bounds[1],
+                                'east': bounds[2],
+                                'north': bounds[3]
+                            }
+                        }
+                except:
+                    pass
+            
+            conn.close()
+            return coordinate_info
+            
+        except Exception as e:
+            coordinate_info['error'] = f'读取MBTiles元数据失败: {str(e)}'
+            return coordinate_info
+    
+    def _analyze_shapefile_extent(self, ogrinfo_output):
+        """分析shapefile的边界范围来推测坐标系"""
+        analysis = {
+            'extent_analysis': {},
+            'suggested_crs': [],
+            'analysis_notes': []
+        }
+        
+        try:
+            import re
+            
+            # 解析Extent信息
+            extent_match = re.search(r'Extent:\s*\(([-\d.]+),\s*([-\d.]+)\)\s*-\s*\(([-\d.]+),\s*([-\d.]+)\)', ogrinfo_output)
+            
+            if extent_match:
+                min_x = float(extent_match.group(1))
+                min_y = float(extent_match.group(2))
+                max_x = float(extent_match.group(3))
+                max_y = float(extent_match.group(4))
+                
+                analysis['extent_analysis'] = {
+                    'min_x': min_x,
+                    'min_y': min_y,
+                    'max_x': max_x,
+                    'max_y': max_y,
+                    'width': max_x - min_x,
+                    'height': max_y - min_y
+                }
+                
+                # 推测坐标系类型
+                # 1. 检查是否为地理坐标系（经纬度）
+                if (-180 <= min_x <= 180) and (-180 <= max_x <= 180) and (-90 <= min_y <= 90) and (-90 <= max_y <= 90):
+                    analysis['analysis_notes'].append('坐标范围在经纬度范围内（-180~180, -90~90），可能是地理坐标系')
+                    
+                    # 进一步推测具体的地理坐标系
+                    if (-180 <= min_x <= -66) and (18 <= min_y <= 72):  # 北美洲范围
+                        analysis['suggested_crs'].extend([
+                            {'epsg': 'EPSG:4326', 'name': 'WGS 84', 'reason': 'GPS数据或全球数据常用坐标系'},
+                            {'epsg': 'EPSG:4269', 'name': 'NAD83', 'reason': '北美地区常用坐标系'},
+                            {'epsg': 'EPSG:4267', 'name': 'NAD27', 'reason': '北美地区传统坐标系'}
+                        ])
+                    elif (70 <= min_x <= 140) and (10 <= min_y <= 55):  # 中国范围
+                        analysis['suggested_crs'].extend([
+                            {'epsg': 'EPSG:4326', 'name': 'WGS 84', 'reason': 'GPS数据或全球数据常用坐标系'},
+                            {'epsg': 'EPSG:4490', 'name': 'CGCS2000', 'reason': '中国大陆常用坐标系'},
+                            {'epsg': 'EPSG:4214', 'name': 'Beijing 1954', 'reason': '中国传统坐标系'}
+                        ])
+                    else:
+                        analysis['suggested_crs'].append({
+                            'epsg': 'EPSG:4326', 
+                            'name': 'WGS 84', 
+                            'reason': 'GPS数据的标准坐标系'
+                        })
+                
+                # 2. 检查是否为投影坐标系
+                elif abs(min_x) > 1000000 or abs(max_x) > 1000000:  # 大坐标值，可能是投影坐标系
+                    coord_magnitude = max(abs(min_x), abs(max_x), abs(min_y), abs(max_y))
+                    
+                    if coord_magnitude > 10000000:
+                        analysis['analysis_notes'].append(f'坐标值很大（{coord_magnitude:.0f}），可能是以米为单位的投影坐标系')
+                    else:
+                        analysis['analysis_notes'].append(f'坐标值较大（{coord_magnitude:.0f}），可能是投影坐标系')
+                    
+                    # 根据坐标范围推测可能的投影坐标系
+                    if 200000 <= abs(min_x) <= 800000:  # UTM坐标系特征
+                        analysis['suggested_crs'].extend([
+                            {'epsg': 'EPSG:3857', 'name': 'Web Mercator', 'reason': '网络地图常用投影'},
+                            {'epsg': 'EPSG:32649', 'name': 'WGS 84 / UTM zone 49N', 'reason': 'UTM投影系统'},
+                            {'epsg': 'EPSG:32650', 'name': 'WGS 84 / UTM zone 50N', 'reason': 'UTM投影系统'}
+                        ])
+                    else:
+                        analysis['suggested_crs'].append({
+                            'epsg': 'EPSG:3857', 
+                            'name': 'Web Mercator', 
+                            'reason': '网络地图和Web应用常用投影'
+                        })
+                
+                # 3. 中等范围坐标值
+                else:
+                    analysis['analysis_notes'].append('坐标值在中等范围内，需要更多信息来确定坐标系')
+                    analysis['suggested_crs'].extend([
+                        {'epsg': 'EPSG:4326', 'name': 'WGS 84', 'reason': '通用地理坐标系'},
+                        {'epsg': 'EPSG:3857', 'name': 'Web Mercator', 'reason': '网络地图投影'}
+                    ])
+            
+            # 解析几何类型
+            geom_match = re.search(r'Geometry:\s*(\w+)', ogrinfo_output)
+            if geom_match:
+                analysis['geometry_type'] = geom_match.group(1)
+                analysis['analysis_notes'].append(f'几何类型: {geom_match.group(1)}')
+            
+            # 解析要素数量
+            feature_match = re.search(r'Feature Count:\s*(\d+)', ogrinfo_output)
+            if feature_match:
+                analysis['feature_count'] = int(feature_match.group(1))
+                analysis['analysis_notes'].append(f'要素数量: {feature_match.group(1)}')
+            
+        except Exception as e:
+            analysis['analysis_notes'].append(f'边界分析失败: {str(e)}')
+        
+        return analysis
+    
+    def _get_coordinate_system_suggestions(self):
+        """提供常用坐标系建议"""
+        return {
+            'common_geographic': [
+                {
+                    'epsg': 'EPSG:4326',
+                    'name': 'WGS 84',
+                    'description': 'GPS和全球定位系统的标准坐标系',
+                    'use_cases': ['GPS数据', '全球数据', 'Web地图服务']
+                },
+                {
+                    'epsg': 'EPSG:4490',
+                    'name': 'CGCS2000',
+                    'description': '中国大陆地区的官方坐标系',
+                    'use_cases': ['中国测绘数据', '政府数据', '基础地理信息']
+                },
+                {
+                    'epsg': 'EPSG:4269',
+                    'name': 'NAD83',
+                    'description': '北美地区的标准坐标系',
+                    'use_cases': ['美国和加拿大数据', '北美测绘数据']
+                }
+            ],
+            'common_projected': [
+                {
+                    'epsg': 'EPSG:3857',
+                    'name': 'Web Mercator',
+                    'description': '网络地图服务的标准投影',
+                    'use_cases': ['Google Maps', 'OpenStreetMap', 'Web地图应用']
+                },
+                {
+                    'epsg': 'EPSG:32649',
+                    'name': 'WGS 84 / UTM zone 49N',
+                    'description': 'UTM第49带北区投影（中国东部）',
+                    'use_cases': ['中国东部地区', '精确测量', '工程项目']
+                },
+                {
+                    'epsg': 'EPSG:32650',
+                    'name': 'WGS 84 / UTM zone 50N',
+                    'description': 'UTM第50带北区投影（中国中东部）',
+                    'use_cases': ['中国中东部地区', '精确测量', '工程项目']
+                }
+            ],
+            'detection_tips': [
+                '如果数据来源于GPS设备，通常使用WGS84 (EPSG:4326)',
+                '如果数据在中国境内，建议尝试CGCS2000 (EPSG:4490)',
+                '如果是网络地图数据，通常使用Web Mercator (EPSG:3857)',
+                '联系数据提供者是获取准确坐标系信息的最佳方式',
+                '可以通过与已知坐标系的数据进行对比来验证坐标系'
+            ]
+        } 

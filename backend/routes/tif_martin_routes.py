@@ -3,6 +3,9 @@
 """
 TIF Martin 瓦片服务相关 API 路由
 将TIF文件转换为MBTiles并发布为Martin服务
+
+注意：保持原始坐标系，不强制转换为Web Mercator
+适用于需要保持数据精度和原始投影的场景
 """
 
 from flask import Blueprint, jsonify, request, current_app
@@ -24,7 +27,10 @@ file_service = FileService()
 @tif_martin_bp.route('/convert-and-publish/<string:file_id>', methods=['POST'])
 @require_auth
 def convert_tif_and_publish_martin(file_id):
-    """将已上传的TIF文件转换为MBTiles并发布为Martin服务"""
+    """将已上传的TIF文件转换为MBTiles并发布为Martin服务
+    
+    注意：保持原始坐标系，不进行强制投影转换
+    """
     try:
         print(f"\n=== TIF转MBTiles并发布Martin服务请求 ===")
         print(f"文件ID: {file_id}")
@@ -96,7 +102,7 @@ def convert_tif_and_publish_martin(file_id):
             
             return jsonify({
                 'success': True,
-                'message': 'TIF文件成功转换为MBTiles并发布为Martin服务',
+                'message': 'TIF文件成功转换为MBTiles并发布为Martin服务（智能坐标系处理）',
                 'data': {
                     'original_file': {
                         'id': str(file_id_int),
@@ -108,7 +114,8 @@ def convert_tif_and_publish_martin(file_id):
                         'max_zoom': max_zoom,
                         'tif_info': result['tif_info'],
                         'mbtiles_info': result['mbtiles_info'],
-                        'stats': result['conversion_stats']
+                        'stats': result['conversion_stats'],
+                        'coordinate_analysis': result.get('coordinate_analysis', {})  # 坐标系分析结果
                     },
                     'martin_service': result['martin_service']
                 }
@@ -128,7 +135,10 @@ def convert_tif_and_publish_martin(file_id):
 @tif_martin_bp.route('/batch-convert', methods=['POST'])
 @require_auth
 def batch_convert_tif_files():
-    """批量转换多个TIF文件为MBTiles并发布为Martin服务"""
+    """批量转换多个TIF文件为MBTiles并发布为Martin服务
+    
+    注意：保持原始坐标系，不进行强制投影转换
+    """
     try:
         print(f"\n=== 批量TIF转MBTiles请求 ===")
         
@@ -231,12 +241,13 @@ def batch_convert_tif_files():
         
         return jsonify({
             'success': True,
-            'message': f'批量处理完成: 成功 {success_count} 个, 失败 {error_count} 个',
+            'message': f'批量处理完成: 成功 {success_count} 个, 失败 {error_count} 个（智能坐标系处理）',
             'summary': {
                 'total': len(file_ids),
                 'success_count': success_count,
                 'error_count': error_count,
-                'max_zoom': max_zoom
+                'max_zoom': max_zoom,
+                'coordinate_system': 'intelligent'  # 标记使用智能坐标系处理
             },
             'results': results
         }), 200

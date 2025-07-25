@@ -1700,3 +1700,58 @@ def force_cleanup_geoserver_files(file_id):
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': f'强制清理失败: {str(e)}'}), 500 
+
+@file_bp.route('/<string:file_id>/coordinate-info', methods=['GET'])
+@require_auth
+def get_file_coordinate_info(file_id):
+    """查询文件的原始坐标系信息"""
+    try:
+        print(f"=== 查询文件坐标系信息 ===")
+        print(f"文件ID: {file_id}")
+        
+        # 1. 获取文件信息
+        file_info = file_service.get_file_by_id(file_id)
+        if not file_info:
+            return jsonify({'success': False, 'error': '文件不存在'}), 404
+        
+        file_path = file_info['file_path']
+        file_type = file_info.get('file_type', '').lower()
+        original_name = file_info.get('original_name', '')
+        
+        print(f"文件路径: {file_path}")
+        print(f"文件类型: {file_type}")
+        print(f"原始文件名: {original_name}")
+        
+        # 2. 检查文件是否存在
+        if not os.path.exists(file_path):
+            return jsonify({'success': False, 'error': '文件不存在于磁盘'}), 404
+        
+        coordinate_info = {}
+        
+        # 3. 根据文件类型获取坐标系信息
+        if file_type in ['shp', 'dem.tif', 'dom.tif', 'geojson']:
+            coordinate_info = file_service.get_file_coordinate_info_with_gdal(file_path, file_type)
+        elif 'mbtiles' in file_type:
+            coordinate_info = file_service.get_mbtiles_coordinate_info(file_path)
+        else:
+            return jsonify({
+                'success': False, 
+                'error': f'不支持的文件类型: {file_type}'
+            }), 400
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'file_id': file_id,
+                'file_name': file_info.get('file_name'),
+                'original_name': original_name,
+                'file_type': file_type,
+                'coordinate_info': coordinate_info
+            }
+        }), 200
+        
+    except Exception as e:
+        print(f"查询文件坐标系信息失败: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'查询失败: {str(e)}'}), 500 

@@ -483,6 +483,19 @@
                 <div class="coordinate-edit-buttons">
                   <el-button 
                     size="small" 
+                    type="info"
+                    link
+                    @click="viewCoordinateInfo(scope.row)"
+                    title="查看原始坐标系信息"
+                    class="view-coordinate-btn"
+                  >
+                    <svg class="coordinate-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  </el-button>
+                  <el-button 
+                    size="small" 
                     type="success"
                     link
                     @click="openCoordinateSearchForFile(scope.row)"
@@ -713,6 +726,279 @@
       v-model="coordinateSearchVisible" 
       @select="handleCoordinateSelect" 
     />
+
+    <!-- 坐标系信息查看对话框 -->
+    <el-dialog
+      v-model="coordinateInfoVisible"
+      title="原始坐标系信息"
+      width="700px"
+      :close-on-click-modal="false"
+    >
+      <div v-loading="coordinateInfoLoading" class="coordinate-info-dialog">
+        <div v-if="coordinateInfoData" class="coordinate-info-content">
+          <!-- 基本文件信息 -->
+          <div class="info-section">
+            <h4>文件信息</h4>
+            <div class="info-grid">
+              <div class="info-item">
+                <label>文件名:</label>
+                <span>{{ coordinateInfoData.file_name }}</span>
+              </div>
+              <div class="info-item">
+                <label>原始文件名:</label>
+                <span>{{ coordinateInfoData.original_name }}</span>
+              </div>
+              <div class="info-item">
+                <label>文件类型:</label>
+                <span>{{ coordinateInfoData.file_type }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 坐标系信息 -->
+          <div class="info-section">
+            <h4>坐标系信息</h4>
+            <div v-if="coordinateInfoData.coordinate_info.error" class="error-message">
+              <el-alert
+                :title="coordinateInfoData.coordinate_info.error"
+                type="error"
+                :closable="false"
+              />
+            </div>
+            <div v-else class="coordinate-details">
+              <!-- Shapefile特殊信息 -->
+              <div v-if="coordinateInfoData.file_type === 'shp'" class="shp-specific-info">
+                <!-- ZIP文件内容 -->
+                <div v-if="coordinateInfoData.coordinate_info.zip_contents" class="info-item">
+                  <label>ZIP文件内容:</label>
+                  <div class="zip-contents">
+                    <el-tag v-for="file in coordinateInfoData.coordinate_info.zip_contents" :key="file" 
+                            size="small" type="info" class="file-tag">
+                      {{ file }}
+                    </el-tag>
+                  </div>
+                </div>
+
+                <!-- .prj文件内容 -->
+                <div v-if="coordinateInfoData.coordinate_info.prj_file_content" class="info-item">
+                  <label>.prj文件内容:</label>
+                  <el-input
+                    type="textarea"
+                    :value="coordinateInfoData.coordinate_info.prj_file_content"
+                    :rows="4"
+                    readonly
+                    class="prj-textarea"
+                  />
+                </div>
+
+                <!-- PRJ与GDAL信息对比 -->
+                <div v-if="coordinateInfoData.coordinate_info.prj_gdal_comparison" class="info-item">
+                  <label>坐标系信息验证:</label>
+                  <div class="comparison-result">
+                    <el-alert
+                      :title="coordinateInfoData.coordinate_info.prj_gdal_comparison.match ? 
+                              '.prj文件与GDAL读取的坐标系信息一致' : 
+                              '.prj文件与GDAL读取的坐标系信息不一致'"
+                      :type="coordinateInfoData.coordinate_info.prj_gdal_comparison.match ? 'success' : 'warning'"
+                      :closable="false"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- EPSG代码 -->
+              <div v-if="coordinateInfoData.coordinate_info.epsg_code" class="info-item">
+                <label>EPSG代码:</label>
+                <el-tag type="primary" size="large">{{ coordinateInfoData.coordinate_info.epsg_code }}</el-tag>
+              </div>
+              
+              <!-- 投影参数机构 -->
+              <div v-if="coordinateInfoData.coordinate_info.authority" class="info-item">
+                <label>参数机构:</label>
+                <span>{{ coordinateInfoData.coordinate_info.authority }}</span>
+              </div>
+
+              <!-- WKT信息 -->
+              <div v-if="coordinateInfoData.coordinate_info.wkt" class="info-item wkt-section">
+                <label>WKT格式:</label>
+                <el-input
+                  type="textarea"
+                  :value="coordinateInfoData.coordinate_info.wkt"
+                  :rows="6"
+                  readonly
+                  class="wkt-textarea"
+                />
+              </div>
+
+              <!-- PROJ4信息 -->
+              <div v-if="coordinateInfoData.coordinate_info.proj4" class="info-item">
+                <label>PROJ4格式:</label>
+                <el-input
+                  :value="coordinateInfoData.coordinate_info.proj4"
+                  readonly
+                  class="proj4-input"
+                />
+              </div>
+
+              <!-- 空间范围 -->
+              <div v-if="coordinateInfoData.coordinate_info.extent" class="info-item">
+                <label>空间范围:</label>
+                <div class="extent-info">
+                  <div v-if="coordinateInfoData.coordinate_info.extent.type === 'bounds'">
+                    <div class="bounds-grid">
+                      <div>西: {{ coordinateInfoData.coordinate_info.extent.coordinates.west }}</div>
+                      <div>东: {{ coordinateInfoData.coordinate_info.extent.coordinates.east }}</div>
+                      <div>南: {{ coordinateInfoData.coordinate_info.extent.coordinates.south }}</div>
+                      <div>北: {{ coordinateInfoData.coordinate_info.extent.coordinates.north }}</div>
+                    </div>
+                  </div>
+                  <div v-else>
+                    <code>{{ JSON.stringify(coordinateInfoData.coordinate_info.extent, null, 2) }}</code>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 栅格信息（针对TIF文件） -->
+              <div v-if="coordinateInfoData.coordinate_info.raster_size" class="info-item">
+                <label>栅格大小:</label>
+                <span>{{ coordinateInfoData.coordinate_info.raster_size[0] }} × {{ coordinateInfoData.coordinate_info.raster_size[1] }} 像素</span>
+              </div>
+              
+              <div v-if="coordinateInfoData.coordinate_info.band_count" class="info-item">
+                <label>波段数:</label>
+                <span>{{ coordinateInfoData.coordinate_info.band_count }}</span>
+              </div>
+              
+              <div v-if="coordinateInfoData.coordinate_info.data_type" class="info-item">
+                <label>数据类型:</label>
+                <span>{{ coordinateInfoData.coordinate_info.data_type }}</span>
+              </div>
+
+              <!-- MBTiles特殊信息 -->
+              <div v-if="coordinateInfoData.coordinate_info.tile_info" class="info-item">
+                <label>瓦片信息:</label>
+                <div class="tile-info-grid">
+                  <div v-for="(value, key) in coordinateInfoData.coordinate_info.tile_info" :key="key" class="tile-info-item">
+                    <label>{{ key }}:</label>
+                    <span>{{ value }}</span>
+                  </div>
+                </div>
+              </div>
+
+                              <!-- 边界分析（针对没有坐标系的shapefile） -->
+                <div v-if="coordinateInfoData.coordinate_info.extent_analysis" class="info-item">
+                  <label>数据边界分析:</label>
+                  <div class="extent-analysis">
+                    <div class="bounds-info">
+                      <div class="bound-item">
+                        <span>范围: </span>
+                        <code>{{ coordinateInfoData.coordinate_info.extent_analysis.min_x?.toFixed(6) }}, {{ coordinateInfoData.coordinate_info.extent_analysis.min_y?.toFixed(6) }}</code>
+                        <span> 到 </span>
+                        <code>{{ coordinateInfoData.coordinate_info.extent_analysis.max_x?.toFixed(6) }}, {{ coordinateInfoData.coordinate_info.extent_analysis.max_y?.toFixed(6) }}</code>
+                      </div>
+                      <div class="bound-item">
+                        <span>尺寸: </span>
+                        <code>{{ coordinateInfoData.coordinate_info.extent_analysis.width?.toFixed(6) }} × {{ coordinateInfoData.coordinate_info.extent_analysis.height?.toFixed(6) }}</code>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 分析注释 -->
+                <div v-if="coordinateInfoData.coordinate_info.analysis_notes && coordinateInfoData.coordinate_info.analysis_notes.length > 0" class="info-item">
+                  <label>分析结果:</label>
+                  <div class="analysis-notes">
+                    <div v-for="(note, index) in coordinateInfoData.coordinate_info.analysis_notes" :key="index" class="note-item">
+                      <i class="el-icon-info"></i>
+                      <span>{{ note }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 坐标系建议 -->
+                <div v-if="coordinateInfoData.coordinate_info.suggested_crs && coordinateInfoData.coordinate_info.suggested_crs.length > 0" class="info-item">
+                  <label>建议的坐标系:</label>
+                  <div class="suggested-crs">
+                    <div v-for="(suggestion, index) in coordinateInfoData.coordinate_info.suggested_crs" :key="index" class="crs-suggestion">
+                      <el-tag type="success" size="small">{{ suggestion.epsg }}</el-tag>
+                      <span class="crs-name">{{ suggestion.name }}</span>
+                      <span class="crs-reason">{{ suggestion.reason }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 通用坐标系建议 -->
+                <div v-if="coordinateInfoData.coordinate_info.suggestions" class="info-item">
+                  <label>常用坐标系参考:</label>
+                  <div class="coordinate-suggestions">
+                    <!-- 地理坐标系 -->
+                    <div class="suggestion-category">
+                      <h5>地理坐标系（经纬度）:</h5>
+                      <div v-for="(crs, index) in coordinateInfoData.coordinate_info.suggestions.common_geographic" :key="'geo-' + index" class="crs-item">
+                        <div class="crs-header">
+                          <el-tag type="primary" size="small">{{ crs.epsg }}</el-tag>
+                          <span class="crs-title">{{ crs.name }}</span>
+                        </div>
+                        <div class="crs-description">{{ crs.description }}</div>
+                        <div class="crs-use-cases">
+                          <span class="use-case-label">适用于:</span>
+                          <el-tag v-for="useCase in crs.use_cases" :key="useCase" size="mini" type="info">{{ useCase }}</el-tag>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 投影坐标系 -->
+                    <div class="suggestion-category">
+                      <h5>投影坐标系（米/英尺）:</h5>
+                      <div v-for="(crs, index) in coordinateInfoData.coordinate_info.suggestions.common_projected" :key="'proj-' + index" class="crs-item">
+                        <div class="crs-header">
+                          <el-tag type="warning" size="small">{{ crs.epsg }}</el-tag>
+                          <span class="crs-title">{{ crs.name }}</span>
+                        </div>
+                        <div class="crs-description">{{ crs.description }}</div>
+                        <div class="crs-use-cases">
+                          <span class="use-case-label">适用于:</span>
+                          <el-tag v-for="useCase in crs.use_cases" :key="useCase" size="mini" type="info">{{ useCase }}</el-tag>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 检测提示 -->
+                    <div class="suggestion-category">
+                      <h5>检测提示:</h5>
+                      <div class="detection-tips">
+                        <div v-for="(tip, index) in coordinateInfoData.coordinate_info.suggestions.detection_tips" :key="index" class="tip-item">
+                          <i class="el-icon-bulb"></i>
+                          <span>{{ tip }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 注意事项 -->
+                <div v-if="coordinateInfoData.coordinate_info.note" class="info-item">
+                  <el-alert
+                    :title="coordinateInfoData.coordinate_info.note"
+                    type="info"
+                    :closable="false"
+                  />
+                </div>
+            </div>
+          </div>
+        </div>
+        
+        <div v-if="coordinateInfoLoading" class="loading-message">
+          正在读取坐标系信息...
+        </div>
+      </div>
+      
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="coordinateInfoVisible = false">关闭</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -744,7 +1030,12 @@ export default {
     
     // 坐标系搜索相关
     const coordinateSearchVisible = ref(false)
-    const currentEditingFile = ref(null) // 添加当前正在编辑的文件引用
+    const currentEditingFile = ref(null)
+    
+    // 坐标系信息查看对话框相关
+    const coordinateInfoVisible = ref(false)
+    const coordinateInfoData = ref(null)
+    const coordinateInfoLoading = ref(false) // 添加当前正在编辑的文件引用
     
     // 移动端搜索相关
     const mobileSearchExpanded = ref(false)
@@ -1635,7 +1926,7 @@ export default {
     // 判断文件是否需要坐标系
     const needsCoordinateSystem = (file) => {
       const fileType = file.file_type?.toLowerCase()
-      const needs = ['shp','dxf', 'dom.tif', 'dem.tif'].includes(fileType)
+      const needs = ['shp','dxf', 'dom.tif', 'dem.tif', 'vector.mbtiles', 'raster.mbtiles'].includes(fileType)
       return needs
     }
 
@@ -1691,6 +1982,33 @@ export default {
     const openCoordinateSearchForFile = (file) => {
       currentEditingFile.value = file
       coordinateSearchVisible.value = true
+    }
+
+    // 查看文件原始坐标系信息
+    const viewCoordinateInfo = async (file) => {
+      try {
+        coordinateInfoLoading.value = true
+        coordinateInfoData.value = null
+        coordinateInfoVisible.value = true
+        
+        console.log('查看文件坐标系信息:', file.id)
+        
+        // 调用API获取坐标系信息
+        const response = await gisApi.getFileCoordinateInfo(file.id)
+        console.log('坐标系信息:', response)
+        if (response.data.success) {
+          coordinateInfoData.value = response.data.data
+          console.log('坐标系信息:', response.data)
+        } else {
+          throw new Error(response.error || '获取坐标系信息失败')
+        }
+      } catch (error) {
+        console.error('获取坐标系信息失败:', error)
+        ElMessage.error('获取坐标系信息失败: ' + (error.response?.data?.error || error.message))
+        coordinateInfoVisible.value = false
+      } finally {
+        coordinateInfoLoading.value = false
+      }
     }
 
     return {
@@ -1751,6 +2069,11 @@ export default {
       saveCoordinate,
       openCoordinateSearchForFile,
       currentEditingFile,
+      // 坐标系信息查看相关
+      viewCoordinateInfo,
+      coordinateInfoVisible,
+      coordinateInfoData,
+      coordinateInfoLoading,
       // 移动端搜索相关
       mobileSearchExpanded,
       toggleMobileSearch,
@@ -2098,9 +2421,9 @@ export default {
 .coordinate-edit {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 1px;
   width: 100%;
-  padding: 4px;
+  padding: 1px;
   background-color: #f8f9fa;
   border-radius: 4px;
   border: 1px solid #e9ecef;
@@ -2115,18 +2438,18 @@ export default {
 .coordinate-edit-buttons {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0px;
   justify-content: flex-start;
 }
 
 .search-coordinate-btn {
-  margin-right: 2px;
+  margin-right: 0px;
   font-weight: 500;
   color: #67c23a !important;
   background-color: #f0f9ff;
   border: 1px solid #d9ecff;
   border-radius: 4px;
-  padding: 4px 6px;
+  
 }
 
 .search-coordinate-btn:hover {
@@ -2135,17 +2458,32 @@ export default {
 }
 
 .save-coordinate-btn {
-  margin-right: 2px;
+  margin-right: 0px;
   font-weight: 500;
   color: #409eff !important;
   background-color: #ecf5ff;
   border: 1px solid #b3d8ff;
   border-radius: 4px;
-  padding: 4px 6px;
+  
 }
 
 .save-coordinate-btn:hover {
   background-color: #d9ecff;
+  transform: scale(1.05);
+}
+
+.view-coordinate-btn {
+  margin-right: 0px;
+  font-weight: 500;
+  color: #606266 !important;
+  background-color: #f5f7fa;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  
+}
+
+.view-coordinate-btn:hover {
+  background-color: #e4e7ed;
   transform: scale(1.05);
 }
 
@@ -2155,7 +2493,7 @@ export default {
   background-color: #fef0f0;
   border: 1px solid #fbc4c4;
   border-radius: 4px;
-  padding: 4px 6px;
+  
 }
 
 .cancel-coordinate-btn:hover {
@@ -2349,7 +2687,7 @@ export default {
 
 .mobile-coordinate-edit-buttons {
   display: flex;
-  gap: 2px;
+  gap: 0px;
   justify-content: flex-start;
 }
 
@@ -2440,6 +2778,346 @@ export default {
   font-size: 12px;
   color: #c0c4cc;
   font-style: italic;
+}
+
+/* 坐标系信息对话框样式 */
+.coordinate-info-dialog {
+  min-height: 200px;
+}
+
+.coordinate-info-content {
+  font-size: 14px;
+}
+
+.info-section {
+  margin-bottom: 20px;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  padding: 16px;
+  background-color: #fafafa;
+}
+
+.info-section h4 {
+  margin: 0 0 12px 0;
+  color: #409eff;
+  font-weight: 600;
+  font-size: 16px;
+  border-bottom: 1px solid #e4e7ed;
+  padding-bottom: 8px;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.info-item label {
+  font-weight: 600;
+  color: #606266;
+  font-size: 13px;
+}
+
+.info-item span {
+  color: #303133;
+  word-break: break-all;
+}
+
+.wkt-section {
+  margin-top: 16px;
+}
+
+.wkt-textarea :deep(.el-textarea__inner) {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  background-color: #f8f9fa;
+}
+
+.proj4-input :deep(.el-input__inner) {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  background-color: #f8f9fa;
+}
+
+.extent-info {
+  background-color: #f0f9ff;
+  padding: 12px;
+  border-radius: 4px;
+  border: 1px solid #bfdbfe;
+}
+
+.bounds-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.bounds-grid div {
+  padding: 4px 8px;
+  background-color: white;
+  border-radius: 3px;
+  border: 1px solid #e0e7ff;
+}
+
+.tile-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.tile-info-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background-color: #f0f9ff;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.tile-info-item label {
+  font-weight: 600;
+  color: #374151;
+}
+
+.error-message {
+  margin: 16px 0;
+}
+
+.loading-message {
+  text-align: center;
+  padding: 40px;
+  color: #606266;
+  font-size: 14px;
+}
+
+.coordinate-details {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+/* Shapefile特殊信息样式 */
+.shp-specific-info {
+  background-color: #f0f9ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.zip-contents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.file-tag {
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+}
+
+.prj-textarea :deep(.el-textarea__inner) {
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  background-color: #f8f9fa;
+  border: 1px solid #bfdbfe;
+  color: #2563eb;
+}
+
+.comparison-result {
+  margin-top: 8px;
+}
+
+/* 边界分析和坐标系建议样式 */
+.extent-analysis {
+  background-color: #f8f9fa;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.bounds-info {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.bound-item {
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bound-item span {
+  color: #606266;
+  font-weight: 500;
+}
+
+.bound-item code {
+  background-color: #e9ecef;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: #495057;
+}
+
+.analysis-notes {
+  background-color: #e3f2fd;
+  padding: 12px;
+  border-radius: 6px;
+  border-left: 4px solid #2196f3;
+}
+
+.note-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #1565c0;
+}
+
+.note-item:last-child {
+  margin-bottom: 0;
+}
+
+.note-item i {
+  color: #2196f3;
+  margin-top: 2px;
+}
+
+.suggested-crs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.crs-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: #f0f9ff;
+  border-radius: 6px;
+  border: 1px solid #bfdbfe;
+}
+
+.crs-name {
+  font-weight: 600;
+  color: #1e40af;
+}
+
+.crs-reason {
+  font-size: 12px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.coordinate-suggestions {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 12px;
+  background-color: #fafbfc;
+  border-radius: 8px;
+  border: 1px solid #e1e5e9;
+}
+
+.suggestion-category {
+  margin-bottom: 20px;
+}
+
+.suggestion-category:last-child {
+  margin-bottom: 0;
+}
+
+.suggestion-category h5 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #374151;
+  font-weight: 600;
+  border-bottom: 1px solid #d1d5db;
+  padding-bottom: 6px;
+}
+
+.crs-item {
+  margin-bottom: 12px;
+  padding: 12px;
+  background-color: white;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.crs-item:last-child {
+  margin-bottom: 0;
+}
+
+.crs-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.crs-title {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 13px;
+}
+
+.crs-description {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.crs-use-cases {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.use-case-label {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.detection-tips {
+  background-color: #fffbeb;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #fbbf24;
+}
+
+.tip-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #92400e;
+  line-height: 1.4;
+}
+
+.tip-item:last-child {
+  margin-bottom: 0;
+}
+
+.tip-item i {
+  color: #f59e0b;
+  margin-top: 1px;
 }
 
 /* 移动端响应式样式 */
@@ -2589,11 +3267,11 @@ export default {
 
   .mobile-coordinate-edit-buttons {
     justify-content: flex-end;
-    gap: 6px;
+    
   }
 
   .coordinate-icon {
-    width: 12px;
+    width: 8px;
     height: 12px;
   }
 }
@@ -2642,7 +3320,7 @@ export default {
   }
 
   .mobile-coordinate-edit-buttons .el-button {
-    padding: 4px 6px;
+    padding: 1px 1px;
     font-size: 11px;
   }
 
