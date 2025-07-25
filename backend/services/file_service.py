@@ -543,189 +543,44 @@ class FileService:
                     coordinate_info['error'] = f'解压ZIP文件失败: {str(e)}'
                     return coordinate_info
             
-            # 优先尝试使用Python GDAL绑定获取坐标系信息
-            try:
-                from osgeo import gdal, ogr, osr
-                gdal.UseExceptions()
-                
-                print(f"✅ 使用Python GDAL处理文件: {actual_file_path}")
-                
+            # 对于shapefile使用ogrinfo，对于栅格使用gdalinfo
+            if file_type == 'shp':
+                # 使用ogrinfo读取矢量数据信息
+                cmd = ['ogrinfo', '-json', '-so', actual_file_path]
+                coordinate_info['gdal_command'] = 'ogrinfo'
+            else:
+                # 使用gdalinfo读取栅格数据信息
+                cmd = ['gdalinfo', '-json', actual_file_path]
+                coordinate_info['gdal_command'] = 'gdalinfo'
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode != 0:
+                # 如果ogrinfo/gdalinfo失败，尝试获取基本的几何信息
                 if file_type == 'shp':
-                    # 使用OGR读取矢量数据
-                    coordinate_info['gdal_command'] = 'python-ogr'
-                    coordinate_info['source'] = 'python-gdal'
-                    
-                    driver = ogr.GetDriverByName("ESRI Shapefile")
-                    datasource = driver.Open(actual_file_path, 0)
-                    
-                    if datasource:
-                        layer = datasource.GetLayer()
-                        spatial_ref = layer.GetSpatialRef()
+                    # 尝试使用ogrinfo获取边界信息
+                    try:
+                        extent_cmd = ['ogrinfo', '-al', '-so', actual_file_path]
+                        extent_result = subprocess.run(extent_cmd, capture_output=True, text=True, timeout=30)
                         
-                        if spatial_ref:
-                            # 获取WKT
-                            wkt = spatial_ref.ExportToWkt()
-                            if not coordinate_info.get('wkt'):
-                                coordinate_info['wkt'] = wkt
-                            
-                            # 获取EPSG代码
-                            epsg_code = spatial_ref.GetAuthorityCode(None)
-                            if epsg_code and not coordinate_info.get('epsg_code'):
-                                coordinate_info['epsg_code'] = f"EPSG:{epsg_code}"
-                                coordinate_info['authority'] = 'EPSG'
-                            
-                            # 获取PROJ4字符串
-                            try:
-                                proj4 = spatial_ref.ExportToProj4()
-                                coordinate_info['proj4'] = proj4
-                            except:
-                                pass
-                        
-                        # 获取范围
-                        extent = layer.GetExtent()
-                        coordinate_info['extent'] = {
-                            'minX': extent[0],
-                            'maxX': extent[1],
-                            'minY': extent[2],
-                            'maxY': extent[3]
-                        }
-                        
-                        datasource = None
-                        print(f"✅ 成功使用Python OGR获取坐标系信息")
-                        return coordinate_info
-                    else:
-                        print(f"⚠️ 无法打开shapefile: {actual_file_path}")
-                        
+                        if extent_result.returncode == 0:
+                            coordinate_info['ogrinfo_output'] = extent_result.stdout
+                            # 解析extent信息来推测坐标系
+                            coordinate_info.update(self._analyze_shapefile_extent(extent_result.stdout))
+                        else:
+                            coordinate_info['error'] = f'ogrinfo执行失败: {result.stderr}'
+                    except Exception as e:
+                        coordinate_info['error'] = f'读取shapefile信息失败: {str(e)}'
                 else:
-                    # 使用GDAL读取栅格数据
-                    coordinate_info['gdal_command'] = 'python-gdal'
-                    coordinate_info['source'] = 'python-gdal'
-                    
-                    dataset = gdal.Open(actual_file_path, gdal.GA_ReadOnly)
-                    
-                    if dataset:
-                        print(f"✅ 成功打开栅格文件: {actual_file_path}")
-                        
-                        # 获取投影信息
-                        projection = dataset.GetProjection()
-                        if projection:
-                            coordinate_info['wkt'] = projection
-                            
-                            # 创建空间参考对象
-                            srs = osr.SpatialReference()
-                            srs.ImportFromWkt(projection)
-                            
-                            # 获取EPSG代码
-                            epsg_code = srs.GetAuthorityCode(None)
-                            if epsg_code:
-                                coordinate_info['epsg_code'] = f"EPSG:{epsg_code}"
-                                coordinate_info['authority'] = 'EPSG'
-                            
-                            # 获取PROJ4字符串
-                            try:
-                                proj4 = srs.ExportToProj4()
-                                coordinate_info['proj4'] = proj4
-                            except:
-                                pass
-                        else:
-                            print("⚠️ 文件没有投影信息")
-                        
-                        # 获取地理变换参数
-                        geotransform = dataset.GetGeoTransform()
-                        if geotransform and geotransform != (0.0, 1.0, 0.0, 0.0, 0.0, 1.0):
-                            coordinate_info['geotransform'] = geotransform
-                            
-                            # 计算范围
-                            width = dataset.RasterXSize
-                            height = dataset.RasterYSize
-                            
-                            minX = geotransform[0]
-                            maxX = geotransform[0] + width * geotransform[1]
-                            maxY = geotransform[3]
-                            minY = geotransform[3] + height * geotransform[5]
-                            
-                            coordinate_info['extent'] = {
-                                'minX': minX,
-                                'maxX': maxX,
-                                'minY': minY,
-                                'maxY': maxY
-                            }
-                        else:
-                            print("⚠️ 文件没有地理变换信息")
-                        
-                        dataset = None
-                        print(f"✅ 成功使用Python GDAL获取坐标系信息")
-                        return coordinate_info
-                    else:
-                        print(f"⚠️ 无法打开栅格文件: {actual_file_path}")
-                        
-            except ImportError:
-                print("⚠️ Python GDAL绑定不可用")
-                coordinate_info['gdal_python_available'] = False
-                coordinate_info['error'] = "Python GDAL绑定不可用，请安装GDAL: pip install gdal 或 conda install gdal"
-                return coordinate_info
-            except Exception as e:
-                print(f"⚠️ Python GDAL处理失败: {str(e)}")
-                coordinate_info['gdal_python_error'] = str(e)
-                coordinate_info['error'] = f"Python GDAL处理失败: {str(e)}"
+                    coordinate_info['error'] = f'gdalinfo执行失败: {result.stderr}'
+                
+                # 如果没有.prj文件且GDAL失败，提供推测建议
+                if file_type == 'shp' and not coordinate_info.get('prj_file_content'):
+                    coordinate_info['suggestions'] = self._get_coordinate_system_suggestions()
+                
                 return coordinate_info
             
-            # 如果Python GDAL失败，尝试使用命令行工具
-            try:
-                if file_type == 'shp':
-                    # 使用ogrinfo读取矢量数据信息
-                    cmd = ['ogrinfo', '-json', '-so', actual_file_path]
-                    coordinate_info['gdal_command'] = 'ogrinfo'
-                else:
-                    # 使用gdalinfo读取栅格数据信息
-                    cmd = ['gdalinfo', '-json', actual_file_path]
-                    coordinate_info['gdal_command'] = 'gdalinfo'
-                
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-                
-                if result.returncode != 0:
-                    # 如果命令行工具也失败，提供详细错误信息
-                    error_msg = f"GDAL命令行工具执行失败: {result.stderr}"
-                    if "系统找不到指定的文件" in result.stderr or "not found" in result.stderr.lower():
-                        error_msg += "\n\n可能的解决方案:\n1. 安装GDAL: conda install gdal 或 pip install gdal\n2. 确保GDAL工具已添加到系统PATH中\n3. 检查GDAL安装是否正确"
-                    
-                    coordinate_info['error'] = error_msg
-                    
-                    # 如果是shapefile且有.prj文件，至少返回.prj文件的信息
-                    if file_type == 'shp' and coordinate_info.get('prj_file_content'):
-                        coordinate_info['source'] = 'prj_file_only'
-                        return coordinate_info
-                    
-                    # 提供一些基本建议
-                    if file_type == 'shp':
-                        coordinate_info['suggestions'] = self._get_coordinate_system_suggestions()
-                    
-                    return coordinate_info
-                
-                gdal_info = json.loads(result.stdout)
-                
-            except FileNotFoundError:
-                error_msg = "GDAL工具未找到。请安装GDAL并确保已添加到系统PATH中。\n\n安装方法:\n1. conda install gdal\n2. pip install gdal\n3. 或下载OSGeo4W安装包"
-                coordinate_info['error'] = error_msg
-                
-                # 如果是shapefile且有.prj文件，至少返回.prj文件的信息
-                if file_type == 'shp' and coordinate_info.get('prj_file_content'):
-                    coordinate_info['source'] = 'prj_file_only'
-                    return coordinate_info
-                
-                return coordinate_info
-                
-            except subprocess.TimeoutExpired:
-                coordinate_info['error'] = 'GDAL命令执行超时'
-                return coordinate_info
-                
-            except json.JSONDecodeError as e:
-                coordinate_info['error'] = f'解析GDAL输出失败: {str(e)}'
-                return coordinate_info
-                
-            except Exception as e:
-                coordinate_info['error'] = f'获取坐标系信息失败: {str(e)}'
-                return coordinate_info
+            gdal_info = json.loads(result.stdout)
             
             # 存储GDAL信息用于对比
             gdal_coordinate_info = {}
