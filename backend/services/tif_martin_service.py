@@ -195,40 +195,58 @@ class TifMartinService:
                     print(f"⚠️ 清理临时目录失败: {e}")
     
     def _generate_tiles_with_gdal2tiles(self, tif_path, tiles_dir, min_zoom, max_zoom, coordinate_system, task_id):
-        """使用gdal2tiles.py生成瓦片"""
+        """使用GDAL Python API生成瓦片"""
         try:
-            print(f"🔧 使用gdal2tiles.py生成瓦片...")
+            from osgeo import gdal, osr
+            import math
             
-            # 构建命令
-            cmd = [
-                'python', 'gdal2tiles.py',
-                '--config', 'GDAL_CACHEMAX', '500',
-                f'--zoom={min_zoom}-{max_zoom}',
-                '-s', coordinate_system,
-                '--webviewer=none',
-                '--quiet',
-                tif_path,
-                tiles_dir
+            print(f"🔧 使用GDAL Python API生成瓦片...")
+            
+            # 设置GDAL配置
+            gdal.SetConfigOption('GDAL_CACHEMAX', '500')
+            
+            # 打开源数据集
+            src_ds = gdal.Open(tif_path, gdal.GA_ReadOnly)
+            if src_ds is None:
+                raise Exception(f"无法打开TIF文件: {tif_path}")
+            
+            # 获取源数据集信息
+            src_srs = osr.SpatialReference()
+            src_srs.ImportFromWkt(src_ds.GetProjection())
+            
+            # 目标坐标系 (Web Mercator)
+            dst_srs = osr.SpatialReference()
+            dst_srs.ImportFromEPSG(3857)
+            
+            # 创建坐标转换
+            transform = osr.CoordinateTransformation(src_srs, dst_srs)
+            
+            # 获取源数据集的地理范围
+            gt = src_ds.GetGeoTransform()
+            width = src_ds.RasterXSize
+            height = src_ds.RasterYSize
+            
+            # 计算四个角点的坐标
+            corners = [
+                (gt[0], gt[3]),  # 左上
+                (gt[0] + width * gt[1], gt[3]),  # 右上
+                (gt[0], gt[3] + height * gt[5]),  # 左下
+                (gt[0] + width * gt[1], gt[3] + height * gt[5])  # 右下
             ]
             
-            # 检查是否支持MPI
-            try:
-                subprocess.run(['mpirun', '--version'], capture_output=True, timeout=5)
-                cmd.insert(2, '--mpi')  # 在gdal2tiles.py后添加--mpi参数
-                print("✅ 启用MPI并行处理")
-            except:
-                print("⚠️ MPI不可用，使用单线程处理")
+            # 转换到Web Mercator
+            transformed_corners = []
+            for x, y in corners:
+                point = transform.TransformPoint(x, y)
+                transformed_corners.append((point[0], point[1]))
             
-            print(f"🔧 执行命令: {' '.join(cmd)}")
+            # 计算边界框
+            min_x = min(corner[0] for corner in transformed_corners)
+            max_x = max(corner[0] for corner in transformed_corners)
+            min_y = min(corner[1] for corner in transformed_corners)
+            max_y = max(corner[1] for corner in transformed_corners)
             
-            # 启动进程
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                universal_newlines=True
-            )
+            print(f"📊 数据范围: ({min_x:.2f}, {min_y:.2f}) - ({max_x:.2f}, {max_y:.2f})")
             
             # 启动进度监控线程
             progress_thread = threading.Thread(
@@ -238,34 +256,131 @@ class TifMartinService:
             progress_thread.daemon = True
             progress_thread.start()
             
-            # 等待进程完成
-            stdout, stderr = process.communicate(timeout=3600)  # 1小时超时
+            # 生成瓦片
+            total_tiles = 0
+            processed_tiles = 0
             
-            if process.returncode != 0:
-                print(f"❌ gdal2tiles.py执行失败: {stderr}")
-                self.progress_data[task_id].update({
-                    'status': 'error',
-                    'message': f'瓦片生成失败: {stderr}'
-                })
-                return False
+            # 计算总瓦片数
+            for zoom in range(min_zoom, max_zoom + 1):
+                tile_min_x, tile_max_x, tile_min_y, tile_max_y = self._get_tile_bounds(min_x, max_x, min_y, max_y, zoom)
+                total_tiles += (tile_max_x - tile_min_x + 1) * (tile_max_y - tile_min_y + 1)
             
-            print(f"✅ 瓦片生成完成")
+            print(f"📊 预计生成 {total_tiles} 个瓦片")
+            
+            # 为每个缩放级别生成瓦片
+            for zoom in range(min_zoom, max_zoom + 1):
+                zoom_dir = os.path.join(tiles_dir, str(zoom))
+                os.makedirs(zoom_dir, exist_ok=True)
+                
+                # 计算该缩放级别的瓦片范围
+                tile_min_x, tile_max_x, tile_min_y, tile_max_y = self._get_tile_bounds(min_x, max_x, min_y, max_y, zoom)
+                
+                print(f"🔧 生成缩放级别 {zoom} 的瓦片 ({tile_min_x}-{tile_max_x}, {tile_min_y}-{tile_max_y})")
+                
+                for tile_x in range(tile_min_x, tile_max_x + 1):
+                    x_dir = os.path.join(zoom_dir, str(tile_x))
+                    os.makedirs(x_dir, exist_ok=True)
+                    
+                    for tile_y in range(tile_min_y, tile_max_y + 1):
+                        try:
+                            # 生成单个瓦片
+                            tile_path = os.path.join(x_dir, f"{tile_y}.png")
+                            if self._generate_single_tile(src_ds, tile_path, zoom, tile_x, tile_y, transform):
+                                processed_tiles += 1
+                            
+                            # 更新进度
+                            if processed_tiles % 50 == 0:
+                                progress = 10 + int((processed_tiles / total_tiles) * 65)
+                                self.progress_data[task_id].update({
+                                    'progress': min(progress, 75),
+                                    'message': f'正在生成瓦片... ({processed_tiles}/{total_tiles})',
+                                    'tiles_count': processed_tiles
+                                })
+                        except Exception as e:
+                            print(f"⚠️ 生成瓦片 {zoom}/{tile_x}/{tile_y} 失败: {str(e)}")
+                            continue
+            
+            # 关闭数据集
+            src_ds = None
+            
+            print(f"✅ 瓦片生成完成，共生成 {processed_tiles} 个瓦片")
             return True
             
-        except subprocess.TimeoutExpired:
-            print("❌ gdal2tiles.py执行超时")
-            process.kill()
-            self.progress_data[task_id].update({
-                'status': 'error',
-                'message': '瓦片生成超时'
-            })
-            return False
         except Exception as e:
-            print(f"❌ gdal2tiles.py执行异常: {str(e)}")
+            print(f"❌ GDAL瓦片生成异常: {str(e)}")
             self.progress_data[task_id].update({
                 'status': 'error',
                 'message': f'瓦片生成异常: {str(e)}'
             })
+            return False
+    
+    def _get_tile_bounds(self, min_x, max_x, min_y, max_y, zoom):
+        """计算指定缩放级别的瓦片边界"""
+        # Web Mercator 范围
+        EARTH_RADIUS = 6378137
+        EARTH_CIRCUMFERENCE = 2 * math.pi * EARTH_RADIUS
+        
+        # 瓦片大小 (Web Mercator)
+        tile_size = EARTH_CIRCUMFERENCE / (2 ** zoom)
+        
+        # 计算瓦片索引
+        tile_min_x = max(0, int((min_x + EARTH_CIRCUMFERENCE/2) / tile_size))
+        tile_max_x = min(2**zoom - 1, int((max_x + EARTH_CIRCUMFERENCE/2) / tile_size))
+        tile_min_y = max(0, int((EARTH_CIRCUMFERENCE/2 - max_y) / tile_size))
+        tile_max_y = min(2**zoom - 1, int((EARTH_CIRCUMFERENCE/2 - min_y) / tile_size))
+        
+        return tile_min_x, tile_max_x, tile_min_y, tile_max_y
+    
+    def _generate_single_tile(self, src_ds, tile_path, zoom, tile_x, tile_y, transform):
+        """生成单个瓦片"""
+        try:
+            from osgeo import gdal
+            import math
+            
+            # Web Mercator 参数
+            EARTH_RADIUS = 6378137
+            EARTH_CIRCUMFERENCE = 2 * math.pi * EARTH_RADIUS
+            TILE_SIZE = 256
+            
+            # 计算瓦片的地理范围
+            tile_size_meters = EARTH_CIRCUMFERENCE / (2 ** zoom)
+            
+            min_x = -EARTH_CIRCUMFERENCE/2 + tile_x * tile_size_meters
+            max_x = -EARTH_CIRCUMFERENCE/2 + (tile_x + 1) * tile_size_meters
+            max_y = EARTH_CIRCUMFERENCE/2 - tile_y * tile_size_meters
+            min_y = EARTH_CIRCUMFERENCE/2 - (tile_y + 1) * tile_size_meters
+            
+            # 使用gdalwarp进行重投影和裁剪
+            warp_options = gdal.WarpOptions(
+                format='PNG',
+                outputBounds=[min_x, min_y, max_x, max_y],
+                width=TILE_SIZE,
+                height=TILE_SIZE,
+                dstSRS='EPSG:3857',
+                resampleAlg=gdal.GRA_Bilinear,
+                creationOptions=['WORLDFILE=NO']
+            )
+            
+            # 执行重投影
+            result_ds = gdal.Warp(tile_path, src_ds, options=warp_options)
+            
+            if result_ds is None:
+                return False
+            
+            # 关闭数据集
+            result_ds = None
+            
+            # 检查文件是否生成且有效
+            if os.path.exists(tile_path) and os.path.getsize(tile_path) > 0:
+                return True
+            else:
+                # 删除无效文件
+                if os.path.exists(tile_path):
+                    os.remove(tile_path)
+                return False
+                
+        except Exception as e:
+            print(f"⚠️ 生成瓦片失败 {zoom}/{tile_x}/{tile_y}: {str(e)}")
             return False
     
     def _monitor_tiles_progress(self, tiles_dir, task_id, min_zoom, max_zoom):
