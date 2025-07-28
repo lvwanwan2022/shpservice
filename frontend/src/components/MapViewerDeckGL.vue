@@ -749,8 +749,8 @@ export default {
               deckLayer = createMVTLayer(layer)
             } else if (layer.file_type === 'tif' || layer.file_type === 'tiff') {
               if(layer.martin_service_type==='raster.mbtiles'){
-              console.log(`创建栅格文件图层: ${layer.layer_name} (${layer.file_type})`)
-              deckLayer = createMVTLayer(layer)
+                console.log(`创建栅格瓦片图层: ${layer.layer_name} (${layer.file_type})`)
+                deckLayer = createTileLayer(layer)
               }else{
                 console.log(`创建栅格文件图层: ${layer.layer_name} (${layer.file_type})`)
                 deckLayer = createMVTLayer(layer)
@@ -782,6 +782,77 @@ export default {
       
       console.log(`共创建了 ${deckLayers.length} 个Deck.gl图层`)
       return deckLayers
+    }
+
+    // 创建栅格瓦片图层 - 用于raster.mbtiles
+    const createTileLayer = (layer) => {
+      console.log(`创建栅格瓦片图层，图层信息:`, layer)
+      
+      // 检查MVT URL是否存在 - 参考OpenLayers的验证逻辑
+      if (!layer.mvt_url) {
+        console.warn('栅格瓦片URL不存在，跳过图层:', layer.layer_name)
+        return null
+      }
+      
+      // 从配置中获取Martin基础URL - 参考OpenLayers的配置使用
+      const baseUrl = MARTIN_BASE_URL
+      
+      // 构建栅格瓦片URL - 参考OpenLayers的URL处理逻辑
+      let tileUrl = layer.mvt_url
+      
+      if (tileUrl.includes('localhost:3000')) {
+        // 检查是否是MBTiles服务 - 参考OpenLayers的处理
+        if (layer.file_type === 'mbtiles' || layer.file_type === 'raster.mbtiles' || tileUrl.includes('/mbtiles/')) {
+          const mbtilesMatch = tileUrl.match(/\/mbtiles\/([^/]+)\/\{z\}/) || []
+          const fileName = mbtilesMatch[1] || 'default'
+          tileUrl = `${baseUrl}/${fileName}/{z}/{x}/{y}`
+        } else {
+          // 提取表名 - 参考OpenLayers的表名提取逻辑
+          const tableName = tileUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
+          tileUrl = `${baseUrl}/${tableName}/{z}/{x}/{y}`
+        }
+      }
+      
+      console.log(`栅格瓦片图层URL: ${tileUrl}`)
+      
+      const tileLayerConfig = {
+        id: `tile-${layer.scene_layer_id || layer.layer_id || layer.id}`,
+        data: tileUrl,
+        minZoom: layer.min_zoom || 0,
+        maxZoom: layer.max_zoom || 22,
+        opacity: typeof layer.opacity === 'number' ? layer.opacity : 1.0,
+        visible: (layer.visibility !== false && layer.visible !== false),
+        tileSize: 256,
+        renderSubLayers: props => {
+          const {
+            bbox: { west, south, east, north }
+          } = props.tile
+          
+          return new BitmapLayer(props, {
+            data: null,
+            image: props.data,
+            bounds: [west, south, east, north]
+          })
+        },
+        // 启用拾取
+        pickable: true,
+        // 图层信息 - 便于调试
+        layerInfo: {
+          layerName: layer.layer_name,
+          fileType: layer.file_type,
+          serviceType: layer.service_type
+        }
+      }
+      
+      // 🔑 混合方案：在三维模式下，数据图层使用TerrainExtension贴合地形
+      if (is3DModeEnabled.value) {
+        tileLayerConfig.extensions = [new TerrainExtension()]
+        // drape模式：将栅格数据作为纹理覆盖在地形表面
+        tileLayerConfig.terrainDrawMode = 'drape'
+        console.log(`🏔️ 栅格瓦片图层 ${layer.layer_name} 已启用TerrainExtension (drape模式)`)
+      }
+      
+      return new TileLayer(tileLayerConfig)
     }
 
     // 创建MVT矢量瓦片图层 - 参考OpenLayers的实现
