@@ -736,8 +736,15 @@ export default {
           // 图层类型判断 - 参考OpenLayers的图层类型判断逻辑
           if (layer.service_type === 'martin') {
             // Martin矢量瓦片图层 - 参考OpenLayers的addMartinLayer
-            console.log(`创建Martin MVT图层: ${layer.layer_name}`)
-            deckLayer = createMVTLayer(layer)
+           
+            if(layer.martin_service_type==='raster.mbtiles'){
+                console.log(`创建栅格瓦片图层: ${layer.layer_name} (${layer.file_type})`)
+                deckLayer = createTileLayer(layer)
+              }else{
+                console.log(`创建栅格文件图层: ${layer.layer_name} (${layer.file_type})`)
+                deckLayer = createMVTLayer(layer)
+              }
+
           } else if (layer.service_type === 'geoserver') {
             // GeoServer WMS图层 - 参考OpenLayers的addGeoServerLayer
             console.log(`创建GeoServer WMS图层: ${layer.layer_name}`)
