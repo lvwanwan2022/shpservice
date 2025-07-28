@@ -1465,8 +1465,8 @@ export default {
       
       try {
         // 检查是否为栅格mbtiles
-        const isRasterMbtiles = layer.file_type === 'raster.mbtiles';
-        
+        const isRasterMbtiles = layer.file_type === 'raster.mbtiles' || layer.martin_service_type==='raster.mbtiles';
+        //console.log('lv-0728-layer:', layer.martin_service_type)
         let olLayer;
         
         if (isRasterMbtiles) {
