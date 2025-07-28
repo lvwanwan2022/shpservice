@@ -748,8 +748,13 @@ export default {
               console.log(`创建矢量文件图层: ${layer.layer_name} (${layer.file_type})`)
               deckLayer = createMVTLayer(layer)
             } else if (layer.file_type === 'tif' || layer.file_type === 'tiff') {
+              if(layer.martin_service_type==='raster.mbtiles'){
               console.log(`创建栅格文件图层: ${layer.layer_name} (${layer.file_type})`)
-              deckLayer = createWMSLayer(layer)
+              deckLayer = createMVTLayer(layer)
+              }else{
+                console.log(`创建栅格文件图层: ${layer.layer_name} (${layer.file_type})`)
+                deckLayer = createMVTLayer(layer)
+              }
             } else if (layer.file_type === 'mbtiles') {
               console.log(`创建MBTiles图层: ${layer.layer_name}`)
               deckLayer = createMVTLayer(layer)
