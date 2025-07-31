@@ -345,10 +345,9 @@ class VectorMartinService:
                 conn.commit()
                 print(f"✅ PostGIS表已删除: {table_name}")
             
-            # 更新服务状态为已删除
+            # 硬删除服务记录
             sql = """
-            UPDATE vector_martin_services
-            SET status = 'deleted', updated_at = CURRENT_TIMESTAMP
+            DELETE FROM vector_martin_services
             WHERE id = %(service_id)s
             """
             

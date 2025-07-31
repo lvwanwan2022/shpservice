@@ -152,12 +152,16 @@ class RasterMartinService:
             
             # 对于MBTiles服务，不需要删除PostGIS表，只需更新服务状态
             # 更新服务状态为已删除
+            # sql = """
+            # UPDATE vector_martin_services
+            # SET status = 'deleted', updated_at = CURRENT_TIMESTAMP
+            # WHERE id = %(service_id)s
+            # """
+            # 硬删除服务记录
             sql = """
-            UPDATE vector_martin_services
-            SET status = 'deleted', updated_at = CURRENT_TIMESTAMP
+            DELETE FROM vector_martin_services
             WHERE id = %(service_id)s
             """
-            
             execute_query(sql, {'service_id': service_id}, fetch=False)
             print(f"✅ MBTiles Martin服务已删除: {service_id}")
             
