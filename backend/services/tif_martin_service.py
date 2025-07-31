@@ -19,6 +19,14 @@ from models.db import execute_query, insert_with_snowflake_id
 from config import DB_CONFIG, MARTIN_CONFIG, FILE_STORAGE
 import logging
 
+# 尝试导入PIL用于透明度处理
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    print("⚠️ PIL库未安装，将无法处理透明背景。如需此功能请安装: pip install Pillow")
+
 logger = logging.getLogger(__name__)
 
 class TifMartinService:
@@ -359,6 +367,8 @@ class TifMartinService:
                 height=TILE_SIZE,
                 dstSRS='EPSG:3857',
                 resampleAlg=gdal.GRA_Bilinear,
+                srcNodata=0,  # 设置源数据的nodata值为0（黑色）
+                dstNodata=0,  # 设置目标数据的nodata值为0
                 creationOptions=['WORLDFILE=NO']
             )
             
@@ -371,7 +381,16 @@ class TifMartinService:
             # 关闭数据集
             result_ds = None
             
-            # 检查文件是否生成且有效
+            # 检查文件是否生成
+            if not os.path.exists(tile_path) or os.path.getsize(tile_path) == 0:
+                if os.path.exists(tile_path):
+                    os.remove(tile_path)
+                return False
+            
+            # 处理透明度，将纯黑色设置为透明
+            self._make_black_transparent(tile_path, tolerance=5)
+            
+            # 检查最终文件是否有效
             if os.path.exists(tile_path) and os.path.getsize(tile_path) > 0:
                 return True
             else:
@@ -421,6 +440,57 @@ class TifMartinService:
                 
         except Exception as e:
             print(f"⚠️ 进度监控异常: {str(e)}")
+    
+    def _make_black_transparent(self, tile_path, tolerance=5):
+        """将PNG瓦片中的纯黑色设置为透明
+        
+        Args:
+            tile_path: 瓦片文件路径
+            tolerance: 黑色容差值，默认为5
+        
+        Returns:
+            bool: 处理是否成功
+        """
+        if not PIL_AVAILABLE:
+            return False
+            
+        try:
+            # 打开生成的PNG图像
+            img = Image.open(tile_path).convert("RGBA")
+            
+            # 获取图像数据
+            data = img.getdata()
+            
+            # 统计处理的像素数
+            transparent_pixels = 0
+            
+            # 创建新的图像数据，将黑色像素设置为透明
+            new_data = []
+            for item in data:
+                # 检查是否为纯黑色 (RGB值都小于等于容差值)
+                if item[0] <= tolerance and item[1] <= tolerance and item[2] <= tolerance:
+                    # 设置为透明
+                    new_data.append((0, 0, 0, 0))
+                    transparent_pixels += 1
+                else:
+                    # 保持原有的颜色和透明度
+                    new_data.append(item)
+            
+            # 更新图像数据
+            img.putdata(new_data)
+            
+            # 保存处理后的图像
+            img.save(tile_path, "PNG", optimize=True)
+            
+            # 只在有透明像素时输出日志
+            if transparent_pixels > 0:
+                print(f"🎨 瓦片透明度处理完成，设置了 {transparent_pixels} 个黑色像素为透明")
+            
+            return True
+            
+        except Exception as e:
+            print(f"⚠️ 透明度处理失败: {str(e)}")
+            return False
     
     def _pack_tiles_to_mbtiles(self, tiles_dir, mbtiles_path, min_zoom, max_zoom, task_id):
         """将瓦片目录打包为MBTiles文件"""
