@@ -1,6 +1,7 @@
 <template>
   <el-dialog
-    v-model="visible"
+    :model-value="visible"
+    @update:model-value="$emit('update:visible', $event)"
     title="TIF文件转换进度"
     width="600px"
     :close-on-click-modal="false"
@@ -118,6 +119,8 @@ import { ElMessage } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
 import axios from 'axios'
 
+// 在Vue 3的script setup中，defineProps和defineEmits是编译器宏，不需要导入
+// eslint-disable-next-line no-undef
 const props = defineProps({
   visible: {
     type: Boolean,
@@ -145,6 +148,7 @@ const props = defineProps({
   }
 })
 
+// eslint-disable-next-line no-undef
 const emit = defineEmits(['update:visible', 'completed', 'error', 'retry'])
 
 // 响应式数据

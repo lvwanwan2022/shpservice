@@ -1016,7 +1016,7 @@
 
 <script>
 import { ref, reactive, onMounted, computed } from 'vue'
-import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, ArrowDown } from '@element-plus/icons-vue'
 import gisApi from '@/api/gis'
 import CoordinateSystemSearch from '@/components/CoordinateSystemSearch.vue'
@@ -1657,45 +1657,41 @@ export default {
           publishParams.max_zoom = maxZoom
           publishParams.min_zoom = minZoom
           
-          try {
-            // 启动异步转换任务
-            const conversionResponse = await gisApi.startTifConversionAsync(file.id, publishParams)
-            
-            if (conversionResponse.success) {
-              // 设置对话框信息
-              tifConversionFileInfo.value = {
-                name: file.file_name,
-                type: file.file_type,
-                id: file.id
-              }
-              tifConversionTaskId.value = conversionResponse.task_id
-              tifConversionMinZoom.value = minZoom
-              tifConversionMaxZoom.value = maxZoom
-              
-              // 显示转换进度对话框
-              tifConversionDialogVisible.value = true
-              
-              // 监听转换完成事件
-              const handleConversionCompleted = (result) => {
-                ElMessage.success('TIF文件转换并发布Martin服务成功')
-                fetchFileList() // 刷新文件列表
-              }
-              
-              const handleConversionError = (error) => {
-                ElMessage.error(`转换失败: ${error}`)
-              }
-              
-              // 临时存储事件处理器以便清理
-              tifConversionFileInfo.value.onCompleted = handleConversionCompleted
-              tifConversionFileInfo.value.onError = handleConversionError
-              
-              // 返回，不执行后续的result处理逻辑
-              return
-            } else {
-              throw new Error(conversionResponse.error || '启动转换任务失败')
+          // 启动异步转换任务
+          const conversionResponse = await gisApi.startTifConversionAsync(file.id, publishParams)
+          
+          if (conversionResponse.success) {
+            // 设置对话框信息
+            tifConversionFileInfo.value = {
+              name: file.file_name,
+              type: file.file_type,
+              id: file.id
             }
-          } catch (conversionError) {
-            throw conversionError
+            tifConversionTaskId.value = conversionResponse.task_id
+            tifConversionMinZoom.value = minZoom
+            tifConversionMaxZoom.value = maxZoom
+            
+            // 显示转换进度对话框
+            tifConversionDialogVisible.value = true
+            
+            // 监听转换完成事件
+            const handleConversionCompleted = () => {
+              ElMessage.success('TIF文件转换并发布Martin服务成功')
+              fetchFileList() // 刷新文件列表
+            }
+            
+            const handleConversionError = (error) => {
+              ElMessage.error(`转换失败: ${error}`)
+            }
+            
+            // 临时存储事件处理器以便清理
+            tifConversionFileInfo.value.onCompleted = handleConversionCompleted
+            tifConversionFileInfo.value.onError = handleConversionError
+            
+            // 返回，不执行后续的result处理逻辑
+            return
+          } else {
+            throw new Error(conversionResponse.error || '启动转换任务失败')
           }
         } else {
           // 使用通用的Martin发布接口
@@ -2075,7 +2071,6 @@ export default {
       coordinateInfoVisible,
       coordinateInfoData,
       coordinateInfoLoading,
-      viewCoordinateInfo,
       // TIF转换对话框相关
       tifConversionDialogVisible,
       tifConversionTaskId,
