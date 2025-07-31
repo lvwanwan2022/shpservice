@@ -47,6 +47,51 @@ class TifMartinService:
         
         print("✅ TIF Martin服务初始化完成")
     
+    def _update_progress_with_log(self, task_id, progress=None, message=None, status=None, current_step=None, **kwargs):
+        """更新进度并添加详细日志"""
+        if task_id not in self.progress_data:
+            return
+            
+        # 更新进度数据
+        updates = {}
+        if progress is not None:
+            updates['progress'] = progress
+        if message is not None:
+            updates['message'] = message
+        if status is not None:
+            updates['status'] = status
+        if current_step is not None:
+            updates['current_step'] = current_step
+        
+        # 添加其他参数
+        for key, value in kwargs.items():
+            updates[key] = value
+        
+        # 初始化日志列表（如果不存在）
+        if 'logs' not in self.progress_data[task_id]:
+            self.progress_data[task_id]['logs'] = []
+        
+        # 添加日志条目
+        if message:
+            log_entry = {
+                'timestamp': time.time(),
+                'message': message,
+                'progress': progress,
+                'step': current_step
+            }
+            self.progress_data[task_id]['logs'].append(log_entry)
+            
+            # 保持日志数量在合理范围内（最多100条）
+            if len(self.progress_data[task_id]['logs']) > 100:
+                self.progress_data[task_id]['logs'] = self.progress_data[task_id]['logs'][-100:]
+        
+        # 更新进度数据
+        self.progress_data[task_id].update(updates)
+        
+        # 打印到控制台（包含表情符号的消息）
+        if message:
+            print(message)
+    
     def get_file_coordinate_system(self, file_id):
         """从数据库获取文件的坐标系信息"""
         try:
@@ -72,8 +117,27 @@ class TifMartinService:
                 'status': 'starting',
                 'progress': 0,
                 'message': '开始处理...',
-                'current_step': 'init'
+                'current_step': 'init',
+                'logs': []
             }
+            
+            # 记录开始信息
+            from auth.auth_service import get_current_user
+            current_user = get_current_user()
+            user_id_display = current_user.get('id', 'unknown') if current_user else 'unknown'
+            
+            self._update_progress_with_log(task_id, 
+                progress=0, 
+                message=f"用户ID: {user_id_display}", 
+                status='starting', 
+                current_step='init'
+            )
+            
+            self._update_progress_with_log(task_id, 
+                progress=0, 
+                message=f"🔄 开始处理TIF文件: {original_filename}", 
+                current_step='init'
+            )
             
             # 检查文件是否存在
             if not os.path.exists(file_path):
@@ -83,7 +147,11 @@ class TifMartinService:
             
             # 获取坐标系
             coordinate_system = self.get_file_coordinate_system(file_id)
-            print(f"📊 使用坐标系: {coordinate_system}")
+            self._update_progress_with_log(task_id, 
+                progress=5, 
+                message=f"📊 使用坐标系: {coordinate_system}", 
+                current_step='init'
+            )
             
             # 生成输出路径
             file_uuid = uuid.uuid4().hex
@@ -94,16 +162,18 @@ class TifMartinService:
             temp_dir = tempfile.mkdtemp(prefix='tif_conversion_')
             tiles_dir = os.path.join(temp_dir, 'tiles')
             
-            print(f"📁 临时目录: {temp_dir}")
-            print(f"📁 瓦片目录: {tiles_dir}")
+            self._update_progress_with_log(task_id, 
+                progress=8, 
+                message=f"📁 临时目录: {temp_dir}", 
+                current_step='init'
+            )
             
-            # 更新进度
-            self.progress_data[task_id].update({
-                'status': 'processing',
-                'progress': 10,
-                'message': '开始生成瓦片...',
-                'current_step': 'tiles_generation'
-            })
+            self._update_progress_with_log(task_id, 
+                progress=10, 
+                message=f"📁 瓦片目录: {tiles_dir}", 
+                status='processing',
+                current_step='tiles_generation'
+            )
             
             # 第一步：使用gdal2tiles.py生成瓦片
             if not self._generate_tiles_with_gdal2tiles(file_path, tiles_dir, min_zoom, max_zoom, coordinate_system, task_id):
@@ -208,7 +278,11 @@ class TifMartinService:
             from osgeo import gdal, osr
             import math
             
-            print(f"🔧 使用GDAL Python API生成瓦片...")
+            self._update_progress_with_log(task_id, 
+                progress=12, 
+                message="🔧 使用GDAL Python API生成瓦片...", 
+                current_step='tiles_generation'
+            )
             
             # 设置GDAL配置
             gdal.SetConfigOption('GDAL_CACHEMAX', '500')
@@ -254,7 +328,11 @@ class TifMartinService:
             min_y = min(corner[1] for corner in transformed_corners)
             max_y = max(corner[1] for corner in transformed_corners)
             
-            print(f"📊 数据范围: ({min_x:.2f}, {min_y:.2f}) - ({max_x:.2f}, {max_y:.2f})")
+            self._update_progress_with_log(task_id, 
+                progress=15, 
+                message=f"📊 数据范围: ({min_x:.2f}, {min_y:.2f}) - ({max_x:.2f}, {max_y:.2f})", 
+                current_step='tiles_generation'
+            )
             
             # 启动进度监控线程
             progress_thread = threading.Thread(
@@ -273,7 +351,11 @@ class TifMartinService:
                 tile_min_x, tile_max_x, tile_min_y, tile_max_y = self._get_tile_bounds(min_x, max_x, min_y, max_y, zoom)
                 total_tiles += (tile_max_x - tile_min_x + 1) * (tile_max_y - tile_min_y + 1)
             
-            print(f"📊 预计生成 {total_tiles} 个瓦片")
+            self._update_progress_with_log(task_id, 
+                progress=18, 
+                message=f"📊 预计生成 {total_tiles} 个瓦片", 
+                current_step='tiles_generation'
+            )
             
             # 为每个缩放级别生成瓦片
             for zoom in range(min_zoom, max_zoom + 1):
@@ -283,7 +365,10 @@ class TifMartinService:
                 # 计算该缩放级别的瓦片范围
                 tile_min_x, tile_max_x, tile_min_y, tile_max_y = self._get_tile_bounds(min_x, max_x, min_y, max_y, zoom)
                 
-                print(f"🔧 生成缩放级别 {zoom} 的瓦片 ({tile_min_x}-{tile_max_x}, {tile_min_y}-{tile_max_y})")
+                self._update_progress_with_log(task_id, 
+                    message=f"🔧 生成缩放级别 {zoom} 的瓦片 ({tile_min_x}-{tile_max_x}, {tile_min_y}-{tile_max_y})", 
+                    current_step='tiles_generation'
+                )
                 
                 for tile_x in range(tile_min_x, tile_max_x + 1):
                     x_dir = os.path.join(zoom_dir, str(tile_x))
@@ -388,7 +473,11 @@ class TifMartinService:
                 return False
             
             # 处理透明度，将纯黑色设置为透明
-            self._make_black_transparent(tile_path, tolerance=5)
+            success, transparent_pixels = self._make_black_transparent(tile_path, tolerance=5)
+            
+            # 记录透明度处理结果（仅当有透明像素时）
+            if success and transparent_pixels > 0:
+                print(f"🎨 瓦片透明度处理完成，设置了 {transparent_pixels} 个黑色像素为透明")
             
             # 检查最终文件是否有效
             if os.path.exists(tile_path) and os.path.getsize(tile_path) > 0:
@@ -449,10 +538,10 @@ class TifMartinService:
             tolerance: 黑色容差值，默认为5
         
         Returns:
-            bool: 处理是否成功
+            tuple: (处理是否成功, 透明像素数量)
         """
         if not PIL_AVAILABLE:
-            return False
+            return False, 0
             
         try:
             # 打开生成的PNG图像
@@ -482,15 +571,12 @@ class TifMartinService:
             # 保存处理后的图像
             img.save(tile_path, "PNG", optimize=True)
             
-            # 只在有透明像素时输出日志
-            if transparent_pixels > 0:
-                print(f"🎨 瓦片透明度处理完成，设置了 {transparent_pixels} 个黑色像素为透明")
-            
-            return True
+            # 返回处理结果
+            return True, transparent_pixels
             
         except Exception as e:
             print(f"⚠️ 透明度处理失败: {str(e)}")
-            return False
+            return False, 0
     
     def _pack_tiles_to_mbtiles(self, tiles_dir, mbtiles_path, min_zoom, max_zoom, task_id):
         """将瓦片目录打包为MBTiles文件"""

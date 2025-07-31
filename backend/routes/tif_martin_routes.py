@@ -262,6 +262,22 @@ def get_conversion_progress(task_id):
         logger.error(f"获取转换进度失败: {str(e)}")
         return jsonify({'error': f'获取进度失败: {str(e)}'}), 500
 
+@tif_martin_bp.route('/cleanup-progress/<string:task_id>', methods=['DELETE'])
+@require_auth
+def cleanup_conversion_progress(task_id):
+    """清理转换任务的进度数据"""
+    try:
+        tif_martin_service.cleanup_progress(task_id)
+        
+        return jsonify({
+            'success': True,
+            'message': '进度数据已清理'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"清理转换进度失败: {str(e)}")
+        return jsonify({'error': f'清理进度失败: {str(e)}'}), 500
+
 @tif_martin_bp.route('/batch-convert', methods=['POST'])
 @require_auth
 def batch_convert_tif_files():

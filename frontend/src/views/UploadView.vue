@@ -999,6 +999,18 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- TIF转换进度对话框 -->
+    <TifConversionDialog
+      v-model:visible="tifConversionDialogVisible"
+      :task-id="tifConversionTaskId"
+      :file-info="tifConversionFileInfo"
+      :min-zoom="tifConversionMinZoom"
+      :max-zoom="tifConversionMaxZoom"
+      @completed="handleTifConversionCompleted"
+      @error="handleTifConversionError"
+      @retry="handleTifConversionRetry"
+    />
   </div>
 </template>
 
@@ -1008,12 +1020,14 @@ import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import { Search, ArrowDown } from '@element-plus/icons-vue'
 import gisApi from '@/api/gis'
 import CoordinateSystemSearch from '@/components/CoordinateSystemSearch.vue'
+import TifConversionDialog from '@/components/TifConversionDialog.vue'
 import { processServiceUrl } from '@/utils/urlUtils.js'
 
 export default {
   name: 'UploadView',
   components: {
-    CoordinateSystemSearch
+    CoordinateSystemSearch,
+    TifConversionDialog
   },
   setup() {
     // 响应式数据
@@ -1036,6 +1050,13 @@ export default {
     const coordinateInfoVisible = ref(false)
     const coordinateInfoData = ref(null)
     const coordinateInfoLoading = ref(false) // 添加当前正在编辑的文件引用
+    
+    // TIF转换对话框相关
+    const tifConversionDialogVisible = ref(false)
+    const tifConversionTaskId = ref('')
+    const tifConversionFileInfo = ref({})
+    const tifConversionMinZoom = ref(2)
+    const tifConversionMaxZoom = ref(18)
     
     // 移动端搜索相关
     const mobileSearchExpanded = ref(false)
@@ -1612,6 +1633,7 @@ export default {
           
           // 获取转换参数
           let maxZoom = 20 // 默认最大缩放级别
+          let minZoom = 2 // 默认最小缩放级别
           
           try {
             const { value } = await ElMessageBox.prompt(
@@ -1633,93 +1655,46 @@ export default {
           }
           
           publishParams.max_zoom = maxZoom
-          
-          // 显示转换进度弹窗，防止页面跳转
-          const loadingInstance = ElLoading.service({
-            lock: true,
-            text: `正在转换TIF文件为MBTiles（最大级别${maxZoom}）\n\n这可能需要几分钟时间，请耐心等待...`,
-            background: 'rgba(0, 0, 0, 0.85)',
-            customClass: 'tif-conversion-loading'
-          })
-          
-          // 防止页面跳转的事件处理
-          const preventNavigation = (e) => {
-            e.preventDefault()
-            e.returnValue = '正在进行TIF文件转换，确定要离开吗？'
-            return '正在进行TIF文件转换，确定要离开吗？'
-          }
-          
-          // 添加页面刷新和关闭的确认
-          window.addEventListener('beforeunload', preventNavigation)
-          
-          // 添加进度提示更新
-          let progressCounter = 0
-          const progressSteps = [
-            '🔍 分析TIF文件信息...',
-            '🔄 转换坐标系到Web Mercator...',
-            '🎯 预处理影像数据...',
-            '🧩 生成瓦片中...',
-            '📦 打包为MBTiles格式...',
-            '🚀 发布到Martin服务...',
-            '✅ 转换即将完成...'
-          ]
-          
-          const updateProgress = () => {
-            progressCounter += 3
-            const stepIndex = Math.floor((progressCounter / 15) % progressSteps.length)
-            const dots = '.'.repeat((progressCounter / 3) % 4)
-            
-            loadingInstance.setText(
-              `${progressSteps[stepIndex]}${dots}\n\n` +
-              `转换中... (${progressCounter}秒)\n` +
-              `请勿关闭浏览器或刷新页面\n` +
-              `大文件转换可能需要较长时间，请耐心等待`
-            )
-          }
-          
-          // 每3秒更新一次进度
-          const progressInterval = setInterval(updateProgress, 3000)
+          publishParams.min_zoom = minZoom
           
           try {
-            // 使用TIF转MBTiles的Martin发布接口
-            result = await gisApi.convertTifToMbtilesAndPublish(file.id, publishParams)
+            // 启动异步转换任务
+            const conversionResponse = await gisApi.startTifConversionAsync(file.id, publishParams)
             
-            // 清理资源
-            clearInterval(progressInterval)
-            window.removeEventListener('beforeunload', preventNavigation)
-            loadingInstance.close()
-            
-            if (result.success) {
-              // 显示转换成功的详细信息
-              const conversionInfo = result.data.conversion
-              const serviceInfo = result.data.martin_service
+            if (conversionResponse.success) {
+              // 设置对话框信息
+              tifConversionFileInfo.value = {
+                name: file.file_name,
+                type: file.file_type,
+                id: file.id
+              }
+              tifConversionTaskId.value = conversionResponse.task_id
+              tifConversionMinZoom.value = minZoom
+              tifConversionMaxZoom.value = maxZoom
               
-              ElMessageBox.alert(
-                `<div style="text-align: left;">
-                  <h4>🎉 TIF转换并发布成功！</h4>
-                  <p><strong>原始文件：</strong>${result.data.original_file.name}</p>
-                  <p><strong>MBTiles文件：</strong>${conversionInfo.mbtiles_filename}</p>
-                  <p><strong>缩放级别：</strong>0-${conversionInfo.max_zoom}</p>
-                  <p><strong>瓦片数量：</strong>${conversionInfo.mbtiles_info.tile_count}</p>
-                  <p><strong>文件大小：</strong>${conversionInfo.stats.file_size_mb}MB</p>
-                  <hr/>
-                  <p><strong>Martin服务：</strong></p>
-                  <p><code>${serviceInfo.service_url}</code></p>
-                  <p><strong>MVT地址：</strong></p>
-                  <p><code>${serviceInfo.mvt_url}</code></p>
-                </div>`,
-                '转换完成',
-                {
-                  dangerouslyUseHTMLString: true,
-                  confirmButtonText: '确定'
-                }
-              )
+              // 显示转换进度对话框
+              tifConversionDialogVisible.value = true
+              
+              // 监听转换完成事件
+              const handleConversionCompleted = (result) => {
+                ElMessage.success('TIF文件转换并发布Martin服务成功')
+                fetchFileList() // 刷新文件列表
+              }
+              
+              const handleConversionError = (error) => {
+                ElMessage.error(`转换失败: ${error}`)
+              }
+              
+              // 临时存储事件处理器以便清理
+              tifConversionFileInfo.value.onCompleted = handleConversionCompleted
+              tifConversionFileInfo.value.onError = handleConversionError
+              
+              // 返回，不执行后续的result处理逻辑
+              return
+            } else {
+              throw new Error(conversionResponse.error || '启动转换任务失败')
             }
           } catch (conversionError) {
-            // 清理资源
-            clearInterval(progressInterval)
-            window.removeEventListener('beforeunload', preventNavigation)
-            loadingInstance.close()
             throw conversionError
           }
         } else {
@@ -2011,6 +1986,32 @@ export default {
       }
     }
 
+    // TIF转换对话框处理函数
+    const handleTifConversionCompleted = (result) => {
+      console.log('TIF转换完成:', result)
+      ElMessage.success('TIF文件转换并发布Martin服务成功')
+      fetchFileList() // 刷新文件列表
+      tifConversionDialogVisible.value = false
+    }
+
+    const handleTifConversionError = (error) => {
+      console.error('TIF转换失败:', error)
+      ElMessage.error(`TIF文件转换失败: ${error}`)
+    }
+
+    const handleTifConversionRetry = () => {
+      console.log('重试TIF转换')
+      tifConversionDialogVisible.value = false
+      
+      // 重新尝试发布Martin服务
+      if (tifConversionFileInfo.value.id) {
+        const file = fileList.value.find(f => f.id === tifConversionFileInfo.value.id)
+        if (file) {
+          publishMartinService(file)
+        }
+      }
+    }
+
     return {
       fileList,
       uploaders,
@@ -2074,6 +2075,16 @@ export default {
       coordinateInfoVisible,
       coordinateInfoData,
       coordinateInfoLoading,
+      viewCoordinateInfo,
+      // TIF转换对话框相关
+      tifConversionDialogVisible,
+      tifConversionTaskId,
+      tifConversionFileInfo,
+      tifConversionMinZoom,
+      tifConversionMaxZoom,
+      handleTifConversionCompleted,
+      handleTifConversionError,
+      handleTifConversionRetry,
       // 移动端搜索相关
       mobileSearchExpanded,
       toggleMobileSearch,

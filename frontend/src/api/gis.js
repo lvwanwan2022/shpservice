@@ -950,6 +950,32 @@ export default {
     })
   },
 
+  // 启动异步TIF转换任务
+  startTifConversionAsync(fileId, params = {}) {
+    console.log('启动异步TIF转换任务:', fileId, params)
+    return authHttp({
+      url: `/tif-martin/convert-async/${fileId}`,
+      method: 'POST',
+      data: params
+    })
+  },
+
+  // 获取TIF转换进度
+  getTifConversionProgress(taskId) {
+    return authHttp({
+      url: `/tif-martin/progress/${taskId}`,
+      method: 'GET'
+    })
+  },
+
+  // 清理TIF转换进度数据
+  cleanupTifConversionProgress(taskId) {
+    return authHttp({
+      url: `/tif-martin/cleanup-progress/${taskId}`,
+      method: 'DELETE'
+    })
+  },
+
   // ========== DXF相关 ==========
   
   // 发布DXF的Martin服务
