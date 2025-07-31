@@ -104,27 +104,29 @@ class TifMartinService:
             print(f"⚠️ 获取坐标系信息失败: {str(e)}")
             return 'EPSG:4326'
     
-    def tif_to_mbtiles_and_publish(self, file_id, file_path, original_filename, user_id=None, max_zoom=18, min_zoom=2):
+    def tif_to_mbtiles_and_publish(self, file_id, file_path, original_filename, user_id=None, max_zoom=18, min_zoom=2, task_id=None):
         """将TIF文件转换为MBTiles并发布为Martin服务"""
         temp_dir = None
-        task_id = str(uuid.uuid4())
+        
+        # 如果没有提供task_id，生成一个新的
+        if task_id is None:
+            task_id = str(uuid.uuid4())
         
         try:
             print(f"🔄 开始处理TIF文件: {original_filename}")
             
-            # 初始化进度
-            self.progress_data[task_id] = {
-                'status': 'starting',
-                'progress': 0,
-                'message': '开始处理...',
-                'current_step': 'init',
-                'logs': []
-            }
+            # 初始化进度（如果之前没有初始化的话）
+            if task_id not in self.progress_data:
+                self.progress_data[task_id] = {
+                    'status': 'starting',
+                    'progress': 0,
+                    'message': '开始处理...',
+                    'current_step': 'init',
+                    'logs': []
+                }
             
-            # 记录开始信息
-            from auth.auth_service import get_current_user
-            current_user = get_current_user()
-            user_id_display = current_user.get('id', 'unknown') if current_user else 'unknown'
+            # 使用传递的user_id，不再从Flask上下文获取
+            user_id_display = user_id or 'unknown'
             
             self._update_progress_with_log(task_id, 
                 progress=0, 

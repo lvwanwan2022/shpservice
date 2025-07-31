@@ -198,13 +198,15 @@ def convert_tif_async(file_id):
         # 启动异步转换任务
         def async_convert():
             try:
+                # 在异步任务中，使用传递的task_id来跟踪进度
                 result = tif_martin_service.tif_to_mbtiles_and_publish(
                     file_id=str(file_id_int),
                     file_path=file_info['file_path'],
                     original_filename=file_info['file_name'],
                     user_id=user_id,
                     max_zoom=max_zoom,
-                    min_zoom=min_zoom
+                    min_zoom=min_zoom,
+                    task_id=task_id  # 传递task_id
                 )
                 
                 # 更新最终结果到进度数据中
@@ -212,6 +214,9 @@ def convert_tif_async(file_id):
                     tif_martin_service.progress_data[task_id]['result'] = result
                     
             except Exception as e:
+                print(f"❌ 异步处理失败: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 if task_id in tif_martin_service.progress_data:
                     tif_martin_service.progress_data[task_id].update({
                         'status': 'error',
