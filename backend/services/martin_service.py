@@ -9,6 +9,7 @@ import subprocess
 import requests
 import logging
 import time
+import socket
 from typing import Dict, List, Optional, Tuple
 import psycopg2
 from config import MARTIN_CONFIG, DB_CONFIG
@@ -260,8 +261,9 @@ class MartinService:
             
             # 等待服务启动
             logger.info("等待Martin服务启动...")
-            max_retries = 5
+            max_retries = 10  # 增加重试次数
             retry_interval = 2
+            martin_port = self.config.get('port', 3000)
             
             for i in range(max_retries):
                 # 检查进程是否已退出
@@ -272,20 +274,35 @@ class MartinService:
                     logger.error(f"错误输出: {stderr_output}")
                     return False
                 
-                # 检查服务是否可访问
-                if self.is_running():
-                    logger.info(f"✅ Martin服务启动成功 (尝试 {i+1}/{max_retries})")
-                    return True
+                # 首先检查端口是否被占用（这是启动成功的主要指标）
+                if self.check_port_in_use(martin_port):
+                    logger.info(f"✅ 端口{martin_port}已被占用，Martin服务启动成功 (尝试 {i+1}/{max_retries})")
+                    
+                    # 进一步验证Martin服务的可访问性
+                    if self.is_running():
+                        logger.info(f"✅ Martin服务完全就绪并可访问")
+                        return True
+                    else:
+                        logger.info(f"⚠️ 端口已占用但服务尚未完全就绪，继续等待...")
+                        # 端口占用了，说明Martin在启动过程中，继续等待
+                        time.sleep(retry_interval)
+                        continue
                 
-                logger.info(f"Martin服务尚未就绪，等待重试... ({i+1}/{max_retries})")
+                logger.info(f"端口{martin_port}尚未被占用，Martin服务正在启动... ({i+1}/{max_retries})")
                 time.sleep(retry_interval)
             
-            # 最后一次检查
-            if self.is_running():
-                logger.info("✅ Martin服务最终启动成功")
+            # 最后一次检查端口占用情况
+            if self.check_port_in_use(martin_port):
+                logger.info("✅ Martin服务启动成功（端口已被占用）")
+                
+                # 尝试最后一次验证服务可访问性
+                if self.is_running():
+                    logger.info("✅ Martin服务完全就绪")
+                else:
+                    logger.warning("⚠️ Martin服务端口已占用但HTTP访问可能需要更多时间")
                 return True
             else:
-                logger.error("❌ Martin服务无法访问，启动失败")
+                logger.error(f"❌ 端口{martin_port}未被占用，Martin服务启动失败")
                 # 尝试获取错误输出
                 if self.process and self.process.stderr:
                     stderr_output = self._safe_decode(self.process.stderr.read())
@@ -491,9 +508,28 @@ class MartinService:
             logger.error(f"❌ 使用bat启动Martin失败: {e}")
             return False
     
+    def check_port_in_use(self, port: int) -> bool:
+        """检查端口是否被占用"""
+        try:
+            # 检查TCP端口
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(1)
+                result = sock.connect_ex(('localhost', port))
+                return result == 0  # 0表示连接成功，端口被占用
+        except Exception as e:
+            logger.debug(f"检查端口{port}占用状态失败: {e}")
+            return False
+
     def is_running(self) -> bool:
         """检查 Martin 服务是否运行中"""
+        # 首先检查端口是否被占用
+        martin_port = self.config.get('port', 3000)
+        if not self.check_port_in_use(martin_port):
+            logger.debug(f"端口{martin_port}未被占用，Martin服务未运行")
+            return False
+        
         try:
+            # 端口被占用，进一步检查是否是Martin服务
             # 尝试访问health端点
             response = requests.get(f"{self.base_url}/health", timeout=5)
             if response.status_code == 200:
@@ -504,10 +540,12 @@ class MartinService:
             return response.status_code == 200
             
         except requests.exceptions.ConnectionError:
-            # 连接被拒绝，服务未运行
+            # 端口被占用但连接被拒绝，可能是其他服务
+            logger.debug(f"端口{martin_port}被占用但不是Martin服务")
             return False
         except requests.exceptions.Timeout:
             # 超时，可能服务有问题
+            logger.debug(f"端口{martin_port}被占用但Martin服务响应超时")
             return False
         except Exception as e:
             logger.error(f"检查Martin服务状态失败: {e}")
@@ -640,14 +678,33 @@ class MartinService:
             # 6. 如果直接启动失败，尝试使用bat文件启动
             logger.info("直接启动失败，尝试使用bat文件启动...")
             if self.start_service_with_bat(background=True):
-                # 等待服务启动并验证
-                time.sleep(4)
+                # 等待服务启动并验证（增加验证时间和次数）
+                logger.info("等待bat启动的Martin服务...")
+                martin_port = self.config.get('port', 3000)
+                max_wait_time = 15  # 最多等待15秒
+                check_interval = 1  # 每秒检查一次
                 
-                if self.is_running():
-                    logger.info("✅ Martin服务通过bat启动成功")
+                for i in range(max_wait_time):
+                    # 检查端口是否被占用
+                    if self.check_port_in_use(martin_port):
+                        logger.info(f"✅ 端口{martin_port}已被占用，Martin服务通过bat启动成功")
+                        
+                        # 进一步验证HTTP访问
+                        if self.is_running():
+                            logger.info("✅ Martin服务完全就绪并可访问")
+                        else:
+                            logger.info("⚠️ Martin服务端口已占用，HTTP服务正在启动中")
+                        return True
+                    
+                    logger.info(f"等待端口{martin_port}被占用... ({i+1}/{max_wait_time})")
+                    time.sleep(check_interval)
+                
+                # 最后检查一次
+                if self.check_port_in_use(martin_port):
+                    logger.info("✅ Martin服务通过bat启动成功（端口已被占用）")
                     return True
                 else:
-                    logger.warning("⚠️ Martin服务正在启动中，但尚未就绪")
+                    logger.warning("⚠️ bat命令执行成功但Martin服务可能需要更多时间启动")
                     return True  # bat命令执行成功就算成功
             
             logger.error("❌ 所有启动方法均失败")

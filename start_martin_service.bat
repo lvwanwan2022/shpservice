@@ -11,6 +11,34 @@ echo 当前目录: %SCRIPT_DIR%
 REM 切换到项目目录
 cd /d "%SCRIPT_DIR%"
 
+REM 检查端口3000是否被占用
+echo 🔍 检查端口3000占用情况...
+netstat -an | findstr ":3000 " >nul 2>&1
+if %errorlevel% equ 0 (
+    echo ⚠️  警告: 端口3000已被占用
+    echo 💡 Martin服务可能已经在运行中
+    echo 🌐 请访问: http://localhost:3000 确认服务状态
+    echo.
+    echo 选择操作:
+    echo 1. 继续启动 ^(可能失败^)
+    echo 2. 退出
+    set /p choice="请输入选择 (1/2): "
+    if "!choice!"=="2" (
+        echo ❌ 用户选择退出
+        pause
+        exit /b 0
+    )
+    if "!choice!"=="1" (
+        echo ⚠️  继续尝试启动Martin服务...
+    ) else (
+        echo ❌ 无效选择，退出
+        pause
+        exit /b 0
+    )
+) else (
+    echo ✅ 端口3000可用，可以启动Martin服务
+)
+
 REM 从Python配置文件中获取Martin可执行文件路径
 echo 正在从配置文件获取Martin可执行文件路径...
 set "MARTIN_EXECUTABLE="
