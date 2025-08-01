@@ -227,41 +227,62 @@ class MartinService:
             # 在Windows上使用特定的启动方式
             if os.name == 'nt':
                 try:
+                    # 清理旧日志文件
+                    self._clean_old_logs()
+                    
                     # 使用startupinfo隐藏控制台窗口
                     import subprocess
                     startupinfo = subprocess.STARTUPINFO()
                     startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
                     startupinfo.wShowWindow = 0  # SW_HIDE
                     
-                    self.process = subprocess.Popen(
-                        cmd,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        text=False,
-                        startupinfo=startupinfo
-                    )
+                    # 解决方案1: 将输出重定向到文件而不是PIPE，避免缓冲区阻塞
+                    log_dir = os.path.join(os.path.dirname(self.config_file_path), 'logs')
+                    os.makedirs(log_dir, exist_ok=True)
+                    stdout_log = os.path.join(log_dir, 'martin_stdout.log')
+                    stderr_log = os.path.join(log_dir, 'martin_stderr.log')
+                    
+                    with open(stdout_log, 'w', encoding='utf-8') as stdout_file, \
+                         open(stderr_log, 'w', encoding='utf-8') as stderr_file:
+                        
+                        self.process = subprocess.Popen(
+                            cmd,
+                            stdout=stdout_file,
+                            stderr=stderr_file,
+                            startupinfo=startupinfo,
+                            # 重要：不要设置text=False，使用默认值
+                            # 并且将stdin设置为DEVNULL避免任何输入阻塞
+                            stdin=subprocess.DEVNULL
+                        )
+                    
                     logger.info(f"Windows方式启动Martin进程，PID: {self.process.pid if self.process else 'unknown'}")
+                    logger.info(f"日志输出: stdout -> {stdout_log}, stderr -> {stderr_log}")
+                    
                 except Exception as win_error:
                     logger.error(f"Windows特定启动方式失败: {win_error}")
-                    # 回退到标准方式
+                    # 回退到标准方式（使用DEVNULL避免阻塞）
                     self.process = subprocess.Popen(
                         cmd,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        text=False
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        stdin=subprocess.DEVNULL
                     )
             else:
-                # 非Windows系统的标准启动方式
+                # 非Windows系统的标准启动方式（同样避免管道阻塞）
                 self.process = subprocess.Popen(
                     cmd, 
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=False
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL
                 )
             
-            # 等待服务启动
+            # 等待服务启动 - 增加初始等待时间
             logger.info("等待Martin服务启动...")
-            max_retries = 10  # 增加重试次数
+            
+            # 给Martin进程一点时间来初始化（重要：避免立即检查）
+            time.sleep(1)
+            
+            max_retries = 15  # 增加重试次数
             retry_interval = 2
             martin_port = self.config.get('port', 3000)
             
@@ -269,9 +290,21 @@ class MartinService:
                 # 检查进程是否已退出
                 if self.process.poll() is not None:
                     exit_code = self.process.poll()
-                    stderr_output = self._safe_decode(self.process.stderr.read() if self.process.stderr else b'')
                     logger.error(f"Martin进程启动后立即退出，退出码: {exit_code}")
-                    logger.error(f"错误输出: {stderr_output}")
+                    
+                    # 尝试读取日志文件获取错误信息
+                    if os.name == 'nt':
+                        try:
+                            log_dir = os.path.join(os.path.dirname(self.config_file_path), 'logs')
+                            stderr_log = os.path.join(log_dir, 'martin_stderr.log')
+                            if os.path.exists(stderr_log):
+                                with open(stderr_log, 'r', encoding='utf-8') as f:
+                                    stderr_content = f.read()
+                                    if stderr_content.strip():
+                                        logger.error(f"错误输出: {stderr_content}")
+                        except Exception as e:
+                            logger.debug(f"读取错误日志失败: {e}")
+                    
                     return False
                 
                 # 首先检查端口是否被占用（这是启动成功的主要指标）
@@ -303,11 +336,20 @@ class MartinService:
                 return True
             else:
                 logger.error(f"❌ 端口{martin_port}未被占用，Martin服务启动失败")
-                # 尝试获取错误输出
-                if self.process and self.process.stderr:
-                    stderr_output = self._safe_decode(self.process.stderr.read())
-                    if stderr_output:
-                        logger.error(f"错误输出: {stderr_output}")
+                
+                # 尝试读取日志文件获取错误信息
+                if os.name == 'nt':
+                    try:
+                        log_dir = os.path.join(os.path.dirname(self.config_file_path), 'logs')
+                        stderr_log = os.path.join(log_dir, 'martin_stderr.log')
+                        if os.path.exists(stderr_log):
+                            with open(stderr_log, 'r', encoding='utf-8') as f:
+                                stderr_content = f.read()
+                                if stderr_content.strip():
+                                    logger.error(f"错误输出: {stderr_content}")
+                    except Exception as e:
+                        logger.debug(f"读取错误日志失败: {e}")
+                
                 return False
                 
         except Exception as e:
@@ -673,33 +715,40 @@ class MartinService:
             logs['status'] = 'terminated'
             
         try:
-            # 由于我们使用bytes模式，这里需要处理编码
-            # 对于实时日志，我们可以尝试读取少量数据
-            if self.process.stdout:
+            # 从日志文件读取输出（适用于Windows新的启动方式）
+            if os.name == 'nt':
+                log_dir = os.path.join(os.path.dirname(self.config_file_path), 'logs')
+                stdout_log = os.path.join(log_dir, 'martin_stdout.log')
+                stderr_log = os.path.join(log_dir, 'martin_stderr.log')
+                
+                # 读取stdout日志
                 try:
-                    # 非阻塞读取
-                    import select
-                    import sys
-                    
-                    if sys.platform != 'win32':
-                        # Unix系统使用select
-                        ready, _, _ = select.select([self.process.stdout], [], [], 0)
-                        if ready:
-                            data = self.process.stdout.read(1024)
-                            if data:
-                                logs['stdout'] = self._safe_decode(data)
-                    else:
-                        # Windows系统，只在进程结束时获取输出
-                        if self.process.poll() is not None:
-                            try:
-                                stdout_bytes, stderr_bytes = self.process.communicate(timeout=1)
-                                logs['stdout'] = self._safe_decode(stdout_bytes)
-                                logs['stderr'] = self._safe_decode(stderr_bytes)
-                            except subprocess.TimeoutExpired:
-                                pass
+                    if os.path.exists(stdout_log):
+                        with open(stdout_log, 'r', encoding='utf-8') as f:
+                            lines_list = f.readlines()
+                            # 取最后N行
+                            if len(lines_list) > lines:
+                                lines_list = lines_list[-lines:]
+                            logs['stdout'] = ''.join(lines_list)
                 except Exception as e:
-                    logger.debug(f"读取stdout失败: {e}")
-                    
+                    logger.debug(f"读取stdout日志失败: {e}")
+                
+                # 读取stderr日志
+                try:
+                    if os.path.exists(stderr_log):
+                        with open(stderr_log, 'r', encoding='utf-8') as f:
+                            lines_list = f.readlines()
+                            # 取最后N行
+                            if len(lines_list) > lines:
+                                lines_list = lines_list[-lines:]
+                            logs['stderr'] = ''.join(lines_list)
+                except Exception as e:
+                    logger.debug(f"读取stderr日志失败: {e}")
+            else:
+                # 非Windows系统，日志输出被重定向到DEVNULL，无法获取
+                logs['stdout'] = '日志输出已重定向到/dev/null'
+                logs['stderr'] = '错误输出已重定向到/dev/null'
+                
         except Exception as e:
             logger.error(f"读取日志失败: {e}")
             logs['error'] = str(e)
@@ -977,6 +1026,29 @@ class MartinService:
                 'success': False,
                 'error': f'应用样式失败: {str(e)}'
             }
+
+    def _clean_old_logs(self) -> None:
+        """清理旧的日志文件"""
+        try:
+            if os.name == 'nt':
+                log_dir = os.path.join(os.path.dirname(self.config_file_path), 'logs')
+                if os.path.exists(log_dir):
+                    # 清理超过7天的日志文件
+                    import time
+                    now = time.time()
+                    seven_days_ago = now - (7 * 24 * 60 * 60)
+                    
+                    for filename in os.listdir(log_dir):
+                        if filename.startswith('martin_') and filename.endswith('.log'):
+                            filepath = os.path.join(log_dir, filename)
+                            if os.path.getmtime(filepath) < seven_days_ago:
+                                try:
+                                    os.remove(filepath)
+                                    logger.debug(f"已清理旧日志文件: {filepath}")
+                                except Exception as e:
+                                    logger.debug(f"清理日志文件失败: {filepath}, {e}")
+        except Exception as e:
+            logger.debug(f"清理日志文件时发生错误: {e}")
 
 
 # 创建全局实例
