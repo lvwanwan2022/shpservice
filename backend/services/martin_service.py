@@ -511,11 +511,94 @@ class MartinService:
     def check_port_in_use(self, port: int) -> bool:
         """检查端口是否被占用"""
         try:
-            # 检查TCP端口
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.settimeout(1)
-                result = sock.connect_ex(('localhost', port))
-                return result == 0  # 0表示连接成功，端口被占用
+            # 方法1: 使用系统命令检查端口占用（更可靠）
+            import platform
+            system = platform.system().lower()
+            
+            if system == 'windows' or os.name == 'nt':
+                # Windows: 使用netstat命令
+                try:
+                    result = subprocess.run(['netstat', '-ano'], 
+                                          capture_output=True, text=True, timeout=10)
+                    if result.returncode == 0:
+                        lines = result.stdout.split('\n')
+                        for line in lines:
+                            # 检查是否包含指定端口并且状态为LISTENING
+                            if f':{port} ' in line and 'LISTENING' in line:
+                                logger.debug(f"通过netstat检测到端口{port}被占用: {line.strip()}")
+                                return True
+                except Exception as e:
+                    logger.debug(f"Windows netstat检查端口{port}失败: {e}")
+            else:
+                # Linux/Unix: 优先使用ss命令，其次使用netstat
+                try:
+                    # 尝试使用ss命令（更现代）
+                    result = subprocess.run(['ss', '-tln'], 
+                                          capture_output=True, text=True, timeout=10)
+                    if result.returncode == 0:
+                        lines = result.stdout.split('\n')
+                        for line in lines:
+                            # ss输出格式: LISTEN 0.0.0.0:3000 或 *:3000
+                            if ('LISTEN' in line and 
+                                (f':{port} ' in line or f':{port}\t' in line or line.endswith(f':{port}'))):
+                                logger.debug(f"通过ss检测到端口{port}被占用: {line.strip()}")
+                                return True
+                except FileNotFoundError:
+                    # ss命令不存在，尝试netstat
+                    try:
+                        result = subprocess.run(['netstat', '-tln'], 
+                                              capture_output=True, text=True, timeout=10)
+                        if result.returncode == 0:
+                            lines = result.stdout.split('\n')
+                            for line in lines:
+                                if ('LISTEN' in line and 
+                                    (f':{port} ' in line or f':{port}\t' in line or line.endswith(f':{port}'))):
+                                    logger.debug(f"通过netstat检测到端口{port}被占用: {line.strip()}")
+                                    return True
+                    except Exception as e:
+                        logger.debug(f"Linux netstat检查端口{port}失败: {e}")
+                except Exception as e:
+                    logger.debug(f"Linux ss检查端口{port}失败: {e}")
+            
+            # 方法2: 如果系统命令失败，回退到socket连接方法
+            logger.debug(f"系统命令检查失败，回退到socket方法检查端口{port}")
+            
+            # 先尝试连接localhost
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.settimeout(1)
+                    result = sock.connect_ex(('localhost', port))
+                    if result == 0:
+                        logger.debug(f"通过socket(localhost)检测到端口{port}被占用")
+                        return True
+            except Exception as e:
+                logger.debug(f"socket连接localhost:{port}失败: {e}")
+            
+            # 如果localhost连接失败，尝试连接0.0.0.0
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.settimeout(1)
+                    result = sock.connect_ex(('0.0.0.0', port))
+                    if result == 0:
+                        logger.debug(f"通过socket(0.0.0.0)检测到端口{port}被占用")
+                        return True
+            except Exception as e:
+                logger.debug(f"socket连接0.0.0.0:{port}失败: {e}")
+            
+            # 最后尝试连接127.0.0.1
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.settimeout(1)
+                    result = sock.connect_ex(('127.0.0.1', port))
+                    if result == 0:
+                        logger.debug(f"通过socket(127.0.0.1)检测到端口{port}被占用")
+                        return True
+            except Exception as e:
+                logger.debug(f"socket连接127.0.0.1:{port}失败: {e}")
+            
+            logger.debug(f"所有方法均未检测到端口{port}被占用")
+            return False
+            
         except Exception as e:
             logger.debug(f"检查端口{port}占用状态失败: {e}")
             return False
