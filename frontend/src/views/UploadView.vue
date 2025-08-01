@@ -1659,7 +1659,9 @@ export default {
           publishParams.min_zoom = minZoom
           
             // 启动异步转换任务
+            console.log('准备启动TIF转换任务，参数:', publishParams)
             const conversionResponse = await gisApi.startTifConversionAsync(file.id, publishParams)
+            console.log('TIF转换任务响应:', conversionResponse)
             
             if (conversionResponse.success) {
               // 设置对话框信息

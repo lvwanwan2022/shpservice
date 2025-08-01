@@ -956,7 +956,8 @@ export default {
     return authHttp({
       url: `/tif-martin/convert-async/${fileId}`,
       method: 'POST',
-      data: params
+      data: params,
+      timeout: 120000  // 设置2分钟超时，给后端足够时间初始化任务
     })
   },
 
