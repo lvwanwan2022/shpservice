@@ -16,7 +16,7 @@ import threading
 logger = logging.getLogger(__name__)
 
 # 创建蓝图
-tif_martin_bp = Blueprint('tif_martin', __name__, url_prefix='/api/tif-martin')
+tif_martin_bp = Blueprint('tif_martin', __name__)
 
 # 创建服务实例
 tif_martin_service = TifMartinService()

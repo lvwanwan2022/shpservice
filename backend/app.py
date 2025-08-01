@@ -207,7 +207,7 @@ except Exception as e:
 # TIF Martin 服务路由
 try:
     from routes.tif_martin_routes import tif_martin_bp
-    app.register_blueprint(tif_martin_bp)
+    app.register_blueprint(tif_martin_bp,url_prefix='/api/tif-martin')
     logger.info("✅ TIF Martin 服务路由注册成功")
 except ImportError:
     logger.info("TIF Martin 服务路由不存在，跳过")
