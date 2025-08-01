@@ -1663,14 +1663,18 @@ export default {
             const conversionResponse = await gisApi.startTifConversionAsync(file.id, publishParams)
             console.log('TIF转换任务响应:', conversionResponse)
             
-            if (conversionResponse.success) {
+            // 正确处理axios响应格式 - 数据在response.data中
+            const responseData = conversionResponse.data || conversionResponse
+            console.log('解析后的响应数据:', responseData)
+            
+            if (responseData.success) {
               // 设置对话框信息
               tifConversionFileInfo.value = {
                 name: file.file_name,
                 type: file.file_type,
                 id: file.id
               }
-              tifConversionTaskId.value = conversionResponse.task_id
+              tifConversionTaskId.value = responseData.task_id
               tifConversionMinZoom.value = minZoom
               tifConversionMaxZoom.value = maxZoom
               
@@ -1704,7 +1708,7 @@ export default {
               // 成功启动异步任务，不执行后续的同步result处理逻辑
               return
             } else {
-              throw new Error(conversionResponse.error || '启动转换任务失败')
+              throw new Error(responseData.error || '启动转换任务失败')
           }
         } else {
           // 使用通用的Martin发布接口
