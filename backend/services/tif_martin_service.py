@@ -110,14 +110,14 @@ class TifMartinService:
         
         # 如果没有提供task_id，生成一个新的
         if task_id is None:
-        task_id = str(uuid.uuid4())
+            task_id = str(uuid.uuid4())
         
         try:
             print(f"🔄 开始处理TIF文件: {original_filename}")
             
             # 初始化进度（如果之前没有初始化的话）
             if task_id not in self.progress_data:
-            self.progress_data[task_id] = {
+                self.progress_data[task_id] = {
                 'status': 'starting',
                 'progress': 0,
                 'message': '开始处理...',
