@@ -317,7 +317,7 @@ class MartinService:
         return data.decode('utf-8', errors='replace')
     
     def stop_service(self) -> bool:
-        """简单kill Martin进程"""
+        """停止Martin服务，同时杀掉martin.exe进程和占用端口的进程"""
         try:
             logger.info("正在停止Martin服务...")
             
@@ -331,23 +331,129 @@ class MartinService:
                 finally:
                     self.process = None
             
-            # 强制kill所有Martin进程
-            try:
-                result = subprocess.run(['taskkill', '/f', '/im', 'martin.exe'], 
-                                     capture_output=True, text=True)
-                if result.returncode == 0:
-                    logger.info("已kill所有martin.exe进程")
-                else:
-                    logger.info("没有找到运行中的martin.exe进程")
-            except Exception as e:
-                logger.debug(f"kill进程命令执行失败: {e}")
+            # 获取Martin端口配置
+            martin_port = self.config.get('port', 3000)
+            logger.info(f"Martin服务端口: {martin_port}")
             
-            logger.info("Martin进程已清理")
+            # 根据操作系统选择不同的命令
+            import platform
+            system = platform.system().lower()
+            
+            if system == 'windows' or os.name == 'nt':
+                # Windows系统的处理
+                self._stop_service_windows(martin_port)
+            else:
+                # Linux/Unix系统的处理
+                self._stop_service_linux(martin_port)
+            
+            logger.info("Martin服务已停止，进程和端口已清理")
             return True
             
         except Exception as e:
             logger.error(f"停止Martin服务失败: {e}")
             return False
+    
+    def _stop_service_windows(self, port: int) -> None:
+        """Windows系统停止Martin服务"""
+        # 1. 强制kill所有Martin进程
+        try:
+            result = subprocess.run(['taskkill', '/f', '/im', 'martin.exe'], 
+                                 capture_output=True, text=True)
+            if result.returncode == 0:
+                logger.info("已kill所有martin.exe进程")
+            else:
+                logger.info("没有找到运行中的martin.exe进程")
+        except Exception as e:
+            logger.debug(f"kill martin.exe进程命令执行失败: {e}")
+        
+        # 2. 查找并杀掉占用端口的进程
+        try:
+            # 使用netstat查找占用端口的进程
+            result = subprocess.run(['netstat', '-ano'], capture_output=True, text=True)
+            if result.returncode == 0:
+                lines = result.stdout.split('\n')
+                for line in lines:
+                    if f':{port} ' in line and 'LISTENING' in line:
+                        # 提取PID
+                        parts = line.split()
+                        if len(parts) >= 5:
+                            pid = parts[-1]
+                            try:
+                                # 杀掉占用端口的进程
+                                kill_result = subprocess.run(['taskkill', '/f', '/pid', pid], 
+                                                           capture_output=True, text=True)
+                                if kill_result.returncode == 0:
+                                    logger.info(f"已kill占用端口{port}的进程PID: {pid}")
+                                else:
+                                    logger.warning(f"无法kill占用端口{port}的进程PID: {pid}")
+                            except Exception as e:
+                                logger.debug(f"kill进程PID {pid}失败: {e}")
+        except Exception as e:
+            logger.debug(f"查找占用端口的进程失败: {e}")
+    
+    def _stop_service_linux(self, port: int) -> None:
+        """Linux系统停止Martin服务"""
+        # 1. 强制kill所有martin进程
+        try:
+            result = subprocess.run(['pkill', '-f', 'martin'], capture_output=True, text=True)
+            if result.returncode == 0:
+                logger.info("已kill所有martin进程")
+            else:
+                logger.info("没有找到运行中的martin进程")
+        except Exception as e:
+            logger.debug(f"kill martin进程命令执行失败: {e}")
+        
+        # 2. 查找并杀掉占用端口的进程
+        try:
+            # 使用lsof查找占用端口的进程
+            result = subprocess.run(['lsof', '-t', '-i', f':{port}'], 
+                                 capture_output=True, text=True)
+            if result.returncode == 0 and result.stdout.strip():
+                pids = result.stdout.strip().split('\n')
+                for pid in pids:
+                    if pid.strip():
+                        try:
+                            # 杀掉占用端口的进程
+                            kill_result = subprocess.run(['kill', '-9', pid.strip()], 
+                                                       capture_output=True, text=True)
+                            if kill_result.returncode == 0:
+                                logger.info(f"已kill占用端口{port}的进程PID: {pid.strip()}")
+                            else:
+                                logger.warning(f"无法kill占用端口{port}的进程PID: {pid.strip()}")
+                        except Exception as e:
+                            logger.debug(f"kill进程PID {pid.strip()}失败: {e}")
+            else:
+                logger.info(f"没有找到占用端口{port}的进程")
+                
+        except FileNotFoundError:
+            # 如果lsof不可用，尝试使用ss和netstat
+            try:
+                # 尝试使用ss命令
+                result = subprocess.run(['ss', '-tlnp'], capture_output=True, text=True)
+                if result.returncode == 0:
+                    lines = result.stdout.split('\n')
+                    for line in lines:
+                        if f':{port} ' in line:
+                            # 提取PID信息 (格式通常是users:(("process",pid,fd)))
+                            import re
+                            pid_match = re.search(r'pid=(\d+)', line)
+                            if not pid_match:
+                                pid_match = re.search(r'"[^"]*",(\d+),', line)
+                            
+                            if pid_match:
+                                pid = pid_match.group(1)
+                                try:
+                                    kill_result = subprocess.run(['kill', '-9', pid], 
+                                                               capture_output=True, text=True)
+                                    if kill_result.returncode == 0:
+                                        logger.info(f"已kill占用端口{port}的进程PID: {pid}")
+                                except Exception as e:
+                                    logger.debug(f"kill进程PID {pid}失败: {e}")
+            except Exception as e:
+                logger.debug(f"使用ss查找占用端口的进程失败: {e}")
+                
+        except Exception as e:
+            logger.debug(f"查找占用端口的进程失败: {e}")
 
     def start_service_with_bat(self, background=False) -> bool:
         """使用现成的bat文件启动Martin服务"""
