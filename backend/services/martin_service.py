@@ -282,7 +282,7 @@ class MartinService:
             # 给Martin进程一点时间来初始化（重要：避免立即检查）
             time.sleep(1)
             
-            max_retries = 15  # 增加重试次数
+            max_retries = 5  # 增加重试次数
             retry_interval = 2
             martin_port = self.config.get('port', 3000)
             
