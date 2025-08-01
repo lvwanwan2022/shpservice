@@ -118,6 +118,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
 import axios from 'axios'
+import gisApi from '@/api/gis'
 
 // 在Vue 3的script setup中，defineProps和defineEmits是编译器宏，不需要导入
 // eslint-disable-next-line no-undef
@@ -229,9 +230,11 @@ const getElapsedTime = () => {
 
 const fetchProgress = async () => {
   try {
-    const response = await axios.get(`/api/tif-martin/progress/${props.taskId}`)
-    if (response.data.success) {
-      const newProgress = response.data.progress
+    // 使用gisApi的带认证方法获取进度
+    const response = await gisApi.getTifConversionProgress(props.taskId)
+    const responseData = response.data || response
+    if (responseData.success) {
+      const newProgress = responseData.progress
       progress.value = { ...progress.value, ...newProgress }
       
       // 如果完成，获取结果
