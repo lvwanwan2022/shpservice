@@ -174,7 +174,15 @@ def update_connection(connection_id):
         
         # 更新连接配置
         if any(key in data for key in ['username', 'password', 'workspace', 'api_key', 'database_url']):
-            current_config = json.loads(existing[0]['connection_config'])
+            config_data = existing[0]['connection_config']
+            
+            # 安全地解析JSON配置
+            if isinstance(config_data, str):
+                current_config = json.loads(config_data)
+            elif isinstance(config_data, dict):
+                current_config = config_data
+            else:
+                current_config = {}
             
             if 'username' in data:
                 current_config['username'] = data['username']
@@ -319,7 +327,15 @@ def test_existing_connection(connection_id):
             return jsonify({'error': '连接不存在或无权限访问'}), 404
         
         connection = connections[0]
-        config = json.loads(connection['connection_config'])
+        config_data = connection['connection_config']
+        
+        # 安全地解析JSON配置
+        if isinstance(config_data, str):
+            config = json.loads(config_data)
+        elif isinstance(config_data, dict):
+            config = config_data
+        else:
+            return jsonify({'error': '连接配置格式错误'}), 400
         
         # 执行测试
         if connection['service_type'] == 'geoserver':
