@@ -332,7 +332,8 @@ import authService from '@/auth/authService'
 export default {
   name: 'ServiceManagerView',
   components: {
-    Plus, Refresh, MoreFilled, VideoPlay, VideoPause, View, Search
+    Plus, Refresh, MoreFilled, VideoPlay, VideoPause, View, Search,
+    CircleCheck, CircleClose, Warning
   },
   setup() {
     // 响应式数据
@@ -573,7 +574,7 @@ export default {
     
     // 编辑服务
     const editService = (service) => {
-      ElMessage.info('编辑功能开发中...')
+      ElMessage.info(`编辑服务"${service.service_name}"功能开发中...`)
     }
     
     // 显示服务日志
