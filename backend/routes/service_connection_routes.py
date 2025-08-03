@@ -6,7 +6,6 @@
 """
 
 from flask import Blueprint, request, jsonify
-from functools import wraps
 import json
 import requests
 from requests.auth import HTTPBasicAuth
@@ -17,30 +16,12 @@ from models.user_service_db import (
 )
 from models.db import execute_query
 from utils.snowflake import get_snowflake_id
-from auth.auth_service import AuthService
+from auth.auth_service import AuthService, require_auth, get_current_user
 
 # 创建蓝图
 service_connection_bp = Blueprint('service_connection', __name__, url_prefix='/api/service-connections')
 
-# 认证装饰器
-def require_auth(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({'error': '需要登录访问'}), 401
-        
-        token = auth_header.split(' ')[1]
-        auth_service = AuthService()
-        user_data = auth_service.verify_token(token)
-        
-        if not user_data:
-            return jsonify({'error': '无效的认证信息'}), 401
-        
-        request.current_user = user_data
-        return f(*args, **kwargs)
-    
-    return decorated_function
+# 使用统一的认证装饰器，移除自定义版本
 
 # ===============================
 # 服务连接CRUD接口
@@ -51,7 +32,11 @@ def require_auth(f):
 def get_connections():
     """获取用户的服务连接列表"""
     try:
-        user_id = request.current_user['user_id']
+        current_user = get_current_user()
+        user_id = str(current_user.get('id')) if current_user else None
+        
+        if not user_id:
+            return jsonify({'error': '无法获取用户信息'}), 401
         service_type = request.args.get('service_type')
         is_active = request.args.get('is_active')
         
@@ -85,7 +70,11 @@ def get_connections():
 def create_connection():
     """创建新的服务连接"""
     try:
-        user_id = request.current_user['user_id']
+        current_user = get_current_user()
+        user_id = str(current_user.get('id')) if current_user else None
+        
+        if not user_id:
+            return jsonify({'error': '无法获取用户信息'}), 401
         data = request.get_json()
         
         # 验证必填字段
@@ -145,7 +134,11 @@ def create_connection():
 def update_connection(connection_id):
     """更新服务连接"""
     try:
-        user_id = request.current_user['user_id']
+        current_user = get_current_user()
+        user_id = str(current_user.get('id')) if current_user else None
+        
+        if not user_id:
+            return jsonify({'error': '无法获取用户信息'}), 401
         data = request.get_json()
         
         # 验证连接所有权
@@ -229,7 +222,11 @@ def update_connection(connection_id):
 def delete_connection(connection_id):
     """删除服务连接"""
     try:
-        user_id = request.current_user['user_id']
+        current_user = get_current_user()
+        user_id = str(current_user.get('id')) if current_user else None
+        
+        if not user_id:
+            return jsonify({'error': '无法获取用户信息'}), 401
         
         # 验证连接所有权
         check_sql = "SELECT service_name FROM user_service_connections WHERE id = %s AND user_id = %s"
@@ -308,7 +305,11 @@ def test_connection():
 def test_existing_connection(connection_id):
     """测试现有连接"""
     try:
-        user_id = request.current_user['user_id']
+        current_user = get_current_user()
+        user_id = str(current_user.get('id')) if current_user else None
+        
+        if not user_id:
+            return jsonify({'error': '无法获取用户信息'}), 401
         
         # 获取连接信息
         query = "SELECT * FROM user_service_connections WHERE id = %s AND user_id = %s"
@@ -454,7 +455,11 @@ def test_martin_connection(server_url, api_key=None):
 def get_default_connections():
     """获取用户的默认连接"""
     try:
-        user_id = request.current_user['user_id']
+        current_user = get_current_user()
+        user_id = str(current_user.get('id')) if current_user else None
+        
+        if not user_id:
+            return jsonify({'error': '无法获取用户信息'}), 401
         
         geoserver_default = get_default_connection(user_id, 'geoserver')
         martin_default = get_default_connection(user_id, 'martin')
