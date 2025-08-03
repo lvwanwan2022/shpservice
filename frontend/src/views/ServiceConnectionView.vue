@@ -436,10 +436,28 @@ export default {
       }
       
       const response = await fetch(url, { ...defaultOptions, ...options })
-      const data = await response.json()
+      
+      // 检查响应内容类型
+      const contentType = response.headers.get('content-type')
+      let data = null
+      
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          data = await response.json()
+        } catch (jsonError) {
+          console.error('JSON解析失败:', jsonError)
+          throw new Error(`JSON解析失败: ${jsonError.message}`)
+        }
+      } else {
+        // 如果不是JSON响应，获取文本内容
+        const textData = await response.text()
+        console.warn('收到非JSON响应:', textData)
+        data = { error: textData || '服务器返回了非JSON响应' }
+      }
       
       if (!response.ok) {
-        throw new Error(data.error || '请求失败')
+        const errorMessage = data && data.error ? data.error : `请求失败 (${response.status})`
+        throw new Error(errorMessage)
       }
       
       return data
@@ -510,7 +528,9 @@ export default {
         resetCreateForm()
         loadConnections()
       } catch (error) {
-        ElMessage.error('保存连接失败: ' + error.message)
+        console.error('保存连接失败:', error)
+        const errorMessage = error.message || error.toString()
+        ElMessage.error(`保存连接失败: ${errorMessage}`)
       } finally {
         createLoading.value = false
       }
@@ -630,7 +650,9 @@ export default {
           data: { testMethod: 'backend' }
         }
         
-        ElMessage.error('连接测试失败: ' + error.message)
+        console.error('表单连接测试失败:', error)
+        const errorMessage = error.message || error.toString()
+        ElMessage.error(`连接测试失败: ${errorMessage}`)
       } finally {
         testLoading.value = false
       }
@@ -643,7 +665,19 @@ export default {
         connection.testMethod = 'frontend'
         
         // 构建测试配置
-        const config = JSON.parse(connection.connection_config || '{}')
+        let config = {}
+        if (connection.connection_config) {
+          if (typeof connection.connection_config === 'string') {
+            try {
+              config = JSON.parse(connection.connection_config)
+            } catch (parseError) {
+              console.warn('解析连接配置失败:', parseError)
+              config = {}
+            }
+          } else if (typeof connection.connection_config === 'object') {
+            config = connection.connection_config
+          }
+        }
         const testConfig = {
           service_type: connection.service_type,
           server_url: connection.server_url,
@@ -663,7 +697,9 @@ export default {
         connection.last_tested_at = new Date().toISOString()
         
       } catch (error) {
-        ElMessage.error('前端测试失败: ' + error.message)
+        console.error('前端测试失败:', error)
+        const errorMessage = error.message || error.toString()
+        ElMessage.error(`前端测试失败: ${errorMessage}`)
         connection.test_status = 'failed'
       } finally {
         connection.testing = false
@@ -684,7 +720,9 @@ export default {
         ElMessage.success('连接测试成功')
         loadConnections() // 重新加载以更新测试状态
       } catch (error) {
-        ElMessage.error('连接测试失败: ' + error.message)
+        console.error('后端测试失败:', error)
+        const errorMessage = error.message || error.toString()
+        ElMessage.error(`连接测试失败: ${errorMessage}`)
       } finally {
         connection.testing = false
         connection.testMethod = null
