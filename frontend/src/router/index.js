@@ -67,6 +67,12 @@ const routes = [
     name: 'Feedback',
     component: () => import('@/feedback/views/FeedbackView.vue'),
     meta: { requiresAuth: true } // 反馈系统需要登录
+  },
+  {
+    path: '/service-manager',
+    name: 'ServiceManager',
+    component: () => import('@/views/ServiceManagerView.vue'),
+    meta: { requiresAuth: true } // 服务管理需要登录
   }
 ]
 

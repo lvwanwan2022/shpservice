@@ -618,6 +618,80 @@ def init_database():
         )
         """
         
+        # ===== 用户服务管理系统表 =====
+        # 创建用户服务配置表
+        create_user_service_configs_table = """
+        CREATE TABLE IF NOT EXISTS user_service_configs (
+            id BIGINT PRIMARY KEY,
+            user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            service_name VARCHAR(100) NOT NULL,
+            service_type VARCHAR(20) NOT NULL CHECK (service_type IN ('geoserver', 'martin')),
+            service_status VARCHAR(20) DEFAULT 'stopped' CHECK (service_status IN ('running', 'stopped', 'error', 'starting', 'stopping')),
+            config_data JSONB NOT NULL,
+            port_number INTEGER,
+            resource_quota JSONB,
+            description TEXT,
+            is_default BOOLEAN DEFAULT FALSE,
+            auto_start BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_started_at TIMESTAMP,
+            last_stopped_at TIMESTAMP,
+            UNIQUE(user_id, service_name, service_type)
+        )
+        """
+        
+        # 创建服务运行日志表
+        create_service_logs_table = """
+        CREATE TABLE IF NOT EXISTS service_logs (
+            id BIGINT PRIMARY KEY,
+            service_config_id BIGINT NOT NULL REFERENCES user_service_configs(id) ON DELETE CASCADE,
+            user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            operation_type VARCHAR(50) NOT NULL,
+            operation_status VARCHAR(20) NOT NULL CHECK (operation_status IN ('success', 'failed', 'pending')),
+            log_message TEXT,
+            error_details JSONB,
+            execution_time_ms INTEGER,
+            ip_address VARCHAR(45),
+            user_agent TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+        
+        # 创建系统资源配额表
+        create_system_resource_quotas_table = """
+        CREATE TABLE IF NOT EXISTS system_resource_quotas (
+            id BIGINT PRIMARY KEY,
+            user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            max_geoserver_services INTEGER DEFAULT 3 CHECK (max_geoserver_services >= 0),
+            max_martin_services INTEGER DEFAULT 5 CHECK (max_martin_services >= 0),
+            max_memory_mb INTEGER DEFAULT 2048 CHECK (max_memory_mb > 0),
+            max_storage_mb INTEGER DEFAULT 10240 CHECK (max_storage_mb > 0),
+            concurrent_requests INTEGER DEFAULT 100 CHECK (concurrent_requests > 0),
+            quota_type VARCHAR(20) DEFAULT 'standard' CHECK (quota_type IN ('basic', 'standard', 'premium')),
+            effective_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expiry_date TIMESTAMP,
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, is_active, effective_date)
+        )
+        """
+        
+        # 创建服务端口分配表
+        create_service_port_allocations_table = """
+        CREATE TABLE IF NOT EXISTS service_port_allocations (
+            id BIGINT PRIMARY KEY,
+            port_number INTEGER NOT NULL UNIQUE CHECK (port_number BETWEEN 1024 AND 65535),
+            user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+            service_config_id BIGINT REFERENCES user_service_configs(id) ON DELETE SET NULL,
+            allocation_status VARCHAR(20) DEFAULT 'allocated' CHECK (allocation_status IN ('allocated', 'released', 'reserved')),
+            allocated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            released_at TIMESTAMP,
+            notes TEXT
+        )
+        """
+        
         # ===== 用户反馈系统表 =====
         # 创建反馈表
         create_feedback_items_table = """
@@ -784,6 +858,35 @@ def init_database():
         create_geoserver_layergroups_indexes = []
         create_scenes_indexes = []
         
+        # 用户服务管理系统索引
+        create_user_service_configs_indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_user_service_configs_user_id ON user_service_configs(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_user_service_configs_type_status ON user_service_configs(service_type, service_status)",
+            "CREATE INDEX IF NOT EXISTS idx_user_service_configs_port ON user_service_configs(port_number)",
+            "CREATE INDEX IF NOT EXISTS idx_user_service_configs_created_at ON user_service_configs(created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_user_service_configs_default ON user_service_configs(user_id, is_default) WHERE is_default = TRUE"
+        ]
+        
+        create_service_logs_indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_service_logs_service_config_id ON service_logs(service_config_id)",
+            "CREATE INDEX IF NOT EXISTS idx_service_logs_user_id ON service_logs(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_service_logs_created_at ON service_logs(created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_service_logs_operation_type ON service_logs(operation_type)",
+            "CREATE INDEX IF NOT EXISTS idx_service_logs_status ON service_logs(operation_status)",
+            "CREATE INDEX IF NOT EXISTS idx_service_logs_recent ON service_logs(user_id, created_at DESC)"
+        ]
+        
+        create_system_resource_quotas_indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_system_resource_quotas_user_id ON system_resource_quotas(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_system_resource_quotas_active ON system_resource_quotas(is_active)",
+            "CREATE INDEX IF NOT EXISTS idx_system_resource_quotas_effective ON system_resource_quotas(effective_date, expiry_date)"
+        ]
+        
+        create_service_port_allocations_indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_service_port_allocations_status ON service_port_allocations(allocation_status)",
+            "CREATE INDEX IF NOT EXISTS idx_service_port_allocations_user_id ON service_port_allocations(user_id)"
+        ]
+        
         # 执行所有创建表的SQL
         tables = [
             create_users_table,
@@ -799,6 +902,11 @@ def init_database():
             create_scene_layers_table,
             create_vector_martin_services_table,
             create_geojson_files_table,
+            # 用户服务管理系统表
+            create_user_service_configs_table,
+            create_service_logs_table,
+            create_system_resource_quotas_table,
+            create_service_port_allocations_table,
             # 反馈系统表
             create_feedback_items_table,
             create_feedback_attachments_table,
@@ -824,6 +932,11 @@ def init_database():
             create_vector_martin_services_indexes +
             create_scene_layers_indexes +
             create_geojson_files_indexes +
+            # 用户服务管理系统索引
+            create_user_service_configs_indexes +
+            create_service_logs_indexes +
+            create_system_resource_quotas_indexes +
+            create_service_port_allocations_indexes +
             # 反馈系统索引
             create_feedback_items_indexes +
             create_feedback_attachments_indexes +
@@ -979,6 +1092,152 @@ def init_database():
                     print(f"⚠️ GeoServer工作空间检查失败: {str(e)}")
         except Exception as e:
             print(f"⚠️ GeoServer工作空间初始化失败: {str(e)}")
+        
+        # 初始化用户服务管理系统
+        try:
+            # 创建用户服务管理系统的函数
+            # 更新时间戳触发器函数
+            update_timestamp_function_sql = """
+            CREATE OR REPLACE FUNCTION update_updated_at_column()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.updated_at = CURRENT_TIMESTAMP;
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+            
+            # 端口分配函数
+            allocate_port_function_sql = """
+            CREATE OR REPLACE FUNCTION allocate_available_port(p_user_id BIGINT, p_service_config_id BIGINT)
+            RETURNS INTEGER AS $$
+            DECLARE
+                available_port INTEGER;
+            BEGIN
+                -- 查找最小的可用端口（从8081开始）
+                SELECT port_number INTO available_port
+                FROM generate_series(8081, 65535) AS port_number
+                WHERE port_number NOT IN (
+                    SELECT port_number 
+                    FROM service_port_allocations 
+                    WHERE allocation_status IN ('allocated', 'reserved')
+                    AND port_number IS NOT NULL
+                )
+                ORDER BY port_number
+                LIMIT 1;
+                
+                IF available_port IS NULL THEN
+                    RAISE EXCEPTION '没有可用的端口';
+                END IF;
+                
+                -- 分配端口
+                INSERT INTO service_port_allocations (
+                    id, port_number, user_id, service_config_id, allocation_status
+                ) VALUES (
+                    available_port, available_port, p_user_id, p_service_config_id, 'allocated'
+                );
+                
+                RETURN available_port;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+            
+            # 释放端口函数
+            release_port_function_sql = """
+            CREATE OR REPLACE FUNCTION release_port(p_port_number INTEGER)
+            RETURNS BOOLEAN AS $$
+            BEGIN
+                UPDATE service_port_allocations 
+                SET allocation_status = 'released',
+                    released_at = CURRENT_TIMESTAMP,
+                    user_id = NULL,
+                    service_config_id = NULL
+                WHERE port_number = p_port_number 
+                AND allocation_status = 'allocated';
+                
+                RETURN FOUND;
+            END;
+            $$ LANGUAGE plpgsql;
+            """
+            
+            execute_query(update_timestamp_function_sql, fetch=False)
+            execute_query(allocate_port_function_sql, fetch=False)
+            execute_query(release_port_function_sql, fetch=False)
+            
+            # 创建触发器
+            create_service_triggers_sql = """
+            DO $$
+            BEGIN
+                -- 为用户服务配置表创建更新时间戳触发器
+                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'user_service_configs') THEN
+                    DROP TRIGGER IF EXISTS update_user_service_configs_updated_at ON user_service_configs;
+                    CREATE TRIGGER update_user_service_configs_updated_at 
+                        BEFORE UPDATE ON user_service_configs 
+                        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+                END IF;
+                
+                -- 为资源配额表创建更新时间戳触发器
+                IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'system_resource_quotas') THEN
+                    DROP TRIGGER IF EXISTS update_system_resource_quotas_updated_at ON system_resource_quotas;
+                    CREATE TRIGGER update_system_resource_quotas_updated_at 
+                        BEFORE UPDATE ON system_resource_quotas 
+                        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+                END IF;
+            END $$;
+            """
+            
+            execute_query(create_service_triggers_sql, fetch=False)
+            
+            # 为现有用户创建默认资源配额
+            init_quotas_sql = """
+            INSERT INTO system_resource_quotas (
+                id,
+                user_id, 
+                max_geoserver_services, 
+                max_martin_services, 
+                max_memory_mb, 
+                max_storage_mb, 
+                concurrent_requests, 
+                quota_type
+            )
+            SELECT 
+                COALESCE((SELECT MAX(id) FROM system_resource_quotas), 0) + ROW_NUMBER() OVER(),
+                u.id,
+                CASE 
+                    WHEN u.username = 'admin' THEN 10
+                    ELSE 3 
+                END,
+                CASE 
+                    WHEN u.username = 'admin' THEN 20
+                    ELSE 5 
+                END,
+                CASE 
+                    WHEN u.username = 'admin' THEN 8192
+                    ELSE 2048 
+                END,
+                CASE 
+                    WHEN u.username = 'admin' THEN 51200
+                    ELSE 10240 
+                END,
+                CASE 
+                    WHEN u.username = 'admin' THEN 500
+                    ELSE 100 
+                END,
+                CASE 
+                    WHEN u.username = 'admin' THEN 'premium'
+                    ELSE 'standard' 
+                END
+            FROM users u
+            WHERE NOT EXISTS (
+                SELECT 1 FROM system_resource_quotas srq 
+                WHERE srq.user_id = u.id AND srq.is_active = TRUE
+            )
+            """
+            
+            execute_query(init_quotas_sql, fetch=False)
+            print("✅ 用户服务管理系统初始化成功")
+        except Exception as e:
+            print(f"⚠️ 用户服务管理系统初始化失败: {str(e)}")
         
         print("数据库初始化完成")
         

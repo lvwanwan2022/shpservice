@@ -251,6 +251,16 @@ except ImportError:
 except Exception as e:
     logger.warning(f"⚠️ 用户反馈路由注册失败: {str(e)}")
 
+# 用户服务管理路由
+try:
+    from routes.user_service_routes import user_service_bp
+    app.register_blueprint(user_service_bp)
+    logger.info("✅ 用户服务管理路由注册成功")
+except ImportError:
+    logger.info("用户服务管理路由不存在，跳过")
+except Exception as e:
+    logger.warning(f"⚠️ 用户服务管理路由注册失败: {str(e)}")
+
 # 导入Martin服务
 try:
     from services.martin_service import MartinService

@@ -17,6 +17,7 @@
               <router-link to="/">首页</router-link>
               <router-link to="/upload">数据上传</router-link>
               <router-link to="/scene">场景管理</router-link>
+              <router-link to="/service-manager">服务管理</router-link>
               <!-- <router-link to="/map-lf">地图浏览(Leaflet)</router-link> -->
               <router-link to="/map-ol">地图浏览(OpenLayers)</router-link>
               <router-link to="/map-deckgl">地图浏览(Deck.gl)</router-link>
@@ -94,6 +95,7 @@ export default {
         { path: '/', name: '首页', icon: 'House' },
         { path: '/upload', name: '数据上传', icon: 'Upload' },
         { path: '/scene', name: '场景管理', icon: 'Film' },
+        { path: '/service-manager', name: '服务管理', icon: 'Setting' },
         { path: '/map-ol', name: '地图浏览(OpenLayers)', icon: 'MapLocation' },
         { path: '/map-deckgl', name: '地图浏览(Deck.gl)', icon: 'View' },
         { path: '/cache-manager', name: '缓存管理', icon: 'Setting' }
