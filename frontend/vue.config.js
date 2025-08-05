@@ -9,7 +9,7 @@
  */
 const { defineConfig } = require('@vue/cli-service')
 //const base_url='http://172.16.118.124'
-const base_url='http://192.168.1.17'
+const base_url='http://10.20.186.58'
 // 从环境变量获取Martin服务的基础URL，默认为http://192.168.1.17:3000
 //const backend_url = 'http://192.168.1.17:5030'
 const backend_url = base_url+':5030'
@@ -49,7 +49,7 @@ module.exports = defineConfig({
         }
       },
       '/geoserver': {
-        target: 'http://localhost:8083',
+        target: GEOSERVER_BASE_URL,
         changeOrigin: true,
         secure: false,
         logLevel: 'debug',
@@ -59,7 +59,7 @@ module.exports = defineConfig({
         onError: (err, req, res) => {
           console.error('GeoServer代理错误:', err.message)
           console.error('请求URL:', req.url)
-          console.error('目标:', 'http://localhost:8083' + req.url)
+          console.error('目标:', GEOSERVER_BASE_URL + req.url)
         }
       }
     },

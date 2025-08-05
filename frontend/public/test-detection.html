@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GeoServer检测逻辑测试</title>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-case { margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
+        .result { margin: 5px 0; }
+        .true { color: green; font-weight: bold; }
+        .false { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>GeoServer检测逻辑测试</h1>
+    
+    <div id="results"></div>
+    
+    <script>
+        function testDetectionLogic() {
+            const currentOrigin = window.location.origin;
+            const testCases = [
+                { 
+                    url: 'http://localhost:8083/geoserver', 
+                    description: '本地GeoServer (localhost)' 
+                },
+                { 
+                    url: 'http://127.0.0.1:8083/geoserver', 
+                    description: '本地GeoServer (127.0.0.1)' 
+                },
+                { 
+                    url: currentOrigin + '/geoserver', 
+                    description: '同源GeoServer' 
+                },
+                { 
+                    url: 'http://10.20.186.58:8083/geoserver', 
+                    description: '远程GeoServer (您的服务器)' 
+                },
+                { 
+                    url: 'http://example.com:8080/geoserver', 
+                    description: '完全远程的GeoServer' 
+                }
+            ];
+            
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<h3>当前环境信息:</h3>' +
+                                 `<p><strong>当前Origin:</strong> ${currentOrigin}</p>` +
+                                 '<h3>检测结果:</h3>';
+            
+            testCases.forEach(testCase => {
+                const isLocalhost = testCase.url.includes('localhost') || testCase.url.includes('127.0.0.1');
+                const isSameOrigin = testCase.url.startsWith(currentOrigin);
+                const needsAlternativeTest = !isLocalhost && !isSameOrigin;
+                
+                const testDiv = document.createElement('div');
+                testDiv.className = 'test-case';
+                testDiv.innerHTML = `
+                    <strong>${testCase.description}</strong><br>
+                    URL: ${testCase.url}<br>
+                    <div class="result">是否本地: <span class="${isLocalhost}">${isLocalhost}</span></div>
+                    <div class="result">是否同源: <span class="${isSameOrigin}">${isSameOrigin}</span></div>
+                    <div class="result">需要新窗口测试: <span class="${needsAlternativeTest}">${needsAlternativeTest}</span></div>
+                `;
+                
+                resultsDiv.appendChild(testDiv);
+            });
+        }
+        
+        // 页面加载后运行测试
+        window.addEventListener('load', testDetectionLogic);
+    </script>
+</body>
+</html>

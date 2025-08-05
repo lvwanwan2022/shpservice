@@ -4,6 +4,21 @@
     <div class="page-header">
       <h1>我的服务连接</h1>
       <p class="page-description">管理您的外部Geoserver和Martin服务连接配置</p>
+      
+      <!-- 功能说明 -->
+      <el-alert
+        title="连接测试说明"
+        type="info"
+        show-icon
+        :closable="false"
+        class="test-info-alert"
+      >
+        <div>
+          <p><strong>前端测试：</strong>直接从浏览器测试服务连接，无需通过后端。适用于客户端可直接访问Geoserver的场景。</p>
+          <p><strong>后端测试：</strong>通过系统后端测试连接，适用于服务器间的网络连接测试。</p>
+          <p class="tip">💡 推荐优先使用前端测试，这样即使后端服务器无法访问Geoserver，只要您的浏览器能访问就可以正常使用服务。</p>
+        </div>
+      </el-alert>
     </div>
 
     <!-- 服务连接列表 -->
@@ -121,14 +136,35 @@
 
             <div class="connection-actions">
               <el-button-group>
-                <el-button 
-                  size="small" 
-                  @click="testConnection(connection)"
-                  :loading="connection.testing"
+                <el-tooltip 
+                  content="前端直接测试（可能受CORS限制，适用于本地或已配置CORS的服务）" 
+                  placement="top"
                 >
-                  <el-icon><Link /></el-icon>
-                  测试连接
-                </el-button>
+                  <el-button 
+                    size="small" 
+                    @click="testConnectionFrontend(connection)"
+                    :loading="connection.testing && connection.testMethod === 'frontend'"
+                    type="primary"
+                  >
+                    <el-icon><Link /></el-icon>
+                    前端测试
+                  </el-button>
+                </el-tooltip>
+                
+                <el-tooltip 
+                  content="通过后端测试（推荐，无CORS限制，更可靠）" 
+                  placement="top"
+                >
+                  <el-button 
+                    size="small" 
+                    @click="testConnectionBackend(connection)"
+                    :loading="connection.testing && connection.testMethod === 'backend'"
+                    type="success"
+                  >
+                    <el-icon><Link /></el-icon>
+                    后端测试 ⭐
+                  </el-button>
+                </el-tooltip>
                 
                 <el-button 
                   size="small" 
@@ -255,18 +291,38 @@
         
         <!-- 连接测试 -->
         <el-form-item>
-          <el-button 
-            type="info" 
-            @click="testConnectionForm" 
-            :loading="testLoading"
-            :disabled="!canTestConnection"
-          >
-            <el-icon><Link /></el-icon>
-            测试连接
-          </el-button>
-          <span v-if="connectionTestResult" class="test-result" :class="connectionTestResult.success ? 'success' : 'error'">
-            {{ connectionTestResult.message }}
-          </span>
+          <div class="test-buttons">
+            <el-button 
+              type="primary" 
+              @click="testConnectionFormFrontend" 
+              :loading="testLoading && testMethod === 'frontend'"
+              :disabled="!canTestConnection"
+            >
+              <el-icon><Link /></el-icon>
+              前端测试
+            </el-button>
+            <el-button 
+              type="info" 
+              @click="testConnectionFormBackend" 
+              :loading="testLoading && testMethod === 'backend'"
+              :disabled="!canTestConnection"
+            >
+              <el-icon><Link /></el-icon>
+              后端测试
+            </el-button>
+          </div>
+          <div v-if="connectionTestResult" class="test-result" :class="connectionTestResult.success ? 'success' : 'error'">
+            <div class="test-message">{{ connectionTestResult.message }}</div>
+            <div v-if="connectionTestResult.data && connectionTestResult.data.testMethod" class="test-method">
+              测试方式: {{ connectionTestResult.data.testMethod === 'frontend' ? '前端直连' : '后端代理' }}
+            </div>
+            <div v-if="connectionTestResult.data && connectionTestResult.data.version" class="test-details">
+              版本: {{ connectionTestResult.data.version }}
+            </div>
+            <div v-if="connectionTestResult.data && connectionTestResult.data.workspaceCount !== undefined" class="test-details">
+              工作空间: {{ connectionTestResult.data.workspaceCount }} 个
+            </div>
+          </div>
         </el-form-item>
       </el-form>
       
@@ -289,6 +345,7 @@ import {
   Plus, Refresh, MoreFilled, Link, Edit
 } from '@element-plus/icons-vue'
 import authService from '@/auth/authService'
+import { testServiceConnection, testGeoserverInNewWindow } from '@/utils/geoserverTest'
 
 export default {
   name: 'ServiceConnectionView',
@@ -300,6 +357,7 @@ export default {
     const loading = ref(false)
     const createLoading = ref(false)
     const testLoading = ref(false)
+    const testMethod = ref('frontend') // 'frontend' 或 'backend'
     const connections = ref([])
     const connectionTestResult = ref(null)
     
@@ -388,10 +446,28 @@ export default {
       }
       
       const response = await fetch(url, { ...defaultOptions, ...options })
-      const data = await response.json()
+      
+      // 检查响应内容类型
+      const contentType = response.headers.get('content-type')
+      let data = null
+      
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          data = await response.json()
+        } catch (jsonError) {
+          console.error('JSON解析失败:', jsonError)
+          throw new Error(`JSON解析失败: ${jsonError.message}`)
+        }
+      } else {
+        // 如果不是JSON响应，获取文本内容
+        const textData = await response.text()
+        console.warn('收到非JSON响应:', textData)
+        data = { error: textData || '服务器返回了非JSON响应' }
+      }
       
       if (!response.ok) {
-        throw new Error(data.error || '请求失败')
+        const errorMessage = data && data.error ? data.error : `请求失败 (${response.status})`
+        throw new Error(errorMessage)
       }
       
       return data
@@ -404,7 +480,8 @@ export default {
         const data = await apiRequest('/api/service-connections')
         connections.value = data.data.map(connection => ({
           ...connection,
-          testing: false
+          testing: false,
+          testMethod: null
         }))
       } catch (error) {
         ElMessage.error('加载连接列表失败: ' + error.message)
@@ -443,11 +520,29 @@ export default {
         
         if (editingConnection.value) {
           // 更新连接
-          await apiRequest(`/api/service-connections/${editingConnection.value.id}`, {
-            method: 'PUT',
-            body: JSON.stringify(requestData)
+          console.log('🔍 前端调试 - 更新连接:', {
+            connectionId: editingConnection.value.id,
+            connectionIdType: typeof editingConnection.value.id,
+            requestData: requestData
           })
-          ElMessage.success('连接更新成功')
+          
+          try {
+            await apiRequest(`/api/service-connections/${editingConnection.value.id}`, {
+              method: 'PUT',
+              body: JSON.stringify(requestData)
+            })
+            ElMessage.success('连接更新成功')
+          } catch (error) {
+            // 如果连接不存在，可能是前端数据过期，重新加载连接列表
+            if (error.message && error.message.includes('连接不存在')) {
+              ElMessage.error('连接信息已过期，正在刷新列表...')
+              await loadConnections() // 重新加载连接列表
+              showCreateDialog.value = false // 关闭对话框
+              editingConnection.value = null
+              return
+            }
+            throw error // 重新抛出其他错误
+          }
         } else {
           // 创建连接
           await apiRequest('/api/service-connections', {
@@ -461,7 +556,9 @@ export default {
         resetCreateForm()
         loadConnections()
       } catch (error) {
-        ElMessage.error('保存连接失败: ' + error.message)
+        console.error('保存连接失败:', error)
+        const errorMessage = error.message || error.toString()
+        ElMessage.error(`保存连接失败: ${errorMessage}`)
       } finally {
         createLoading.value = false
       }
@@ -498,10 +595,54 @@ export default {
       connectionTestResult.value = null
     }
     
-    // 测试连接（表单中）
-    const testConnectionForm = async () => {
+    // 前端测试连接（表单中）
+    const testConnectionFormFrontend = async () => {
       try {
         testLoading.value = true
+        testMethod.value = 'frontend'
+        connectionTestResult.value = null
+        
+        const testConfig = {
+          service_type: createForm.service_type,
+          server_url: createForm.server_url
+        }
+        
+        if (createForm.service_type === 'geoserver') {
+          testConfig.username = createForm.username
+          testConfig.password = createForm.password
+          testConfig.workspace = createForm.workspace
+        } else if (createForm.service_type === 'martin') {
+          if (createForm.api_key) {
+            testConfig.api_key = createForm.api_key
+          }
+        }
+        
+        const result = await testServiceConnection(testConfig, true)
+        
+        connectionTestResult.value = result
+        
+        if (result.success) {
+          ElMessage.success(result.message)
+        } else {
+          ElMessage.error(result.message)
+        }
+      } catch (error) {
+        connectionTestResult.value = {
+          success: false,
+          message: error.message || '前端测试失败'
+        }
+        
+        ElMessage.error('前端测试失败: ' + error.message)
+      } finally {
+        testLoading.value = false
+      }
+    }
+    
+    // 后端测试连接（表单中）
+    const testConnectionFormBackend = async () => {
+      try {
+        testLoading.value = true
+        testMethod.value = 'backend'
         connectionTestResult.value = null
         
         const testData = {
@@ -525,26 +666,140 @@ export default {
         
         connectionTestResult.value = {
           success: true,
-          message: response.message || '连接测试成功'
+          message: response.message || '连接测试成功',
+          data: { testMethod: 'backend', ...response.data }
         }
         
         ElMessage.success('连接测试成功')
       } catch (error) {
         connectionTestResult.value = {
           success: false,
-          message: error.message || '连接测试失败'
+          message: error.message || '连接测试失败',
+          data: { testMethod: 'backend' }
         }
         
-        ElMessage.error('连接测试失败: ' + error.message)
+        console.error('表单连接测试失败:', error)
+        const errorMessage = error.message || error.toString()
+        ElMessage.error(`连接测试失败: ${errorMessage}`)
       } finally {
         testLoading.value = false
       }
     }
     
-    // 测试现有连接
-    const testConnection = async (connection) => {
+    // 前端测试现有连接
+    const testConnectionFrontend = async (connection) => {
       try {
         connection.testing = true
+        connection.testMethod = 'frontend'
+        
+        // 构建测试配置
+        let config = {}
+        if (connection.connection_config) {
+          if (typeof connection.connection_config === 'string') {
+            try {
+              config = JSON.parse(connection.connection_config)
+            } catch (parseError) {
+              console.warn('解析连接配置失败:', parseError)
+              config = {}
+            }
+          } else if (typeof connection.connection_config === 'object') {
+            config = connection.connection_config
+          }
+        }
+        const testConfig = {
+          service_type: connection.service_type,
+          server_url: connection.server_url,
+          ...config
+        }
+        
+        const result = await testServiceConnection(testConfig, true)
+        
+        if (result.success) {
+          ElMessage.success(result.message)
+        } else {
+          // 显示更详细的错误信息和建议
+          console.error('前端测试失败详情:', result)
+          
+          let errorMessage = result.message
+          if (result.data && result.data.suggestion) {
+            errorMessage += `\n💡 ${result.data.suggestion}`
+          }
+          
+          // 对于CORS相关错误或需要特殊处理的情况，显示更友好的提示
+          const needsSpecialHandling = result.message.includes('跨域') || 
+                                      result.message.includes('CORS') || 
+                                      result.message.includes('前端测试受跨域限制') ||
+                                      result.message.includes('检测到远程GeoServer服务') ||
+                                      (result.data && result.data.showWindowTest);
+          
+          if (needsSpecialHandling) {
+            // 检查是否可以提供新窗口测试
+            if (result.data && result.data.showWindowTest) {
+              console.log('🔍 显示新窗口测试对话框:', result.data);
+              showNewWindowTestDialog(connection, result.data)
+            } else {
+              ElMessage({
+                type: 'warning',
+                message: '⚠️ 前端测试受浏览器安全策略限制',
+                duration: 4000,
+                showClose: true
+              })
+              
+              setTimeout(() => {
+                ElMessage({
+                  type: 'info',
+                  message: '💡 建议使用右侧的"后端测试"按钮，后端测试不受CORS限制且更可靠',
+                  duration: 6000,
+                  showClose: true
+                })
+              }, 1500)
+            }
+          } else {
+            ElMessage.error(errorMessage)
+          }
+        }
+        
+        // 可选：更新本地状态，不重新加载整个列表
+        connection.test_status = result.success ? 'success' : 'failed'
+        connection.last_tested_at = new Date().toISOString()
+        
+      } catch (error) {
+        console.error('前端测试失败:', error)
+        const errorMessage = error.message || error.toString()
+        ElMessage.error(`前端测试失败: ${errorMessage}`)
+        connection.test_status = 'failed'
+      } finally {
+        connection.testing = false
+        connection.testMethod = null
+      }
+    }
+    
+    // 后端测试现有连接
+    const testConnectionBackend = async (connection) => {
+      try {
+        connection.testing = true
+        connection.testMethod = 'backend'
+        
+        console.log('🔍 前端调试 - 后端测试连接:', {
+          connectionId: connection.id,
+          connectionIdType: typeof connection.id,
+          connection: connection
+        })
+        
+        // 🔥 在测试前先验证连接是否存在
+        try {
+          const response = await apiRequest('/api/service-connections')
+          const currentConnections = response.data
+          const currentConnection = currentConnections.find(conn => conn.id === connection.id)
+          
+          if (!currentConnection) {
+            ElMessage.error('该连接已不存在，正在刷新列表...')
+            await loadConnections()
+            return
+          }
+        } catch (validationError) {
+          console.warn('验证连接存在性失败，继续使用原连接信息:', validationError)
+        }
         
         await apiRequest(`/api/service-connections/${connection.id}/test`, {
           method: 'POST'
@@ -553,31 +808,66 @@ export default {
         ElMessage.success('连接测试成功')
         loadConnections() // 重新加载以更新测试状态
       } catch (error) {
-        ElMessage.error('连接测试失败: ' + error.message)
+        console.error('后端测试失败:', error)
+        const errorMessage = error.message || error.toString()
+        
+        // 如果是404错误，可能是连接信息过期
+        if (error.message && error.message.includes('404')) {
+          ElMessage.error('连接信息可能已过期，正在刷新列表...')
+          await loadConnections() // 重新加载连接列表
+        } else {
+          ElMessage.error(`后端测试失败: ${errorMessage}`)
+        }
       } finally {
         connection.testing = false
+        connection.testMethod = null
       }
     }
     
     // 编辑连接
-    const editConnection = (connection) => {
-      editingConnection.value = connection
+    const editConnection = async (connection) => {
+      console.log('🔍 前端调试 - 编辑连接:', {
+        connectionId: connection.id,
+        connectionIdType: typeof connection.id,
+        connection: connection
+      })
       
-      // 填充表单
-      createForm.service_name = connection.service_name
-      createForm.service_type = connection.service_type
-      createForm.server_url = connection.server_url
-      createForm.description = connection.description || ''
-      createForm.is_default = connection.is_default
+      // 🔥 在编辑前验证连接是否仍然存在
+      try {
+        const response = await apiRequest('/api/service-connections')
+        const currentConnections = response.data
+        const currentConnection = currentConnections.find(conn => conn.id === connection.id)
+        
+        if (!currentConnection) {
+          ElMessage.error('该连接已不存在，正在刷新列表...')
+          await loadConnections()
+          return
+        }
+        
+        // 使用最新的连接信息
+        editingConnection.value = currentConnection
+      } catch (error) {
+        console.error('验证连接存在性失败:', error)
+        // 如果验证失败，仍然尝试使用原连接信息
+        editingConnection.value = connection
+      }
+      
+      // 填充表单（使用最新的连接信息）
+      const connToUse = editingConnection.value || connection
+      createForm.service_name = connToUse.service_name
+      createForm.service_type = connToUse.service_type
+      createForm.server_url = connToUse.server_url
+      createForm.description = connToUse.description || ''
+      createForm.is_default = connToUse.is_default
       
       // 填充连接配置
-      if (connection.connection_config) {
-        const config = connection.connection_config
-        if (connection.service_type === 'geoserver') {
+      if (connToUse.connection_config) {
+        const config = connToUse.connection_config
+        if (connToUse.service_type === 'geoserver') {
           createForm.username = config.username || ''
           createForm.password = '' // 不显示密码
           createForm.workspace = config.workspace || 'default'
-        } else if (connection.service_type === 'martin') {
+        } else if (connToUse.service_type === 'martin') {
           createForm.database_url = config.database_url || ''
           createForm.api_key = '' // 不显示API密钥
         }
@@ -593,7 +883,8 @@ export default {
           editConnection(connection)
           break
         case 'test':
-          testConnection(connection)
+          // 默认使用前端测试
+          testConnectionFrontend(connection)
           break
         case 'toggle':
           toggleConnection(connection)
@@ -648,6 +939,52 @@ export default {
       }
     }
     
+    // 新窗口测试对话框
+    const showNewWindowTestDialog = (connection, testData) => {
+      ElMessageBox.confirm(
+        '前端直接测试受到CORS限制，但我们可以通过新窗口测试连接。这将打开一个指导页面，帮助您手动验证GeoServer连接。',
+        '🌐 新窗口测试',
+        {
+          confirmButtonText: '🚀 开始新窗口测试',
+          cancelButtonText: '❌ 取消',
+          type: 'info',
+          dangerouslyUseHTMLString: true,
+          customStyle: { width: '500px' }
+        }
+      ).then(async () => {
+        try {
+          connection.testing = true
+          connection.testMethod = 'new-window'
+          
+          const config = {
+            server_url: testData.server_url,
+            username: testData.username,
+            password: testData.password
+          }
+          
+          const result = await testGeoserverInNewWindow(config)
+          
+          if (result.success) {
+            ElMessage.success(result.message)
+            connection.test_status = 'success'
+          } else {
+            ElMessage.error(result.message)
+            connection.test_status = 'failed'
+          }
+          
+          connection.last_tested_at = new Date().toISOString()
+          
+        } catch (error) {
+          ElMessage.error(`新窗口测试失败: ${error.message}`)
+        } finally {
+          connection.testing = false
+          connection.testMethod = null
+        }
+      }).catch(() => {
+        // 用户取消
+      })
+    }
+    
     // 工具方法
     const getServiceTypeName = (type) => {
       const map = {
@@ -697,6 +1034,7 @@ export default {
       loading,
       createLoading,
       testLoading,
+      testMethod,
       connections,
       connectionTestResult,
       
@@ -721,12 +1059,15 @@ export default {
       saveConnection,
       resetCreateForm,
       onServiceTypeChange,
-      testConnectionForm,
-      testConnection,
+      testConnectionFormFrontend,
+      testConnectionFormBackend,
+      testConnectionFrontend,
+      testConnectionBackend,
       editConnection,
       handleConnectionAction,
       toggleConnection,
       deleteConnection,
+      showNewWindowTestDialog,
       
       // 工具方法
       getServiceTypeName,
@@ -759,6 +1100,20 @@ export default {
 .page-description {
   color: #909399;
   margin: 5px 0 0 0;
+}
+
+.test-info-alert {
+  margin-top: 15px;
+}
+
+.test-info-alert .el-alert__content p {
+  margin-bottom: 5px;
+}
+
+.test-info-alert .el-alert__content .tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 5px;
 }
 
 .connection-list {
@@ -870,19 +1225,48 @@ export default {
   line-height: 1.4;
 }
 
+/* 测试按钮组 */
+.test-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
 /* 连接测试结果 */
 .test-result {
-  margin-left: 10px;
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 4px;
   font-size: 14px;
-  font-weight: 500;
 }
 
 .test-result.success {
-  color: #67c23a;
+  background-color: #f0f9ff;
+  border: 1px solid #e1f5fe;
+  color: #2e7d32;
 }
 
 .test-result.error {
-  color: #f56c6c;
+  background-color: #fff3f3;
+  border: 1px solid #ffebee;
+  color: #d32f2f;
+}
+
+.test-message {
+  font-weight: 500;
+  margin-bottom: 5px;
+}
+
+.test-method {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 3px;
+}
+
+.test-details {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 2px;
 }
 
 @media (max-width: 768px) {

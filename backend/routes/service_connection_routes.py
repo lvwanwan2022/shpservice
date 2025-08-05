@@ -6,7 +6,6 @@
 """
 
 from flask import Blueprint, request, jsonify
-from functools import wraps
 import json
 import requests
 from requests.auth import HTTPBasicAuth
@@ -17,30 +16,12 @@ from models.user_service_db import (
 )
 from models.db import execute_query
 from utils.snowflake import get_snowflake_id
-from auth.auth_service import AuthService
+from auth.auth_service import AuthService, require_auth, get_current_user
 
 # 创建蓝图
 service_connection_bp = Blueprint('service_connection', __name__, url_prefix='/api/service-connections')
 
-# 认证装饰器
-def require_auth(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({'error': '需要登录访问'}), 401
-        
-        token = auth_header.split(' ')[1]
-        auth_service = AuthService()
-        user_data = auth_service.verify_token(token)
-        
-        if not user_data:
-            return jsonify({'error': '无效的认证信息'}), 401
-        
-        request.current_user = user_data
-        return f(*args, **kwargs)
-    
-    return decorated_function
+# 使用统一的认证装饰器，移除自定义版本
 
 # ===============================
 # 服务连接CRUD接口
@@ -51,7 +32,11 @@ def require_auth(f):
 def get_connections():
     """获取用户的服务连接列表"""
     try:
-        user_id = request.current_user['user_id']
+        current_user = get_current_user()
+        user_id = str(current_user.get('id')) if current_user else None
+        
+        if not user_id:
+            return jsonify({'error': '无法获取用户信息'}), 401
         service_type = request.args.get('service_type')
         is_active = request.args.get('is_active')
         
@@ -61,8 +46,14 @@ def get_connections():
         
         connections = get_user_connections(user_id, service_type, is_active)
         
-        # 隐藏敏感信息
+        # 处理大整数ID和隐藏敏感信息
         for conn in connections:
+            # 🔥 确保ID字段转换为字符串，避免JavaScript精度丢失
+            if conn.get('id'):
+                conn['id'] = str(conn['id'])
+            if conn.get('user_id'):
+                conn['user_id'] = str(conn['user_id'])
+                
             if 'connection_config' in conn and conn['connection_config']:
                 config = json.loads(conn['connection_config']) if isinstance(conn['connection_config'], str) else conn['connection_config']
                 # 隐藏密码和API密钥
@@ -85,7 +76,11 @@ def get_connections():
 def create_connection():
     """创建新的服务连接"""
     try:
-        user_id = request.current_user['user_id']
+        current_user = get_current_user()
+        user_id = str(current_user.get('id')) if current_user else None
+        
+        if not user_id:
+            return jsonify({'error': '无法获取用户信息'}), 401
         data = request.get_json()
         
         # 验证必填字段
@@ -129,6 +124,12 @@ def create_connection():
         )
         
         if connection:
+            # 🔥 处理创建返回数据中的大整数ID
+            if connection.get('id'):
+                connection['id'] = str(connection['id'])
+            if connection.get('user_id'):
+                connection['user_id'] = str(connection['user_id'])
+            
             return jsonify({
                 'success': True,
                 'data': connection,
@@ -145,12 +146,58 @@ def create_connection():
 def update_connection(connection_id):
     """更新服务连接"""
     try:
-        user_id = request.current_user['user_id']
+        current_user = get_current_user()
+        user_id = str(current_user.get('id')) if current_user else None
+        
+        # 🔥 添加调试日志
+        print(f"🔍 更新服务连接调试信息:")
+        print(f"   - connection_id: {connection_id} (类型: {type(connection_id)})")
+        print(f"   - user_id: {user_id}")
+        
+        if not user_id:
+            return jsonify({'error': '无法获取用户信息'}), 401
         data = request.get_json()
         
         # 验证连接所有权
         check_sql = "SELECT * FROM user_service_connections WHERE id = %s AND user_id = %s"
+        print(f"🔍 查询SQL: {check_sql}")
+        print(f"🔍 查询参数: [{connection_id}, {user_id}]")
+        
         existing = execute_query(check_sql, [connection_id, user_id])
+        
+        print(f"🔍 查询结果: {len(existing) if existing else 0} 条记录")
+        if existing:
+            print(f"🔍 找到的连接ID: {existing[0].get('id')}")
+        else:
+            print(f"❌ 未找到连接 - 可能原因：")
+            print(f"   1. 连接ID不存在: {connection_id}")
+            print(f"   2. 用户无权限: {user_id}")
+            
+            # 尝试单独查询连接是否存在
+            check_connection_sql = "SELECT id, user_id FROM user_service_connections WHERE id = %s"
+            connection_check = execute_query(check_connection_sql, [connection_id])
+            if connection_check:
+                print(f"   连接存在，但属于用户: {connection_check[0].get('user_id')}")
+            else:
+                print(f"   连接完全不存在")
+                
+                # 🔥 查找该用户的相近连接ID（可能是前端精度问题）
+                similar_connections_sql = """
+                SELECT id, service_name, service_type 
+                FROM user_service_connections 
+                WHERE user_id = %s 
+                ORDER BY ABS(id - %s) 
+                LIMIT 3
+                """
+                similar_connections = execute_query(similar_connections_sql, [user_id, connection_id])
+                if similar_connections:
+                    print(f"   该用户的相近连接ID:")
+                    for similar in similar_connections:
+                        print(f"     ID: {similar['id']} | 名称: {similar['service_name']} | 类型: {similar['service_type']}")
+                        id_diff = abs(int(similar['id']) - int(connection_id))
+                        print(f"     ID差值: {id_diff}")
+                        if id_diff <= 10:  # ID差值很小，可能是精度问题
+                            print(f"     ⚠️ 可能的精度丢失问题！")
         
         if not existing:
             return jsonify({'error': '连接不存在或无权限访问'}), 404
@@ -180,8 +227,23 @@ def update_connection(connection_id):
             params.append(data['is_active'])
         
         # 更新连接配置
-        if any(key in data for key in ['username', 'password', 'workspace', 'api_key', 'database_url']):
-            current_config = json.loads(existing[0]['connection_config'])
+        config_update_needed = any(key in data for key in ['server_url', 'username', 'password', 'workspace', 'api_key', 'database_url'])
+        
+        if config_update_needed:
+            config_data = existing[0]['connection_config']
+            
+            # 安全地解析JSON配置
+            if isinstance(config_data, str):
+                current_config = json.loads(config_data)
+            elif isinstance(config_data, dict):
+                current_config = config_data
+            else:
+                current_config = {}
+            
+            # 🔥 确保同步更新server_url
+            if 'server_url' in data:
+                current_config['server_url'] = data['server_url']
+                print(f"🔍 更新配置中的server_url: {data['server_url']}")
             
             if 'username' in data:
                 current_config['username'] = data['username']
@@ -194,6 +256,7 @@ def update_connection(connection_id):
             if 'database_url' in data:
                 current_config['database_url'] = data['database_url']
             
+            print(f"🔍 更新后的配置: {current_config}")
             update_fields.append('connection_config = %s')
             params.append(json.dumps(current_config))
         
@@ -213,9 +276,16 @@ def update_connection(connection_id):
         result = execute_query(update_sql, params)
         
         if result:
+            # 🔥 处理返回数据中的大整数ID
+            updated_connection = result[0]
+            if updated_connection.get('id'):
+                updated_connection['id'] = str(updated_connection['id'])
+            if updated_connection.get('user_id'):
+                updated_connection['user_id'] = str(updated_connection['user_id'])
+            
             return jsonify({
                 'success': True,
-                'data': result[0],
+                'data': updated_connection,
                 'message': '连接更新成功'
             })
         else:
@@ -229,7 +299,11 @@ def update_connection(connection_id):
 def delete_connection(connection_id):
     """删除服务连接"""
     try:
-        user_id = request.current_user['user_id']
+        current_user = get_current_user()
+        user_id = str(current_user.get('id')) if current_user else None
+        
+        if not user_id:
+            return jsonify({'error': '无法获取用户信息'}), 401
         
         # 验证连接所有权
         check_sql = "SELECT service_name FROM user_service_connections WHERE id = %s AND user_id = %s"
@@ -308,34 +382,79 @@ def test_connection():
 def test_existing_connection(connection_id):
     """测试现有连接"""
     try:
-        user_id = request.current_user['user_id']
+        current_user = get_current_user()
+        user_id = str(current_user.get('id')) if current_user else None
+        
+        # 🔥 添加调试日志
+        print(f"🔍 测试现有连接调试信息:")
+        print(f"   - connection_id: {connection_id} (类型: {type(connection_id)})")
+        print(f"   - user_id: {user_id}")
+        
+        if not user_id:
+            return jsonify({'error': '无法获取用户信息'}), 401
         
         # 获取连接信息
         query = "SELECT * FROM user_service_connections WHERE id = %s AND user_id = %s"
+        print(f"🔍 查询SQL: {query}")
+        print(f"🔍 查询参数: [{connection_id}, {user_id}]")
+        
         connections = execute_query(query, [connection_id, user_id])
+        print(f"🔍 查询结果: {len(connections) if connections else 0} 条记录")
         
         if not connections:
             return jsonify({'error': '连接不存在或无权限访问'}), 404
         
         connection = connections[0]
-        config = json.loads(connection['connection_config'])
+        config_data = connection['connection_config']
+        
+        # 安全地解析JSON配置
+        if isinstance(config_data, str):
+            config = json.loads(config_data)
+        elif isinstance(config_data, dict):
+            config = config_data
+        else:
+            return jsonify({'error': '连接配置格式错误'}), 400
         
         # 执行测试
+        print(f"🔍 连接信息: 类型={connection['service_type']}, 名称={connection['service_name']}")
+        print(f"🔍 配置信息: {config}")
+        print(f"🔍 数据库server_url: {connection['server_url']}")
+        print(f"🔍 配置server_url: {config.get('server_url')}")
+        
         if connection['service_type'] == 'geoserver':
+            print(f"🔍 开始测试GeoServer连接...")
+            
+            # 🔥 优先使用数据库中的server_url（通常是完整的）
+            server_url = connection['server_url'] or config.get('server_url')
+            
+            # 🔥 如果URL仍然不完整，添加/geoserver路径
+            if server_url and '/geoserver' not in server_url:
+                if server_url.endswith('/'):
+                    server_url += 'geoserver'
+                else:
+                    server_url += '/geoserver'
+                print(f"🔍 修正后的server_url: {server_url}")
+            
+            print(f"🔍 最终使用的server_url: {server_url}")
+            
             result = test_geoserver_connection(
-                config['server_url'],
+                server_url,
                 config['username'],
                 config['password']
             )
+            print(f"🔍 GeoServer测试结果: {result}")
         elif connection['service_type'] == 'martin':
+            print(f"🔍 开始测试Martin连接...")
             result = test_martin_connection(
                 config['server_url'],
                 config.get('api_key')
             )
+            print(f"🔍 Martin测试结果: {result}")
         else:
             return jsonify({'error': '不支持的服务类型'}), 400
         
         # 更新测试结果
+        print(f"🔍 准备更新测试结果: success={result['success']}, message={result['message']}")
         update_connection_test_result(
             connection_id,
             'success' if result['success'] else 'failed',
@@ -343,15 +462,20 @@ def test_existing_connection(connection_id):
         )
         
         if result['success']:
+            print(f"🔍 测试成功，返回200")
             return jsonify({
                 'success': True,
                 'message': result['message'],
                 'data': result.get('data', {})
             })
         else:
+            print(f"🔍 测试失败，返回400: {result['message']}")
             return jsonify({'error': result['message']}), 400
         
     except Exception as e:
+        print(f"❌ 测试连接异常: {str(e)}")
+        import traceback
+        print(f"❌ 异常堆栈: {traceback.format_exc()}")
         return jsonify({'error': f'测试连接失败: {str(e)}'}), 500
 
 # ===============================
@@ -361,17 +485,25 @@ def test_existing_connection(connection_id):
 def test_geoserver_connection(server_url, username, password):
     """测试GeoServer连接"""
     try:
+        print(f"🔍 GeoServer测试参数:")
+        print(f"   - server_url: {server_url}")
+        print(f"   - username: {username}")
+        print(f"   - password: {'***' if password else 'None'}")
+        
         # 构建REST API URL
         if not server_url.endswith('/'):
             server_url += '/'
         
         workspaces_url = f"{server_url}rest/workspaces.json"
+        print(f"🔍 请求URL: {workspaces_url}")
         
         response = requests.get(
             workspaces_url,
             auth=HTTPBasicAuth(username, password),
             timeout=10
         )
+        
+        print(f"🔍 响应状态码: {response.status_code}")
         
         if response.status_code == 200:
             workspaces_data = response.json()
@@ -454,7 +586,11 @@ def test_martin_connection(server_url, api_key=None):
 def get_default_connections():
     """获取用户的默认连接"""
     try:
-        user_id = request.current_user['user_id']
+        current_user = get_current_user()
+        user_id = str(current_user.get('id')) if current_user else None
+        
+        if not user_id:
+            return jsonify({'error': '无法获取用户信息'}), 401
         
         geoserver_default = get_default_connection(user_id, 'geoserver')
         martin_default = get_default_connection(user_id, 'martin')
