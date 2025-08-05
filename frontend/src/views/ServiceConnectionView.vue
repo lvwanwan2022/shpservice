@@ -405,7 +405,7 @@ export default {
     const createLoading = ref(false)
     const testLoading = ref(false)
     const testMethod = ref('frontend') // 'frontend' 或 'backend'
-    const testMethod = ref('frontend') // 'frontend' 或 'backend'
+  
     const connections = ref([])
     const connectionTestResult = ref(null)
     
@@ -513,30 +513,8 @@ export default {
         data = { error: textData || '服务器返回了非JSON响应' }
       }
       
-      // 检查响应内容类型
-      const contentType = response.headers.get('content-type')
-      let data = null
       
-      if (contentType && contentType.includes('application/json')) {
-        try {
-          data = await response.json()
-        } catch (jsonError) {
-          console.error('JSON解析失败:', jsonError)
-          throw new Error(`JSON解析失败: ${jsonError.message}`)
-        }
-      } else {
-        // 如果不是JSON响应，获取文本内容
-        const textData = await response.text()
-        console.warn('收到非JSON响应:', textData)
-        data = { error: textData || '服务器返回了非JSON响应' }
-      }
-      
-      if (!response.ok) {
-        const errorMessage = data && data.error ? data.error : `请求失败 (${response.status})`
-        throw new Error(errorMessage)
-        const errorMessage = data && data.error ? data.error : `请求失败 (${response.status})`
-        throw new Error(errorMessage)
-      }
+     
       
       return data
     }
@@ -548,8 +526,6 @@ export default {
         const data = await apiRequest('/api/service-connections')
         connections.value = data.data.map(connection => ({
           ...connection,
-          testing: false,
-          testMethod: null
           testing: false,
           testMethod: null
         }))
@@ -626,9 +602,7 @@ export default {
         resetCreateForm()
         loadConnections()
       } catch (error) {
-        console.error('保存连接失败:', error)
-        const errorMessage = error.message || error.toString()
-        ElMessage.error(`保存连接失败: ${errorMessage}`)
+        
         console.error('保存连接失败:', error)
         const errorMessage = error.message || error.toString()
         ElMessage.error(`保存连接失败: ${errorMessage}`)
@@ -668,8 +642,7 @@ export default {
       connectionTestResult.value = null
     }
     
-    // 前端测试连接（表单中）
-    const testConnectionFormFrontend = async () => {
+
     // 前端测试连接（表单中）
     const testConnectionFormFrontend = async () => {
       try {
@@ -757,63 +730,9 @@ export default {
       }
     }
     
-    // 后端测试连接（表单中）
-    const testConnectionFormBackend = async () => {
-      try {
-        testLoading.value = true
-        testMethod.value = 'backend'
-        connectionTestResult.value = null
-        
-        const testData = {
-          service_type: createForm.service_type,
-          server_url: createForm.server_url
-        }
-        
-        if (createForm.service_type === 'geoserver') {
-          testData.username = createForm.username
-          testData.password = createForm.password
-        } else if (createForm.service_type === 'martin') {
-          if (createForm.api_key) {
-            testData.api_key = createForm.api_key
-          }
-        }
-        
-        const response = await apiRequest('/api/service-connections/test', {
-          method: 'POST',
-          body: JSON.stringify(testData)
-        })
-        
-        connectionTestResult.value = {
-          success: true,
-          message: response.message || '连接测试成功',
-          data: { testMethod: 'backend', ...response.data }
-          message: response.message || '连接测试成功',
-          data: { testMethod: 'backend', ...response.data }
-        }
-        
-        ElMessage.success('连接测试成功')
-      } catch (error) {
-        connectionTestResult.value = {
-          success: false,
-          message: error.message || '连接测试失败',
-          data: { testMethod: 'backend' }
-          message: error.message || '连接测试失败',
-          data: { testMethod: 'backend' }
-        }
-        
-        console.error('表单连接测试失败:', error)
-        const errorMessage = error.message || error.toString()
-        ElMessage.error(`连接测试失败: ${errorMessage}`)
-        console.error('表单连接测试失败:', error)
-        const errorMessage = error.message || error.toString()
-        ElMessage.error(`连接测试失败: ${errorMessage}`)
-      } finally {
-        testLoading.value = false
-      }
-    }
     
-    // 前端测试现有连接
-    const testConnectionFrontend = async (connection) => {
+    
+    
     // 前端测试现有连接
     const testConnectionFrontend = async (connection) => {
       try {
@@ -1166,7 +1085,6 @@ export default {
       createLoading,
       testLoading,
       testMethod,
-      testMethod,
       connections,
       connectionTestResult,
       
@@ -1195,10 +1113,7 @@ export default {
       testConnectionFormBackend,
       testConnectionFrontend,
       testConnectionBackend,
-      testConnectionFormFrontend,
-      testConnectionFormBackend,
-      testConnectionFrontend,
-      testConnectionBackend,
+    
       editConnection,
       handleConnectionAction,
       toggleConnection,
@@ -1214,6 +1129,7 @@ export default {
     }
   }
 }
+
 </script>
 
 <style scoped>
