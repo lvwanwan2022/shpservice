@@ -17,10 +17,12 @@ from models.user_service_db import (
 from models.db import execute_query
 from utils.snowflake import get_snowflake_id
 from auth.auth_service import AuthService, require_auth, get_current_user
+from auth.auth_service import AuthService, require_auth, get_current_user
 
 # 创建蓝图
 service_connection_bp = Blueprint('service_connection', __name__, url_prefix='/api/service-connections')
 
+# 使用统一的认证装饰器，移除自定义版本
 # 使用统一的认证装饰器，移除自定义版本
 
 # ===============================
@@ -32,6 +34,11 @@ service_connection_bp = Blueprint('service_connection', __name__, url_prefix='/a
 def get_connections():
     """获取用户的服务连接列表"""
     try:
+        current_user = get_current_user()
+        user_id = str(current_user.get('id')) if current_user else None
+        
+        if not user_id:
+            return jsonify({'error': '无法获取用户信息'}), 401
         current_user = get_current_user()
         user_id = str(current_user.get('id')) if current_user else None
         
@@ -76,6 +83,11 @@ def get_connections():
 def create_connection():
     """创建新的服务连接"""
     try:
+        current_user = get_current_user()
+        user_id = str(current_user.get('id')) if current_user else None
+        
+        if not user_id:
+            return jsonify({'error': '无法获取用户信息'}), 401
         current_user = get_current_user()
         user_id = str(current_user.get('id')) if current_user else None
         
@@ -304,6 +316,11 @@ def delete_connection(connection_id):
         
         if not user_id:
             return jsonify({'error': '无法获取用户信息'}), 401
+        current_user = get_current_user()
+        user_id = str(current_user.get('id')) if current_user else None
+        
+        if not user_id:
+            return jsonify({'error': '无法获取用户信息'}), 401
         
         # 验证连接所有权
         check_sql = "SELECT service_name FROM user_service_connections WHERE id = %s AND user_id = %s"
@@ -405,6 +422,15 @@ def test_existing_connection(connection_id):
             return jsonify({'error': '连接不存在或无权限访问'}), 404
         
         connection = connections[0]
+        config_data = connection['connection_config']
+        
+        # 安全地解析JSON配置
+        if isinstance(config_data, str):
+            config = json.loads(config_data)
+        elif isinstance(config_data, dict):
+            config = config_data
+        else:
+            return jsonify({'error': '连接配置格式错误'}), 400
         config_data = connection['connection_config']
         
         # 安全地解析JSON配置
@@ -586,6 +612,11 @@ def test_martin_connection(server_url, api_key=None):
 def get_default_connections():
     """获取用户的默认连接"""
     try:
+        current_user = get_current_user()
+        user_id = str(current_user.get('id')) if current_user else None
+        
+        if not user_id:
+            return jsonify({'error': '无法获取用户信息'}), 401
         current_user = get_current_user()
         user_id = str(current_user.get('id')) if current_user else None
         
