@@ -582,7 +582,7 @@ def file_list():
                 text-align: center;
                 background: #f8f9ff;
                 transition: all 0.3s ease;
-                cursor: pointer;
+                position: relative;
             }
             
             .upload-area:hover {
@@ -593,7 +593,7 @@ def file_list():
             .upload-icon {
                 font-size: 48px;
                 color: #667eea;
-                margin-bottom: 20px;
+                margin-bottom: 15px;
             }
             
             input[type="file"] {
@@ -601,21 +601,26 @@ def file_list():
             }
             
             .file-label {
-                display: inline-block;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                padding: 15px 30px;
-                border-radius: 10px;
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                background: transparent;
+                color: #667eea;
                 cursor: pointer;
                 font-size: 16px;
                 font-weight: 600;
                 transition: all 0.3s ease;
-                margin-bottom: 20px;
+                border-radius: 15px;
             }
             
             .file-label:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+                background: rgba(102, 126, 234, 0.05);
             }
             
             .upload-btn {
@@ -628,7 +633,9 @@ def file_list():
                 font-weight: 600;
                 cursor: pointer;
                 transition: all 0.3s ease;
-                margin-left: 15px;
+                position: relative;
+                z-index: 20;
+                pointer-events: auto;
             }
             
             .upload-btn:hover {
@@ -765,9 +772,9 @@ def file_list():
                     padding: 20px;
                 }
                 
-                .file-label, .upload-btn {
+                .upload-btn {
                     display: block;
-                    margin: 10px 0;
+                    margin: 20px auto 0;
                 }
             }
         </style>
@@ -801,12 +808,14 @@ def file_list():
             <div class="upload-section">
                 <h2 class="section-title">📤 上传文件</h2>
                 <form method="post" enctype="multipart/form-data" id="uploadForm">
-                    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
-                        <div class="upload-icon">☁️</div>
-                        <label for="fileInput" class="file-label">选择文件</label>
+                    <div class="upload-area">
+                        <label for="fileInput" class="file-label">
+                            <div class="upload-icon">☁️</div>
+                            <div style="font-size: 16px; font-weight: 600; margin-bottom: 10px;">选择文件</div>
+                            <div id="fileName" style="color: #666; font-size: 14px;"></div>
+                        </label>
                         <input type="file" name="file" id="fileInput" onchange="showFileName()">
-                        <div id="fileName" style="margin-top: 10px; color: #666;"></div>
-                        <div style="margin-top: 20px;">
+                        <div style="margin-top: 20px; position: relative; z-index: 10;">
                             <button type="submit" class="upload-btn">🚀 开始上传</button>
                         </div>
                     </div>
