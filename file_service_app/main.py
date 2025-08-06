@@ -3,7 +3,7 @@ from tkinter import filedialog, messagebox
 import os
 import sys
 import threading
-from flask import Flask, request, send_from_directory, abort, Response
+from flask import Flask, request, send_from_directory, abort, Response, render_template_string, redirect, url_for, session  # Add imports for templates and session
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash, generate_password_hash
 import shutil
@@ -82,13 +82,13 @@ def create_gui():
 
 # Flask app
 app = Flask(__name__)
+app.secret_key = 'super_secret_key'  # For session
 
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        auth = request.authorization
-        if not auth or auth.username != CONFIG['username'] or not check_password_hash(CONFIG['password_hash'], auth.password):
-            return Response('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="Login Required"'})
+        if 'logged_in' not in session:
+            return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated
 
@@ -125,6 +125,98 @@ def download_file(filename):
 def list_files():
     files = os.listdir(CONFIG['folder'])
     return {'files': files}, 200
+
+# Login page
+@app.route('/', methods=['GET'])
+def login():
+    return render_template_string('''
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background-color: #f0f0f0; }
+        h1 { color: #333; }
+        form { margin: 20px; }
+        input[type=submit] { background-color: #4CAF50; color: white; padding: 10px; border: none; cursor: pointer; }
+    </style>
+    <!doctype html>
+    <title>登录</title>
+    <h1>文件服务登录</h1>
+    <form method=post action="{{ url_for('do_login') }}">
+      <input type=text name=username placeholder="用户名">
+      <input type=password name=password placeholder="密码">
+      <input type=submit value=登录>
+    </form>
+    ''')
+
+@app.route('/login', methods=['POST'])
+def do_login():
+    username = request.form['username']
+    password = request.form['password']
+    if username == CONFIG['username'] and check_password_hash(CONFIG['password_hash'], password):
+        session['logged_in'] = True
+        return redirect(url_for('file_list'))
+    else:
+        return '登录失败', 401
+
+# File list page with upload and download
+@app.route('/files', methods=['GET', 'POST'])
+@requires_auth
+def file_list():
+    error = None
+    if request.method == 'POST':
+        if 'file' not in request.files:
+            error = '没有文件部分'
+        else:
+            file = request.files['file']
+            if file.filename == '':
+                error = '没有选择文件'
+            else:
+                filename = secure_filename(file.filename)
+                file_path = os.path.join(CONFIG['folder'], filename)
+                
+                # Get exact file size
+                file.seek(0, os.SEEK_END)
+                file_size = file.tell()
+                file.seek(0)  # Reset position
+                file_size_mb = file_size / (1024 * 1024)
+                
+                # Check capacity
+                current_used_mb = shutil.disk_usage(CONFIG['folder']).used / (1024 * 1024)
+                if current_used_mb + file_size_mb > CONFIG['max_size_mb']:
+                    error = '上传将超过最大容量'
+                else:
+                    file.save(file_path)
+                    return redirect(url_for('file_list'))
+    
+    files = os.listdir(CONFIG['folder'])
+    file_list_html = '<ul>' + ''.join(f'<li><a href="/files/{f}" download>{f}</a></li>' for f in files) + '</ul>'
+    
+    return render_template_string('''
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background-color: #f0f0f0; }
+        h1, h2 { color: #333; }
+        form { margin: 20px; }
+        input[type=submit] { background-color: #4CAF50; color: white; padding: 10px; border: none; cursor: pointer; }
+        ul { list-style-type: none; padding: 0; }
+        li { margin: 10px; background-color: #fff; padding: 10px; border: 1px solid #ddd; }
+        a { text-decoration: none; color: #007BFF; }
+        .error { color: red; }
+    </style>
+    <!doctype html>
+    <title>文件列表</title>
+    <h1>文件夹文件</h1>
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    ''' + file_list_html + '''
+    <h2>上传文件</h2>
+    <form method=post enctype=multipart/form-data>
+      <input type=file name=file>
+      <input type=submit value=上传>
+    </form>
+    <a href="{{ url_for('logout') }}">登出</a>
+    ''', error=error)
+
+@app.route('/logout')
+def logout():
+    session.pop('logged_in', None)
+    return redirect(url_for('login'))
 
 def run_server():
     app.run(host='0.0.0.0', port=CONFIG['port'], threaded=True, use_reloader=False)
