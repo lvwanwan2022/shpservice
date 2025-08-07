@@ -59,7 +59,7 @@ def create_gui():
     tk.Label(root, text="最大容量 (MB):").grid(row=3, column=0)
     max_size_entry = tk.Entry(root)
     max_size_entry.grid(row=3, column=1)
-    max_size_entry.insert(0, "1024")
+    max_size_entry.insert(0, "10240")
 
     # Username
     tk.Label(root, text="用户名:").grid(row=4, column=0)
@@ -599,9 +599,9 @@ def file_list():
             }
             
             .upload-icon {
-                font-size: 48px;
+                font-size: 24px;
                 color: #667eea;
-                margin-bottom: 15px;
+                margin-bottom: 2px;
             }
             
             input[type="file"] {
@@ -921,6 +921,7 @@ if __name__ == '__main__':
     icon.title = "文件服务 - @Lvwan"  # 汉化标题并添加作者信息
     icon.menu = pystray.Menu(
         pystray.MenuItem("停止服务", on_stop),  # 汉化菜单项
+        
     )
     
     # Run tray in separate thread or main
