@@ -36,41 +36,46 @@ def check_disk_usage(path, file_size_mb, max_size_mb):
 
 def create_gui():
     root = tk.Tk()
-    root.title("文件服务设置")  # 汉化标题
+    root.title("文件服务设置 - 作者: @Lvwan")  # 汉化标题并添加作者信息
+
+    # Copyright label
+    copyright_label = tk.Label(root, text="© 2024 文件服务 | 作者: @Lvwan | 邮箱: 793145268@qq.com", 
+                              font=("Arial", 8), fg="gray")
+    copyright_label.grid(row=0, column=0, columnspan=3, pady=(5, 10))
 
     # Port
-    tk.Label(root, text="端口:").grid(row=0, column=0)
+    tk.Label(root, text="端口:").grid(row=1, column=0)
     port_entry = tk.Entry(root)
-    port_entry.grid(row=0, column=1)
+    port_entry.grid(row=1, column=1)
     port_entry.insert(0, "5055")
 
     # Folder
-    tk.Label(root, text="文件夹路径:").grid(row=1, column=0)
+    tk.Label(root, text="文件夹路径:").grid(row=2, column=0)
     folder_entry = tk.Entry(root)
-    folder_entry.grid(row=1, column=1)
-    tk.Button(root, text="浏览", command=lambda: folder_entry.insert(0, filedialog.askdirectory())).grid(row=1, column=2)  # 汉化按钮
+    folder_entry.grid(row=2, column=1)
+    tk.Button(root, text="浏览", command=lambda: folder_entry.insert(0, filedialog.askdirectory())).grid(row=2, column=2)  # 汉化按钮
 
     # Max Capacity (MB)
-    tk.Label(root, text="最大容量 (MB):").grid(row=2, column=0)
+    tk.Label(root, text="最大容量 (MB):").grid(row=3, column=0)
     max_size_entry = tk.Entry(root)
-    max_size_entry.grid(row=2, column=1)
+    max_size_entry.grid(row=3, column=1)
     max_size_entry.insert(0, "1024")
 
     # Username
-    tk.Label(root, text="用户名:").grid(row=3, column=0)
+    tk.Label(root, text="用户名:").grid(row=4, column=0)
     user_entry = tk.Entry(root)
-    user_entry.grid(row=3, column=1)
+    user_entry.grid(row=4, column=1)
     user_entry.insert(0, "admin")
 
     # Password
-    tk.Label(root, text="密码:").grid(row=4, column=0)
+    tk.Label(root, text="密码:").grid(row=5, column=0)
     pass_entry = tk.Entry(root, show="*")
-    pass_entry.grid(row=4, column=1)
+    pass_entry.grid(row=5, column=1)
 
     # API Key (optional)
-    tk.Label(root, text="API密钥 (可选):").grid(row=5, column=0)
+    tk.Label(root, text="API密钥 (可选):").grid(row=6, column=0)
     api_key_entry = tk.Entry(root)
-    api_key_entry.grid(row=5, column=1)
+    api_key_entry.grid(row=6, column=1)
 
     def start_server():
         global CONFIG
@@ -90,7 +95,7 @@ def create_gui():
             messagebox.showerror("错误", f"无效输入: {e}")  # 汉化错误消息
             return
 
-    tk.Button(root, text="启动服务", command=start_server).grid(row=6, column=1)  # 汉化按钮
+    tk.Button(root, text="启动服务", command=start_server).grid(row=7, column=1)  # 汉化按钮
     root.mainloop()
 
     if not CONFIG:
@@ -376,6 +381,9 @@ def login():
                 </div>
                 <input type="submit" value="登录">
             </form>
+            <div style="text-align: center; margin-top: 30px; color: #888; font-size: 12px;">
+                © 2024 文件服务 | 作者: @Lvwan | 联系邮箱: 793145268@qq.com
+            </div>
         </div>
     </body>
     </html>
@@ -633,9 +641,6 @@ def file_list():
                 font-weight: 600;
                 cursor: pointer;
                 transition: all 0.3s ease;
-                position: relative;
-                z-index: 20;
-                pointer-events: auto;
             }
             
             .upload-btn:hover {
@@ -815,9 +820,9 @@ def file_list():
                             <div id="fileName" style="color: #666; font-size: 14px;"></div>
                         </label>
                         <input type="file" name="file" id="fileInput" onchange="showFileName()">
-                        <div style="margin-top: 20px; position: relative; z-index: 10;">
-                            <button type="submit" class="upload-btn">🚀 开始上传</button>
-                        </div>
+                    </div>
+                    <div style="text-align: center; margin-top: 20px;">
+                        <button type="submit" class="upload-btn">🚀 开始上传</button>
                     </div>
                 </form>
             </div>
@@ -842,6 +847,10 @@ def file_list():
                 {% endif %}
             </div>
         </div>
+        
+        <footer style="text-align: center; padding: 20px; color: #666; background: #f8f9fa; margin-top: 40px; border-top: 1px solid #e9ecef;">
+            <p style="margin: 0; font-size: 14px;">© 2024 文件管理系统 | 作者: @Lvwan | 联系邮箱: 793145268@qq.com</p>
+        </footer>
         
         <script>
             function showFileName() {
@@ -909,7 +918,7 @@ if __name__ == '__main__':
     
     icon = pystray.Icon('file_service')
     icon.icon = create_image()
-    icon.title = "文件服务"  # 汉化标题
+    icon.title = "文件服务 - @Lvwan"  # 汉化标题并添加作者信息
     icon.menu = pystray.Menu(
         pystray.MenuItem("停止服务", on_stop),  # 汉化菜单项
     )
