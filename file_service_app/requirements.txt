@@ -4,3 +4,4 @@ Werkzeug==2.3.7
 Pillow==10.0.1
 pystray==0.19.4
 requests==2.31.0
+pyinstaller==6.1.0
