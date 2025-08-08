@@ -454,7 +454,7 @@
           <h4>2. 配置说明</h4>
           <ul>
             <li><strong>文件夹路径：</strong>选择要共享的文件夹</li>
-            <li><strong>端口号：</strong>默认8080，如冲突可修改</li>
+            <li><strong>端口号：</strong>默认5055，如冲突可修改</li>
             <li><strong>用户名/密码：</strong>用于访问控制</li>
             <li><strong>最大容量：</strong>限制文件夹的最大使用空间</li>
           </ul>
