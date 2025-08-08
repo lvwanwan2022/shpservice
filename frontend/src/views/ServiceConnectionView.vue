@@ -11,12 +11,12 @@
           <el-collapse-item title="📦 文件服务程序下载" name="file-service">
             <div class="guide-content">
               <div class="download-section">
-                <h4>🛠️ Main.exe 文件服务程序</h4>
+                <h4>🛠️ Main.zip 文件服务程序</h4>
                 <p>客户端文件服务程序，用于在本地发布文件服务供系统连接使用</p>
                 <div class="download-buttons">
                   <el-button type="primary" @click="downloadFileService">
                     <el-icon><Download /></el-icon>
-                    下载 Main.exe
+                    下载 Main.zip
                   </el-button>
                   <el-button type="info" @click="showFileServiceGuide = true">
                     <el-icon><Document /></el-icon>
