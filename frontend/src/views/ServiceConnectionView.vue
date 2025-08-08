@@ -5,20 +5,67 @@
       <h1>我的服务连接</h1>
       <p class="page-description">管理您的外部Geoserver和Martin服务连接配置</p>
       
-      <!-- 功能说明 -->
-      <el-alert
-        title="连接测试说明"
-        type="info"
-        show-icon
-        :closable="false"
-        class="test-info-alert"
-      >
-        <div>
-          <p><strong>前端测试：</strong>直接从浏览器测试服务连接，无需通过后端。适用于客户端可直接访问Geoserver的场景。</p>
-          <p><strong>后端测试：</strong>通过系统后端测试连接，适用于服务器间的网络连接测试。</p>
-          <p class="tip">💡 推荐优先使用前端测试，这样即使后端服务器无法访问Geoserver，只要您的浏览器能访问就可以正常使用服务。</p>
-        </div>
-      </el-alert>
+      <!-- 服务下载和使用说明 -->
+      <div class="service-guides">
+        <el-collapse v-model="activeGuides" accordion>
+          <el-collapse-item title="📦 文件服务程序下载" name="file-service">
+            <div class="guide-content">
+              <div class="download-section">
+                <h4>🛠️ Main.exe 文件服务程序</h4>
+                <p>客户端文件服务程序，用于在本地发布文件服务供系统连接使用</p>
+                <div class="download-buttons">
+                  <el-button type="primary" @click="downloadFileService">
+                    <el-icon><Download /></el-icon>
+                    下载 Main.exe
+                  </el-button>
+                  <el-button type="info" @click="showFileServiceGuide = true">
+                    <el-icon><Document /></el-icon>
+                    使用说明
+                  </el-button>
+                </div>
+              </div>
+            </div>
+          </el-collapse-item>
+          
+          <el-collapse-item title="🗺️ Martin瓦片服务" name="martin">
+            <div class="guide-content">
+              <div class="download-section">
+                <h4>📍 Martin MVT服务</h4>
+                <p>现代化矢量瓦片服务，支持PostGIS数据库直接发布MVT瓦片</p>
+                <div class="download-buttons">
+                  <el-button type="success" @click="openMartinDownload">
+                    <el-icon><Link /></el-icon>
+                    官方下载
+                  </el-button>
+                  <el-button type="info" @click="showMartinGuide = true">
+                    <el-icon><Document /></el-icon>
+                    使用说明
+                  </el-button>
+                </div>
+              </div>
+            </div>
+          </el-collapse-item>
+          
+          <el-collapse-item title="🌍 GeoServer地图服务" name="geoserver">
+            <div class="guide-content">
+              <div class="download-section">
+                <h4>🗺️ GeoServer WMS/WFS服务</h4>
+                <p>企业级地理信息服务器，支持多种数据格式和OGC标准服务</p>
+                <div class="download-buttons">
+                  <el-button type="warning" @click="openGeoServerDownload">
+                    <el-icon><Link /></el-icon>
+                    官方下载
+                  </el-button>
+                  <el-button type="info" @click="showGeoServerGuide = true">
+                    <el-icon><Document /></el-icon>
+                    使用说明
+                  </el-button>
+                </div>
+              </div>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+      </div>
     </div>
 
     <!-- 服务连接列表 -->
@@ -104,17 +151,25 @@
             </div>
 
             <div class="connection-info">
-              <div class="info-item">
-                <span class="label">服务地址:</span>
-                <span class="value" :title="connection.server_url">
-                  {{ connection.server_url }}
-                </span>
-              </div>
-              
-              <div class="info-item" v-if="connection.description">
-                <span class="label">描述:</span>
-                <span class="value">{{ connection.description }}</span>
-              </div>
+                          <div class="info-item">
+              <span class="label">服务地址:</span>
+              <span class="value" :title="connection.server_url">
+                {{ connection.server_url }}
+              </span>
+            </div>
+            
+            <!-- Martin文件服务信息 -->
+            <div v-if="connection.service_type === 'martin' && getFileServiceInfo(connection)" class="info-item">
+              <span class="label">文件服务:</span>
+              <span class="value" :title="getFileServiceInfo(connection)">
+                {{ getFileServiceInfo(connection) }}
+              </span>
+            </div>
+            
+            <div class="info-item" v-if="connection.description">
+              <span class="label">描述:</span>
+              <span class="value">{{ connection.description }}</span>
+            </div>
               
               <div class="info-item">
                 <span class="label">状态:</span>
@@ -249,7 +304,7 @@
         
         <!-- Martin 配置 -->
         <template v-if="createForm.service_type === 'martin'">
-          <el-form-item label="服务地址" prop="server_url">
+          <el-form-item label="Martin地址" prop="server_url">
             <el-input 
               v-model="createForm.server_url" 
               placeholder="http://your-server:3000"
@@ -272,6 +327,45 @@
               show-password
             />
             <div class="form-tip">如果Martin服务需要认证，请填写API密钥</div>
+          </el-form-item>
+          
+          <!-- 文件服务配置 -->
+          <el-divider content-position="left">
+            <span style="color: #409EFF; font-weight: bold;">📁 文件服务配置</span>
+          </el-divider>
+          
+          <el-form-item label="文件服务地址" prop="file_service_url">
+            <el-input 
+              v-model="createForm.file_service_url" 
+              placeholder="http://client-ip:8080"
+            />
+            <div class="form-tip">客户端Main.exe程序发布的文件服务地址</div>
+          </el-form-item>
+          
+          <el-form-item label="文件夹地址" prop="file_folder_url">
+            <el-input 
+              v-model="createForm.file_folder_url" 
+              placeholder="http://client-ip:8080/files"
+            />
+            <div class="form-tip">文件服务的文件夹访问地址（含端口号）</div>
+          </el-form-item>
+          
+          <el-form-item label="文件服务账号" prop="file_service_username">
+            <el-input 
+              v-model="createForm.file_service_username" 
+              placeholder="请输入文件服务登录账号"
+            />
+            <div class="form-tip">访问文件服务的用户名</div>
+          </el-form-item>
+          
+          <el-form-item label="文件服务密码" prop="file_service_password">
+            <el-input 
+              v-model="createForm.file_service_password" 
+              type="password"
+              placeholder="请输入文件服务登录密码"
+              show-password
+            />
+            <div class="form-tip">访问文件服务的密码</div>
           </el-form-item>
         </template>
         
@@ -335,6 +429,176 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- 文件服务使用说明对话框 -->
+    <el-dialog 
+      v-model="showFileServiceGuide" 
+      title="📁 文件服务程序使用说明" 
+      width="800px"
+      :close-on-click-modal="false"
+    >
+      <div class="guide-dialog">
+        <h3>🛠️ Main.exe 程序使用说明</h3>
+        
+        <div class="guide-step">
+          <h4>1. 下载和运行</h4>
+          <ul>
+            <li>下载 Main.exe 程序到客户端计算机</li>
+            <li>双击运行程序，会弹出配置界面</li>
+            <li>设置文件夹路径、端口号、用户名和密码</li>
+            <li>点击"启动服务"按钮</li>
+          </ul>
+        </div>
+
+        <div class="guide-step">
+          <h4>2. 配置说明</h4>
+          <ul>
+            <li><strong>文件夹路径：</strong>选择要共享的文件夹</li>
+            <li><strong>端口号：</strong>默认8080，如冲突可修改</li>
+            <li><strong>用户名/密码：</strong>用于访问控制</li>
+            <li><strong>最大容量：</strong>限制文件夹的最大使用空间</li>
+          </ul>
+        </div>
+
+        <div class="guide-step">
+          <h4>3. 连接配置</h4>
+          <ul>
+            <li><strong>文件服务地址：</strong>http://客户端IP:端口号</li>
+            <li><strong>文件夹地址：</strong>http://客户端IP:端口号/files</li>
+            <li><strong>账号密码：</strong>使用程序中设置的用户名和密码</li>
+          </ul>
+        </div>
+
+        <div class="guide-step">
+          <h4>4. 功能特点</h4>
+          <ul>
+            <li>✅ 支持文件上传下载</li>
+            <li>✅ 分块上传大文件</li>
+            <li>✅ 用户认证和权限控制</li>
+            <li>✅ 系统托盘后台运行</li>
+            <li>✅ 跨域支持，便于前端调用</li>
+          </ul>
+        </div>
+      </div>
+    </el-dialog>
+
+    <!-- Martin服务使用说明对话框 -->
+    <el-dialog 
+      v-model="showMartinGuide" 
+      title="🗺️ Martin服务使用说明" 
+      width="800px"
+      :close-on-click-modal="false"
+    >
+      <div class="guide-dialog">
+        <h3>📍 Martin MVT瓦片服务配置</h3>
+        
+        <div class="guide-step">
+          <h4>1. 下载和安装</h4>
+          <ul>
+            <li>访问 <a href="https://github.com/maplibre/martin/releases" target="_blank">Martin官方下载页面</a></li>
+            <li>下载适合你操作系统的版本</li>
+            <li>解压到合适的目录</li>
+          </ul>
+        </div>
+
+        <div class="guide-step">
+          <h4>2. 配置文件</h4>
+          <pre class="code-block">
+listen_addresses: 0.0.0.0:3000
+worker_processes: auto
+cache_size_mb: 512
+cors: true
+
+postgres:
+  connection_string: "postgresql://用户名:密码@localhost:5432/数据库名"
+  pool_size: 20
+  auto_publish:
+    tables:
+      from_schemas: ["public"]
+      </pre>
+        </div>
+
+        <div class="guide-step">
+          <h4>3. 启动服务</h4>
+          <ul>
+            <li>命令行运行：<code>martin config.yaml</code></li>
+            <li>服务将在配置的端口启动（默认3000）</li>
+            <li>访问 http://localhost:3000/catalog 查看数据源</li>
+          </ul>
+        </div>
+
+        <div class="guide-step">
+          <h4>4. 数据库要求</h4>
+          <ul>
+            <li>需要PostgreSQL数据库，并安装PostGIS扩展</li>
+            <li>空间数据表需要正确的几何字段和SRID</li>
+            <li>建议为表创建空间索引以提高性能</li>
+          </ul>
+        </div>
+      </div>
+    </el-dialog>
+
+    <!-- GeoServer使用说明对话框 -->
+    <el-dialog 
+      v-model="showGeoServerGuide" 
+      title="🌍 GeoServer使用说明" 
+      width="800px"
+      :close-on-click-modal="false"
+    >
+      <div class="guide-dialog">
+        <h3>🗺️ GeoServer地图服务配置</h3>
+        
+        <div class="guide-step">
+          <h4>1. 下载和安装</h4>
+          <ul>
+            <li>访问 <a href="https://geoserver.org/download/" target="_blank">GeoServer官方下载页面</a></li>
+            <li>选择平台包下载（推荐Web Archive (.war)或安装包）</li>
+            <li>解压或安装到合适的目录</li>
+            <li>需要Java 8或更高版本</li>
+          </ul>
+        </div>
+
+        <div class="guide-step">
+          <h4>2. 启动服务</h4>
+          <ul>
+            <li>Windows: 运行 bin/startup.bat</li>
+            <li>Linux/Mac: 运行 bin/startup.sh</li>
+            <li>默认端口8080，访问 http://localhost:8080/geoserver</li>
+            <li>默认管理员账号：admin/geoserver</li>
+          </ul>
+        </div>
+
+        <div class="guide-step">
+          <h4>3. 工作空间和数据源</h4>
+          <ul>
+            <li>创建工作空间（Workspace）</li>
+            <li>添加数据存储（Data Store）：Shapefile、PostGIS等</li>
+            <li>发布图层（Layer）</li>
+            <li>配置样式（Style）</li>
+          </ul>
+        </div>
+
+        <div class="guide-step">
+          <h4>4. 服务类型</h4>
+          <ul>
+            <li><strong>WMS：</strong>Web地图服务，返回地图图片</li>
+            <li><strong>WFS：</strong>Web要素服务，返回矢量数据</li>
+            <li><strong>WCS：</strong>Web覆盖服务，返回栅格数据</li>
+            <li><strong>WMTS：</strong>Web地图瓦片服务</li>
+          </ul>
+        </div>
+
+        <div class="guide-step">
+          <h4>5. 连接配置</h4>
+          <ul>
+            <li><strong>服务地址：</strong>http://服务器IP:8080/geoserver</li>
+            <li><strong>管理员账号：</strong>admin（或自定义）</li>
+            <li><strong>管理员密码：</strong>geoserver（建议修改）</li>
+            <li><strong>工作空间：</strong>发布数据时使用的工作空间名称</li>
+          </ul>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -342,7 +606,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
-  Plus, Refresh, MoreFilled, Link, Edit
+  Plus, Refresh, MoreFilled, Link, Edit, Download, Document
 } from '@element-plus/icons-vue'
 import authService from '@/auth/authService'
 import { testServiceConnection, testGeoserverInNewWindow } from '@/utils/geoserverTest'
@@ -350,7 +614,7 @@ import { testServiceConnection, testGeoserverInNewWindow } from '@/utils/geoserv
 export default {
   name: 'ServiceConnectionView',
   components: {
-    Plus, Refresh, MoreFilled, Link, Edit
+    Plus, Refresh, MoreFilled, Link, Edit, Download, Document
   },
   setup() {
     // 响应式数据
@@ -360,6 +624,12 @@ export default {
     const testMethod = ref('frontend') // 'frontend' 或 'backend'
     const connections = ref([])
     const connectionTestResult = ref(null)
+    
+    // 指南相关
+    const activeGuides = ref('')
+    const showFileServiceGuide = ref(false)
+    const showMartinGuide = ref(false)
+    const showGeoServerGuide = ref(false)
     
     // 过滤条件
     const filterType = ref('')
@@ -381,7 +651,12 @@ export default {
       workspace: 'default',
       // Martin 配置
       database_url: '',
-      api_key: ''
+      api_key: '',
+      // 文件服务配置
+      file_service_url: '',
+      file_folder_url: '',
+      file_service_username: '',
+      file_service_password: ''
     })
     
     const createFormRef = ref(null)
@@ -516,6 +791,18 @@ export default {
           if (createForm.api_key) {
             requestData.api_key = createForm.api_key
           }
+          if (createForm.file_service_url) {
+            requestData.file_service_url = createForm.file_service_url
+          }
+          if (createForm.file_folder_url) {
+            requestData.file_folder_url = createForm.file_folder_url
+          }
+          if (createForm.file_service_username) {
+            requestData.file_service_username = createForm.file_service_username
+          }
+          if (createForm.file_service_password) {
+            requestData.file_service_password = createForm.file_service_password
+          }
         }
         
         if (editingConnection.value) {
@@ -576,7 +863,11 @@ export default {
         password: '',
         workspace: 'default',
         database_url: '',
-        api_key: ''
+        api_key: '',
+        file_service_url: '',
+        file_folder_url: '',
+        file_service_username: '',
+        file_service_password: ''
       })
       connectionTestResult.value = null
       editingConnection.value = null
@@ -592,6 +883,11 @@ export default {
       createForm.workspace = 'default'
       createForm.database_url = ''
       createForm.api_key = ''
+      // 清空文件服务相关字段
+      createForm.file_service_url = ''
+      createForm.file_folder_url = ''
+      createForm.file_service_username = ''
+      createForm.file_service_password = ''
       connectionTestResult.value = null
     }
     
@@ -614,6 +910,18 @@ export default {
         } else if (createForm.service_type === 'martin') {
           if (createForm.api_key) {
             testConfig.api_key = createForm.api_key
+          }
+          if (createForm.file_service_url) {
+            testConfig.file_service_url = createForm.file_service_url
+          }
+          if (createForm.file_folder_url) {
+            testConfig.file_folder_url = createForm.file_folder_url
+          }
+          if (createForm.file_service_username) {
+            testConfig.file_service_username = createForm.file_service_username
+          }
+          if (createForm.file_service_password) {
+            testConfig.file_service_password = createForm.file_service_password
           }
         }
         
@@ -656,6 +964,18 @@ export default {
         } else if (createForm.service_type === 'martin') {
           if (createForm.api_key) {
             testData.api_key = createForm.api_key
+          }
+          if (createForm.file_service_url) {
+            testData.file_service_url = createForm.file_service_url
+          }
+          if (createForm.file_folder_url) {
+            testData.file_folder_url = createForm.file_folder_url
+          }
+          if (createForm.file_service_username) {
+            testData.file_service_username = createForm.file_service_username
+          }
+          if (createForm.file_service_password) {
+            testData.file_service_password = createForm.file_service_password
           }
         }
         
@@ -870,6 +1190,11 @@ export default {
         } else if (connToUse.service_type === 'martin') {
           createForm.database_url = config.database_url || ''
           createForm.api_key = '' // 不显示API密钥
+          // 文件服务配置
+          createForm.file_service_url = config.file_service_url || ''
+          createForm.file_folder_url = config.file_folder_url || ''
+          createForm.file_service_username = config.file_service_username || ''
+          createForm.file_service_password = '' // 不显示密码
         }
       }
       
@@ -985,6 +1310,49 @@ export default {
       })
     }
     
+         // 文件服务下载
+     const downloadFileService = async () => {
+       try {
+         const response = await fetch('/api/service-connections/file-service/download', {
+           headers: {
+             'Authorization': `Bearer ${authService.getToken()}`
+           }
+         });
+         
+         if (response.ok) {
+           const blob = await response.blob();
+           const url = window.URL.createObjectURL(blob);
+           const a = document.createElement('a');
+           a.href = url;
+           a.download = '文件服务程序.exe';
+           document.body.appendChild(a);
+           a.click();
+           window.URL.revokeObjectURL(url);
+           document.body.removeChild(a);
+           ElMessage.success('文件服务程序下载成功');
+         } else {
+           const errorData = await response.json();
+           ElMessage.error(errorData.error || '下载失败');
+         }
+       } catch (error) {
+         ElMessage.error('下载失败: ' + error.message);
+       }
+     };
+
+         // Martin 官方下载
+     const openMartinDownload = () => {
+       const url = 'https://github.com/maplibre/martin/releases'; // 正确的Martin官方下载地址
+       window.open(url, '_blank');
+     };
+
+    // GeoServer 官方下载
+    const openGeoServerDownload = () => {
+      const url = 'https://geoserver.org/download/'; // 示例URL
+      window.open(url, '_blank');
+    };
+
+    
+
     // 工具方法
     const getServiceTypeName = (type) => {
       const map = {
@@ -1024,6 +1392,30 @@ export default {
       return new Date(dateString).toLocaleString('zh-CN')
     }
     
+    // 获取文件服务信息
+    const getFileServiceInfo = (connection) => {
+      if (connection.service_type !== 'martin') return null
+      
+      let config = {}
+      if (connection.connection_config) {
+        if (typeof connection.connection_config === 'string') {
+          try {
+            config = JSON.parse(connection.connection_config)
+          } catch (e) {
+            return null
+          }
+        } else {
+          config = connection.connection_config
+        }
+      }
+      
+      if (config.file_service_url) {
+        return config.file_service_url
+      }
+      
+      return null
+    }
+    
     // 初始化
     onMounted(() => {
       loadConnections()
@@ -1037,6 +1429,12 @@ export default {
       testMethod,
       connections,
       connectionTestResult,
+      
+      // 指南相关
+      activeGuides,
+      showFileServiceGuide,
+      showMartinGuide,
+      showGeoServerGuide,
       
       // 过滤条件
       filterType,
@@ -1068,13 +1466,17 @@ export default {
       toggleConnection,
       deleteConnection,
       showNewWindowTestDialog,
+      downloadFileService,
+      openMartinDownload,
+      openGeoServerDownload,
       
       // 工具方法
       getServiceTypeName,
       getServiceTypeTagType,
       getStatusText,
       getStatusTagType,
-      formatDate
+      formatDate,
+      getFileServiceInfo
     }
   }
 }
@@ -1114,6 +1516,109 @@ export default {
   font-size: 12px;
   color: #909399;
   margin-top: 5px;
+}
+
+.service-guides {
+  margin-bottom: 20px;
+}
+
+.guide-content {
+  padding: 15px;
+  background-color: #f9fafc;
+  border: 1px solid #e9e9eb;
+  border-radius: 4px;
+}
+
+.download-section {
+  margin-bottom: 15px;
+}
+
+.download-section h4 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  color: #303133;
+}
+
+.download-section p {
+  color: #606266;
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+
+.download-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+/* 使用说明对话框样式 */
+.guide-dialog {
+  line-height: 1.6;
+}
+
+.guide-dialog h3 {
+  color: #409EFF;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #409EFF;
+  padding-bottom: 10px;
+}
+
+.guide-step {
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-left: 4px solid #409EFF;
+  border-radius: 0 4px 4px 0;
+}
+
+.guide-step h4 {
+  color: #303133;
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+
+.guide-step ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.guide-step li {
+  margin-bottom: 5px;
+  color: #606266;
+}
+
+.guide-step strong {
+  color: #409EFF;
+}
+
+.code-block {
+  background-color: #f4f4f5;
+  border: 1px solid #e9e9eb;
+  border-radius: 4px;
+  padding: 12px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #2d3748;
+  white-space: pre-wrap;
+  margin: 10px 0;
+}
+
+.guide-step code {
+  background-color: #f4f4f5;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: #e83e8c;
+}
+
+.guide-step a {
+  color: #409EFF;
+  text-decoration: none;
+}
+
+.guide-step a:hover {
+  text-decoration: underline;
 }
 
 .connection-list {

@@ -111,6 +111,15 @@ def create_connection():
                 connection_config['api_key'] = data['api_key']
             if data.get('database_url'):
                 connection_config['database_url'] = data['database_url']
+            # 文件服务配置
+            if data.get('file_service_url'):
+                connection_config['file_service_url'] = data['file_service_url']
+            if data.get('file_folder_url'):
+                connection_config['file_folder_url'] = data['file_folder_url']
+            if data.get('file_service_username'):
+                connection_config['file_service_username'] = data['file_service_username']
+            if data.get('file_service_password'):
+                connection_config['file_service_password'] = data['file_service_password']
         
         # 创建连接
         connection = create_service_connection(
@@ -227,7 +236,7 @@ def update_connection(connection_id):
             params.append(data['is_active'])
         
         # 更新连接配置
-        config_update_needed = any(key in data for key in ['server_url', 'username', 'password', 'workspace', 'api_key', 'database_url'])
+        config_update_needed = any(key in data for key in ['server_url', 'username', 'password', 'workspace', 'api_key', 'database_url', 'file_service_url', 'file_folder_url', 'file_service_username', 'file_service_password'])
         
         if config_update_needed:
             config_data = existing[0]['connection_config']
@@ -255,6 +264,15 @@ def update_connection(connection_id):
                 current_config['api_key'] = data['api_key']
             if 'database_url' in data:
                 current_config['database_url'] = data['database_url']
+            # 文件服务配置更新
+            if 'file_service_url' in data:
+                current_config['file_service_url'] = data['file_service_url']
+            if 'file_folder_url' in data:
+                current_config['file_folder_url'] = data['file_folder_url']
+            if 'file_service_username' in data:
+                current_config['file_service_username'] = data['file_service_username']
+            if 'file_service_password' in data:
+                current_config['file_service_password'] = data['file_service_password']
             
             print(f"🔍 更新后的配置: {current_config}")
             update_fields.append('connection_config = %s')
@@ -352,7 +370,15 @@ def test_connection():
             result = test_geoserver_connection(server_url, username, password)
         elif service_type == 'martin':
             api_key = data.get('api_key')
-            result = test_martin_connection(server_url, api_key)
+            # 构建文件服务配置
+            file_service_config = {}
+            if data.get('file_service_url'):
+                file_service_config = {
+                    'file_service_url': data.get('file_service_url'),
+                    'file_service_username': data.get('file_service_username'),
+                    'file_service_password': data.get('file_service_password')
+                }
+            result = test_martin_connection(server_url, api_key, file_service_config if file_service_config else None)
         else:
             return jsonify({'error': '不支持的服务类型'}), 400
         
@@ -445,9 +471,18 @@ def test_existing_connection(connection_id):
             print(f"🔍 GeoServer测试结果: {result}")
         elif connection['service_type'] == 'martin':
             print(f"🔍 开始测试Martin连接...")
+            # 构建文件服务配置
+            file_service_config = None
+            if config.get('file_service_url'):
+                file_service_config = {
+                    'file_service_url': config.get('file_service_url'),
+                    'file_service_username': config.get('file_service_username'),
+                    'file_service_password': config.get('file_service_password')
+                }
             result = test_martin_connection(
                 config['server_url'],
-                config.get('api_key')
+                config.get('api_key'),
+                file_service_config
             )
             print(f"🔍 Martin测试结果: {result}")
         else:
@@ -529,8 +564,63 @@ def test_geoserver_connection(server_url, username, password):
     except Exception as e:
         return {'success': False, 'message': f'连接测试失败: {str(e)}'}
 
-def test_martin_connection(server_url, api_key=None):
-    """测试Martin连接"""
+def test_file_service_connection(file_service_url, username=None, password=None):
+    """测试文件服务连接"""
+    try:
+        if not file_service_url.endswith('/'):
+            file_service_url += '/'
+        
+        # 构建认证
+        auth = None
+        if username and password:
+            auth = HTTPBasicAuth(username, password)
+        
+        # 测试健康检查接口
+        try:
+            health_url = f"{file_service_url}health"
+            response = requests.get(health_url, auth=auth, timeout=10)
+            if response.status_code == 200:
+                return {
+                    'success': True,
+                    'message': '文件服务连接成功',
+                    'data': {'service_type': 'file_service'}
+                }
+        except:
+            pass
+        
+        # 测试登录接口
+        try:
+            login_url = f"{file_service_url}login"
+            response = requests.get(login_url, timeout=10)
+            if response.status_code in [200, 401]:  # 登录页面存在
+                return {
+                    'success': True,
+                    'message': '文件服务连接成功，服务正在运行',
+                    'data': {'service_type': 'file_service', 'has_auth': True}
+                }
+        except:
+            pass
+        
+        # 测试根路径
+        root_response = requests.get(file_service_url, timeout=10)
+        if root_response.status_code in [200, 401, 403]:
+            return {
+                'success': True,
+                'message': '文件服务连接成功',
+                'data': {'service_type': 'file_service'}
+            }
+        else:
+            return {'success': False, 'message': f'文件服务连接失败，HTTP状态码: {root_response.status_code}'}
+            
+    except requests.exceptions.Timeout:
+        return {'success': False, 'message': '文件服务连接超时，请检查服务地址'}
+    except requests.exceptions.ConnectionError:
+        return {'success': False, 'message': '无法连接到文件服务，请检查地址和网络'}
+    except Exception as e:
+        return {'success': False, 'message': f'文件服务连接测试失败: {str(e)}'}
+
+def test_martin_connection(server_url, api_key=None, file_service_config=None):
+    """测试Martin连接，可选文件服务配置"""
     try:
         if not server_url.endswith('/'):
             server_url += '/'
@@ -539,41 +629,84 @@ def test_martin_connection(server_url, api_key=None):
         if api_key:
             headers['Authorization'] = f'Bearer {api_key}'
         
-        # 尝试健康检查
+        martin_result = None
+        file_service_result = None
+        
+        # 测试Martin服务
         try:
-            health_url = f"{server_url}health"
-            health_response = requests.get(health_url, headers=headers, timeout=10)
-            if health_response.status_code == 200:
-                return {
-                    'success': True,
-                    'message': 'Martin服务连接成功',
-                    'data': health_response.json()
-                }
-        except:
-            pass
-        
-        # 尝试目录接口
-        catalog_url = f"{server_url}catalog"
-        catalog_response = requests.get(catalog_url, headers=headers, timeout=10)
-        
-        if catalog_response.status_code == 200:
-            catalog_data = catalog_response.json()
-            table_count = len(catalog_data) if isinstance(catalog_data, list) else 0
+            # 尝试健康检查
+            try:
+                health_url = f"{server_url}health"
+                health_response = requests.get(health_url, headers=headers, timeout=10)
+                if health_response.status_code == 200:
+                    martin_result = {
+                        'success': True,
+                        'message': 'Martin服务连接成功',
+                        'data': health_response.json()
+                    }
+            except:
+                pass
             
-            return {
-                'success': True,
-                'message': f'Martin服务连接成功，发现 {table_count} 个数据源',
-                'data': {'table_count': table_count}
-            }
-        elif catalog_response.status_code == 401:
-            return {'success': False, 'message': '认证失败，请检查API密钥'}
+            if not martin_result:
+                # 尝试目录接口
+                catalog_url = f"{server_url}catalog"
+                catalog_response = requests.get(catalog_url, headers=headers, timeout=10)
+                
+                if catalog_response.status_code == 200:
+                    catalog_data = catalog_response.json()
+                    table_count = len(catalog_data) if isinstance(catalog_data, list) else 0
+                    
+                    martin_result = {
+                        'success': True,
+                        'message': f'Martin服务连接成功，发现 {table_count} 个数据源',
+                        'data': {'table_count': table_count}
+                    }
+                elif catalog_response.status_code == 401:
+                    martin_result = {'success': False, 'message': 'Martin认证失败，请检查API密钥'}
+                else:
+                    martin_result = {'success': False, 'message': f'Martin连接失败，HTTP状态码: {catalog_response.status_code}'}
+                    
+        except requests.exceptions.Timeout:
+            martin_result = {'success': False, 'message': 'Martin连接超时，请检查服务地址'}
+        except requests.exceptions.ConnectionError:
+            martin_result = {'success': False, 'message': '无法连接到Martin服务器，请检查地址和网络'}
+        except Exception as e:
+            martin_result = {'success': False, 'message': f'Martin连接测试失败: {str(e)}'}
+        
+        # 测试文件服务（如果配置了）
+        if file_service_config and file_service_config.get('file_service_url'):
+            file_service_result = test_file_service_connection(
+                file_service_config['file_service_url'],
+                file_service_config.get('file_service_username'),
+                file_service_config.get('file_service_password')
+            )
+        
+        # 综合返回结果
+        if martin_result and martin_result['success']:
+            if file_service_result:
+                if file_service_result['success']:
+                    return {
+                        'success': True,
+                        'message': f"{martin_result['message']}，文件服务也连接成功",
+                        'data': {
+                            'martin': martin_result.get('data', {}),
+                            'file_service': file_service_result.get('data', {})
+                        }
+                    }
+                else:
+                    return {
+                        'success': True,
+                        'message': f"{martin_result['message']}，但文件服务连接失败: {file_service_result['message']}",
+                        'data': {
+                            'martin': martin_result.get('data', {}),
+                            'file_service_error': file_service_result['message']
+                        }
+                    }
+            else:
+                return martin_result
         else:
-            return {'success': False, 'message': f'连接失败，HTTP状态码: {catalog_response.status_code}'}
+            return martin_result or {'success': False, 'message': 'Martin连接测试失败'}
             
-    except requests.exceptions.Timeout:
-        return {'success': False, 'message': '连接超时，请检查服务地址'}
-    except requests.exceptions.ConnectionError:
-        return {'success': False, 'message': '无法连接到服务器，请检查地址和网络'}
     except Exception as e:
         return {'success': False, 'message': f'连接测试失败: {str(e)}'}
 
@@ -604,4 +737,27 @@ def get_default_connections():
         })
         
     except Exception as e:
-        return jsonify({'error': f'获取默认连接失败: {str(e)}'}), 500 
+        return jsonify({'error': f'获取默认连接失败: {str(e)}'}), 500
+
+@service_connection_bp.route('/file-service/download', methods=['GET'])
+def download_file_service():
+    """下载文件服务程序"""
+    try:
+        import os
+        from flask import send_file
+        
+        # 假设main.exe文件在项目的downloads目录中
+        file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'downloads', 'main.exe')
+        
+        if not os.path.exists(file_path):
+            return jsonify({'error': '文件服务程序未找到'}), 404
+        
+        return send_file(
+            file_path,
+            as_attachment=True,
+            download_name='文件服务程序.exe',
+            mimetype='application/octet-stream'
+        )
+        
+    except Exception as e:
+        return jsonify({'error': f'下载失败: {str(e)}'}), 500 
