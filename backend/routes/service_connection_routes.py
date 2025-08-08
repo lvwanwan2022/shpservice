@@ -747,7 +747,7 @@ def download_file_service():
         from flask import send_file
         
         # 假设main.exe文件在项目的downloads目录中
-        file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'downloads', 'main.zip')
+        file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'downloads', 'selfFileService.zip')
         
         if not os.path.exists(file_path):
             return jsonify({'error': '文件服务程序未找到'}), 404

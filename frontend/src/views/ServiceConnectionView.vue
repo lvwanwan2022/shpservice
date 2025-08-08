@@ -11,12 +11,12 @@
           <el-collapse-item title="📦 文件服务程序下载" name="file-service">
             <div class="guide-content">
               <div class="download-section">
-                <h4>🛠️ Main.zip 文件服务程序</h4>
+                <h4>🛠️ selfFileService.zip 文件服务程序</h4>
                 <p>客户端文件服务程序，用于在本地发布文件服务供系统连接使用</p>
                 <div class="download-buttons">
                   <el-button type="primary" @click="downloadFileService">
                     <el-icon><Download /></el-icon>
-                    下载 Main.zip
+                    下载 selfFileService.zip
                   </el-button>
                   <el-button type="info" @click="showFileServiceGuide = true">
                     <el-icon><Document /></el-icon>
@@ -438,12 +438,12 @@
       :close-on-click-modal="false"
     >
       <div class="guide-dialog">
-        <h3>🛠️ Main.zip 程序使用说明</h3>
+        <h3>🛠️ selfFileService.zip 程序使用说明</h3>
         
         <div class="guide-step">
           <h4>1. 下载和运行</h4>
           <ul>
-            <li>下载 Main.zip 程序包到客户端计算机</li>
+            <li>下载 selfFileService.zip 程序包到客户端计算机</li>
             <li>解压zip文件，双击运行main.exe程序，会弹出配置界面</li>
             <li>设置文件夹路径、端口号、用户名和密码</li>
             <li>点击"启动服务"按钮</li>
