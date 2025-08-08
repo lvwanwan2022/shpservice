@@ -438,13 +438,13 @@
       :close-on-click-modal="false"
     >
       <div class="guide-dialog">
-        <h3>🛠️ Main.exe 程序使用说明</h3>
+        <h3>🛠️ Main.zip 程序使用说明</h3>
         
         <div class="guide-step">
           <h4>1. 下载和运行</h4>
           <ul>
-            <li>下载 Main.exe 程序到客户端计算机</li>
-            <li>双击运行程序，会弹出配置界面</li>
+            <li>下载 Main.zip 程序包到客户端计算机</li>
+            <li>解压zip文件，双击运行main.exe程序，会弹出配置界面</li>
             <li>设置文件夹路径、端口号、用户名和密码</li>
             <li>点击"启动服务"按钮</li>
           </ul>
@@ -1324,7 +1324,7 @@ export default {
            const url = window.URL.createObjectURL(blob);
            const a = document.createElement('a');
            a.href = url;
-           a.download = '文件服务程序.exe';
+           a.download = '文件服务程序.zip';
            document.body.appendChild(a);
            a.click();
            window.URL.revokeObjectURL(url);

@@ -756,7 +756,7 @@ def download_file_service():
             file_path,
             as_attachment=True,
             download_name='文件服务程序.zip',
-            mimetype='application/octet-stream'
+            mimetype='application/zip'
         )
         
     except Exception as e:
