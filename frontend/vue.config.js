@@ -2,7 +2,7 @@
  * @Author: Lvwan-793145268@qq.com
  * @Date: 2025-05-11 22:17:16
  * @LastEditors: WangNing
- * @LastEditTime: 2025-08-05 11:18:42
+ * @LastEditTime: 2025-08-08 21:42:07
  * @FilePath: \shpservice\frontend\vue.config.js
  * @Description: 
  * Copyright (c) 2025 by Lvwan, All Rights Reserved. 
@@ -24,7 +24,9 @@ module.exports = defineConfig({
   transpileDependencies: true,
   // 添加开发服务器代理配置
   devServer: {
+    host: '::',  // 启用IPv6监听，同时支持IPv4和IPv6
     port: 8080,
+    allowedHosts: 'all',  // 允许所有主机访问
     proxy: {
       '/api': {
         target: backend_url,
