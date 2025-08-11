@@ -26,7 +26,6 @@ module.exports = defineConfig({
     host: '::',  // 启用IPv6监听，同时支持IPv4和IPv6
     port: 8080,
     allowedHosts: 'all',  // 允许所有主机访问
-    host: '0.0.0.0',
     proxy: {
       '/api': {
         target: backend_url,
