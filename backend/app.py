@@ -394,5 +394,5 @@ def cleanup_martin():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5030))
     debug = os.environ.get('DEBUG', 'True').lower() == 'true'    
-    logger.info(f"🌐 启动Flask应用在端口 {port}")
-    app.run(host='0.0.0.0', port=port, debug=debug) 
+    logger.info(f"🌐 启动Flask应用在端口 {port} (IPv4 + IPv6)")
+    app.run(host='::', port=port, debug=debug) 
