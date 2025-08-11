@@ -110,23 +110,30 @@ class IPv6NetworkChecker:
         self.print_separator("3. DNS服务器检查")
         
         if self.system == "Windows":
-            stdout, stderr, code = self.run_command("nslookup")
+            stdout, stderr, code = self.run_command("ipconfig /all | findstr DNS")
             print("📋 当前DNS配置:")
             print(stdout[:500] if stdout else "无法获取DNS信息")
         
-        # 测试IPv6 DNS解析
-        test_domains = ['ipv6.google.com', 'ipv6.test-ipv6.com']
+        # 测试IPv6 DNS解析 - 添加超时控制
+        test_domains = ['ipv6.google.com', 'test-ipv6.com']
         dns_working = False
         
         for domain in test_domains:
             try:
+                print(f"🔍 测试DNS解析: {domain}")
+                # 设置较短的超时时间
+                socket.setdefaulttimeout(5)
                 result = socket.getaddrinfo(domain, None, socket.AF_INET6)
                 if result:
                     print(f"✅ IPv6 DNS解析正常: {domain}")
                     dns_working = True
                     break
+            except socket.timeout:
+                print(f"⏰ DNS解析超时: {domain}")
             except Exception as e:
-                print(f"❌ IPv6 DNS解析失败: {domain} - {e}")
+                print(f"❌ IPv6 DNS解析失败: {domain} - {str(e)[:50]}")
+            finally:
+                socket.setdefaulttimeout(None)  # 重置超时
         
         self.results['dns_working'] = dns_working
         return dns_working
@@ -135,28 +142,30 @@ class IPv6NetworkChecker:
         """检查IPv6连通性"""
         self.print_separator("4. IPv6连通性测试")
         
-        # 测试IPv6网站连接
+        # 测试IPv6网站连接 - 添加超时控制
         test_sites = [
-            ('ipv6.google.com', '谷歌IPv6'),
-            ('ipv6.test-ipv6.com', 'IPv6测试站点'),
             ('2001:4860:4860::8888', '谷歌DNS'),
+            ('ipv6.google.com', '谷歌IPv6'),
         ]
         
         connectivity_working = False
         
         for site, name in test_sites:
+            print(f"🔍 测试连通性: {name}")
             if self.system == "Windows":
-                stdout, stderr, code = self.run_command(f"ping -6 -n 3 {site}")
+                stdout, stderr, code = self.run_command(f"ping -6 -n 2 -w 3000 {site}")
                 if "TTL=" in stdout or "生存时间" in stdout:
                     print(f"✅ {name} 连通性正常")
                     connectivity_working = True
+                    break
                 else:
                     print(f"❌ {name} 连通性失败")
             else:
-                stdout, stderr, code = self.run_command(f"ping6 -c 3 {site}")
+                stdout, stderr, code = self.run_command(f"ping6 -c 2 -W 3 {site}")
                 if code == 0:
                     print(f"✅ {name} 连通性正常")
                     connectivity_working = True
+                    break
                 else:
                     print(f"❌ {name} 连通性失败")
         
