@@ -1,15 +1,14 @@
 /*
  * @Author: Lvwan-793145268@qq.com
  * @Date: 2025-05-11 22:17:16
- * @LastEditors: WangNing
- * @LastEditTime: 2025-08-08 21:42:07
+ * @LastEditors: WangNi * @LastEditTime: 2025-08-08 21:42:07
  * @FilePath: \shpservice\frontend\vue.config.js
  * @Description: 
  * Copyright (c) 2025 by Lvwan, All Rights Reserved. 
  */
 const { defineConfig } = require('@vue/cli-service')
-const base_url='http://172.16.101.52'
-//const base_url='http://10.20.186.58'
+//const base_url='http://172.16.101.52'
+const base_url='http://10.20.186.58'
 // 从环境变量获取Martin服务的基础URL，默认为http://192.168.1.17:3000
 //const backend_url = 'http://192.168.1.17:5030'
 const backend_url = base_url+':5030'
@@ -27,6 +26,7 @@ module.exports = defineConfig({
     host: '::',  // 启用IPv6监听，同时支持IPv4和IPv6
     port: 8080,
     allowedHosts: 'all',  // 允许所有主机访问
+    host: '0.0.0.0',
     proxy: {
       '/api': {
         target: backend_url,
