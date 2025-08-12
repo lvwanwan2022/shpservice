@@ -7,7 +7,7 @@
  * Copyright (c) 2025 by Lvwan, All Rights Reserved. 
  */
 const { defineConfig } = require('@vue/cli-service')
-const base_url='http://192.168.1.16'
+const base_url='http://www.totodudu.com'
 //const base_url='http://10.20.186.58'
 // 从环境变量获取Martin服务的基础URL，默认为http://192.168.1.17:3000
 //const backend_url = 'http://192.168.1.17:5030'
@@ -24,7 +24,7 @@ module.exports = defineConfig({
   // 添加开发服务器代理配置
   devServer: {
     host: '::',  // 启用IPv6监听，同时支持IPv4和IPv6
-    port: 8080,
+    port: 8085,
     allowedHosts: 'all',  // 允许所有主机访问
     proxy: {
       '/api': {

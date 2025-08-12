@@ -17,7 +17,7 @@
               <router-link to="/">首页</router-link>
               <router-link to="/upload">数据上传</router-link>
               <router-link to="/scene">场景管理</router-link>
-              <router-link to="/service-connections">服务连接</router-link>
+              <!-- <router-link to="/service-connections">服务连接</router-link> -->
               <!-- <router-link to="/map-lf">地图浏览(Leaflet)</router-link> -->
               <router-link to="/map-ol">地图浏览(OpenLayers)</router-link>
               <router-link to="/map-deckgl">地图浏览(Deck.gl)</router-link>
