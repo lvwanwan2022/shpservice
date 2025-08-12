@@ -628,6 +628,8 @@ import {
 } from '@element-plus/icons-vue'
 import authService from '@/auth/authService'
 import { testServiceConnection, testGeoserverInNewWindow } from '@/utils/geoserverTest'
+// 🔒 引入前端加密工具
+import frontendEncryption from '@/utils/encryption'
 
 export default {
   name: 'ServiceConnectionView',
@@ -789,7 +791,7 @@ export default {
         await createFormRef.value.validate()
         createLoading.value = true
         
-        const requestData = {
+        let requestData = {
           service_name: createForm.service_name,
           service_type: createForm.service_type,
           server_url: createForm.server_url,
@@ -821,6 +823,16 @@ export default {
           if (createForm.file_service_password) {
             requestData.file_service_password = createForm.file_service_password
           }
+        }
+        
+        // 🔒 加密敏感字段
+        try {
+          console.log('🔒 正在加密敏感数据...')
+          requestData = await frontendEncryption.encryptFormData(requestData)
+          console.log('✅ 敏感数据加密完成')
+        } catch (error) {
+          console.error('❌ 数据加密失败:', error)
+          ElMessage.warning('数据加密失败，将使用明文传输')
         }
         
         if (editingConnection.value) {
@@ -971,7 +983,7 @@ export default {
         testMethod.value = 'backend'
         connectionTestResult.value = null
         
-        const testData = {
+        let testData = {
           service_type: createForm.service_type,
           server_url: createForm.server_url
         }
@@ -995,6 +1007,14 @@ export default {
           if (createForm.file_service_password) {
             testData.file_service_password = createForm.file_service_password
           }
+        }
+        
+        // 🔒 加密测试数据中的敏感字段
+        try {
+          testData = await frontendEncryption.encryptFormData(testData)
+        } catch (error) {
+          console.error('❌ 测试数据加密失败:', error)
+          ElMessage.warning('测试数据加密失败，将使用明文传输')
         }
         
         const response = await apiRequest('/api/service-connections/test', {
@@ -1435,7 +1455,17 @@ export default {
     }
     
     // 初始化
-    onMounted(() => {
+    onMounted(async () => {
+      // 🔒 初始化加密服务
+      try {
+        console.log('🔒 初始化前端加密服务...')
+        await frontendEncryption.initialize()
+        console.log('✅ 前端加密服务初始化完成')
+      } catch (error) {
+        console.error('❌ 前端加密服务初始化失败:', error)
+        ElMessage.warning('加密服务初始化失败，部分功能可能受限')
+      }
+      
       loadConnections()
     })
     

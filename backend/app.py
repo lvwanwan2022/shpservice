@@ -19,6 +19,8 @@ import os
 import requests
 import atexit
 import json
+# 🔒 引入HTTPS配置
+from utils.https_config import HTTPSConfig
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -393,6 +395,21 @@ def cleanup_martin():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5030))
-    debug = os.environ.get('DEBUG', 'True').lower() == 'true'    
-    logger.info(f"🌐 启动Flask应用在端口 {port} (IPv4 + IPv6)")
-    app.run(host='::', port=port, debug=debug) 
+    debug = os.environ.get('DEBUG', 'True').lower() == 'true'
+    use_https = os.environ.get('USE_HTTPS', 'False').lower() == 'true'
+    
+    if use_https:
+        # 🔒 配置HTTPS
+        https_config = HTTPSConfig()
+        ssl_context = https_config.create_flask_ssl_context()
+        
+        if ssl_context:
+            logger.info(f"🔒 启动HTTPS Flask应用在端口 {port} (IPv4 + IPv6)")
+            app.run(host='::', port=port, debug=debug, ssl_context=ssl_context)
+        else:
+            logger.warning("⚠️ HTTPS配置失败，降级为HTTP模式")
+            logger.info(f"🌐 启动HTTP Flask应用在端口 {port} (IPv4 + IPv6)")
+            app.run(host='::', port=port, debug=debug)
+    else:
+        logger.info(f"🌐 启动HTTP Flask应用在端口 {port} (IPv4 + IPv6)")
+        app.run(host='::', port=port, debug=debug) 

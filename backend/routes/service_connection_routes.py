@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-用户服务连接管理路由 - 简化版
+用户服务连接管理路由 - 简化版 + 加密功能
 只提供外部服务连接的CRUD操作和连接测试功能
+集成数据加密保护敏感信息
 """
 
 from flask import Blueprint, request, jsonify
@@ -17,11 +18,89 @@ from models.user_service_db import (
 from models.db import execute_query
 from utils.snowflake import get_snowflake_id
 from auth.auth_service import AuthService, require_auth, get_current_user
+# 🔒 引入加密服务
+from utils.encryption import service_connection_encryption, encryption_service
 
 # 创建蓝图
 service_connection_bp = Blueprint('service_connection', __name__, url_prefix='/api/service-connections')
 
 # 使用统一的认证装饰器，移除自定义版本
+
+# ===============================
+# 🔒 加密工具函数
+# ===============================
+
+def encrypt_request_data(data):
+    """加密请求中的敏感数据"""
+    try:
+        # 处理RSA加密的敏感字段
+        encrypted_fields = {}
+        sensitive_fields = ['password', 'api_key', 'file_service_password']
+        
+        for field in sensitive_fields:
+            if field in data and data[field]:
+                # 检查是否已经被RSA加密（来自前端）
+                if data.get(f'{field}_rsa_encrypted'):
+                    # RSA解密
+                    decrypted_value = encryption_service.rsa_decrypt(data[field])
+                    if decrypted_value:
+                        encrypted_fields[field] = decrypted_value
+                        # 清除RSA加密标记
+                        data.pop(f'{field}_rsa_encrypted', None)
+                else:
+                    encrypted_fields[field] = data[field]
+        
+        # 更新原始数据
+        data.update(encrypted_fields)
+        return data
+    except Exception as e:
+        print(f"❌ 请求数据解密失败: {e}")
+        return data
+
+def prepare_response_data(connections):
+    """准备响应数据，遮蔽敏感信息"""
+    try:
+        for conn in connections:
+            # 🔥 确保ID字段转换为字符串，避免JavaScript精度丢失
+            if conn.get('id'):
+                conn['id'] = str(conn['id'])
+            if conn.get('user_id'):
+                conn['user_id'] = str(conn['user_id'])
+                
+            if 'connection_config' in conn and conn['connection_config']:
+                config = json.loads(conn['connection_config']) if isinstance(conn['connection_config'], str) else conn['connection_config']
+                
+                # 🔒 解密配置以便处理
+                decrypted_config = service_connection_encryption.decrypt_connection_config(config)
+                
+                # 🔒 遮蔽敏感字段返回给前端
+                masked_config = service_connection_encryption.mask_sensitive_fields(decrypted_config)
+                
+                conn['connection_config'] = masked_config
+        
+        return connections
+    except Exception as e:
+        print(f"❌ 响应数据处理失败: {e}")
+        return connections
+
+# ===============================
+# 🔒 公钥获取接口
+# ===============================
+
+@service_connection_bp.route('/encryption/public-key', methods=['GET'])
+def get_public_key():
+    """获取RSA公钥用于前端加密"""
+    try:
+        public_key = encryption_service.get_public_key_pem()
+        return jsonify({
+            'success': True,
+            'data': {
+                'public_key': public_key,
+                'algorithm': 'RSA-OAEP-SHA256'
+            }
+        })
+    except Exception as e:
+        return jsonify({'error': f'获取公钥失败: {str(e)}'}), 500
 
 # ===============================
 # 服务连接CRUD接口
@@ -46,26 +125,12 @@ def get_connections():
         
         connections = get_user_connections(user_id, service_type, is_active)
         
-        # 处理大整数ID和隐藏敏感信息
-        for conn in connections:
-            # 🔥 确保ID字段转换为字符串，避免JavaScript精度丢失
-            if conn.get('id'):
-                conn['id'] = str(conn['id'])
-            if conn.get('user_id'):
-                conn['user_id'] = str(conn['user_id'])
-                
-            if 'connection_config' in conn and conn['connection_config']:
-                config = json.loads(conn['connection_config']) if isinstance(conn['connection_config'], str) else conn['connection_config']
-                # 隐藏密码和API密钥
-                if 'password' in config:
-                    config['password'] = '***'
-                if 'api_key' in config:
-                    config['api_key'] = '***'
-                conn['connection_config'] = config
+        # 🔒 处理响应数据，遮蔽敏感信息
+        processed_connections = prepare_response_data(connections)
         
         return jsonify({
             'success': True,
-            'data': connections
+            'data': processed_connections
         })
         
     except Exception as e:
@@ -82,6 +147,9 @@ def create_connection():
         if not user_id:
             return jsonify({'error': '无法获取用户信息'}), 401
         data = request.get_json()
+        
+        # 🔒 解密请求中的敏感数据
+        data = encrypt_request_data(data)
         
         # 验证必填字段
         required_fields = ['service_name', 'service_type', 'server_url']
@@ -121,13 +189,16 @@ def create_connection():
             if data.get('file_service_password'):
                 connection_config['file_service_password'] = data['file_service_password']
         
+        # 🔒 加密敏感配置字段
+        encrypted_config = service_connection_encryption.encrypt_connection_config(connection_config)
+        
         # 创建连接
         connection = create_service_connection(
             user_id=user_id,
             service_name=data['service_name'],
             service_type=data['service_type'],
             server_url=data['server_url'],
-            connection_config=connection_config,
+            connection_config=encrypted_config,
             description=data.get('description'),
             is_default=data.get('is_default', False)
         )
@@ -138,6 +209,17 @@ def create_connection():
                 connection['id'] = str(connection['id'])
             if connection.get('user_id'):
                 connection['user_id'] = str(connection['user_id'])
+            
+            # 🔒 处理返回的配置信息，遮蔽敏感字段
+            if connection.get('connection_config'):
+                config = connection['connection_config']
+                if isinstance(config, str):
+                    config = json.loads(config)
+                
+                # 解密后遮蔽
+                decrypted_config = service_connection_encryption.decrypt_connection_config(config)
+                masked_config = service_connection_encryption.mask_sensitive_fields(decrypted_config)
+                connection['connection_config'] = masked_config
             
             return jsonify({
                 'success': True,
@@ -166,6 +248,9 @@ def update_connection(connection_id):
         if not user_id:
             return jsonify({'error': '无法获取用户信息'}), 401
         data = request.get_json()
+        
+        # 🔒 解密请求中的敏感数据
+        data = encrypt_request_data(data)
         
         # 验证连接所有权
         check_sql = "SELECT * FROM user_service_connections WHERE id = %s AND user_id = %s"
@@ -249,6 +334,9 @@ def update_connection(connection_id):
             else:
                 current_config = {}
             
+            # 🔒 先解密现有配置
+            current_config = service_connection_encryption.decrypt_connection_config(current_config)
+            
             # 🔥 确保同步更新server_url
             if 'server_url' in data:
                 current_config['server_url'] = data['server_url']
@@ -275,8 +363,12 @@ def update_connection(connection_id):
                 current_config['file_service_password'] = data['file_service_password']
             
             print(f"🔍 更新后的配置: {current_config}")
+            
+            # 🔒 重新加密配置
+            encrypted_config = service_connection_encryption.encrypt_connection_config(current_config)
+            
             update_fields.append('connection_config = %s')
-            params.append(json.dumps(current_config))
+            params.append(json.dumps(encrypted_config))
         
         if not update_fields:
             return jsonify({'error': '没有需要更新的字段'}), 400
@@ -300,6 +392,17 @@ def update_connection(connection_id):
                 updated_connection['id'] = str(updated_connection['id'])
             if updated_connection.get('user_id'):
                 updated_connection['user_id'] = str(updated_connection['user_id'])
+            
+            # 🔒 处理返回的配置信息，遮蔽敏感字段
+            if updated_connection.get('connection_config'):
+                config = updated_connection['connection_config']
+                if isinstance(config, str):
+                    config = json.loads(config)
+                
+                # 解密后遮蔽
+                decrypted_config = service_connection_encryption.decrypt_connection_config(config)
+                masked_config = service_connection_encryption.mask_sensitive_fields(decrypted_config)
+                updated_connection['connection_config'] = masked_config
             
             return jsonify({
                 'success': True,
@@ -354,6 +457,10 @@ def test_connection():
     """测试服务连接"""
     try:
         data = request.get_json()
+        
+        # 🔒 解密请求中的敏感数据
+        data = encrypt_request_data(data)
+        
         service_type = data.get('service_type')
         server_url = data.get('server_url')
         
@@ -440,6 +547,9 @@ def test_existing_connection(connection_id):
             config = config_data
         else:
             return jsonify({'error': '连接配置格式错误'}), 400
+        
+        # 🔒 解密配置数据
+        config = service_connection_encryption.decrypt_connection_config(config)
         
         # 执行测试
         print(f"🔍 连接信息: 类型={connection['service_type']}, 名称={connection['service_name']}")
