@@ -498,13 +498,14 @@ export default {
         if (layer.file_type === 'mbtiles' || mvtUrl.includes('/mbtiles/')) {
           const mbtilesMatch = mvtUrl.match(/\/mbtiles\/([^/]+)\/\{z\}/) || []
           const fileName = mbtilesMatch[1] || 'default'
-
+          console.log('mvtUrl',mvtUrl)
           mvtUrl = `${MARTIN_BASE_URL}/mbtiles/${fileName}/{z}/{x}/{y}`
         } else {
 
           const tableName = mvtUrl.match(/\/([^/]+)\/\{z\}/)?.[1] || 'default'
 
           mvtUrl = `${MARTIN_BASE_URL}/${tableName}/{z}/{x}/{y}`
+          console.log('mvtUrl',mvtUrl)
         }
       }
       

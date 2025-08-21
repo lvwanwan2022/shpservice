@@ -271,26 +271,7 @@ except ImportError:
 except Exception as e:
     logger.warning(f"⚠️ 用户服务连接管理路由注册失败: {str(e)}")
 
-# 导入Martin服务
-try:
-    from services.martin_service import MartinService
-    martin_service = MartinService()
-    logger.info("✅ Martin服务模块加载成功")
-    try:
-        martin_service.stop_service()
-        success = martin_service.start_service()
-        
-        if success:
-            logger.info('✅Martin 服务启动成功')
-        else:
-            logger.warning('⚠️Martin 服务启动失败')
-            
-    except Exception as e:
-        logger.error(f"重启服务失败: {e}")
-    
-except Exception as e:
-    martin_service = None
-    logger.warning(f"⚠️ Martin服务模块加载失败: {str(e)}")
+
 # GeoServer代理路由（解决CORS问题）
 @app.route('/geoserver/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
 def geoserver_proxy(path):
@@ -381,18 +362,10 @@ def internal_error(error):
     """处理500错误"""
     return jsonify({'error': '服务器内部错误'}), 500
 
-def cleanup_martin():
-    """清理Martin服务进程"""
-    if martin_service and martin_service.process:
-        try:
-            martin_service.process.terminate()
-            martin_service.process.wait(timeout=5)
-            logger.info("✅ Martin服务已清理")
-        except Exception as e:
-            logger.warning(f"⚠️ 清理Martin服务时出错: {str(e)}")
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5030))
     debug = os.environ.get('DEBUG', 'True').lower() == 'true'    
     logger.info(f"🌐 启动Flask应用在端口 {port} (IPv4 + IPv6)")
-    app.run(host='::', port=port, debug=debug) 
+    #app.run(host='::', port=port, debug=debug) 
+    app.run(host='0.0.0.0', port=port, debug=debug) 

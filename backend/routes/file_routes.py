@@ -862,10 +862,23 @@ def publish_martin_service(file_id):
             )
         
         if result['success']:
+            # 发布成功后，调用Martin reload-postgres接口重新加载PostgreSQL数据源
+            try:
+                from services.martin_service import martin_service
+                #martin_service.get_config_info()
+                result_reload = martin_service.reload_postgres()
+                if result_reload['success']:
+                    current_app.logger.info(f"✅ Martin reload-postgres成功: {result_reload.get('data', {})}")
+                else:
+                    current_app.logger.warning(f"⚠️ Martin reload-postgres失败: {result_reload.get('error', '未知错误')}")
+            except Exception as reload_error:
+                current_app.logger.error(f"❌ Martin reload-postgres异常: {str(reload_error)}")
+            
             return jsonify({
                 'success': True,
                 'message': 'Martin服务发布成功',
-                'martin_info': result
+                'martin_info': result,
+                'reload_status': result_reload.get('success', False) if 'result_reload' in locals() else False
             }), 200
         else:
             return jsonify({
@@ -957,10 +970,23 @@ def publish_martin_mbtiles_service(file_id):
             )
         
         if result['success']:
+            # 发布成功后，调用Martin reload-sources接口重新加载MBTiles数据源
+            try:
+                from services.martin_service import martin_service
+                #martin_service.get_config_info()
+                result_reload = martin_service.reload_sources()
+                if result_reload['success']:
+                    current_app.logger.info(f"✅ Martin reload-sources成功: {result_reload.get('data', {})}")
+                else:
+                    current_app.logger.warning(f"⚠️ Martin reload-sources失败: {result_reload.get('error', '未知错误')}")
+            except Exception as reload_error:
+                current_app.logger.error(f"❌ Martin reload-sources异常: {str(reload_error)}")
+            
             return jsonify({
                 'success': True,
                 'message': 'Martin服务发布成功',
-                'martin_info': result
+                'martin_info': result,
+                'reload_status': result_reload.get('success', False) if 'result_reload' in locals() else False
             }), 200
         else:
             return jsonify({

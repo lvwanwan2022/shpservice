@@ -253,7 +253,7 @@ def publish_service(file_id):
         if file_type == 'geojson':
             # GeoJSON文件优先尝试使用PostGIS方式，如果失败则回退到直接发布
             try:
-                from services.postgis_service import PostGISService
+                from backend.services.postgis_service_copy import PostGISService
                 postgis_service = PostGISService()
                 
                 # 简单测试数据库连接

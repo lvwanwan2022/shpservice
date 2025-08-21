@@ -363,7 +363,7 @@
           <template #header>
             <div class="column-header">
               <span>Martin服务</span>
-              <el-tooltip content="重启Martin服务" placement="top">
+              <!-- <el-tooltip content="重启Martin服务" placement="top">
                 <el-button 
                   size="small" 
                   type="warning" 
@@ -374,7 +374,7 @@
                 >
                   <i class="el-icon-refresh"></i>
                 </el-button>
-              </el-tooltip>
+              </el-tooltip> -->
             </div>
           </template>
           <template #default="scope">

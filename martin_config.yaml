@@ -1,4 +1,4 @@
-listen_addresses: '[::]:3000'
+listen_addresses: '0.0.0.0:3000'
 worker_processes: 32
 cache_size_mb: 5120
 # Enable or disable Martin web UI. At the moment, only allows `enable-for-all` which enables the web UI for all connections. This may be undesirable in a production environment. [default: disable]

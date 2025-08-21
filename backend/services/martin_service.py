@@ -9,6 +9,7 @@ import subprocess
 import requests
 import logging
 import time
+import yaml
 import socket
 from typing import Dict, List, Optional, Tuple
 import psycopg2
@@ -1050,6 +1051,202 @@ class MartinService:
         except Exception as e:
             logger.debug(f"清理日志文件时发生错误: {e}")
 
+
+    def get_config_info(self) -> Dict:
+        """
+        获取Martin配置文件信息，用于构造reload请求的请求体
+        
+        Returns:
+            包含connection_string、paths、from_schemas、id_regex等信息的字典
+        """
+        try:
+            if not os.path.exists(self.config_file_path):
+                logger.error(f"Martin配置文件不存在: {self.config_file_path}")
+                return {
+                    'success': False,
+                    'error': f'配置文件不存在: {self.config_file_path}'
+                }
+            
+            # 读取YAML配置文件
+            with open(self.config_file_path, 'r', encoding='utf-8') as f:
+                config_data = yaml.safe_load(f)
+            
+            # 提取所需信息
+            config_info = {
+                'success': True,
+                'config_file_path': self.config_file_path,
+                'postgres': {},
+                'mbtiles': {}
+            }
+            
+            # 提取PostgreSQL配置
+            if 'postgres' in config_data:
+                postgres_config = config_data['postgres']
+                config_info['postgres'] = {
+                    'connection_string': postgres_config.get('connection_string', ''),
+                    'pool_size': postgres_config.get('pool_size', 20)
+                }
+                
+                # 提取auto_publish配置
+                if 'auto_publish' in postgres_config and 'tables' in postgres_config['auto_publish']:
+                    tables_config = postgres_config['auto_publish']['tables']
+                    config_info['postgres']['from_schemas'] = tables_config.get('from_schemas', ['public'])
+                    # 去掉正则符号，直接使用字符串匹配
+                    config_info['postgres']['id_regex'] = tables_config.get('id_regex', 'vector_').replace('^', '').replace('.*', '')
+                    # config_info['postgres']['id_regex'] = tables_config.get('id_regex', 'vector_')
+            
+            # 提取MBTiles配置
+            if 'mbtiles' in config_data and 'paths' in config_data['mbtiles']:
+                config_info['mbtiles']['paths'] = config_data['mbtiles']['paths']
+            
+            logger.info(f"✅ 成功读取Martin配置文件: {self.config_file_path}")
+            logger.info(f"PostgreSQL配置: {config_info['postgres']}")
+            logger.info(f"MBTiles配置: {config_info['mbtiles']}")
+            
+            return config_info
+            
+        except Exception as e:
+            logger.error(f"读取Martin配置文件失败: {str(e)}")
+            return {
+                'success': False,
+                'error': f'读取配置文件失败: {str(e)}'
+            }
+    
+    def reload_sources(self) -> Dict:
+        """
+        调用Martin的reload-sources接口，重新加载MBTiles数据源
+        
+        Returns:
+            请求结果字典
+        """
+        try:
+            # 获取配置信息
+            config_info = self.get_config_info()
+            if not config_info['success']:
+                return config_info
+            
+            # 构造请求URL
+            url = f"{self.base_url}/admin/reload-sources"
+            
+            # 构造请求体
+            request_body = {}
+            
+            # 如果有MBTiles路径配置，添加到请求体中
+            if config_info['mbtiles'].get('paths'):
+                request_body['paths'] = config_info['mbtiles']['paths']
+            
+            logger.info(f"🔄 发送reload-sources请求到: {url}")
+            logger.info(f"请求体: {json.dumps(request_body, ensure_ascii=False, indent=2)}")
+            
+            # 发送POST请求
+            response = requests.post(
+                url,
+                json=request_body,
+                headers={'Content-Type': 'application/json'},
+                timeout=30
+            )
+            
+            # 检查响应状态
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(f"✅ reload-sources请求成功: {result}")
+                return {
+                    'success': True,
+                    'data': result,
+                    'status_code': response.status_code
+                }
+            else:
+                logger.error(f"❌ reload-sources请求失败: HTTP {response.status_code}")
+                logger.error(f"响应内容: {response.text}")
+                return {
+                    'success': False,
+                    'error': f'HTTP {response.status_code}: {response.text}',
+                    'status_code': response.status_code
+                }
+                
+        except requests.exceptions.RequestException as e:
+            logger.error(f"❌ reload-sources网络请求异常: {str(e)}")
+            return {
+                'success': False,
+                'error': f'网络请求异常: {str(e)}'
+            }
+        except Exception as e:
+            logger.error(f"❌ reload-sources请求失败: {str(e)}")
+            return {
+                'success': False,
+                'error': f'请求失败: {str(e)}'
+            }
+    
+    def reload_postgres(self) -> Dict:
+        """
+        调用Martin的reload-postgres接口，重新加载PostgreSQL数据源
+        
+        Returns:
+            请求结果字典
+        """
+        try:
+            # 获取配置信息
+            config_info = self.get_config_info()
+            if not config_info['success']:
+                return config_info
+            
+            # 构造请求URL
+            url = f"{self.base_url}/admin/reload-postgres"
+            
+            # 构造请求体
+            request_body = {}
+            
+            # 添加PostgreSQL配置到请求体
+            if config_info['postgres']:
+                postgres_config = config_info['postgres']
+                if postgres_config.get('connection_string'):
+                    request_body['connection_string'] = postgres_config['connection_string']
+                if postgres_config.get('from_schemas'):
+                    request_body['schema_name'] = postgres_config['from_schemas'][0]  # 取第一个schema
+                if postgres_config.get('id_regex'):
+                    request_body['table_pattern'] = postgres_config['id_regex']
+            
+            logger.info(f"🔄 发送reload-postgres请求到: {url}")
+            logger.info(f"请求体: {json.dumps(request_body, ensure_ascii=False, indent=2)}")
+            
+            # 发送POST请求
+            response = requests.post(
+                url,
+                json=request_body,
+                headers={'Content-Type': 'application/json'},
+                timeout=30
+            )
+            
+            # 检查响应状态
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(f"✅ reload-postgres请求成功: {result}")
+                return {
+                    'success': True,
+                    'data': result,
+                    'status_code': response.status_code
+                }
+            else:
+                logger.error(f"❌ reload-postgres请求失败: HTTP {response.status_code}")
+                logger.error(f"响应内容: {response.text}")
+                return {
+                    'success': False,
+                    'error': f'HTTP {response.status_code}: {response.text}',
+                    'status_code': response.status_code
+                }
+                
+        except requests.exceptions.RequestException as e:
+            logger.error(f"❌ reload-postgres网络请求异常: {str(e)}")
+            return {
+                'success': False,
+                'error': f'网络请求异常: {str(e)}'
+            }
+        except Exception as e:
+            logger.error(f"❌ reload-postgres请求失败: {str(e)}")
+            return {
+                'success': False,
+                'error': f'请求失败: {str(e)}'
+            }
 
 # 创建全局实例
 martin_service = MartinService() 

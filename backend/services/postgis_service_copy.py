@@ -16,7 +16,6 @@ import tempfile
 import warnings
 
 from config import DB_CONFIG
-from utils import safe_temp_file
 
 
 class PostGISService:
@@ -52,19 +51,23 @@ class PostGISService:
                 warnings.simplefilter("ignore")
                 # 测试基本功能
                 from shapely.geometry import Point
+                import tempfile
                 
                 # 创建简单测试数据
                 data = {'geometry': [Point(0, 0)]}
                 gdf = gpd.GeoDataFrame(data, crs='EPSG:4326')
                 
-                # 使用安全的临时文件管理
-                with safe_temp_file(suffix='.geojson') as temp_file_path:
-                    gdf.to_file(temp_file_path, driver='GeoJSON')
-                    
-                    # 测试读取功能
-                    gdf_read = gpd.read_file(temp_file_path)
-                    
-                    return True
+                # 测试导出功能
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.geojson')
+                gdf.to_file(temp_file.name, driver='GeoJSON')
+                
+                # 测试读取功能
+                gdf_read = gpd.read_file(temp_file.name)
+                
+                # 清理
+                os.unlink(temp_file.name)
+                
+                return True
                 
         except Exception as e:
             print(f"⚠️ geopandas不可用，将使用手动实现: {e}")
