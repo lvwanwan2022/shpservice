@@ -48,7 +48,9 @@ class SLDTemplateService:
         point_style = {**default_styles['point'], **style_config.get('point', {})}
         line_style = {**default_styles['line'], **style_config.get('line', {})}
         polygon_style = {**default_styles['polygon'], **style_config.get('polygon', {})}
-        
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"point_style: {point_style}")
         # 检查配置中包含的几何类型
         has_point = 'point' in style_config and bool(style_config['point'])
         has_line = 'line' in style_config and bool(style_config['line'])

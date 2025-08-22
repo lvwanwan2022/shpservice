@@ -1,0 +1,1341 @@
+/* 全局响应式布局 - 最少代码适配移动端和平板端 */
+
+/* 移动端适配 (手机) */
+@media (max-width: 768px) {
+  /* 头部导航适配 - 改为横向布局 */
+  .main-header {
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    height: 60px !important;
+    padding: 0 15px !important;
+  }
+  
+  /* 移动端菜单按钮 */
+  .mobile-menu-btn {
+    display: flex !important;
+    align-items: center;
+    color: white;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+  }
+  
+  .mobile-menu-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  /* 标题居中 */
+  .logo {
+    flex: 1;
+    text-align: center;
+    margin: 0;
+  }
+  
+  .logo a {
+    font-size: 16px !important;
+    font-weight: bold;
+  }
+  
+  /* 用户信息区域 */
+  .user-section {
+    display: flex;
+    align-items: center;
+    margin: 0;
+  }
+  
+  /* 隐藏桌面端导航链接 */
+  .nav-center {
+    display: none !important;
+  }
+  
+  /* 调整主容器高度 */
+  .el-main {
+    height: calc(100vh - 60px) !important;
+    overflow-y: auto !important;
+  }
+  
+  /* 移动端导航菜单样式 */
+  .mobile-nav-menu {
+    padding: 20px 0;
+  }
+  
+  .mobile-nav-item {
+    display: flex;
+    align-items: center;
+    padding: 15px 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  
+  .mobile-nav-item:hover {
+    background-color: #f5f7fa;
+  }
+  
+  .mobile-nav-item.active {
+    background-color: #409EFF;
+    color: white;
+  }
+  
+  .mobile-nav-item .nav-icon {
+    margin-right: 15px;
+    color: #606266;
+  }
+  
+  .mobile-nav-item.active .nav-icon {
+    color: white;
+  }
+  
+  .mobile-nav-item .nav-text {
+    font-size: 16px;
+    font-weight: 500;
+  }
+  
+  /* 首页卡片适配 */
+  .home-card-container {
+    flex-direction: column !important;
+    align-items: center !important;
+    margin-top: 20px !important;
+  }
+  
+  .home-card {
+    width: 90% !important;
+    max-width: 300px !important;
+    margin: 10px 0 !important;
+    height: 150px !important;
+  }
+  
+  .card-icon {
+    font-size: 40px !important;
+  }
+  
+  .card-title {
+    font-size: 16px !important;
+  }
+  
+  .card-desc {
+    font-size: 12px !important;
+  }
+  
+  /* 地图页面移动端完全重新设计 */
+  .map-view {
+    height: 100vh !important;
+    flex-direction: column !important;
+    position: relative !important;
+  }
+  
+  .map-content {
+    flex: 1 !important;
+    height: calc(100vh - 60px) !important;
+    position: relative !important;
+    overflow: hidden !important;
+  }
+  
+  /* 移动端图层面板改为浮动抽屉 */
+  .layer-panel {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 85% !important;
+    max-width: 320px !important;
+    height: 100% !important;
+    background: white !important;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15) !important;
+    border-right: 1px solid #e4e7ed !important;
+    border-bottom: none !important;
+    z-index: 1000 !important;
+    transform: translateX(-100%) !important;
+    transition: transform 0.3s ease !important;
+    overflow: hidden !important;
+  }
+  
+  .layer-panel:not(.collapsed) {
+    transform: translateX(0) !important;
+  }
+  
+  .layer-panel.collapsed {
+    transform: translateX(-100%) !important;
+  }
+  
+
+  
+  /* 地图容器占满全屏 */
+  .map-container-wrapper {
+    width: 100% !important;
+    height: 100% !important;
+    margin-left: 0 !important;
+  }
+  
+  .map-container-wrapper.with-panel {
+    margin-left: 0 !important;
+  }
+  
+  /* 添加浮动的图层管理按钮 */
+  .mobile-layer-toggle-btn {
+    position: absolute !important;
+    top: 15px !important;
+    left: 15px !important;
+    z-index: 999 !important;
+    background: rgba(255, 255, 255, 0.95) !important;
+    border: 1px solid #dcdfe6 !important;
+    border-radius: 6px !important;
+    padding: 8px 12px !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    color: #606266 !important;
+    cursor: pointer !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+    transition: all 0.3s ease !important;
+    backdrop-filter: blur(5px) !important;
+    align-items: center !important;
+    gap: 6px !important;
+    min-width: 60px !important;
+    justify-content: center !important;
+  }
+  
+  /* 确保移动端浮动按钮正确显示 */
+  .mobile-layer-toggle-btn {
+    display: none !important;
+  }
+  
+  .mobile-layer-toggle-btn.show {
+    display: flex !important;
+  }
+  
+  .mobile-layer-toggle-btn:hover {
+    background: rgba(64, 158, 255, 0.95) !important;
+    color: white !important;
+    border-color: #409eff !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3) !important;
+  }
+  
+  .mobile-layer-toggle-btn:active {
+    transform: translateY(0) !important;
+  }
+  
+  /* 图层按钮图标 */
+  .mobile-layer-toggle-btn::before {
+    content: '☰' !important;
+    font-size: 16px !important;
+    line-height: 1 !important;
+  }
+  
+  /* 图层面板内容优化 */
+  .layer-panel .panel-header {
+    height: 50px !important;
+    padding: 0 15px !important;
+    background: #f8f9fa !important;
+    border-bottom: 1px solid #e4e7ed !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+  
+  .layer-panel .panel-header h3 {
+    font-size: 16px !important;
+    margin: 0 !important;
+    color: #303133 !important;
+  }
+  
+  .layer-panel .panel-header .header-right {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+  
+  .layer-panel .panel-header .layer-count {
+    font-size: 12px !important;
+    color: #909399 !important;
+  }
+  
+  .layer-panel .scene-selector {
+    padding: 12px 15px !important;
+    border-bottom: 1px solid #e4e7ed !important;
+  }
+  
+  .layer-panel .panel-body {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    padding: 8px 0 !important;
+  }
+  
+  /* 关闭按钮样式优化 */
+  .panel-toggle-btn {
+    background: #ff6b6b !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 4px !important;
+    padding: 6px 10px !important;
+    font-size: 12px !important;
+  }
+  
+  .panel-toggle-btn:hover {
+    background: #ff5252 !important;
+  }
+  
+  /* 地图遮罩层 */
+  .mobile-map-overlay {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    background: rgba(0, 0, 0, 0.3) !important;
+    z-index: 500 !important;
+    opacity: 1 !important;
+    transition: opacity 0.3s ease !important;
+    cursor: pointer !important;
+  }
+  
+  /* 地图组件本身的移动端适配 */
+  .map-viewer {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 300px !important;
+  }
+  
+  .map-container {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 300px !important;
+    position: relative !important;
+  }
+  
+  /* 地图控件移动端优化 */
+  .map-controls {
+    top: 5px !important;
+    right: 5px !important;
+    gap: 5px !important;
+  }
+  
+  .refresh-button {
+    width: 32px !important;
+    height: 32px !important;
+    padding: 6px !important;
+  }
+  
+  .coordinate-info {
+    bottom: 0px !important;
+    right: 50px !important;
+    font-size: 10px !important;
+    padding: 0px 3px !important;
+  }
+  
+  /* 抽屉式图层卡片优化 */
+  .layer-cards {
+    padding: 8px 15px !important;
+    gap: 8px !important;
+  }
+  
+  .layer-card {
+    margin: 0 !important;
+    padding: 12px !important;
+    border-radius: 6px !important;
+    background: #f8f9fa !important;
+    border: 1px solid #e9ecef !important;
+    transition: all 0.2s ease !important;
+  }
+  
+  .layer-card:hover {
+    background: #e6f1fc !important;
+    border-color: #b8d4f0 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+  }
+  
+  .layer-card.active {
+    background: #e6f7ff !important;
+    border-color: #1890ff !important;
+    box-shadow: 0 2px 12px rgba(24, 144, 255, 0.2) !important;
+  }
+  
+  .layer-card-header {
+    margin-bottom: 8px !important;
+    align-items: center !important;
+  }
+  
+  .layer-title {
+    gap: 8px !important;
+  }
+  
+  .layer-title .layer-name {
+    font-size: 14px !important;
+    font-weight: 500 !important;
+  }
+  
+  .layer-actions {
+    gap: 4px !important;
+  }
+  
+  .layer-actions .el-button {
+    padding: 4px 6px !important;
+    min-height: 28px !important;
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 4px !important;
+    background: white !important;
+    border: 1px solid #dcdfe6 !important;
+  }
+  
+  .layer-actions .el-button:hover {
+    background: #ecf5ff !important;
+    border-color: #409eff !important;
+  }
+  
+  .layer-actions .el-button svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+  
+  .layer-card-info {
+    padding: 8px 0 0 !important;
+    gap: 4px !important;
+  }
+  
+  .layer-card-info .tag {
+    font-size: 11px !important;
+    padding: 2px 6px !important;
+    height: 20px !important;
+    line-height: 16px !important;
+    border-radius: 3px !important;
+  }
+  
+  /* 透明度控制优化 */
+  .layer-opacity-control {
+    margin-top: 8px !important;
+  }
+  
+  .opacity-row {
+    align-items: center !important;
+  }
+  
+  .opacity-slider {
+    flex: 1 !important;
+    margin: 0 10px !important;
+  }
+  
+  /* 全局移动端表单元素统一样式 */
+  
+  /* 按钮统一样式 */
+  .el-button {
+    min-height: 36px !important;
+    height: 36px !important;
+    padding: 8px 12px !important;
+    font-size: 14px !important;
+    line-height: 20px !important;
+  }
+  
+  .el-button--large {
+    min-height: 40px !important;
+    height: 40px !important;
+    padding: 10px 16px !important;
+  }
+  
+  .el-button--small {
+    min-height: 28px !important;
+    height: 28px !important;
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+  }
+  
+  /* 输入框统一样式 */
+  .el-input,
+  .el-input__wrapper,
+  .el-input__inner {
+    height: 36px !important;
+    min-height: 36px !important;
+    line-height: 36px !important;
+    font-size: 14px !important;
+  }
+  
+  .el-input .el-input__inner {
+    padding: 0 12px !important;
+  }
+  
+  /* 下拉选择器统一样式 */
+  .el-select,
+  .el-select .el-input,
+  .el-select .el-input__wrapper,
+  .el-select .el-input__inner {
+    height: 36px !important;
+    min-height: 36px !important;
+    line-height: 36px !important;
+    font-size: 14px !important;
+  }
+  
+  .el-select .el-input__inner {
+    padding-right: 30px !important;
+  }
+  
+  /* 日期选择器统一样式 */
+  .el-date-editor,
+  .el-date-editor .el-input__inner {
+    height: 36px !important;
+    min-height: 36px !important;
+    line-height: 36px !important;
+    font-size: 14px !important;
+  }
+  
+  /* 数字输入框统一样式 */
+  .el-input-number,
+  .el-input-number .el-input__inner {
+    height: 36px !important;
+    min-height: 36px !important;
+    line-height: 36px !important;
+    font-size: 14px !important;
+  }
+  
+  /* 表单项标签统一样式 */
+  .el-form-item__label {
+    font-size: 14px !important;
+    line-height: 36px !important;
+    padding-bottom: 0 !important;
+  }
+  
+  /* 标签(Tags)统一样式 */
+  .el-tag {
+    height: 24px !important;
+    line-height: 22px !important;
+    padding: 0 8px !important;
+    font-size: 12px !important;
+  }
+  
+  .el-tag--small {
+    height: 20px !important;
+    line-height: 18px !important;
+    padding: 0 6px !important;
+    font-size: 11px !important;
+  }
+  
+  /* 其他表单组件统一样式 */
+  .el-textarea .el-textarea__inner {
+    font-size: 14px !important;
+    line-height: 1.4 !important;
+    padding: 8px 12px !important;
+  }
+  
+  .el-radio,
+  .el-checkbox {
+    font-size: 14px !important;
+    line-height: 36px !important;
+  }
+  
+  .el-radio__input,
+  .el-checkbox__input {
+    line-height: 1 !important;
+  }
+  
+  /* 对话框内的表单元素保持一致 */
+  .el-dialog .el-form-item {
+    margin-bottom: 16px !important;
+  }
+  
+  .el-dialog .el-form-item__label {
+    line-height: 36px !important;
+  }
+  
+  /* 上传组件优化 */
+  .el-upload-dragger {
+    padding: 20px !important;
+  }
+  
+  .el-upload__text {
+    font-size: 14px !important;
+    margin: 8px 0 !important;
+  }
+  
+  /* 分页组件优化 */
+  .el-pagination .el-pager li,
+  .el-pagination .btn-next,
+  .el-pagination .btn-prev {
+    min-width: 32px !important;
+    height: 32px !important;
+    line-height: 30px !important;
+    font-size: 14px !important;
+  }
+  
+  /* 对话框适配 */
+  .el-dialog {
+    width: 90% !important;
+    margin: 5vh auto !important;
+  }
+  
+  /* 表格适配 */
+  .el-table {
+    font-size: 12px !important;
+  }
+  
+  .el-table th,
+  .el-table td {
+    padding: 8px 4px !important;
+  }
+  
+  /* 场景管理页面适配 */
+  .scene-view {
+    padding: 10px !important;
+  }
+  
+  .scene-view .scene-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+    margin-bottom: 15px !important;
+  }
+  
+  .scene-view .scene-header h1 {
+    font-size: 18px !important;
+  }
+  
+  /* 搜索栏移动端优化 */
+  .scene-view .search-bar {
+    padding: 8px !important;
+    margin-bottom: 10px !important;
+  }
+  
+  /* 移动端搜索切换按钮样式 */
+  .mobile-search-toggle {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: white;
+    border: 1px solid #dcdfe6;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-bottom: 8px;
+  }
+  
+  .mobile-search-toggle:hover {
+    border-color: #409eff;
+    background-color: #f0f9ff;
+  }
+  
+  .mobile-search-toggle .toggle-icon {
+    transition: transform 0.3s ease;
+    color: #409eff;
+  }
+  
+  .mobile-search-toggle .toggle-icon.rotated {
+    transform: rotate(180deg);
+  }
+  
+  .mobile-search-toggle .toggle-text {
+    font-weight: 500;
+    color: #303133;
+    margin-left: 8px;
+    flex: 1;
+  }
+  
+  .mobile-search-toggle .search-summary {
+    margin-left: 8px;
+  }
+  
+  /* 搜索表单容器 */
+  .search-form-container {
+    transition: all 0.3s ease;
+    overflow: hidden;
+  }
+  
+  .search-form-container.mobile-collapsed {
+    display: none;
+  }
+  
+  /* 在移动端显示搜索切换按钮 */
+  .mobile-search-toggle {
+    display: flex !important;
+  }
+  
+  .scene-view .search-bar .el-form {
+    flex-direction: column !important;
+  }
+  
+  .scene-view .search-bar .el-form-item {
+    margin-bottom: 10px !important;
+    margin-right: 0 !important;
+    width: 100% !important;
+  }
+  
+  .scene-view .search-bar .el-form-item__label {
+    width: 80px !important;
+  }
+  
+  .scene-view .search-bar .el-form-item__content {
+    margin-left: 80px !important;
+  }
+  
+  .scene-view .search-bar .el-input,
+  .scene-view .search-bar .el-date-editor {
+    width: 100% !important;
+  }
+  
+  /* 场景卡片网格移动端优化 */
+  .scene-view .scenes-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+    padding: 0 !important;
+  }
+  
+  /* 场景卡片移动端样式 */
+  .scene-view .scene-card {
+    padding: 12px !important;
+    max-height: none !important;
+    border-radius: 6px !important;
+  }
+  
+  .scene-view .scene-card-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+    margin-bottom: 10px !important;
+  }
+  
+  .scene-view .scene-card-header h3 {
+    font-size: 15px !important;
+    max-width: none !important;
+    white-space: normal !important;
+    line-height: 1.3 !important;
+  }
+  
+  .scene-view .scene-actions {
+    align-self: stretch !important;
+    justify-content: space-between !important;
+    gap: 6px !important;
+  }
+  
+  .scene-view .scene-actions .el-button {
+    flex: 1 !important;
+    font-size: 11px !important;
+    padding: 4px 6px !important;
+    height: 28px !important;
+    min-height: 28px !important;
+  }
+  
+  /* 场景信息网格优化 */
+  .scene-view .scene-info {
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
+  }
+  
+  .scene-view .info-item {
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+  }
+  
+  .scene-view .info-item .label {
+    font-size: 12px !important;
+    margin-bottom: 0 !important;
+  }
+  
+  .scene-view .info-item .value {
+    font-size: 12px !important;
+    max-width: 60% !important;
+  }
+  
+  /* 场景描述优化 */
+  .scene-view .scene-description {
+    font-size: 12px !important;
+    -webkit-line-clamp: 3 !important;
+    max-height: 54px !important;
+    margin-bottom: 10px !important;
+  }
+  
+  /* 场景标签优化 */
+  .scene-view .scene-card-footer {
+    gap: 4px !important;
+    margin-top: 10px !important;
+  }
+  
+  .scene-view .scene-card-footer .el-tag {
+    font-size: 10px !important;
+    height: 18px !important;
+    line-height: 16px !important;
+    padding: 0 4px !important;
+  }
+  
+  /* 超小屏幕场景管理优化 */
+  .scene-view .search-bar .el-form-item__label {
+    width: 70px !important;
+    font-size: 12px !important;
+  }
+  
+  .scene-view .search-bar .el-form-item__content {
+    margin-left: 70px !important;
+  }
+  
+  .scene-view .scene-card {
+    padding: 10px !important;
+  }
+  
+  .scene-view .scene-actions .el-button {
+    font-size: 10px !important;
+    padding: 3px 4px !important;
+    height: 26px !important;
+    min-height: 26px !important;
+  }
+  
+  /* 搜索切换按钮超小屏幕优化 */
+  .mobile-search-toggle {
+    padding: 10px !important;
+  }
+  
+  .mobile-search-toggle .toggle-text {
+    font-size: 14px !important;
+  }
+  
+  /* 场景对话框移动端优化 */
+  .scene-view .el-dialog {
+    width: 95% !important;
+    margin: 5vh auto !important;
+  }
+  
+  /* 数据管理页面(上传页面)移动端优化 */
+  .upload-page {
+    padding: 10px !important;
+  }
+  
+  /* 页面头部优化 */
+  .upload-page .page-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+    margin-bottom: 15px !important;
+  }
+  
+  .upload-page .page-header h1 {
+    font-size: 18px !important;
+    margin: 0 !important;
+  }
+  
+  /* 搜索区域优化 */
+  .upload-page .search-area {
+    margin-bottom: 10px !important;
+    padding: 8px !important;
+  }
+  
+  /* 数据管理页面搜索切换按钮 */
+  .upload-page .mobile-search-toggle {
+    display: flex !important;
+  }
+  
+  .upload-page .search-form {
+    flex-direction: column !important;
+  }
+  
+  .upload-page .search-form .el-form-item {
+    margin-bottom: 10px !important;
+    margin-right: 0 !important;
+    width: 100% !important;
+  }
+  
+  .upload-page .search-form .el-form-item__label {
+    width: 80px !important;
+    font-size: 14px !important;
+  }
+  
+  .upload-page .search-form .el-form-item__content {
+    margin-left: 80px !important;
+  }
+  
+  .upload-page .search-form .el-select,
+  .upload-page .search-form .el-input {
+    width: 100% !important;
+  }
+  
+  /* 搜索按钮区域 */
+  .upload-page .search-form .el-form-item:last-child {
+    margin-top: 15px !important;
+  }
+  
+  .upload-page .search-form .el-form-item:last-child .el-form-item__content {
+    margin-left: 0 !important;
+    display: flex;
+    gap: 10px;
+  }
+  
+  .upload-page .search-form .el-form-item:last-child .el-button {
+    flex: 1;
+    height: 36px !important;
+    min-height: 36px !important;
+  }
+  
+  /* 表格移动端优化 */
+  .upload-page .file-list .el-table {
+    font-size: 12px !important;
+  }
+  
+  /* 移动端表格替代方案 - 卡片式布局 */
+  .upload-page .file-list {
+    position: relative;
+  }
+  
+  /* 桌面端隐藏移动端卡片 */
+  .mobile-file-cards {
+    display: none !important;
+  }
+  
+  /* 在移动端显示卡片，隐藏表格 */
+  @media (max-width: 768px) {
+    .upload-page .el-table {
+      display: none !important;
+    }
+    
+    .upload-page .mobile-file-cards {
+      display: block !important;
+    }
+  }
+  
+  .mobile-file-card {
+    background: white;
+    border: 1px solid #e4e7ed;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    padding: 12px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  
+  .mobile-file-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+  }
+  
+  .mobile-file-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: #303133;
+    flex: 1;
+    margin-right: 10px;
+    line-height: 1.4;
+  }
+  
+  .mobile-file-actions {
+    display: flex;
+    gap: 4px;
+  }
+  
+  .mobile-file-actions .el-button {
+    padding: 4px 8px;
+    font-size: 11px;
+    min-height: 28px;
+  }
+  
+  .mobile-file-info {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  
+  .mobile-info-item {
+    font-size: 12px;
+  }
+  
+  .mobile-info-label {
+    color: #909399;
+    font-size: 11px;
+    margin-bottom: 2px;
+  }
+  
+  .mobile-info-value {
+    color: #303133;
+    font-weight: 500;
+  }
+  
+  .mobile-service-section {
+    border-top: 1px solid #f0f0f0;
+    padding-top: 8px;
+    margin-top: 8px;
+  }
+  
+  .mobile-service-title {
+    font-size: 11px;
+    color: #909399;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  
+  .mobile-service-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  
+  .mobile-service-status {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  
+  .mobile-service-buttons {
+    display: flex;
+    gap: 3px;
+  }
+  
+  .mobile-service-buttons .el-button {
+    padding: 2px 6px;
+    font-size: 9px;
+    min-height: 22px;
+  }
+  
+  /* 隐藏次要列 */
+  .upload-page .el-table .el-table__cell:nth-child(1),  /* 序号 */
+  .upload-page .el-table .el-table__cell:nth-child(5),  /* 文件大小 */
+  .upload-page .el-table .el-table__cell:nth-child(6),  /* 共有/私有 */
+  .upload-page .el-table .el-table__cell:nth-child(7),  /* 上传人员 */
+  .upload-page .el-table .el-table__cell:nth-child(8),  /* 上传日期 */
+  .upload-page .el-table .el-table__cell:nth-child(9),  /* 坐标系 */
+  .upload-page .el-table .el-table__cell:nth-child(11), /* 2D/3D */
+  .upload-page .el-table .el-table__cell:nth-child(12)  /* 文件描述 */ {
+    display: none !important;
+  }
+  
+  /* 文件名列优化 */
+  .upload-page .el-table .el-table__cell:nth-child(2) {
+    width: 40% !important;
+    min-width: 120px !important;
+  }
+  
+  /* 服务列优化 - 使用卡片式布局 */
+  .upload-page .el-table .el-table__cell:nth-child(3),
+  .upload-page .el-table .el-table__cell:nth-child(4) {
+    width: 25% !important;
+    min-width: 80px !important;
+  }
+  
+  .upload-page .service-publish {
+    flex-direction: column !important;
+    gap: 5px !important;
+  }
+  
+  .upload-page .service-actions {
+    flex-direction: column !important;
+    gap: 3px !important;
+  }
+  
+  .upload-page .service-actions .el-button {
+    font-size: 10px !important;
+    padding: 2px 6px !important;
+    min-height: 24px !important;
+    height: 24px !important;
+  }
+  
+  /* 标签/类型列优化 */
+  .upload-page .el-table .el-table__cell:nth-child(10) {
+    width: 20% !important;
+    min-width: 60px !important;
+  }
+  
+  .upload-page .tags-and-type-list {
+    flex-direction: column !important;
+    gap: 2px !important;
+  }
+  
+  .upload-page .tags-and-type-list .el-tag {
+    font-size: 9px !important;
+    padding: 1px 4px !important;
+    height: 18px !important;
+    line-height: 16px !important;
+  }
+  
+  /* 操作列优化 */
+  .upload-page .el-table .el-table__cell:nth-child(13) {
+    width: 15% !important;
+    min-width: 50px !important;
+  }
+  
+  .upload-page .el-table .el-table__cell:nth-child(13) .el-button {
+    font-size: 11px !important;
+    padding: 4px 8px !important;
+    height: 28px !important;
+    min-height: 28px !important;
+  }
+  
+  /* 分页优化 */
+  .upload-page .pagination {
+    margin-top: 15px !important;
+    display: flex;
+    justify-content: center;
+  }
+  
+  .upload-page .el-pagination {
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+  }
+  
+  .upload-page .el-pagination .el-pagination__sizes,
+  .upload-page .el-pagination .el-pagination__jump {
+    display: none !important;
+  }
+  
+  /* 上传对话框优化 */
+  .upload-page .el-dialog {
+    width: 95% !important;
+    margin: 5vh auto !important;
+  }
+  
+  .upload-page .el-upload-dragger {
+    width: 100% !important;
+    min-height: 100px !important;
+  }
+  
+  .upload-page .el-upload__text {
+    font-size: 12px !important;
+  }
+  
+  .upload-page .el-upload__tip {
+    font-size: 10px !important;
+    line-height: 1.3 !important;
+  }
+  
+  /* 缓存管理页面适配 */
+  .cache-manager-view .el-card {
+    margin-bottom: 10px !important;
+  }
+}
+
+/* 桌面端隐藏移动端元素 */
+@media (min-width: 769px) {
+  .mobile-layer-toggle-btn {
+    display: none !important;
+  }
+  
+  .mobile-map-overlay {
+    display: none !important;
+  }
+  
+  /* 桌面端确保图层面板正常显示 */
+  .layer-panel {
+    position: relative !important;
+    width: 300px !important;
+    height: 100% !important;
+    transform: none !important;
+    box-shadow: none !important;
+    border-right: 1px solid #e4e7ed !important;
+    z-index: auto !important;
+  }
+}
+
+/* 平板端适配 (768px - 1024px) */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .main-header {
+    padding: 0 15px !important;
+  }
+  
+  .nav-links {
+    gap: 15px !important;
+  }
+  
+  .nav-links a {
+    padding: 8px 12px !important;
+  }
+  
+  /* 地图页面平板适配 */
+  .layer-panel {
+    width: 320px !important;
+  }
+  
+  .map-container {
+    width: calc(100% - 320px) !important;
+  }
+  
+  /* 首页卡片平板适配 */
+  .home-card {
+    width: 200px !important;
+    margin: 15px !important;
+  }
+  
+  .card-icon {
+    font-size: 45px !important;
+  }
+}
+
+/* 超小屏幕优化 (小于480px) */
+@media (max-width: 480px) {
+  /* 头部进一步优化 */
+  .main-header {
+    padding: 0 10px !important;
+  }
+  
+  .logo a {
+    font-size: 14px !important;
+  }
+  
+  .mobile-menu-btn {
+    padding: 6px !important;
+  }
+  
+  .home-container {
+    padding: 10px !important;
+  }
+  
+  .home-card {
+    width: 95% !important;
+    height: 130px !important;
+  }
+  
+  .card-icon {
+    font-size: 35px !important;
+    margin-bottom: 8px !important;
+  }
+  
+  .card-title {
+    font-size: 14px !important;
+    margin-bottom: 5px !important;
+  }
+  
+  .card-desc {
+    font-size: 11px !important;
+    line-height: 1.3 !important;
+  }
+  
+  .layer-panel {
+    height: 140px !important;
+    max-height: 140px !important;
+  }
+  
+  .layer-panel .panel-header {
+    height: 35px !important;
+    padding: 0 8px !important;
+  }
+  
+  .layer-panel .panel-header h3 {
+    font-size: 13px !important;
+  }
+  
+  .layer-panel .scene-selector {
+    padding: 6px 8px !important;
+  }
+  
+  .layer-panel .panel-body {
+    max-height: calc(100% - 70px) !important;
+  }
+  
+  .layer-card {
+    padding: 8px 10px !important;
+  }
+  
+  .layer-title .layer-name {
+    font-size: 13px !important;
+  }
+  
+  .layer-actions .el-button {
+    width: 26px !important;
+    height: 26px !important;
+    padding: 3px 4px !important;
+  }
+  
+  .layer-actions .el-button svg {
+    width: 12px !important;
+    height: 12px !important;
+  }
+  
+  .layer-card-info .tag {
+    font-size: 10px !important;
+    padding: 1px 4px !important;
+    height: 18px !important;
+    line-height: 16px !important;
+  }
+  
+  /* 超小屏幕浮动按钮优化 */
+  .mobile-layer-toggle-btn.show {
+    padding: 6px 10px !important;
+    font-size: 13px !important;
+    min-width: 55px !important;
+  }
+  
+  /* 隐藏不必要的标签 */
+  .layer-card-info .tag:nth-child(n+3) {
+    display: none !important;
+  }
+  
+  /* 移动端抽屉菜单在小屏幕上的优化 */
+  .mobile-nav-item {
+    padding: 12px 15px !important;
+  }
+  
+  .mobile-nav-item .nav-text {
+    font-size: 15px !important;
+  }
+  
+  /* 数据管理页面超小屏幕优化 */
+  .upload-page .search-form .el-form-item__label {
+    width: 70px !important;
+    font-size: 12px !important;
+  }
+  
+  .upload-page .search-form .el-form-item__content {
+    margin-left: 70px !important;
+  }
+  
+  /* 表格进一步优化 */
+  .upload-page .el-table .el-table__cell:nth-child(3),
+  .upload-page .el-table .el-table__cell:nth-child(4) {
+    width: 30% !important;
+    min-width: 70px !important;
+  }
+  
+  .upload-page .service-actions .el-button {
+    font-size: 9px !important;
+    padding: 1px 4px !important;
+    min-height: 20px !important;
+    height: 20px !important;
+  }
+  
+  .upload-page .el-table .el-table__cell:nth-child(10) {
+    width: 25% !important;
+  }
+  
+  .upload-page .el-table .el-table__cell:nth-child(13) {
+    width: 20% !important;
+  }
+}
+
+/* 触摸设备优化 */
+@media (hover: none) and (pointer: coarse) {
+  .el-button:hover {
+    transform: none !important;
+  }
+  
+  .home-card:hover {
+    transform: scale(0.98) !important;
+  }
+  
+  .layer-card:hover {
+    background-color: #f5f7fa !important;
+  }
+}
+
+/* 横屏模式优化 */
+@media (max-width: 768px) and (orientation: landscape) {
+  .el-main {
+    height: calc(100vh - 60px) !important;
+  }
+  
+  .map-content {
+    height: calc(100vh - 60px) !important;
+  }
+  
+  .layer-panel {
+    height: 100% !important;
+    max-height: 100% !important;
+  }
+  
+  .layer-panel .panel-body {
+    max-height: calc(100% - 110px) !important;
+  }
+  
+  /* 横屏模式浮动按钮 */
+  .mobile-layer-toggle-btn.show {
+    top: 10px !important;
+    left: 10px !important;
+    padding: 6px 8px !important;
+    font-size: 12px !important;
+  }
+} 

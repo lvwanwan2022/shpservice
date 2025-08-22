@@ -1,0 +1,249 @@
+{
+  "vectorTileLayerStyles": {
+    "DMTZ": {
+      "weight": 1.5,
+      "color": "#8B4513",
+      "opacity": 0.8,
+      "fillColor": "#DEB887",
+      "fill": true,
+      "fillOpacity": 0.3,
+      "radius": 4
+    },
+    "SXSS": {
+      "weight": 2,
+      "color": "#1E90FF",
+      "opacity": 0.9,
+      "fillColor": "#87CEEB",
+      "fill": true,
+      "fillOpacity": 0.4,
+      "radius": 5
+    },
+    "DLSS": {
+      "weight": 3,
+      "color": "#2F4F4F",
+      "opacity": 1,
+      "fillColor": "#696969",
+      "fill": false,
+      "fillOpacity": 0.6,
+      "lineCap": "round",
+      "lineJoin": "round"
+    },
+    "ASSIST": {
+      "weight": 1,
+      "color": "#708090",
+      "opacity": 0.7,
+      "fillColor": "#D3D3D3",
+      "fill": false,
+      "dashArray": "5,5"
+    },
+    "DLDW": {
+      "weight": 2,
+      "color": "#8B008B",
+      "opacity": 0.8,
+      "fillColor": "#DDA0DD",
+      "fill": true,
+      "fillOpacity": 0.5,
+      "radius": 6
+    },
+    "KZD": {
+      "weight": 2,
+      "color": "#DC143C",
+      "opacity": 1,
+      "fillColor": "#FF6347",
+      "fill": true,
+      "fillOpacity": 0.8,
+      "radius": 8
+    },
+    "ZBTZ": {
+      "weight": 1.5,
+      "color": "#228B22",
+      "opacity": 0.8,
+      "fillColor": "#90EE90",
+      "fill": true,
+      "fillOpacity": 0.4,
+      "radius": 4
+    },
+    "DGX": {
+      "weight": 1,
+      "color": "#808080",
+      "opacity": 0.7,
+      "fillColor": "#D3D3D3",
+      "fill": false,
+      "dashArray": "2,2"
+    },
+    "GCD": {
+      "weight": 1,
+      "color": "#696969",
+      "opacity": 0.8,
+      "fillColor": "#A9A9A9",
+      "fill": true,
+      "fillOpacity": 0.6,
+      "radius": 3
+    },
+    "GXYZ": {
+      "weight": 2.5,
+      "color": "#9932CC",
+      "opacity": 0.9,
+      "fillColor": "#DA70D6",
+      "fill": false,
+      "dashArray": "10,5"
+    },
+    "JJ": {
+      "weight": 3,
+      "color": "#000000",
+      "opacity": 1,
+      "fillColor": "#2F2F2F",
+      "fill": false,
+      "lineCap": "square"
+    },
+    "JMD": {
+      "weight": 2,
+      "color": "#FF4500",
+      "opacity": 0.9,
+      "fillColor": "#FFE4B5",
+      "fill": true,
+      "fillOpacity": 0.5,
+      "radius": 5
+    },
+    "JZD": {
+      "weight": 2,
+      "color": "#B22222",
+      "opacity": 1,
+      "fillColor": "#CD5C5C",
+      "fill": true,
+      "fillOpacity": 0.7,
+      "radius": 4
+    },
+    "TK": {
+      "weight": 4,
+      "color": "#000000",
+      "opacity": 1,
+      "fillColor": "#2F2F2F",
+      "fill": false,
+      "lineCap": "square"
+    },
+    "jqx": {
+      "weight": 1,
+      "color": "#A9A9A9",
+      "opacity": 0.6,
+      "fillColor": "#D3D3D3",
+      "fill": false,
+      "dashArray": "3,2"
+    },
+    "sqx": {
+      "weight": 0.8,
+      "color": "#C0C0C0",
+      "opacity": 0.5,
+      "fillColor": "#E5E5E5",
+      "fill": false,
+      "dashArray": "1,1"
+    }
+  },
+  "layerConfig": {
+    "DMTZ": {
+      "name": "地貌图层",
+      "description": "表示地形特征",
+      "visible": true,
+      "zIndex": 1
+    },
+    "SXSS": {
+      "name": "水系设施图层",
+      "description": "表示水系相关元素",
+      "visible": true,
+      "zIndex": 2
+    },
+    "DLSS": {
+      "name": "道路设施图层",
+      "description": "表示道路和相关设施",
+      "visible": true,
+      "zIndex": 5
+    },
+    "ASSIST": {
+      "name": "骨架线图层",
+      "description": "辅助绘制或显示结构线",
+      "visible": false,
+      "zIndex": 0
+    },
+    "DLDW": {
+      "name": "独立地物图层",
+      "description": "表示独立的地理特征或物体",
+      "visible": true,
+      "zIndex": 3
+    },
+    "KZD": {
+      "name": "控制点图层",
+      "description": "表示地图控制点或基准点",
+      "visible": true,
+      "zIndex": 10
+    },
+    "ZBTZ": {
+      "name": "植被图层",
+      "description": "表示地图上的植被分布",
+      "visible": true,
+      "zIndex": 1
+    },
+    "DGX": {
+      "name": "等高线图层",
+      "description": "表示地形的高程线",
+      "visible": true,
+      "zIndex": 1
+    },
+    "GCD": {
+      "name": "高程点图层",
+      "description": "表示地图上的高程点",
+      "visible": true,
+      "zIndex": 2
+    },
+    "GXYZ": {
+      "name": "管线设施图层",
+      "description": "表示管线及相关设施",
+      "visible": true,
+      "zIndex": 4
+    },
+    "JJ": {
+      "name": "境界线图层",
+      "description": "表示行政区划或其他界线",
+      "visible": true,
+      "zIndex": 8
+    },
+    "JMD": {
+      "name": "居民地图层",
+      "description": "表示居民地或其他居住区域",
+      "visible": true,
+      "zIndex": 3
+    },
+    "JZD": {
+      "name": "界址点图层",
+      "description": "表示地籍图上的界址点",
+      "visible": true,
+      "zIndex": 6
+    },
+    "TK": {
+      "name": "图廓图层",
+      "description": "表示地图的轮廓线",
+      "visible": true,
+      "zIndex": 9
+    },
+    "jqx": {
+      "name": "5米等高线",
+      "description": "5m一根的等高线",
+      "visible": true,
+      "zIndex": 1
+    },
+    "sqx": {
+      "name": "1米等高线",
+      "description": "1m一根的等高线",
+      "visible": false,
+      "zIndex": 0
+    }
+  },
+  "defaultStyle": {
+    "weight": 1,
+    "color": "#666666",
+    "opacity": 0.7,
+    "fillColor": "#CCCCCC",
+    "fill": false,
+    "fillOpacity": 0.3,
+    "radius": 4
+  }
+} 
