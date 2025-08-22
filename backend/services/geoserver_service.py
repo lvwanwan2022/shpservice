@@ -707,7 +707,7 @@ class GeoServerService:
             
             # 7. 将GeoJSON导入PostGIS数据库
             print("\n--- 将GeoJSON导入PostGIS数据库 ---")
-            from services.postgis_service import PostGISService
+            from backend.services.postgis_service_copy import PostGISService
             postgis_service = PostGISService()
             
             postgis_result = postgis_service.store_geojson(corrected_path, file_id)
@@ -2620,7 +2620,7 @@ class GeoServerService:
         # 3. 可选：清理PostGIS表（谨慎操作）
         if table_name:
             try:
-                from services.postgis_service import PostGISService
+                from backend.services.postgis_service_copy import PostGISService
                 postgis_service = PostGISService()
                 postgis_service._drop_table_if_exists(table_name)
                 print(f"✅ 清理PostGIS表完成: {table_name}")
@@ -4206,4 +4206,163 @@ AbsolutePath=false
             
         except Exception as e:
             print(f"应用样式失败: {str(e)}")
+            return False
+    
+    def update_layer_style(self, workspace, layer, style_name, sld_content):
+        """更新图层样式
+        
+        Args:
+            workspace: 工作空间名称
+            layer: 图层名称
+            style_name: 样式名称
+            sld_content: SLD样式内容
+            
+        Returns:
+            bool: 是否更新成功
+        """
+        try:
+            print(f"更新图层样式: {workspace}:{layer} -> {style_name}")
+            
+            # 1. 创建或更新样式
+            style_created = self._create_or_update_style(style_name, sld_content)
+            if not style_created:
+                print(f"❌ 创建样式失败: {style_name}")
+                return False
+            
+            # 2. 应用样式到图层
+            full_layer_name = f"{workspace}:{layer}"
+            style_applied = self._apply_style_to_layer(full_layer_name, style_name)
+            if not style_applied:
+                print(f"❌ 应用样式到图层失败: {full_layer_name}")
+                return False
+            
+            print(f"✅ 图层样式更新成功: {full_layer_name} -> {style_name}")
+            return True
+            
+        except Exception as e:
+            print(f"更新图层样式失败: {str(e)}")
+            return False
+    
+    def remove_layer_style(self, workspace, layer):
+        """移除图层样式，恢复默认样式
+        
+        Args:
+            workspace: 工作空间名称
+            layer: 图层名称
+            
+        Returns:
+            bool: 是否移除成功
+        """
+        try:
+            print(f"移除图层样式: {workspace}:{layer}")
+            
+            # 获取完整的图层名称
+            full_layer_name = f"{workspace}:{layer}"
+            
+            # 图层信息更新URL
+            layer_url = f"{self.rest_url}/layers/{full_layer_name}"
+            
+            # 构建更新请求数据，设置为默认样式
+            update_data = {
+                "layer": {
+                    "defaultStyle": {
+                        "name": "generic"
+                    }
+                }
+            }
+            
+            headers = {'Content-Type': 'application/json'}
+            
+            # 发送更新请求
+            response = requests.put(
+                layer_url,
+                json=update_data,
+                headers=headers,
+                auth=self.auth
+            )
+            
+            if response.status_code not in [200, 201]:
+                print(f"移除样式失败: {response.status_code} - {response.text}")
+                return False
+            
+            print(f"✅ 图层样式移除成功: {full_layer_name}")
+            return True
+            
+        except Exception as e:
+            print(f"移除图层样式失败: {str(e)}")
+            return False
+    
+    def _create_or_update_style(self, style_name, sld_content):
+        """创建或更新样式
+        
+        Args:
+            style_name: 样式名称
+            sld_content: SLD样式内容
+            
+        Returns:
+            bool: 是否成功
+        """
+        try:
+            print(f"创建或更新样式: {style_name}")
+            
+            # 检查样式是否已存在
+            style_check_url = f"{self.rest_url}/styles/{style_name}.xml"
+            style_check_response = requests.get(style_check_url, auth=self.auth)
+            
+            headers_xml = {'Content-Type': 'application/vnd.ogc.sld+xml'}
+            
+            if style_check_response.status_code == 200:
+                print(f"样式 {style_name} 已存在，将更新")
+                # 更新现有样式
+                style_url = f"{self.rest_url}/styles/{style_name}"
+                
+                style_response = requests.put(
+                    style_url,
+                    data=sld_content,
+                    headers=headers_xml,
+                    auth=self.auth
+                )
+            else:
+                print(f"创建新样式: {style_name}")
+                # 创建新样式
+                # 1. 先创建样式定义
+                create_style_url = f"{self.rest_url}/styles"
+                create_style_data = {
+                    "style": {
+                        "name": style_name,
+                        "filename": f"{style_name}.sld"
+                    }
+                }
+                
+                headers_json = {'Content-Type': 'application/json'}
+                create_response = requests.post(
+                    create_style_url,
+                    json=create_style_data,
+                    headers=headers_json,
+                    auth=self.auth
+                )
+                
+                if create_response.status_code not in [201, 200]:
+                    print(f"创建样式定义失败: {create_response.status_code} - {create_response.text}")
+                    return False
+                
+                # 2. 上传样式内容
+                style_content_url = f"{self.rest_url}/styles/{style_name}"
+                
+                style_response = requests.put(
+                    style_content_url,
+                    data=sld_content,
+                    headers=headers_xml,
+                    auth=self.auth
+                )
+            
+            if style_response.status_code not in [200, 201]:
+                print(f"上传样式内容失败: {style_response.status_code} - {style_response.text}")
+                return False
+            
+            print(f"✅ 样式创建/更新成功: {style_name}")
+            return True
+            
+        except Exception as e:
+            print(f"创建或更新样式失败: {str(e)}")
             return False

@@ -270,8 +270,8 @@
                   <el-form-item label="边框颜色">
                     <el-color-picker v-model="styleForm.polygon.outlineColor"></el-color-picker>
                   </el-form-item>
-                  <el-form-item label="透明度">
-                    <el-slider v-model="styleForm.polygon.opacity" :min="0" :max="1" :step="0.1"></el-slider>
+                  <el-form-item label="不透明度">
+                    <el-slider v-model="styleForm.polygon.fillOpacity" :min="0" :max="1" :step="0.1"></el-slider>
                   </el-form-item>
                 </template>
               </template>
@@ -302,6 +302,23 @@
               </div>
             </div>
           </el-tab-pane>
+
+          <el-tab-pane v-if="!isMartinLayer" label="SLD样式" name="sld">
+            <div v-if="currentStyleLayer">
+              <SldStyleSelector 
+                :key="`sld-selector-${currentStyleLayer.id}`"
+                :layer-id="currentStyleLayer.id"
+                :layer-geometry-type="getLayerGeometryType(currentStyleLayer)"
+                @style-applied="onSldStyleApplied"
+                @style-removed="onSldStyleRemoved"
+                ref="sldStyleSelectorRef"
+              />
+            </div>
+            <div v-else class="loading-placeholder">
+              <el-icon class="is-loading"><Loading /></el-icon>
+              <span>正在加载SLD样式选择器...</span>
+            </div>
+          </el-tab-pane>
         </el-tabs>
       </div>
       <div v-else class="dialog-loading">
@@ -313,6 +330,7 @@
           <el-button @click="styleDialogVisible = false">取消</el-button>
           <el-button v-if="activeStyleTab === 'basic'" type="primary" @click="applyStyle">应用样式</el-button>
           <el-button v-if="activeStyleTab === 'dxf' && isDxfMartinLayer === true" type="primary" @click="applyAndSaveDxfStyles" :loading="savingDxfStyles">保存样式到数据库</el-button>
+          <el-button v-if="activeStyleTab === 'sld' && !isMartinLayer" type="primary" @click="refreshMapLayers">刷新地图</el-button>
         </span>
       </template>
     </el-dialog>
@@ -348,6 +366,7 @@ import { Style, Fill, Stroke, Circle } from 'ol/style'
 import { MVT } from 'ol/format'
 import BaseMapSwitcherOL from './BaseMapSwitcherOL.vue'
 import DxfStyleEditor from './DxfStyleEditor.vue'
+import SldStyleSelector from './SldStyleSelector.vue'
 import defaultDxfStylesConfig from '@/config/defaultDxfStyles.json'
 // 引入proj4库用于坐标系转换
 import proj4 from 'proj4'
@@ -365,7 +384,7 @@ import { TileCacheService, getGlobalSceneDataCacheService } from '@/services/til
 
 export default {
   name: 'MapViewerOL',
-  components: { BaseMapSwitcherOL, DxfStyleEditor, Loading, ArrowDown },
+  components: { BaseMapSwitcherOL, DxfStyleEditor, SldStyleSelector, Loading, ArrowDown },
   props: {
     sceneId: { type: [Number, String], default: null },
     readonly: { type: Boolean, default: false }
@@ -526,9 +545,9 @@ export default {
     const savingDxfStyles = ref(false)
     
     const styleForm = reactive({
-      point: { size: 5, color: '#FF0000' },
+      point: { size: 2, color: '#FF0000' },
       line: { width: 2, color: '#0000FF' },
-      polygon: { fillColor: '#00FF00', outlineColor: '#000000', opacity: 0.5 },
+      polygon: { fillColor: '#00FF00', outlineColor: '#000000', fillopacity: 0.5 },
       raster: { opacity: 1 }
     })
     
@@ -542,6 +561,12 @@ export default {
     const isDxfMartinLayer = computed(() => {
       return currentStyleLayer.value?.service_type === 'martin' && 
              currentStyleLayer.value?.file_type === 'dxf' && 
+             Boolean(currentStyleLayer.value?.martin_service_id)
+    })
+    
+    // 判断是否为Martin图层（包括所有类型的Martin图层）
+    const isMartinLayer = computed(() => {
+      return currentStyleLayer.value?.service_type === 'martin' && 
              Boolean(currentStyleLayer.value?.martin_service_id)
     })
     
@@ -1342,7 +1367,7 @@ export default {
             
             // 获取基础样式配置（从样式面板的表单配置）
             const basicStyles = {
-              point: styleForm.point || { color: '#FF0000', size: 6 },
+              point: styleForm.point || { color: '#FF0000', size: 2 },
               line: styleForm.line || { color: '#0000FF', width: 2 },
               polygon: styleForm.polygon || { fillColor: '#00FF00', fillOpacity: 0.3, outlineColor: '#000000' }
             }
@@ -2011,7 +2036,7 @@ export default {
       
       // 将样式配置保存到缓存中，供重新加载图层时使用
       layerStyleCache[currentStyleLayer.value.id] = styleConfig
-      
+      console.log('lv-styleConfig:', styleConfig)
       try {
         if (currentStyleLayer.value.service_type === 'martin' && currentStyleLayer.value.martin_service_id) {
           // Martin服务样式更新
@@ -2366,6 +2391,59 @@ export default {
         if (!enabled && popup.value) {
           popup.value.setPosition(undefined)
         }
+      }
+    }
+
+    // SLD样式应用处理
+    const onSldStyleApplied = async (styleData) => {
+      console.log('SLD样式已应用:', styleData)
+      ElMessage.success('SLD样式应用成功')
+      
+      // 刷新地图图层以显示新的样式
+      await refreshMapLayers()
+    }
+
+    // SLD样式移除处理
+    const onSldStyleRemoved = async () => {
+      console.log('SLD样式已移除')
+      ElMessage.success('SLD样式移除成功')
+      
+      // 刷新地图图层以显示默认样式
+      await refreshMapLayers()
+    }
+
+    // 获取图层几何类型
+    const getLayerGeometryType = (layer) => {
+      // 根据图层类型和属性判断几何类型
+      if (layer.geometry_type) {
+        return layer.geometry_type.toLowerCase()
+      }
+      
+      // 根据图层名称或其他属性推断
+      const layerName = layer.name?.toLowerCase() || ''
+      if (layerName.includes('point') || layerName.includes('点')) {
+        return 'point'
+      } else if (layerName.includes('line') || layerName.includes('线')) {
+        return 'line'
+      } else if (layerName.includes('polygon') || layerName.includes('面')) {
+        return 'polygon'
+      }
+      
+      // 默认返回空字符串，让用户手动选择
+      return ''
+    }
+
+    // 刷新地图图层
+    const refreshMapLayers = async () => {
+      try {
+        // 重新加载当前场景的图层
+        if (currentScene.value) {
+          await loadScene(currentScene.value.id)
+        }
+        ElMessage.success('地图图层已刷新')
+      } catch (error) {
+        console.error('刷新地图图层失败:', error)
+        ElMessage.error('刷新地图图层失败')
       }
     }
 
@@ -2807,6 +2885,7 @@ export default {
       hasLineGeometry,
       hasPolygonGeometry,
       isDxfMartinLayer,
+      isMartinLayer,
       toggleLayerVisibility,
       updateLayerOpacity,
       showAddLayerDialog,
@@ -2824,6 +2903,10 @@ export default {
       onDxfStylesUpdated,
       applyAndSaveDxfStyles,
       onPopupControlChanged,
+      onSldStyleApplied,
+      onSldStyleRemoved,
+      getLayerGeometryType,
+      refreshMapLayers,
       setActiveLayer,
       bringLayerToTop,
       getLayerCRSInfo,

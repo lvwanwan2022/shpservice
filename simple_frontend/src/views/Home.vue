@@ -30,7 +30,7 @@
         <div class="card-icon">
           <i class="el-icon-location"></i>
         </div>
-        <div class="card-title">地图浏览(OpenLayers)</div>
+        <div class="card-title">地图浏览</div>
         <div class="card-desc">使用OpenLayers浏览地图服务和图层数据</div>
       </el-card>
 

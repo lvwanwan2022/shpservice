@@ -1026,8 +1026,22 @@ def init_database():
         
         print("数据库表创建成功")
         
-      
-        
+        # 初始化SLD样式管理表
+        try:
+            from models.sld_styles import SLDStyleModel
+            print("开始创建SLD样式管理表...")
+            
+            # 创建SLD样式表
+            SLDStyleModel.create_sld_styles_table()
+            print("✅ SLD样式表创建成功")
+            
+            # 创建图层SLD映射表
+            SLDStyleModel.create_layer_sld_mapping_table()
+            print("✅ 图层SLD映射表创建成功")
+            
+        except Exception as e:
+            print(f"⚠️ SLD样式管理表创建失败: {str(e)}")
+            print("SLD样式管理功能可能不可用")
         
         # 确保GeoServer工作空间存在
         try:

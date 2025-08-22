@@ -204,6 +204,21 @@ except ImportError:
 except Exception as e:
     logger.warning(f"⚠️ MBTiles 服务路由注册失败: {str(e)}")
 
+# SLD样式管理路由
+try:
+    from routes.sld_style_routes import sld_style_bp
+    app.register_blueprint(sld_style_bp)
+    logger.info("✅ SLD样式管理路由注册成功")
+except ImportError:
+    logger.info("SLD样式管理路由不存在，跳过")
+except Exception as e:
+    logger.warning(f"⚠️ SLD样式管理路由注册失败: {str(e)}")
+    logger.info("✅ MBTiles 服务路由注册成功")
+except ImportError:
+    logger.info("MBTiles 服务路由不存在，跳过")
+except Exception as e:
+    logger.warning(f"⚠️ MBTiles 服务路由注册失败: {str(e)}")
+
 # TIF Martin 服务路由
 try:
     from routes.tif_martin_routes import tif_martin_bp
