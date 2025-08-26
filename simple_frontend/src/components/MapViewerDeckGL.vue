@@ -96,7 +96,7 @@ import { BitmapLayer } from '@deck.gl/layers'
 // 导入MVT支持
 import { MVTLayer } from '@deck.gl/geo-layers'
 // 导入GeoJson图层（用于高亮）
-import { GeoJsonLayer } from '@deck.gl/layers'
+
 // 导入地形支持
 import { TerrainLayer } from '@deck.gl/geo-layers'
 // 导入TerrainExtension用于将2D图层贴合到3D地形
@@ -149,7 +149,136 @@ export default {
       lat: 0
     })
     
-    // 🔥 简化：要素选择状态管理
+    // 🔥 新增：鼠标指针状态管理
+    const cursorState = ref('default')
+    const cursorMonitorInterval = ref(null)
+    const cursorObserver = ref(null)
+    
+    // 🔥 新增：监控和修复canvas cursor样式
+    const monitorCanvasCursor = () => {
+      if (deckgl.value && deckgl.value.canvas && cursorState.value !== 'default') {
+        const canvas = deckgl.value.canvas
+        const expectedCursor = cursorState.value
+        const currentCursor = canvas.style.cursor
+        
+        // 如果canvas的cursor被deck.gl重置了，重新设置
+        if (currentCursor !== expectedCursor) {
+          forceCanvasCursor(expectedCursor)
+        }
+      }
+    }
+    
+    // 🔥 新增：使用MutationObserver监听canvas样式变化
+    const setupCursorObserver = () => {
+      if (deckgl.value && deckgl.value.canvas) {
+        const canvas = deckgl.value.canvas
+        const observer = new MutationObserver((mutations) => {
+          mutations.forEach((mutation) => {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+              const currentCursor = canvas.style.cursor
+              if (currentCursor !== cursorState.value && cursorState.value !== 'default') {
+                //console.log('🔍 检测到canvas样式变化，重新设置cursor:', cursorState.value)
+                forceCanvasCursor(cursorState.value)
+              }
+            }
+          })
+        })
+        
+        observer.observe(canvas, {
+          attributes: true,
+          attributeFilter: ['style']
+        })
+        
+        return observer
+      }
+      return null
+    }
+    
+    // 🔥 新增：强制设置canvas cursor样式（更高效的方法）
+    const forceCanvasCursor = (cursor) => {
+      if (deckgl.value && deckgl.value.canvas) {
+        const canvas = deckgl.value.canvas
+        // 使用更强制的方法：直接设置CSS属性
+        canvas.style.setProperty('cursor', cursor, 'important')
+        //console.log('🔧 强制设置canvas cursor为:', cursor)
+      }
+    }
+    
+    // 🔥 优化：增强的图层onHover处理函数，基于ID的可靠交互
+    const handleLayerHover = (info) => {
+      try {
+        updateMouseCoordinates(info)
+        
+        // 根据deck.gl文档最佳实践处理鼠标指针
+        if (info.object && info.object.properties) {
+          // 有要素时显示手型指针，表示可点击
+          const newCursor = 'pointer'
+          if (cursorState.value !== newCursor) {
+            cursorState.value = newCursor
+            // 设置地图容器的cursor样式
+            if (mapContainer.value) {
+              mapContainer.value.style.cursor = newCursor
+            }
+            // 强制设置deck.gl canvas的cursor样式，覆盖deck.gl的默认样式
+            forceCanvasCursor(newCursor)
+          }
+          
+          // 🔥 核心改进：基于ID的悬停状态管理
+          const feature = info.object
+          const layer = info.layer
+          const coordinate = info.coordinate
+          
+          if (feature && layer && coordinate) {
+            const featureId = generateFeatureId(feature)
+            
+            // 🔥 更新悬停状态 - 确保ID一致性
+            hoverState.value = {
+              hoveredFeatureId: featureId,
+              hoveredFeature: feature,
+              hoveredLayer: layer,
+              hoveredCoordinate: coordinate,
+              popupContent: buildFeaturePopupContent(feature, layer),
+              isHovering: true
+            }
+            
+            // 🔥 为细线要素提供视觉反馈
+            if (isThinLineFeature(feature)) {
+              if (mapContainer.value) {
+                mapContainer.value.title = `点击查看 ${layer.layerInfo?.layerName || '要素'} 属性`
+              }
+            }
+          }
+        } else {
+          // 无要素时恢复默认指针并清除悬停状态
+          const newCursor = 'default'
+          if (cursorState.value !== newCursor) {
+            cursorState.value = newCursor
+            // 设置地图容器的cursor样式
+            if (mapContainer.value) {
+              mapContainer.value.style.cursor = newCursor
+              // 🔥 清除提示信息
+              mapContainer.value.title = ''
+            }
+            // 强制设置deck.gl canvas的cursor样式
+            forceCanvasCursor(newCursor)
+          }
+          
+          // 🔥 清除悬停状态
+          hoverState.value = {
+            hoveredFeatureId: null,
+            hoveredFeature: null,
+            hoveredLayer: null,
+            hoveredCoordinate: null,
+            popupContent: '',
+            isHovering: false
+          }
+        }
+      } catch (error) {
+        console.warn('图层悬停处理出错，已忽略:', error)
+      }
+    }
+    
+    // 🔥 优化：要素选择状态管理
     const selectedFeatureState = ref({
       feature: null,
       layer: null,
@@ -160,9 +289,19 @@ export default {
       selectedFeatureId: null
     })
     
-    // 🔥 简化：使用简单的状态变量来跟踪选中的要素
+    // 🔥 优化：使用简单的状态变量来跟踪选中的要素
     const selectedFeatureId = ref(null)
     const selectedLayerId = ref(null)
+    
+    // 🔥 新增：悬停状态管理 - 确保指针变化和点击响应的一致性
+    const hoverState = ref({
+      hoveredFeatureId: null,    // 当前悬停的要素ID
+      hoveredFeature: null,      // 当前悬停的要素对象
+      hoveredLayer: null,        // 当前悬停的图层
+      hoveredCoordinate: null,   // 当前悬停的坐标
+      popupContent: '',          // 预生成的弹窗内容
+      isHovering: false          // 是否正在悬停
+    })
     
 
     
@@ -187,7 +326,7 @@ export default {
         mapContainer.value.style.width = '100%'
         mapContainer.value.style.height = '100%'
         mapContainer.value.style.overflow = 'hidden'
-        console.log('容器尺寸:', mapContainer.value.getBoundingClientRect())
+        
         
         deckgl.value = new Deck({
           container: mapContainer.value,
@@ -214,29 +353,100 @@ export default {
             doubleClickZoom: true,
             touchZoom: true,
             touchRotate: true,
-            keyboard: true
+            keyboard: true,
+            // 🔥 禁用默认的cursor管理，让我们自己控制
+            eventManager: {
+              // 自定义事件管理器，避免deck.gl覆盖cursor
+              onMouseMove: () => {
+                // 让deck.gl处理事件，但不让它管理cursor
+                return true
+              }
+            }
           },
           layers: [createBaseMapLayer()],
           onViewStateChange: ({ viewState }) => {
             emit('view-change', viewState)
           },
+          // 🔥 优化：全局onHover处理，与图层级别处理协调
+          getCursor: ({ isDragging, isHovering }) => {
+            if (isDragging) return 'grabbing'
+            if (isHovering) return 'pointer'
+            return 'grab'
+          },
           onHover: (info) => {
             try {
               updateMouseCoordinates(info)
               
-              // 🔥 修改：只处理光标变化，不显示弹窗
+              // 🔥 优化：全局悬停处理，确保与图层级别处理协调
               if (info.object && info.object.properties) {
-                // 有要素时显示手型指针
-                document.body.style.cursor = 'pointer'
-              } else {
-                // 无要素时恢复默认指针
-                document.body.style.cursor = 'default'
-              }
+                // 有要素时显示手型指针，表示可点击
+                const newCursor = 'pointer'
+                if (cursorState.value !== newCursor) {
+                  cursorState.value = newCursor
+                  // 设置地图容器的cursor样式
+                  if (mapContainer.value) {
+                    mapContainer.value.style.cursor = newCursor
+                  }
+                  // 强制设置deck.gl canvas的cursor样式，覆盖deck.gl的默认样式
+                  forceCanvasCursor(newCursor)
+                }
+                
+                // 🔥 优化：全局级别的悬停状态管理，作为图层级别的补充
+                const feature = info.object
+                const layer = info.layer
+                const coordinate = info.coordinate
+                
+                // 只有在图层级别没有处理时才进行全局处理
+                if (feature && layer && coordinate && !hoverState.value.isHovering) {
+                  const featureId = generateFeatureId(feature)
+                  
+                  // 更新悬停状态
+                  hoverState.value = {
+                    hoveredFeatureId: featureId,
+                    hoveredFeature: feature,
+                    hoveredLayer: layer,
+                    hoveredCoordinate: coordinate,
+                    popupContent: buildFeaturePopupContent(feature, layer),
+                    isHovering: true
+                  }
+                  
+                  // 🔥 为细线要素提供视觉反馈
+                  if (isThinLineFeature(feature)) {
+                    if (mapContainer.value) {
+                      mapContainer.value.title = `点击查看 ${layer.layerInfo?.layerName || '要素'} 属性`
+                    }
+                  }
+                }
+                              } else {
+                  // 无要素时恢复默认指针并清除悬停状态
+                  const newCursor = 'default'
+                  if (cursorState.value !== newCursor) {
+                    cursorState.value = newCursor
+                    // 设置地图容器的cursor样式
+                    if (mapContainer.value) {
+                      mapContainer.value.style.cursor = newCursor
+                      // 🔥 清除提示信息
+                      mapContainer.value.title = ''
+                    }
+                    // 强制设置deck.gl canvas的cursor样式
+                    forceCanvasCursor(newCursor)
+                  }
+                  
+                  // 🔥 清除悬停状态
+                  hoverState.value = {
+                    hoveredFeatureId: null,
+                    hoveredFeature: null,
+                    hoveredLayer: null,
+                    hoveredCoordinate: null,
+                    popupContent: '',
+                    isHovering: false
+                  }
+                }
             } catch (error) {
-              console.warn('鼠标悬停处理出错，已忽略:', error)
-              // 不抛出错误，避免视口锁定
+              console.warn('全局鼠标悬停处理出错，已忽略:', error)
             }
           },
+
           onClick: (info) => {
             try {
               handleMapClick(info)
@@ -245,29 +455,26 @@ export default {
               // 不抛出错误，避免视口锁定
             }
           },
-          // 🔥 修改：禁用hover tooltip，只保留点击弹窗
-          getTooltip: () => null
+          // 🔥 优化：根据deck.gl文档添加工具提示功能
+          
         })
 
-        console.log('Deck.gl地图初始化成功')
+       
         
         // 设置初始底图版权信息
         updateBaseMapAttribution(currentBaseMap.value.key)
         
         // 初始化完成后，如果有图层数据，立即更新 - 参考OpenLayers的图层加载逻辑
         if (props.layers && props.layers.length > 0) {
-          console.log('🎯 地图初始化完成，开始加载图层，数量:', props.layers.length)
-          console.log('图层数据样例:', props.layers[0])
+          
           updateMapLayers(props.layers)
-        } else {
-          console.log('🎯 地图初始化完成，没有图层数据，仅显示底图')
         }
         
         // 强制修复canvas定位问题
         const fixCanvasPosition = () => {
           // 查找所有canvas元素
           const allCanvases = document.querySelectorAll('canvas')
-          console.log('页面上的所有canvas:', allCanvases)
+          
           
           // 查找deckgl相关的canvas
           let deckglCanvas = null
@@ -278,13 +485,10 @@ export default {
           })
           
           if (deckglCanvas) {
-            console.log('找到deckgl canvas:', deckglCanvas)
-            console.log('当前父容器:', deckglCanvas.parentElement)
-            console.log('期望的父容器:', mapContainer.value)
             
             // 确保canvas在正确的容器中
             if (deckglCanvas.parentElement !== mapContainer.value) {
-              console.log('移动canvas到正确位置')
+              ////console.log('移动canvas到正确位置')
               mapContainer.value.appendChild(deckglCanvas)
             }
             
@@ -299,9 +503,9 @@ export default {
             deckglCanvas.style.display = 'block'
             deckglCanvas.style.zIndex = '1'
             
-            console.log('Canvas样式已修复，位置:', deckglCanvas.getBoundingClientRect())
+            //console.log('Canvas样式已修复，位置:', deckglCanvas.getBoundingClientRect())
           } else {
-            console.log('未找到deckgl canvas')
+            //console.log('未找到deckgl canvas')
           }
         }
         
@@ -318,6 +522,14 @@ export default {
           attributes: true,
           attributeFilter: ['style']
         })
+        
+        // 🔥 启动canvas cursor监控
+        cursorMonitorInterval.value = setInterval(monitorCanvasCursor, 100)
+        //console.log('🔧 启动canvas cursor监控')
+        
+        // 🔥 设置MutationObserver监听canvas样式变化
+        cursorObserver.value = setupCursorObserver()
+        //console.log('🔧 设置canvas样式变化监听器')
         
         emit('map-ready', deckgl.value)
         
@@ -394,14 +606,8 @@ export default {
       
       layers.push(terrainLayer)
       
-      console.log('🏔️ 已创建三维地形图层，直接使用底图作为纹理')
-      console.log('🔧 地形图层配置:', {
-        elevationData: 'AWS Terrain Tiles',
-        texture: currentBaseMap.value.name,
-        elevationScale: 2.0,
-        opacity: 1.0,
-        operation: 'terrain+draw'
-      })
+      //console.log('🏔️ 已创建三维地形图层，直接使用底图作为纹理')
+     
       return layers
     }
     
@@ -430,236 +636,49 @@ export default {
       return featureId
     }
     
-    // 🔥 新增：创建基于几何的高亮图层
-    const createHighlightLayer = (feature) => {
-      if (!feature || !feature.geometry) return null
+    // 🔥 新增：检测是否为细线要素
+    const isThinLineFeature = (feature) => {
+      const geometryType = feature.geometry?.type
+      const properties = feature.properties || {}
       
-      try {
-        // 构建GeoJSON数据
-        const highlightData = {
-          type: 'FeatureCollection',
-          features: [{
-            type: 'Feature',
-            geometry: feature.geometry,
-            properties: {
-              id: 'highlight-feature',
-              ...feature.properties
-            }
-          }]
-        }
-        
-        console.log('🎯 创建高亮图层，几何类型:', feature.geometry.type)
-        
-        // 创建高亮图层配置
-        const highlightLayerConfig = {
-          id: 'highlight-layer',
-          data: highlightData,
-          pickable: false, // 高亮图层不需要拾取
-          stroked: true,
-          filled: true,
-          extruded: false,
-          // 高亮样式
-          getFillColor: [255, 255, 0, 120], // 半透明黄色填充
-          getLineColor: [255, 0, 0, 255],   // 红色边框
-          getLineWidth: 4,                  // 粗边框
-          getPointRadius: 15,               // 大点
-          lineWidthMinPixels: 2,
-          pointRadiusMinPixels: 10,
-          // 设置较高的渲染顺序，确保在最上层
-          renderOrder: 1000,
-          // 图层信息
-          layerInfo: {
-            layerName: 'highlight-layer',
-            fileType: 'geojson',
-            serviceType: 'highlight'
-          }
-        }
-        
-        // 🔥 在三维模式下添加地形贴合
-        if (is3DModeEnabled.value) {
-          highlightLayerConfig.extensions = [new TerrainExtension()]
-          highlightLayerConfig.terrainDrawMode = 'drape'
-          console.log('🏔️ 高亮图层已启用三维地形贴合')
-        }
-        
-        return new GeoJsonLayer(highlightLayerConfig)
-      } catch (error) {
-        console.error('❌ 创建高亮图层失败:', error)
-        return null
+      // 检查是否为线要素
+      if (geometryType === 'LineString' || geometryType === 'MultiLineString') {
+        // 检查是否有线宽属性，且线宽较小
+        const lineWidth = properties.line_width || properties.weight || properties.width || 1
+        return lineWidth <= 2
       }
+      
+      return false
     }
     
-    // 🔥 新增：尝试获取完整要素几何信息
-    const getCompleteFeatureGeometry = async (feature, layer) => {
-      try {
-        // 检查是否有要素ID或唯一标识符
-        const featureId = feature.properties?.id || feature.properties?.gid || feature.properties?.fid || feature.properties?.OBJECTID
-        
-        if (!featureId) {
-          console.log('⚠️ 未找到要素ID，使用当前几何进行高亮')
-          return feature.geometry
-        }
-        
-        // 检查图层信息，确定服务类型
-        const layerInfo = layer?.props?.layerInfo || feature.layerInfo
-        const serviceType = layerInfo?.service_type || layerInfo?.serviceType
-        
-        if (serviceType === 'martin') {
-          // 对于Martin服务，尝试获取完整几何
-          return await getMartinCompleteGeometry(featureId, layerInfo)
-        } else if (serviceType === 'geoserver') {
-          // 对于GeoServer服务，尝试获取完整几何
-          return await getGeoServerCompleteGeometry(featureId, layerInfo)
-        } else {
-          console.log('⚠️ 未知服务类型，使用当前几何进行高亮')
-          return feature.geometry
-        }
-      } catch (error) {
-        console.warn('❌ 获取完整几何失败，使用当前几何:', error)
-        return feature.geometry
+    // 🔥 新增：为细线要素增加拾取容差
+    const getPickableRadiusForFeature = (feature) => {
+      if (isThinLineFeature(feature)) {
+        return 8 // 细线使用更大的拾取半径
       }
+      return 5 // 默认拾取半径
     }
     
-    // 🔥 新增：通过图层样式高亮要素（备选方案）
-    const highlightFeatureByStyle = (featureId, layer) => {
-      if (!deckgl.value || !layer) return
-      
-      try {
-        // 获取当前所有图层
-        const currentLayers = deckgl.value.props.layers || []
-        
-        // 找到对应的图层并修改其样式
-        const updatedLayers = currentLayers.map(l => {
-          if (l.id === layer.id) {
-            // 创建新的图层配置，添加高亮样式
-            const newLayerConfig = {
-              ...l.props,
-              // 添加高亮样式函数
-              getFillColor: (d) => {
-                // 如果是选中的要素，使用高亮颜色
-                if (d.properties?.id === featureId || 
-                    d.properties?.gid === featureId || 
-                    d.properties?.fid === featureId || 
-                    d.properties?.OBJECTID === featureId) {
-                  return [255, 255, 0, 200] // 黄色高亮
-                }
-                // 其他要素使用原始颜色
-                return l.props.getFillColor ? l.props.getFillColor(d) : [0, 0, 0, 255]
-              },
-              getLineColor: (d) => {
-                // 如果是选中的要素，使用高亮边框
-                if (d.properties?.id === featureId || 
-                    d.properties?.gid === featureId || 
-                    d.properties?.fid === featureId || 
-                    d.properties?.OBJECTID === featureId) {
-                  return [255, 0, 0, 255] // 红色边框
-                }
-                // 其他要素使用原始边框颜色
-                return l.props.getLineColor ? l.props.getLineColor(d) : [0, 0, 0, 255]
-              },
-              getLineWidth: (d) => {
-                // 如果是选中的要素，使用粗边框
-                if (d.properties?.id === featureId || 
-                    d.properties?.gid === featureId || 
-                    d.properties?.fid === featureId || 
-                    d.properties?.OBJECTID === featureId) {
-                  return 4 // 粗边框
-                }
-                // 其他要素使用原始边框宽度
-                return l.props.getLineWidth ? l.props.getLineWidth(d) : 1
-              }
-            }
-            
-            // 根据图层类型创建新的图层实例
-            if (l.constructor.name === 'GeoJsonLayer') {
-              return new GeoJsonLayer(newLayerConfig)
-            } else if (l.constructor.name === 'MVTLayer') {
-              return new MVTLayer(newLayerConfig)
-            } else {
-              // 对于其他类型的图层，尝试直接更新属性
-              return l
-            }
-          }
-          return l
+    // 🔥 新增：调试函数 - 监控悬停状态
+    const debugHoverState = () => {
+      if (hoverState.value.isHovering) {
+        console.log('🖱️ 当前悬停状态:', {
+          featureId: hoverState.value.hoveredFeatureId,
+          layerId: hoverState.value.hoveredLayer?.id,
+          isHovering: hoverState.value.isHovering
         })
-        
-        // 更新图层
-        deckgl.value.setProps({ layers: updatedLayers })
-        
-        console.log('✅ 通过图层样式高亮要素:', featureId)
-      } catch (error) {
-        console.error('❌ 通过图层样式高亮失败:', error)
       }
     }
     
-    // 🔥 新增：从Martin服务获取完整几何
-    const getMartinCompleteGeometry = async (featureId, layerInfo) => {
-      try {
-        const layerName = layerInfo?.layer_name || layerInfo?.layerName
-        if (!layerName) {
-          throw new Error('缺少图层名称')
-        }
-        
-        // 构建Martin查询URL
-        const queryUrl = `${MARTIN_BASE_URL}/tiles/${layerName}/features/${featureId}`
-        
-        console.log('🔍 从Martin服务获取完整几何:', queryUrl)
-        
-        const response = await fetch(queryUrl)
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-        }
-        
-        const data = await response.json()
-        
-        if (data && data.features && data.features.length > 0) {
-          const completeFeature = data.features[0]
-          console.log('✅ 获取到完整几何:', completeFeature.geometry?.type)
-          return completeFeature.geometry
-        } else {
-          throw new Error('未找到要素数据')
-        }
-      } catch (error) {
-        console.warn('❌ 从Martin服务获取完整几何失败:', error)
-        throw error
-      }
-    }
+
     
-    // 🔥 新增：从GeoServer服务获取完整几何
-    const getGeoServerCompleteGeometry = async (featureId, layerInfo) => {
-      try {
-        const workspace = layerInfo?.workspace || 'cite'
-        const layerName = layerInfo?.layer_name || layerInfo?.layerName
-        if (!layerName) {
-          throw new Error('缺少图层名称')
-        }
-        
-        // 构建GeoServer WFS查询URL
-        const queryUrl = `${layerInfo?.base_url || 'http://localhost:8080/geoserver'}/wfs?` +
-          `service=WFS&version=1.0.0&request=GetFeature&typeName=${workspace}:${layerName}&` +
-          `featureID=${featureId}&outputFormat=application/json`
-        
-        console.log('🔍 从GeoServer服务获取完整几何:', queryUrl)
-        
-        const response = await fetch(queryUrl)
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-        }
-        
-        const data = await response.json()
-        
-        if (data && data.features && data.features.length > 0) {
-          const completeFeature = data.features[0]
-          console.log('✅ 获取到完整几何:', completeFeature.geometry?.type)
-          return completeFeature.geometry
-        } else {
-          throw new Error('未找到要素数据')
-        }
-      } catch (error) {
-        console.warn('❌ 从GeoServer服务获取完整几何失败:', error)
-        throw error
-      }
-    }
+
+    
+
+    
+
+    
+
     
     // 更新鼠标坐标
     const updateMouseCoordinates = (info) => {
@@ -669,50 +688,30 @@ export default {
       }
     }
 
-    // 🔥 简化：处理地图点击
+    // 🔥 优化：处理地图点击，基于悬停状态的可靠交互
     const handleMapClick = (info) => {
-      console.log('地图点击事件:', info)
-      
-      if (info.layer && info.object && info.object.properties) {
-        const feature = info.object
-        const layer = info.layer
-        const coordinate = info.coordinate
-        // 🔥 生成稳定的要素ID
-        const featureId = generateFeatureId(feature)
+      // 🔥 核心改进：优先使用悬停状态中的要素ID
+      if (hoverState.value.isHovering && hoverState.value.hoveredFeatureId) {
+        // 使用悬停状态中的要素信息，确保一致性
+        const featureId = hoverState.value.hoveredFeatureId
+        const feature = hoverState.value.hoveredFeature
+        const layer = hoverState.value.hoveredLayer
+        const coordinate = hoverState.value.hoveredCoordinate
+        const popupContent = hoverState.value.popupContent
         
-        // 🔥 使用几何高亮方案：设置选中状态
+        // 设置选中状态
         selectedFeatureId.value = featureId
         selectedLayerId.value = layer.id
         
-        // 设置弹窗状态
         selectedFeatureState.value = {
           feature: feature,
           layer: layer,
           coordinate: coordinate,
           popupVisible: true,
-          popupContent: buildFeaturePopupContent(feature, layer),
-          popupPosition: { x: 0, y: 0 }, // 不再使用动态位置
+          popupContent: popupContent,
+          popupPosition: { x: 0, y: 0 },
           selectedFeatureId: featureId
         }
-        
-        // 🔥 创建高亮图层并添加到地图
-        // 优先尝试获取完整几何进行高亮，如果失败则使用图层样式高亮
-        const originalFeatureId = feature.properties?.id || feature.properties?.gid || feature.properties?.fid || feature.properties?.OBJECTID
-        
-        if (originalFeatureId) {
-          // 尝试使用完整几何高亮
-          addHighlightLayer(feature, layer).catch(() => {
-            // 如果获取完整几何失败，使用图层样式高亮
-            console.log('🔄 回退到图层样式高亮')
-            highlightFeatureByStyle(originalFeatureId, layer)
-          })
-        } else {
-          // 没有要素ID，直接使用当前几何高亮
-          addHighlightLayer(feature, layer)
-        }
-        
-        // 🔥 调试信息
-        console.log('✅ 选中要素:', featureId, '图层:', layer.id, '几何:', feature.geometry?.type)
         
         // 触发图层点击事件
         emit('layer-click', {
@@ -721,7 +720,35 @@ export default {
           coordinate: coordinate
         })
         
-        console.log('要素已选择:', featureId, feature.properties)
+        return // 直接返回，避免后续处理
+      }
+      
+      // 🔥 备用方案：如果悬停状态为空，使用点击事件的信息
+      if (info.layer && info.object && info.object.properties) {
+        const feature = info.object
+        const layer = info.layer
+        const coordinate = info.coordinate
+        const featureId = generateFeatureId(feature)
+        
+        selectedFeatureId.value = featureId
+        selectedLayerId.value = layer.id
+        
+        selectedFeatureState.value = {
+          feature: feature,
+          layer: layer,
+          coordinate: coordinate,
+          popupVisible: true,
+          popupContent: buildFeaturePopupContent(feature, layer),
+          popupPosition: { x: 0, y: 0 },
+          selectedFeatureId: featureId
+        }
+        
+        // 触发图层点击事件
+        emit('layer-click', {
+          layer: layer,
+          feature: feature,
+          coordinate: coordinate
+        })
       } else {
         // 点击空白区域，清除选择
         clearFeatureSelection()
@@ -778,74 +805,13 @@ export default {
     
 
 
-    // 🔥 添加高亮图层到地图
-    const addHighlightLayer = async (feature, layer) => {
-      if (!deckgl.value) return
-      
-      try {
-        // 先移除现有的高亮图层
-        removeHighlightLayer()
-        
-        // 🔥 尝试获取完整的几何信息
-        const completeGeometry = await getCompleteFeatureGeometry(feature, layer)
-        
-        // 创建包含完整几何的要素对象
-        const completeFeature = {
-          ...feature,
-          geometry: completeGeometry
-        }
-        
-        // 创建新的高亮图层
-        const highlightLayer = createHighlightLayer(completeFeature)
-        if (!highlightLayer) return
-        
-        // 获取当前所有图层
-        const currentLayers = deckgl.value.props.layers || []
-        
-        // 添加高亮图层到最上层
-        const newLayers = [...currentLayers, highlightLayer]
-        
-        deckgl.value.setProps({ layers: newLayers })
-        
-        console.log('✅ 高亮图层已添加（使用完整几何）')
-      } catch (error) {
-        console.error('❌ 添加高亮图层失败:', error)
-        
-        // 如果获取完整几何失败，回退到使用当前几何
-        try {
-          const highlightLayer = createHighlightLayer(feature)
-          if (highlightLayer) {
-            const currentLayers = deckgl.value.props.layers || []
-            const newLayers = [...currentLayers, highlightLayer]
-            deckgl.value.setProps({ layers: newLayers })
-            console.log('✅ 高亮图层已添加（使用当前几何）')
-          }
-        } catch (fallbackError) {
-          console.error('❌ 回退高亮也失败:', fallbackError)
-        }
-      }
-    }
+
     
-    // 🔥 移除高亮图层
-    const removeHighlightLayer = () => {
-      if (!deckgl.value) return
-      
-      try {
-        const currentLayers = deckgl.value.props.layers || []
-        const filteredLayers = currentLayers.filter(layer => layer.id !== 'highlight-layer')
-        
-        if (filteredLayers.length !== currentLayers.length) {
-          deckgl.value.setProps({ layers: filteredLayers })
-          console.log('✅ 高亮图层已移除')
-        }
-      } catch (error) {
-        console.error('❌ 移除高亮图层失败:', error)
-      }
-    }
+
     
     // 🔥 清除要素选择
     const clearFeatureSelection = () => {
-      // 清除状态
+      // 清除选中状态
       selectedFeatureId.value = null
       selectedLayerId.value = null
       selectedFeatureState.value = {
@@ -858,10 +824,20 @@ export default {
         selectedFeatureId: null
       }
       
-      // 🔥 移除高亮图层
-      removeHighlightLayer()
+      // 🔥 同时清除悬停状态
+      hoverState.value = {
+        hoveredFeatureId: null,
+        hoveredFeature: null,
+        hoveredLayer: null,
+        hoveredCoordinate: null,
+        popupContent: '',
+        isHovering: false
+      }
       
-      console.log('✅ 要素选择已清除，高亮已移除')
+      // 清除提示信息
+      if (mapContainer.value) {
+        mapContainer.value.title = ''
+      }
     }
 
     // 三维模式状态
@@ -887,14 +863,16 @@ export default {
         getFillColor: [64, 158, 255, 200], // 蓝色填充
         getLineColor: [255, 255, 255, 255], // 白色边框
         // 确保在最上层显示
-        renderOrder: 1000
+        renderOrder: 1000,
+        // 🔥 添加图层级别的onHover事件
+        onHover: handleLayerHover
       }
       
       // 在三维模式下贴合地形
       if (is3DModeEnabled.value) {
         layerConfig.extensions = [new TerrainExtension()]
         layerConfig.terrainDrawMode = 'drape'
-        console.log('📍 用户位置标记已启用三维地形贴合')
+        //console.log('📍 用户位置标记已启用三维地形贴合')
       }
       
       return new ScatterplotLayer(layerConfig)
@@ -902,7 +880,7 @@ export default {
     
     // 底图切换 - 参考OpenLayers的实现，支持三维模式
     const onBaseMapChange = (baseMap) => {
-      console.log('切换底图:', baseMap)
+      //console.log('切换底图:', baseMap)
       
       // 简化的三维切换逻辑
       if (baseMap.is3D) {
@@ -949,7 +927,7 @@ export default {
 
     // 更新地图图层
     const updateMapLayers = async (layers) => {
-      console.log('updateMapLayers被调用, deckgl实例:', deckgl.value, '图层数量:', layers?.length)
+      //console.log('updateMapLayers被调用, deckgl实例:', deckgl.value, '图层数量:', layers?.length)
       
       if (!deckgl.value) {
         console.warn('Deck.gl实例不存在，无法更新图层')
@@ -957,26 +935,26 @@ export default {
       }
       
       if (!layers || layers.length === 0) {
-        console.log('没有图层数据，只显示底图')
+        //console.log('没有图层数据，只显示底图')
         
         let layersToShow = []
         if (is3DModeEnabled.value) {
           // 三维模式：只显示地形（包含底图纹理）
           const terrainLayers = create3DTerrainLayers()
           layersToShow = [...terrainLayers]
-          console.log('三维模式无数据：显示地形（含底图纹理）')
+          //console.log('三维模式无数据：显示地形（含底图纹理）')
         } else {
           // 二维模式：只显示底图
           const baseLayer = createBaseMapLayer()
           layersToShow = [baseLayer]
-          console.log('二维模式无数据：只显示底图')
+          //console.log('二维模式无数据：只显示底图')
         }
         
         // 添加用户位置图层（如果存在）
         const userLocationLayer = createUserLocationLayer()
         if (userLocationLayer) {
           layersToShow.push(userLocationLayer)
-          console.log('📍 已添加用户位置标记图层（无数据模式）')
+          //console.log('📍 已添加用户位置标记图层（无数据模式）')
         }
         
         deckgl.value.setProps({
@@ -993,30 +971,30 @@ export default {
         
         if (is3DModeEnabled.value) {
           // 三维模式：地形（含底图纹理） + 数据图层
-          console.log('🏔️ 三维模式下更新图层')
+          //console.log('🏔️ 三维模式下更新图层')
           const terrainLayers = create3DTerrainLayers()
           allLayers = [...terrainLayers, ...dataLayers]
-          console.log('三维模式图层结构: 地形（含纹理）(1) + 数据(' + dataLayers.length + ') = ' + allLayers.length)
+          //console.log('三维模式图层结构: 地形（含纹理）(1) + 数据(' + dataLayers.length + ') = ' + allLayers.length)
         } else {
           // 二维模式：底图 + 数据图层
-          console.log('🗺️ 二维模式下更新图层')
+          //console.log('🗺️ 二维模式下更新图层')
           const baseLayer = createBaseMapLayer()
           allLayers = [baseLayer, ...dataLayers]
-          console.log('二维模式图层结构: 底图(1) + 数据(' + dataLayers.length + ') = ' + allLayers.length)
+          //console.log('二维模式图层结构: 底图(1) + 数据(' + dataLayers.length + ') = ' + allLayers.length)
         }
         
         // 添加用户位置图层（如果存在）
         const userLocationLayer = createUserLocationLayer()
         if (userLocationLayer) {
           allLayers.push(userLocationLayer)
-          console.log('📍 已添加用户位置标记图层')
+          //console.log('📍 已添加用户位置标记图层')
         }
         
         deckgl.value.setProps({
           layers: allLayers
         })
         
-        console.log('✅ 图层更新完成，当前模式:', is3DModeEnabled.value ? '三维' : '二维')
+        //console.log('✅ 图层更新完成，当前模式:', is3DModeEnabled.value ? '三维' : '二维')
         
       } catch (error) {
         console.error('❌ 更新图层失败:', error)
@@ -1027,15 +1005,15 @@ export default {
     const createDataLayers = async (layers) => {
       const deckLayers = []
       
-      console.log('开始创建数据图层，总数:', layers.length)
+      //console.log('开始创建数据图层，总数:', layers.length)
       
       for (const layer of layers) {
         // 检查图层可见性（兼容visibility和visible字段）
         const isVisible = layer.visibility !== false && layer.visible !== false
-        console.log(`图层 ${layer.layer_name}: 可见性=${isVisible}, service_type=${layer.service_type}, file_type=${layer.file_type}`)
+        //console.log(`图层 ${layer.layer_name}: 可见性=${isVisible}, service_type=${layer.service_type}, file_type=${layer.file_type}`)
         
         if (!isVisible) {
-          console.log(`跳过隐藏图层: ${layer.layer_name}`)
+          //console.log(`跳过隐藏图层: ${layer.layer_name}`)
           continue
         }
         
@@ -1047,35 +1025,35 @@ export default {
             // Martin矢量瓦片图层 - 参考OpenLayers的addMartinLayer
            
             if(layer.martin_service_type==='raster.mbtiles'){
-                console.log(`创建栅格瓦片图层: ${layer.layer_name} (${layer.file_type})`)
+                //console.log(`创建栅格瓦片图层: ${layer.layer_name} (${layer.file_type})`)
                 deckLayer = createTileLayer(layer)
               }else{
-                console.log(`创建栅格文件图层: ${layer.layer_name} (${layer.file_type})`)
+                //console.log(`创建栅格文件图层: ${layer.layer_name} (${layer.file_type})`)
                 deckLayer = createMVTLayer(layer)
               }
 
           } else if (layer.service_type === 'geoserver') {
             // GeoServer WMS图层 - 参考OpenLayers的addGeoServerLayer
-            console.log(`创建GeoServer WMS图层: ${layer.layer_name}`)
+            //console.log(`创建GeoServer WMS图层: ${layer.layer_name}`)
             deckLayer = createWMSLayer(layer)
           } else {
             // 根据文件类型推断 - 参考OpenLayers的文件类型判断
             if (layer.file_type === 'geojson' || layer.file_type === 'shp' || layer.file_type === 'dxf') {
-              console.log(`创建矢量文件图层: ${layer.layer_name} (${layer.file_type})`)
+              //console.log(`创建矢量文件图层: ${layer.layer_name} (${layer.file_type})`)
               deckLayer = createMVTLayer(layer)
             } else if (layer.file_type === 'tif' || layer.file_type === 'tiff') {
               if(layer.martin_service_type==='raster.mbtiles'){
-                console.log(`创建栅格瓦片图层: ${layer.layer_name} (${layer.file_type})`)
+                //console.log(`创建栅格瓦片图层: ${layer.layer_name} (${layer.file_type})`)
                 deckLayer = createTileLayer(layer)
               }else{
-                console.log(`创建栅格文件图层: ${layer.layer_name} (${layer.file_type})`)
+                //console.log(`创建栅格文件图层: ${layer.layer_name} (${layer.file_type})`)
                 deckLayer = createMVTLayer(layer)
               }
             } else if (layer.file_type === 'mbtiles') {
-              console.log(`创建MBTiles图层: ${layer.layer_name}`)
+              //console.log(`创建MBTiles图层: ${layer.layer_name}`)
               deckLayer = createMVTLayer(layer)
             } else {
-              console.log(`尝试创建通用图层: ${layer.layer_name}`)
+              //console.log(`尝试创建通用图层: ${layer.layer_name}`)
               // 根据URL内容判断
               if (layer.mvt_url || (layer.url && (layer.url.includes('pbf') || layer.url.includes('mvt')))) {
                 deckLayer = createMVTLayer(layer)
@@ -1087,7 +1065,7 @@ export default {
           
           if (deckLayer) {
             deckLayers.push(deckLayer)
-            console.log(`成功创建图层: ${layer.layer_name}`)
+            //console.log(`成功创建图层: ${layer.layer_name}`)
           } else {
             console.warn(`无法确定图层类型: ${layer.layer_name}`)
           }
@@ -1096,13 +1074,13 @@ export default {
         }
       }
       
-      console.log(`共创建了 ${deckLayers.length} 个Deck.gl图层`)
+      //console.log(`共创建了 ${deckLayers.length} 个Deck.gl图层`)
       return deckLayers
     }
 
     // 创建栅格瓦片图层 - 用于raster.mbtiles
     const createTileLayer = (layer) => {
-      console.log(`创建栅格瓦片图层，图层信息:`, layer)
+      //console.log(`创建栅格瓦片图层，图层信息:`, layer)
       
       // 检查MVT URL是否存在 - 参考OpenLayers的验证逻辑
       if (!layer.mvt_url) {
@@ -1129,7 +1107,7 @@ export default {
         }
       }
       
-      console.log(`栅格瓦片图层URL: ${tileUrl}`)
+      //console.log(`栅格瓦片图层URL: ${tileUrl}`)
       
       const tileLayerConfig = {
         id: `tile-${layer.scene_layer_id || layer.layer_id || layer.id}`,
@@ -1150,10 +1128,8 @@ export default {
             bounds: [west, south, east, north]
           })
         },
-        // 启用拾取
-        pickable: true,
-        // 🔥 修改：禁用自动高亮，改为手动控制
-        autoHighlight: false,
+        // 🔥 栅格瓦片图层通常不需要拾取功能
+        pickable: false,
         // 图层信息 - 便于调试
         layerInfo: {
           layerName: layer.layer_name,
@@ -1167,7 +1143,7 @@ export default {
         tileLayerConfig.extensions = [new TerrainExtension()]
         // drape模式：将栅格数据作为纹理覆盖在地形表面
         tileLayerConfig.terrainDrawMode = 'drape'
-        console.log(`🏔️ 栅格瓦片图层 ${layer.layer_name} 已启用TerrainExtension (drape模式)`)
+        //console.log(`🏔️ 栅格瓦片图层 ${layer.layer_name} 已启用TerrainExtension (drape模式)`)
       }
       
       return new TileLayer(tileLayerConfig)
@@ -1175,7 +1151,7 @@ export default {
 
     // 创建MVT矢量瓦片图层 - 参考OpenLayers的实现
     const createMVTLayer = (layer) => {
-      console.log(`创建MVT图层，图层信息:`, layer)
+      //console.log(`创建MVT图层，图层信息:`, layer)
       
       // 检查MVT URL是否存在 - 参考OpenLayers的验证逻辑
       if (!layer.mvt_url) {
@@ -1202,12 +1178,12 @@ export default {
         }
       }
       
-      console.log(`MVT图层URL: ${mvtUrl}`)
+      //console.log(`MVT图层URL: ${mvtUrl}`)
       
       // 如果是DXF文件，输出样式调试信息
       if (layer.file_type === 'dxf') {
-        console.log(`🎨 为DXF文件创建样式函数: ${layer.layer_name}`)
-        console.log('可用的默认样式图层:', Object.keys(defaultDxfStylesConfig.defaultDxfStyles))
+        //console.log(`🎨 为DXF文件创建样式函数: ${layer.layer_name}`)
+        //console.log('可用的默认样式图层:', Object.keys(defaultDxfStylesConfig.defaultDxfStyles))
       }
       
       // 创建DXF样式函数 - 参考OpenLayers的样式实现
@@ -1246,7 +1222,7 @@ export default {
              let styleConfig = {}
              if (isDxf && dxfLayerName && defaultStyles[dxfLayerName]) {
                styleConfig = defaultStyles[dxfLayerName]
-               console.log(`🎨 找到DXF图层样式: ${dxfLayerName}`, styleConfig)
+               //console.log(`🎨 找到DXF图层样式: ${dxfLayerName}`, styleConfig)
              } else {
                // 默认样式
                styleConfig = {
@@ -1255,7 +1231,7 @@ export default {
                  visible: true
                }
                if (isDxf && dxfLayerName) {
-                 console.log(`⚠️ 未找到DXF图层样式: ${dxfLayerName}，使用默认样式`)
+                 //console.log(`⚠️ 未找到DXF图层样式: ${dxfLayerName}，使用默认样式`)
                }
              }
             
@@ -1323,11 +1299,10 @@ export default {
             return [0, 0, 0, 200]
           },
           
-          // 线宽函数 - 参考OpenLayers的线宽设置
+          // 🔥 优化：线宽函数，特别处理细线以提高可点击性
           getLineWidth: (feature) => {
             const properties = feature.properties || {}
-            
-            // 🔥 移除自定义高亮逻辑，让Deck.gl内置高亮处理
+            const geometryType = feature.geometry?.type
             
             // 获取DXF图层名称
             let dxfLayerName = null
@@ -1348,7 +1323,15 @@ export default {
               return 0
             }
             
-            return styleConfig.weight || 1
+            let lineWidth = styleConfig.weight || 1
+            
+            // 🔥 优化：为细线增加最小宽度，提高可点击性
+            if (geometryType === 'LineString' || geometryType === 'MultiLineString') {
+              // 确保线宽至少为2像素，提高细线的可点击性
+              lineWidth = Math.max(lineWidth, 2)
+            }
+            
+            return lineWidth
           },
           
           // 点半径函数 - 参考OpenLayers的点样式
@@ -1398,17 +1381,30 @@ export default {
         getLineColor: styleFunctions.getLineColor,
         getLineWidth: styleFunctions.getLineWidth,
         getPointRadius: styleFunctions.getPointRadius,
-        lineWidthMinPixels: 1,
-        pointRadiusMinPixels: 2,
-        // 启用拾取
+        // 🔥 优化：增加细线的拾取容差
+        lineWidthMinPixels: 2, // 增加最小线宽，提高细线的可点击性
+        pointRadiusMinPixels: 3, // 增加最小点半径
+        // 🔥 优化：启用拾取并增加拾取半径
         pickable: true,
-        // 🔥 使用几何高亮方案：禁用内置高亮
-        autoHighlight: false,
+        // 🔥 优化：动态拾取半径，特别针对细线
+        getPickableRadius: (feature) => getPickableRadiusForFeature(feature),
+        // 🔥 使用几何高亮方案：启用内置高亮
+        autoHighlight: true,
+        // 🔥 优化：增加高亮容差
+        highlightColor: [255, 255, 0, 100], // 黄色高亮
         // 图层信息 - 便于调试
         layerInfo: {
           layerName: layer.layer_name,
           fileType: layer.file_type,
           serviceType: layer.service_type
+        },
+        // 🔥 添加图层级别的onHover事件
+        onHover: handleLayerHover,
+        // 🔥 添加图层级别的cursor控制
+        getCursor: ({ isDragging, isHovering }) => {
+          if (isDragging) return 'grabbing'
+          if (isHovering) return 'pointer'
+          return 'grab'
         }
       }
       
@@ -1418,9 +1414,9 @@ export default {
         // drape模式：将矢量数据作为纹理覆盖在地形表面
         mvtLayerConfig.terrainDrawMode = 'drape'
         // 🔧 修复拾取问题：在三维模式下禁用拾取功能
-        mvtLayerConfig.pickable = false
-        mvtLayerConfig.autoHighlight = false
-        console.log(`🏔️ MVT图层 ${layer.layer_name} 已启用TerrainExtension (drape模式，禁用拾取)`)
+        mvtLayerConfig.pickable = true
+        mvtLayerConfig.autoHighlight = true
+        ////console.log(`🏔️ MVT图层 ${layer.layer_name} 已启用TerrainExtension (drape模式，禁用拾取)`)
       }
       
       return new MVTLayer(mvtLayerConfig)
@@ -1440,7 +1436,7 @@ export default {
         wmsUrl = '/geoserver/wms'
       }
       
-      console.log('创建WMS图层:', layer.layer_name, 'URL:', wmsUrl)
+      //console.log('创建WMS图层:', layer.layer_name, 'URL:', wmsUrl)
       
       // 获取图层坐标系信息 - 参考OpenLayers的坐标系处理
       let layerCRS = 'EPSG:4326' // 默认坐标系
@@ -1478,7 +1474,7 @@ export default {
       
       const wmsTileUrl = `${wmsUrl}?SERVICE=WMS&REQUEST=GetMap&${paramsString}&BBOX={bbox}&WIDTH=256&HEIGHT=256`
       
-      console.log(`WMS图层URL: ${wmsTileUrl}`)
+      //console.log(`WMS图层URL: ${wmsTileUrl}`)
       
       const wmsLayerConfig = {
         id: `wms-${layer.scene_layer_id || layer.layer_id || layer.id}`,
@@ -1490,6 +1486,8 @@ export default {
         // 设置渲染顺序 - 参考OpenLayers的zIndex
         renderOrder: layer.layer_order || 1,
         tileSize: 256,
+        // 🔥 WMS图层是栅格图层，通常不需要拾取功能
+        pickable: false,
         // 修复WMS瓦片加载 - 使用getTileData获取图像URL
         getTileData: ({ index: { x, y, z } }) => {
           // 计算Web Mercator瓦片边界框（米为单位）
@@ -1540,8 +1538,8 @@ export default {
         // drape模式：将栅格数据作为纹理覆盖在地形表面
         wmsLayerConfig.terrainDrawMode = 'drape'
         // 🔧 修复拾取问题：在三维模式下禁用拾取功能
-        wmsLayerConfig.pickable = false
-        console.log(`🏔️ WMS图层 ${layer.layer_name} 已启用TerrainExtension (drape模式，禁用拾取)`)
+        wmsLayerConfig.pickable = true
+        ////console.log(`🏔️ WMS图层 ${layer.layer_name} 已启用TerrainExtension (drape模式，禁用拾取)`)
       }
       
       return new TileLayer(wmsLayerConfig)
@@ -1550,7 +1548,7 @@ export default {
     // 刷新地图 - 增强版，支持三维模式，包含错误恢复
     const refreshMap = () => {
       refreshing.value = true
-      console.log('🔄 开始刷新地图，当前模式:', is3DModeEnabled.value ? '三维' : '二维')
+      //console.log('🔄 开始刷新地图，当前模式:', is3DModeEnabled.value ? '三维' : '二维')
       
       try {
         if (deckgl.value) {
@@ -1571,7 +1569,7 @@ export default {
           
           // 2. 重新加载所有图层（特别重要用于三维模式）
           if (props.layers && props.layers.length > 0) {
-            console.log('🔄 重新加载业务图层，数量:', props.layers.length)
+            //console.log('🔄 重新加载业务图层，数量:', props.layers.length)
             setTimeout(() => {
               updateMapLayers(props.layers)
             }, 100)
@@ -1579,7 +1577,7 @@ export default {
           
           // 3. 如果是三维模式，确保深度测试启用
           if (is3DModeEnabled.value) {
-            console.log('🏔️ 三维模式刷新：确保WebGL参数正确')
+            //console.log('🏔️ 三维模式刷新：确保WebGL参数正确')
             setTimeout(() => {
               deckgl.value.setProps({
                 parameters: {
@@ -1596,7 +1594,7 @@ export default {
               deckgl.value.setProps({
                 viewState: undefined
               })
-              console.log('🔓 已确保视口控制释放')
+              //console.log('🔓 已确保视口控制释放')
             }
           }, 1000)
           
@@ -1611,7 +1609,7 @@ export default {
           try {
             if (is3DModeEnabled.value) {
               is3DModeEnabled.value = false
-              console.log('🆘 已强制退出三维模式进行重置')
+              //console.log('🆘 已强制退出三维模式进行重置')
             }
             initDeckGL()
           } catch (resetError) {
@@ -1621,7 +1619,7 @@ export default {
       } finally {
         setTimeout(() => {
           refreshing.value = false
-          console.log('✅ 地图刷新完成')
+          //console.log('✅ 地图刷新完成')
         }, 500)
       }
     }
@@ -1645,7 +1643,7 @@ export default {
         })
         
         const { longitude, latitude } = position.coords
-        console.log('🔥 用户定位坐标:', { longitude, latitude })
+        //console.log('🔥 用户定位坐标:', { longitude, latitude })
         
         // 保存用户位置坐标
         userLocationCoords.value = [longitude, latitude]
@@ -1653,7 +1651,7 @@ export default {
         if (deckgl.value) {
           // 获取当前视图状态并保持三维模式的pitch
           const currentViewState = deckgl.value.viewState
-          console.log('🔥 当前视图状态:', currentViewState)
+          //console.log('🔥 当前视图状态:', currentViewState)
           
           const pitch = is3DModeEnabled.value ? (currentViewState.pitch || 45) : 0
           
@@ -1668,7 +1666,7 @@ export default {
             transitionInterpolator: null
           }
           
-          console.log('🔥 目标视图状态:', targetViewState)
+          //console.log('🔥 目标视图状态:', targetViewState)
           
           // 先更新图层以显示位置标记
           updateMapLayers(props.layers || [])
@@ -1682,7 +1680,7 @@ export default {
           // 短暂延迟后释放viewState控制，保持位置标记显示
           setTimeout(() => {
             if (deckgl.value) {
-              console.log('🔥 定位动画完成，释放视图状态控制，保持位置标记')
+              //console.log('🔥 定位动画完成，释放视图状态控制，保持位置标记')
               // 移除viewState控制，让控制器接管，但保持位置坐标
               deckgl.value.setProps({
                 viewState: undefined
@@ -1731,7 +1729,7 @@ export default {
     const toggleLayersCache = () => {
       layersCacheEnabled.value = !layersCacheEnabled.value
       ElMessage.info(`图层缓存已${layersCacheEnabled.value ? '开启' : '关闭'}`)
-      console.log('图层缓存状态已切换:', layersCacheEnabled.value ? '开启' : '关闭')
+      //console.log('图层缓存状态已切换:', layersCacheEnabled.value ? '开启' : '关闭')
     }
     
     // 更新底图版权信息 - 参考OpenLayers的实现
@@ -1752,7 +1750,7 @@ export default {
     const enable3DMode = () => {
       if (!deckgl.value) return
       
-      console.log('🌍 启用三维模式，保持当前底图:', currentBaseMap.value.name)
+      //console.log('🌍 启用三维模式，保持当前底图:', currentBaseMap.value.name)
       is3DModeEnabled.value = true
       
       // 获取当前视图状态
@@ -1767,10 +1765,10 @@ export default {
       // 获取当前的数据图层（非底图）
       const dataLayers = deckgl.value.props.layers?.filter(layer => !layer.id?.includes('base-map')) || []
       
-      console.log('🎯 三维模式图层顺序:')
-      console.log('1. 地形基础 (TerrainLayer)')
-      console.log('2. 底图覆盖:', currentBaseMap.value.name)
-      console.log('3. 数据图层:', dataLayers.length, '个')
+      //console.log('🎯 三维模式图层顺序:')
+      //console.log('1. 地形基础 (TerrainLayer)')
+      //console.log('2. 底图覆盖:', currentBaseMap.value.name)
+      //console.log('3. 数据图层:', dataLayers.length, '个')
       
       // 图层顺序：地形（底） -> 底图（中） -> 数据图层（上） -> 用户位置（最上）
       let allLayers = [...terrainLayers, baseMapLayer, ...dataLayers]
@@ -1779,7 +1777,7 @@ export default {
       const userLocationLayer = createUserLocationLayer()
       if (userLocationLayer) {
         allLayers.push(userLocationLayer)
-        console.log('📍 已添加用户位置标记图层（三维模式）')
+        //console.log('📍 已添加用户位置标记图层（三维模式）')
       }
       
       // 设置三维视图，确保控制器完全启用
@@ -1819,7 +1817,7 @@ export default {
           deckgl.value.setProps({
             viewState: undefined // 移除viewState控制，完全交给用户
           })
-          console.log('✅ 三维模式过渡完成，视口控制已释放')
+          //console.log('✅ 三维模式过渡完成，视口控制已释放')
         }
       }, 1600) // 稍晚于动画完成时间
       
@@ -1830,16 +1828,16 @@ export default {
       
       // 🔄 强制重新加载所有图层，确保在三维模式下正确显示
       setTimeout(() => {
-        console.log('🔄 三维模式启用后，强制刷新图层')
+        //console.log('🔄 三维模式启用后，强制刷新图层')
         
         // 如果有props.layers，重新应用它们
         if (props.layers && props.layers.length > 0) {
-          console.log('📊 重新加载业务图层，数量:', props.layers.length)
+          //console.log('📊 重新加载业务图层，数量:', props.layers.length)
           updateMapLayers(props.layers)
         }
         
         // 不再强制设置viewState，避免锁定视口
-        console.log('✅ 三维模式图层刷新完成')
+        //console.log('✅ 三维模式图层刷新完成')
       }, 500) // 等待地形图层完全加载后再刷新
       
       ElMessage.success(`🌍 三维模式已启用：地形(${currentBaseMap.value.name}纹理) + ${dataLayers.length}个数据图层(TerrainExtension)`)
@@ -1849,7 +1847,7 @@ export default {
     const disable3DMode = () => {
       if (!deckgl.value) return
       
-      console.log('🗺️ 恢复二维模式，当前底图:', currentBaseMap.value.name)
+      //console.log('🗺️ 恢复二维模式，当前底图:', currentBaseMap.value.name)
       is3DModeEnabled.value = false
       
       // 获取当前视图状态
@@ -1870,12 +1868,12 @@ export default {
       const userLocationLayer = createUserLocationLayer()
       if (userLocationLayer) {
         allLayers.push(userLocationLayer)
-        console.log('📍 已添加用户位置标记图层（二维模式）')
+        //console.log('📍 已添加用户位置标记图层（二维模式）')
       }
       
-      console.log('🎯 二维模式图层顺序:')
-      console.log('1. 底图:', currentBaseMap.value.name)
-      console.log('2. 数据图层:', dataLayers.length, '个')
+      //console.log('🎯 二维模式图层顺序:')
+      //console.log('1. 底图:', currentBaseMap.value.name)
+      //console.log('2. 数据图层:', dataLayers.length, '个')
       
       // 恢复二维视图，确保不锁定视口
       deckgl.value.setProps({
@@ -1914,7 +1912,7 @@ export default {
           deckgl.value.setProps({
             viewState: undefined // 移除viewState控制，完全交给用户
           })
-          console.log('✅ 二维模式过渡完成，视口控制已释放')
+          //console.log('✅ 二维模式过渡完成，视口控制已释放')
         }
       }, 1100) // 稍晚于动画完成时间
       
@@ -1923,7 +1921,7 @@ export default {
         deckgl.value.canvas.style.backgroundColor = 'transparent'
       }
       
-      console.log('✅ 二维模式已恢复')
+      //console.log('✅ 二维模式已恢复')
     }
 
     // 🔥 样式更新相关方法
@@ -1953,7 +1951,7 @@ export default {
     }
     
     const refreshLayers = () => {
-      console.log('刷新地图图层')
+      //console.log('刷新地图图层')
       // 这里可以实现图层刷新逻辑
       ElMessage.success('地图图层已刷新')
     }
@@ -1972,6 +1970,29 @@ export default {
         deckgl.value.finalize()
         deckgl.value = null
       }
+      
+      // 🔥 清理鼠标指针状态
+      if (cursorState.value !== 'default') {
+        if (mapContainer.value) {
+          mapContainer.value.style.cursor = 'default'
+        }
+        forceCanvasCursor('default')
+        cursorState.value = 'default'
+      }
+      
+      // 🔥 清理canvas cursor监控
+      if (cursorMonitorInterval.value) {
+        clearInterval(cursorMonitorInterval.value)
+        cursorMonitorInterval.value = null
+        //console.log('🔧 停止canvas cursor监控')
+      }
+      
+      // 🔥 清理MutationObserver
+      if (cursorObserver.value) {
+        cursorObserver.value.disconnect()
+        cursorObserver.value = null
+        //console.log('🔧 停止canvas样式变化监听器')
+      }
     })
 
     return {
@@ -1986,10 +2007,12 @@ export default {
       locationLoading,
       userLocationVisible,
       currentBaseMapAttribution,
-      // 🔥 简化：要素选择相关状态
+      // 🔥 优化：要素选择相关状态
       selectedFeatureState,
       selectedFeatureId,
       selectedLayerId,
+      // 🔥 新增：悬停状态管理
+      hoverState,
       // 方法
       onBaseMapChange,
       refreshMap,
@@ -2002,8 +2025,10 @@ export default {
       updateDxfStyles,
       updatePopupConfig,
       refreshLayers,
-      // 🔥 新增：要素选择相关方法
-      clearFeatureSelection
+      // 🔥 优化：要素选择相关方法
+      clearFeatureSelection,
+      // 🔥 新增：调试方法
+      debugHoverState
     }
   },
   // 🔥 暴露方法给父组件
@@ -2014,7 +2039,8 @@ export default {
     'updatePopupConfig', 
     'refreshLayers',
     'deckgl',
-    'clearFeatureSelection' // �� 新增：暴露清除要素选择方法
+    'clearFeatureSelection', // 🔥 优化：暴露清除要素选择方法
+    'debugHoverState' // 🔥 新增：暴露调试方法
   ]
 }
 </script>
@@ -2032,6 +2058,8 @@ export default {
   width: 100%;
   height: 100%;
   position: relative;
+  /* 🔥 确保鼠标指针样式不被覆盖 */
+  cursor: default !important;
 }
 .el-button+.el-button {
     margin-left: 0px;
@@ -2042,6 +2070,10 @@ export default {
   max-width: 100% !important;
   max-height: 100% !important;
   display: block !important;
+  /* 🔥 确保canvas的鼠标指针样式可以被JavaScript控制 */
+  cursor: inherit !important;
+  /* 🔥 禁用deck.gl的默认cursor管理 */
+  pointer-events: auto !important;
 }
 
 /* 特别针对deckgl-overlay的样式重写 */
@@ -2053,6 +2085,8 @@ export default {
   max-height: 100% !important;
   top: auto !important;
   left: auto !important;
+  /* 🔥 强制覆盖deck.gl的cursor样式 */
+  cursor: inherit !important;
 }
 
 .map-controls {
@@ -2219,6 +2253,12 @@ export default {
 
 .popup-content::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.5);
+}
+
+/* 🔥 新增：细线要素的视觉增强 */
+.map-container:hover {
+  /* 当鼠标悬停在地图上时，为细线提供更好的视觉反馈 */
+  cursor: pointer;
 }
 
 /* 移动端适配 - 参考OpenLayers的移动端样式 */

@@ -15,7 +15,7 @@ from werkzeug.utils import secure_filename
 
 from config import FILE_STORAGE, DB_CONFIG
 from models.db import execute_query, insert_with_snowflake_id
-from services.postgis_service import PostGISService
+from backend.services.postgis_service_copy import PostGISService
 from services.martin_service import MartinService
 
 

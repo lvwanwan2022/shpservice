@@ -16,7 +16,7 @@ import tempfile
 import warnings
 
 from config import DB_CONFIG
-from utils import safe_temp_file
+from backend.utils.__init__copy import safe_temp_file
 
 
 class PostGISService:
