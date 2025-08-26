@@ -1,0 +1,792 @@
+openapi: 3.0.3
+info:
+  title: GeoJSON直接服务 API
+  description: GeoJSON文件上传、获取、管理、Leaflet配置等功能的API接口
+  version: 1.0.0
+  contact:
+    name: SHP Service Team
+    email: support@shpservice.com
+
+servers:
+  - url: /api/geojson
+    description: GeoJSON直接服务
+
+security:
+  - BearerAuth: []
+
+paths:
+  /upload:
+    post:
+      tags:
+        - 文件上传
+      summary: 上传GeoJSON文件
+      description: 上传GeoJSON文件并返回文件信息和访问URL
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: GeoJSON文件（.geojson或.json格式）
+                  required: true
+                user_id:
+                  type: integer
+                  description: 用户ID（可选）
+                  example: 123
+      responses:
+        '200':
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  file_id:
+                    type: string
+                    example: "123"
+                  file_name:
+                    type: string
+                    example: "data.geojson"
+                  file_size:
+                    type: integer
+                    example: 1024000
+                  upload_time:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
+                  access_urls:
+                    type: object
+                    properties:
+                      geojson_url:
+                        type: string
+                        example: "/api/geojson/files/123"
+                      info_url:
+                        type: string
+                        example: "/api/geojson/files/123/info"
+                      download_url:
+                        type: string
+                        example: "/api/geojson/files/123/download"
+                      leaflet_config_url:
+                        type: string
+                        example: "/api/geojson/leaflet-config/123"
+                  file_info:
+                    type: object
+                    properties:
+                      feature_count:
+                        type: integer
+                        example: 150
+                      geometry_types:
+                        type: array
+                        items:
+                          type: string
+                        example: ["Point", "LineString", "Polygon"]
+                      bbox:
+                        type: array
+                        items:
+                          type: number
+                        example: [116.0, 39.0, 117.0, 40.0]
+                      properties:
+                        type: array
+                        items:
+                          type: string
+                        example: ["name", "type", "value"]
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "没有选择文件"
+        '413':
+          description: 文件太大
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "文件太大，请选择更小的文件"
+        '500':
+          description: 上传失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "文件上传失败: 存储空间不足"
+
+  /files/{file_id}:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 文件ID
+        example: "123"
+    
+    get:
+      tags:
+        - 文件获取
+      summary: 获取GeoJSON文件内容
+      description: 获取GeoJSON文件内容，用于前端Leaflet加载
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                description: GeoJSON格式的数据
+                example:
+                  type: "FeatureCollection"
+                  features:
+                    - type: "Feature"
+                      geometry:
+                        type: "Point"
+                        coordinates: [116.0, 39.0]
+                      properties:
+                        name: "示例点"
+                        type: "POI"
+        '404':
+          description: 文件不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "文件不存在"
+        '500':
+          description: 获取失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "获取文件失败: 文件损坏"
+
+  /files/{file_id}/info:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 文件ID
+        example: "123"
+    
+    get:
+      tags:
+        - 文件信息
+      summary: 获取GeoJSON文件信息
+      description: 获取GeoJSON文件的元数据信息
+      responses:
+        '200':
+          description: 获取信息成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  file_id:
+                    type: string
+                    example: "123"
+                  file_name:
+                    type: string
+                    example: "data.geojson"
+                  file_size:
+                    type: integer
+                    example: 1024000
+                  upload_time:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
+                  file_info:
+                    type: object
+                    properties:
+                      feature_count:
+                        type: integer
+                        example: 150
+                      geometry_types:
+                        type: array
+                        items:
+                          type: string
+                        example: ["Point", "LineString", "Polygon"]
+                      bbox:
+                        type: array
+                        items:
+                          type: number
+                        example: [116.0, 39.0, 117.0, 40.0]
+                      properties:
+                        type: array
+                        items:
+                          type: string
+                        example: ["name", "type", "value"]
+                      coordinate_system:
+                        type: string
+                        example: "EPSG:4326"
+                      file_format:
+                        type: string
+                        example: "GeoJSON"
+        '404':
+          description: 文件不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "文件不存在"
+        '500':
+          description: 获取信息失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "获取文件信息失败: 数据库错误"
+
+  /files/{file_id}/download:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 文件ID
+        example: "123"
+    
+    get:
+      tags:
+        - 文件下载
+      summary: 下载GeoJSON文件
+      description: 下载GeoJSON文件
+      responses:
+        '200':
+          description: 下载成功
+          content:
+            application/json:
+              schema:
+                type: object
+                description: GeoJSON文件内容
+        '404':
+          description: 文件不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "文件不存在"
+        '500':
+          description: 下载失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "下载文件失败: 文件损坏"
+
+  /files:
+    get:
+      tags:
+        - 文件管理
+      summary: 获取GeoJSON文件列表
+      description: 获取当前用户的GeoJSON文件列表
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 页码
+          example: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页数量
+          example: 20
+        - name: user_id
+          in: query
+          schema:
+            type: integer
+          description: 用户ID（可选）
+          example: 123
+      responses:
+        '200':
+          description: 获取文件列表成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  files:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        file_id:
+                          type: string
+                          example: "123"
+                        file_name:
+                          type: string
+                          example: "data.geojson"
+                        file_size:
+                          type: integer
+                          example: 1024000
+                        upload_time:
+                          type: string
+                          format: date-time
+                          example: "2024-01-15T10:30:00Z"
+                        feature_count:
+                          type: integer
+                          example: 150
+                        geometry_types:
+                          type: array
+                          items:
+                            type: string
+                          example: ["Point", "LineString", "Polygon"]
+                        bbox:
+                          type: array
+                          items:
+                            type: number
+                          example: [116.0, 39.0, 117.0, 40.0]
+                        access_urls:
+                          type: object
+                          properties:
+                            geojson_url:
+                              type: string
+                              example: "/api/geojson/files/123"
+                            info_url:
+                              type: string
+                              example: "/api/geojson/files/123/info"
+                            download_url:
+                              type: string
+                              example: "/api/geojson/files/123/download"
+                            leaflet_config_url:
+                              type: string
+                              example: "/api/geojson/leaflet-config/123"
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                        example: 1
+                      per_page:
+                        type: integer
+                        example: 20
+                      total:
+                        type: integer
+                        example: 5
+                      total_pages:
+                        type: integer
+                        example: 1
+        '500':
+          description: 获取文件列表失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "获取文件列表失败: 数据库连接错误"
+
+  /files/{file_id}:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 文件ID
+        example: "123"
+    
+    delete:
+      tags:
+        - 文件管理
+      summary: 删除GeoJSON文件
+      description: 删除指定的GeoJSON文件
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "GeoJSON文件已删除"
+                  deleted_file:
+                    type: object
+                    properties:
+                      file_id:
+                        type: string
+                        example: "123"
+                      file_name:
+                        type: string
+                        example: "data.geojson"
+        '404':
+          description: 文件不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "文件不存在"
+        '500':
+          description: 删除失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "删除文件失败: 数据库错误"
+
+  /leaflet-config/{file_id}:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 文件ID
+        example: "123"
+    
+    get:
+      tags:
+        - Leaflet配置
+      summary: 获取Leaflet配置
+      description: 获取用于Leaflet地图的GeoJSON配置信息
+      responses:
+        '200':
+          description: 获取配置成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  file_id:
+                    type: string
+                    example: "123"
+                  file_name:
+                    type: string
+                    example: "data.geojson"
+                  geojson_url:
+                    type: string
+                    example: "/api/geojson/files/123"
+                  bbox:
+                    type: array
+                    items:
+                      type: number
+                    example: [116.0, 39.0, 117.0, 40.0]
+                  center:
+                    type: array
+                    items:
+                      type: number
+                    example: [116.5, 39.5]
+                  zoom:
+                    type: integer
+                    example: 10
+                  feature_count:
+                    type: integer
+                    example: 150
+                  geometry_types:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Point", "LineString", "Polygon"]
+                  properties:
+                    type: array
+                    items:
+                      type: string
+                    example: ["name", "type", "value"]
+                  style_config:
+                    type: object
+                    properties:
+                      point_color:
+                        type: string
+                        example: "#FF0000"
+                      line_color:
+                        type: string
+                        example: "#0000FF"
+                      polygon_fill_color:
+                        type: string
+                        example: "#00FF00"
+                      polygon_stroke_color:
+                        type: string
+                        example: "#000000"
+                      point_radius:
+                        type: integer
+                        example: 6
+                      line_weight:
+                        type: integer
+                        example: 2
+                      polygon_opacity:
+                        type: number
+                        example: 0.7
+                  popup_config:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                        example: true
+                      properties:
+                        type: array
+                        items:
+                          type: string
+                        example: ["name", "type"]
+                      template:
+                        type: string
+                        example: "<b>{name}</b><br>类型: {type}"
+        '404':
+          description: 文件不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "文件不存在"
+        '500':
+          description: 获取配置失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "获取Leaflet配置失败: 文件处理错误"
+
+  /health:
+    get:
+      tags:
+        - 系统状态
+      summary: 服务健康检查
+      description: 检查GeoJSON直接服务的健康状态
+      responses:
+        '200':
+          description: 服务正常
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  status:
+                    type: string
+                    example: "healthy"
+                  service:
+                    type: string
+                    example: "GeoJSON Direct Service"
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
+                  uptime:
+                    type: string
+                    example: "2 days, 5 hours, 30 minutes"
+                  file_count:
+                    type: integer
+                    example: 25
+                  total_size:
+                    type: integer
+                    example: 104857600
+        '500':
+          description: 服务异常
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  status:
+                    type: string
+                    example: "unhealthy"
+                  error:
+                    type: string
+                    example: "数据库连接失败"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT认证令牌
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: 操作是否成功
+        error:
+          type: string
+          description: 错误信息
+        details:
+          type: object
+          description: 错误详情
+          additionalProperties: true
+
+    Success:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: 操作是否成功
+        message:
+          type: string
+          description: 成功信息
+        data:
+          type: object
+          description: 返回数据
+          additionalProperties: true
+
+    GeoJSONFeature:
+      type: object
+      properties:
+        type:
+          type: string
+          example: "Feature"
+        geometry:
+          type: object
+          properties:
+            type:
+              type: string
+              example: "Point"
+            coordinates:
+              type: array
+              items:
+                type: number
+              example: [116.0, 39.0]
+        properties:
+          type: object
+          additionalProperties: true
+          example:
+            name: "示例点"
+            type: "POI"
+
+    GeoJSONFeatureCollection:
+      type: object
+      properties:
+        type:
+          type: string
+          example: "FeatureCollection"
+        features:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeoJSONFeature'
+
+tags:
+  - name: 文件上传
+    description: GeoJSON文件上传相关接口
+  - name: 文件获取
+    description: GeoJSON文件获取相关接口
+  - name: 文件信息
+    description: GeoJSON文件信息查询相关接口
+  - name: 文件下载
+    description: GeoJSON文件下载相关接口
+  - name: 文件管理
+    description: GeoJSON文件管理相关接口
+  - name: Leaflet配置
+    description: Leaflet地图配置相关接口
+  - name: 系统状态
+    description: 系统健康检查相关接口

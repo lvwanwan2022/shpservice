@@ -1,0 +1,1278 @@
+openapi: 3.0.3
+info:
+  title: 图层管理服务 API
+  description: |
+    SHP Service 图层管理模块API接口文档
+    
+    提供图层的CRUD操作、样式管理、预览、统计等功能。
+    
+    ## 主要功能
+    - 图层列表查询和管理
+    - 图层发布和配置
+    - 图层样式管理
+    - 图层预览和边界查询
+    - 图层统计信息
+    
+    ## 图层类型
+    - 矢量图层 (Vector)
+    - 栅格图层 (Raster)
+    - 场景图层 (Scene)
+    
+    ## 认证要求
+    大部分接口需要用户登录认证，请在请求头中包含有效的认证信息。
+  version: 1.0.0
+  contact:
+    name: SHP Service Team
+    email: 793145268@qq.com
+
+servers:
+  - url: http://localhost:5030/api/layers
+    description: 开发环境
+  - url: https://your-domain.com/api/layers
+    description: 生产环境
+
+tags:
+  - name: 图层管理
+    description: 图层CRUD操作、列表查询等接口
+  - name: 图层发布
+    description: 图层发布、配置等接口
+  - name: 样式管理
+    description: 图层样式配置、模板等接口
+  - name: 图层预览
+    description: 图层预览、边界查询等接口
+  - name: 统计信息
+    description: 图层统计相关接口
+
+paths:
+  /:
+    get:
+      tags:
+        - 图层管理
+      summary: 获取图层列表
+      description: |
+        获取图层列表，支持多种筛选条件和分页查询。
+        
+        ## 筛选条件
+        - 工作空间筛选
+        - 启用状态筛选
+        - 可查询状态筛选
+        - 关联文件筛选
+        - 图层名称搜索
+        
+        ## 排序选项
+        - 创建时间
+        - 更新时间
+        - 图层名称
+        - 文件大小
+      parameters:
+        - name: workspace_id
+          in: query
+          description: 工作空间ID
+          required: false
+          schema:
+            type: integer
+        - name: enabled
+          in: query
+          description: 是否启用
+          required: false
+          schema:
+            type: boolean
+        - name: queryable
+          in: query
+          description: 是否可查询
+          required: false
+          schema:
+            type: boolean
+        - name: file_id
+          in: query
+          description: 关联文件ID
+          required: false
+          schema:
+            type: integer
+        - name: name
+          in: query
+          description: 图层名称搜索
+          required: false
+          schema:
+            type: string
+        - name: page
+          in: query
+          description: 页码，从1开始
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: page_size
+          in: query
+          description: 每页数量
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: sort_by
+          in: query
+          description: 排序字段
+          required: false
+          schema:
+            type: string
+            enum: ["created_at", "updated_at", "name", "file_size"]
+            default: "created_at"
+        - name: sort_order
+          in: query
+          description: 排序顺序
+          required: false
+          schema:
+            type: string
+            enum: ["asc", "desc"]
+            default: "desc"
+      responses:
+        '200':
+          description: 获取图层列表成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  layers:
+                    type: array
+                    description: 图层列表
+                    items:
+                      $ref: '#/components/schemas/LayerInfo'
+                  total:
+                    type: integer
+                    description: 总记录数
+                  page:
+                    type: integer
+                    description: 当前页码
+                  page_size:
+                    type: integer
+                    description: 每页数量
+                  total_pages:
+                    type: integer
+                    description: 总页数
+        '500':
+          description: 服务器内部错误
+
+  /{layer_id}:
+    get:
+      tags:
+        - 图层管理
+      summary: 获取图层详情
+      description: |
+        根据图层ID获取图层的详细信息。
+        
+        ## 返回信息
+        - 图层基本信息
+        - 关联文件信息
+        - 样式配置
+        - 服务配置
+        - 边界信息
+      parameters:
+        - name: layer_id
+          in: path
+          description: 图层ID
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 获取图层详情成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LayerDetail'
+        '404':
+          description: 图层不存在
+        '500':
+          description: 服务器内部错误
+
+    put:
+      tags:
+        - 图层管理
+      summary: 更新图层信息
+      description: |
+        更新图层的配置信息。
+        
+        ## 可更新字段
+        - 图层名称和描述
+        - 启用状态
+        - 可查询状态
+        - 样式配置
+        - 服务参数
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: layer_id
+          in: path
+          description: 图层ID
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: 图层名称
+                description:
+                  type: string
+                  description: 图层描述
+                enabled:
+                  type: boolean
+                  description: 是否启用
+                queryable:
+                  type: boolean
+                  description: 是否可查询
+                opacity:
+                  type: number
+                  description: 图层透明度
+                  minimum: 0
+                  maximum: 1
+                min_scale:
+                  type: number
+                  description: 最小比例尺
+                max_scale:
+                  type: number
+                  description: 最大比例尺
+                style_id:
+                  type: integer
+                  description: 样式ID
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: 操作是否成功
+                  message:
+                    type: string
+                    description: 操作消息
+                  layer:
+                    $ref: '#/components/schemas/LayerDetail'
+        '404':
+          description: 图层不存在
+        '401':
+          description: 未授权访问
+        '400':
+          description: 请求参数错误
+        '500':
+          description: 服务器内部错误
+
+    delete:
+      tags:
+        - 图层管理
+      summary: 删除图层
+      description: |
+        删除指定图层及其相关数据。
+        
+        ## 删除内容
+        - 图层记录
+        - 关联的样式配置
+        - 服务配置
+        - 缓存数据
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: layer_id
+          in: path
+          description: 图层ID
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: 操作是否成功
+                  message:
+                    type: string
+                    description: 操作消息
+        '404':
+          description: 图层不存在
+        '401':
+          description: 未授权访问
+        '500':
+          description: 服务器内部错误
+
+  /publish/{file_id}:
+    post:
+      tags:
+        - 图层发布
+      summary: 发布文件为图层
+      description: |
+        将文件发布为图层，支持多种文件格式。
+        
+        ## 发布流程
+        1. 验证文件格式和坐标系
+        2. 创建图层记录
+        3. 配置样式和服务
+        4. 生成预览和边界
+        
+        ## 支持的文件类型
+        - SHP文件
+        - GeoJSON文件
+        - GeoTIFF文件
+        - 其他GDAL支持的格式
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: file_id
+          in: path
+          description: 文件ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: 图层名称
+                description:
+                  type: string
+                  description: 图层描述
+                workspace_id:
+                  type: integer
+                  description: 工作空间ID
+                enabled:
+                  type: boolean
+                  description: 是否启用
+                  default: true
+                queryable:
+                  type: boolean
+                  description: 是否可查询
+                  default: true
+                opacity:
+                  type: number
+                  description: 图层透明度
+                  minimum: 0
+                  maximum: 1
+                  default: 1
+                min_scale:
+                  type: number
+                  description: 最小比例尺
+                max_scale:
+                  type: number
+                  description: 最大比例尺
+                style_config:
+                  type: object
+                  description: 样式配置
+                  properties:
+                    geometry_type:
+                      type: string
+                      description: 几何类型
+                      enum: ["Point", "LineString", "Polygon", "MultiPoint", "MultiLineString", "MultiPolygon"]
+                    color:
+                      type: string
+                      description: 颜色
+                      example: "#FF0000"
+                    width:
+                      type: number
+                      description: 线宽
+                    fill_opacity:
+                      type: number
+                      description: 填充透明度
+      responses:
+        '200':
+          description: 发布成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: 发布是否成功
+                  layer_id:
+                    type: integer
+                    description: 图层ID
+                  layer:
+                    $ref: '#/components/schemas/LayerDetail'
+                  message:
+                    type: string
+                    description: 发布消息
+        '400':
+          description: 发布失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                  details:
+                    type: object
+                    description: 错误详情
+        '404':
+          description: 文件不存在
+        '401':
+          description: 未授权访问
+        '500':
+          description: 服务器内部错误
+
+  /{layer_id}/capabilities:
+    get:
+      tags:
+        - 图层管理
+      summary: 获取图层服务能力
+      description: |
+        获取图层的服务能力信息，包括支持的格式、操作等。
+        
+        ## 服务能力
+        - 支持的输出格式
+        - 支持的操作类型
+        - 图层边界信息
+        - 样式信息
+      parameters:
+        - name: layer_id
+          in: path
+          description: 图层ID
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 获取服务能力成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  layer_id:
+                    type: integer
+                    description: 图层ID
+                  name:
+                    type: string
+                    description: 图层名称
+                  formats:
+                    type: array
+                    description: 支持的输出格式
+                    items:
+                      type: string
+                  operations:
+                    type: array
+                    description: 支持的操作
+                    items:
+                      type: string
+                  bounds:
+                    type: object
+                    description: 图层边界
+                    properties:
+                      minx:
+                        type: number
+                        description: 最小X坐标
+                      miny:
+                        type: number
+                        description: 最小Y坐标
+                      maxx:
+                        type: number
+                        description: 最大X坐标
+                      maxy:
+                        type: number
+                        description: 最大Y坐标
+                  styles:
+                    type: array
+                    description: 可用样式列表
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          description: 样式名称
+                        title:
+                          type: string
+                          description: 样式标题
+        '404':
+          description: 图层不存在
+        '500':
+          description: 服务器内部错误
+
+  /{layer_id}/preview:
+    get:
+      tags:
+        - 图层预览
+      summary: 获取图层预览
+      description: |
+        获取图层的预览图像。
+        
+        ## 预览参数
+        - 图像格式：PNG、JPEG
+        - 图像尺寸：可自定义
+        - 地图范围：图层边界或自定义范围
+        - 样式：可指定样式名称
+      parameters:
+        - name: layer_id
+          in: path
+          description: 图层ID
+          required: true
+          schema:
+            type: integer
+        - name: width
+          in: query
+          description: 图像宽度
+          required: false
+          schema:
+            type: integer
+            default: 256
+        - name: height
+          in: query
+          description: 图像高度
+          required: false
+          schema:
+            type: integer
+            default: 256
+        - name: format
+          in: query
+          description: 图像格式
+          required: false
+          schema:
+            type: string
+            enum: ["image/png", "image/jpeg"]
+            default: "image/png"
+        - name: bbox
+          in: query
+          description: 边界框，格式为"minX,minY,maxX,maxY"
+          required: false
+          schema:
+            type: string
+        - name: style
+          in: query
+          description: 样式名称
+          required: false
+          schema:
+            type: string
+        - name: srs
+          in: query
+          description: 坐标系
+          required: false
+          schema:
+            type: string
+            default: "EPSG:4326"
+      responses:
+        '200':
+          description: 获取图层预览成功
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: 图层不存在
+        '500':
+          description: 服务器内部错误
+
+  /statistics:
+    get:
+      tags:
+        - 统计信息
+      summary: 获取图层统计信息
+      description: |
+        获取图层的统计信息，包括数量、类型分布等。
+        
+        ## 统计内容
+        - 总图层数量
+        - 各类型图层数量
+        - 各状态图层数量
+        - 最近发布统计
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: workspace_id
+          in: query
+          description: 工作空间ID筛选
+          required: false
+          schema:
+            type: integer
+        - name: time_range
+          in: query
+          description: 时间范围
+          required: false
+          schema:
+            type: string
+            enum: ["today", "week", "month", "year"]
+      responses:
+        '200':
+          description: 获取统计信息成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_layers:
+                    type: integer
+                    description: 总图层数量
+                  enabled_layers:
+                    type: integer
+                    description: 启用图层数量
+                  disabled_layers:
+                    type: integer
+                    description: 禁用图层数量
+                  layer_types:
+                    type: object
+                    description: 各类型图层数量
+                    properties:
+                      vector:
+                        type: integer
+                        description: 矢量图层数量
+                      raster:
+                        type: integer
+                        description: 栅格图层数量
+                      scene:
+                        type: integer
+                        description: 场景图层数量
+                  recent_published:
+                    type: array
+                    description: 最近发布的图层
+                    items:
+                      type: object
+                      properties:
+                        layer_id:
+                          type: integer
+                          description: 图层ID
+                        name:
+                          type: string
+                          description: 图层名称
+                        publish_time:
+                          type: string
+                          format: date-time
+                          description: 发布时间
+        '401':
+          description: 未授权访问
+        '500':
+          description: 服务器内部错误
+
+  /{layer_id}/style:
+    get:
+      tags:
+        - 样式管理
+      summary: 获取图层样式
+      description: |
+        获取图层的样式配置信息。
+        
+        ## 样式信息
+        - 当前样式配置
+        - 可用样式列表
+        - 样式参数
+        - SLD内容
+      parameters:
+        - name: layer_id
+          in: path
+          description: 图层ID
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 获取样式成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  layer_id:
+                    type: integer
+                    description: 图层ID
+                  current_style:
+                    type: object
+                    description: 当前样式
+                    properties:
+                      id:
+                        type: integer
+                        description: 样式ID
+                      name:
+                        type: string
+                        description: 样式名称
+                      title:
+                        type: string
+                        description: 样式标题
+                      sld_body:
+                        type: string
+                        description: SLD样式内容
+                  available_styles:
+                    type: array
+                    description: 可用样式列表
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          description: 样式ID
+                        name:
+                          type: string
+                          description: 样式名称
+                        title:
+                          type: string
+                          description: 样式标题
+                        geometry_type:
+                          type: string
+                          description: 适用几何类型
+        '404':
+          description: 图层不存在
+        '500':
+          description: 服务器内部错误
+
+    put:
+      tags:
+        - 样式管理
+      summary: 更新图层样式
+      description: |
+        更新图层的样式配置。
+        
+        ## 样式配置
+        - 选择现有样式
+        - 自定义样式参数
+        - SLD样式内容
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: layer_id
+          in: path
+          description: 图层ID
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                style_id:
+                  type: integer
+                  description: 样式ID
+                style_config:
+                  type: object
+                  description: 样式配置
+                  properties:
+                    geometry_type:
+                      type: string
+                      description: 几何类型
+                      enum: ["Point", "LineString", "Polygon", "MultiPoint", "MultiLineString", "MultiPolygon"]
+                    color:
+                      type: string
+                      description: 颜色
+                      example: "#FF0000"
+                    width:
+                      type: number
+                      description: 线宽
+                    fill_opacity:
+                      type: number
+                      description: 填充透明度
+                    symbol:
+                      type: string
+                      description: 符号类型
+                sld_body:
+                  type: string
+                  description: SLD样式内容
+      responses:
+        '200':
+          description: 更新样式成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: 操作是否成功
+                  message:
+                    type: string
+                    description: 操作消息
+                  style:
+                    type: object
+                    description: 更新后的样式信息
+        '404':
+          description: 图层不存在
+        '401':
+          description: 未授权访问
+        '400':
+          description: 请求参数错误
+        '500':
+          description: 服务器内部错误
+
+  /style/template/{geometry_type}:
+    get:
+      tags:
+        - 样式管理
+      summary: 获取样式模板
+      description: |
+        根据几何类型获取样式模板。
+        
+        ## 样式模板
+        - 点要素样式模板
+        - 线要素样式模板
+        - 面要素样式模板
+        - 复合几何样式模板
+      parameters:
+        - name: geometry_type
+          in: path
+          description: 几何类型
+          required: true
+          schema:
+            type: string
+            enum: ["Point", "LineString", "Polygon", "MultiPoint", "MultiLineString", "MultiPolygon"]
+      responses:
+        '200':
+          description: 获取样式模板成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  geometry_type:
+                    type: string
+                    description: 几何类型
+                  templates:
+                    type: array
+                    description: 样式模板列表
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          description: 模板名称
+                        title:
+                          type: string
+                          description: 模板标题
+                        description:
+                          type: string
+                          description: 模板描述
+                        sld_template:
+                          type: string
+                          description: SLD模板内容
+                        parameters:
+                          type: object
+                          description: 模板参数
+                          properties:
+                            color:
+                              type: string
+                              description: 颜色参数
+                            width:
+                              type: number
+                              description: 线宽参数
+                            opacity:
+                              type: number
+                              description: 透明度参数
+        '400':
+          description: 几何类型不支持
+        '500':
+          description: 服务器内部错误
+
+  /{scene_layer_id}/scenelayerbounds:
+    get:
+      tags:
+        - 图层预览
+      summary: 获取场景图层边界
+      description: |
+        获取3D场景图层的边界信息。
+        
+        ## 场景边界
+        - 空间边界
+        - 高度范围
+        - 时间范围
+        - 属性范围
+      parameters:
+        - name: scene_layer_id
+          in: path
+          description: 场景图层ID
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 获取场景边界成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  layer_id:
+                    type: integer
+                    description: 图层ID
+                  spatial_bounds:
+                    type: object
+                    description: 空间边界
+                    properties:
+                      minx:
+                        type: number
+                        description: 最小X坐标
+                      miny:
+                        type: number
+                        description: 最小Y坐标
+                      maxx:
+                        type: number
+                        description: 最大X坐标
+                      maxy:
+                        type: number
+                        description: 最大Y坐标
+                  height_bounds:
+                    type: object
+                    description: 高度范围
+                    properties:
+                      min_height:
+                        type: number
+                        description: 最小高度
+                      max_height:
+                        type: number
+                        description: 最大高度
+                  time_bounds:
+                    type: object
+                    description: 时间范围
+                    properties:
+                      start_time:
+                        type: string
+                        format: date-time
+                        description: 开始时间
+                      end_time:
+                        type: string
+                        format: date-time
+                        description: 结束时间
+                  attribute_bounds:
+                    type: object
+                    description: 属性范围
+                    properties:
+                      attributes:
+                        type: array
+                        description: 属性范围列表
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                              description: 属性名称
+                            min_value:
+                              type: number
+                              description: 最小值
+                            max_value:
+                              type: number
+                              description: 最大值
+        '404':
+          description: 场景图层不存在
+        '500':
+          description: 服务器内部错误
+
+  /{layer_id}/bounds:
+    get:
+      tags:
+        - 图层预览
+      summary: 获取图层边界
+      description: |
+        获取图层的边界信息。
+        
+        ## 边界信息
+        - 空间边界
+        - 坐标系信息
+        - 边界精度
+      parameters:
+        - name: layer_id
+          in: path
+          description: 图层ID
+          required: true
+          schema:
+            type: integer
+        - name: srs
+          in: query
+          description: 目标坐标系
+          required: false
+          schema:
+            type: string
+            default: "EPSG:4326"
+      responses:
+        '200':
+          description: 获取边界成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  layer_id:
+                    type: integer
+                    description: 图层ID
+                  bounds:
+                    type: object
+                    description: 边界信息
+                    properties:
+                      minx:
+                        type: number
+                        description: 最小X坐标
+                      miny:
+                        type: number
+                        description: 最小Y坐标
+                      maxx:
+                        type: number
+                        description: 最大X坐标
+                      maxy:
+                        type: number
+                        description: 最大Y坐标
+                  srs:
+                    type: string
+                    description: 坐标系
+                  center:
+                    type: object
+                    description: 中心点
+                    properties:
+                      x:
+                        type: number
+                        description: X坐标
+                      y:
+                        type: number
+                        description: Y坐标
+                  extent:
+                    type: object
+                    description: 范围信息
+                    properties:
+                      width:
+                        type: number
+                        description: 宽度
+                      height:
+                        type: number
+                        description: 高度
+        '404':
+          description: 图层不存在
+        '500':
+          description: 服务器内部错误
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        使用JWT Bearer Token进行身份认证。
+        
+        请在请求头中添加：
+        ```
+        Authorization: Bearer <your-jwt-token>
+        ```
+
+  schemas:
+    LayerInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 图层ID
+        name:
+          type: string
+          description: 图层名称
+        title:
+          type: string
+          description: 图层标题
+        description:
+          type: string
+          description: 图层描述
+        type:
+          type: string
+          description: 图层类型
+          enum: ["VECTOR", "RASTER", "SCENE"]
+        enabled:
+          type: boolean
+          description: 是否启用
+        queryable:
+          type: boolean
+          description: 是否可查询
+        opacity:
+          type: number
+          description: 图层透明度
+        workspace_id:
+          type: integer
+          description: 工作空间ID
+        file_id:
+          type: integer
+          description: 关联文件ID
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+
+    LayerDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 图层ID
+        name:
+          type: string
+          description: 图层名称
+        title:
+          type: string
+          description: 图层标题
+        description:
+          type: string
+          description: 图层描述
+        type:
+          type: string
+          description: 图层类型
+        enabled:
+          type: boolean
+          description: 是否启用
+        queryable:
+          type: boolean
+          description: 是否可查询
+        opacity:
+          type: number
+          description: 图层透明度
+        min_scale:
+          type: number
+          description: 最小比例尺
+        max_scale:
+          type: number
+          description: 最大比例尺
+        workspace_id:
+          type: integer
+          description: 工作空间ID
+        file_id:
+          type: integer
+          description: 关联文件ID
+        style_id:
+          type: integer
+          description: 样式ID
+        bounds:
+          type: object
+          description: 图层边界
+          properties:
+            minx:
+              type: number
+              description: 最小X坐标
+            miny:
+              type: number
+              description: 最小Y坐标
+            maxx:
+              type: number
+              description: 最大X坐标
+            maxy:
+              type: number
+              description: 最大Y坐标
+        services:
+          type: object
+          description: 服务配置
+          properties:
+            wms:
+              type: object
+              description: WMS服务配置
+            wfs:
+              type: object
+              description: WFS服务配置
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+
+    StyleInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 样式ID
+        name:
+          type: string
+          description: 样式名称
+        title:
+          type: string
+          description: 样式标题
+        description:
+          type: string
+          description: 样式描述
+        geometry_type:
+          type: string
+          description: 适用几何类型
+        sld_body:
+          type: string
+          description: SLD样式内容
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+
+    PublishRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 图层名称
+        description:
+          type: string
+          description: 图层描述
+        workspace_id:
+          type: integer
+          description: 工作空间ID
+        enabled:
+          type: boolean
+          description: 是否启用
+        queryable:
+          type: boolean
+          description: 是否可查询
+        opacity:
+          type: number
+          description: 图层透明度
+        min_scale:
+          type: number
+          description: 最小比例尺
+        max_scale:
+          type: number
+          description: 最大比例尺
+        style_config:
+          type: object
+          description: 样式配置
+          properties:
+            geometry_type:
+              type: string
+              description: 几何类型
+            color:
+              type: string
+              description: 颜色
+            width:
+              type: number
+              description: 线宽
+            fill_opacity:
+              type: number
+              description: 填充透明度
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: 错误信息
+        code:
+          type: integer
+          description: 错误代码
+        details:
+          type: object
+          description: 错误详情

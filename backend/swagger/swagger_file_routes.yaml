@@ -1,0 +1,1291 @@
+openapi: 3.0.3
+info:
+  title: 文件管理服务 API
+  description: |
+    SHP Service 文件管理模块API接口文档
+    
+    提供文件上传、下载、管理、发布等功能的RESTful API接口。
+    支持多种文件格式（SHP、DXF、DWG、GeoJSON等）的上传和管理。
+    
+    ## 主要功能
+    - 文件上传（支持分片上传）
+    - 文件列表管理
+    - 文件元数据管理
+    - 文件发布服务（Martin、GeoServer、DOM）
+    - 坐标系管理
+    - 文件统计信息
+    
+    ## 认证要求
+    大部分接口需要用户登录认证，请在请求头中包含有效的认证信息。
+  version: 1.0.0
+  contact:
+    name: SHP Service Team
+    email: 793145268@qq.com
+
+servers:
+  - url: http://localhost:5030/api/files
+    description: 开发环境
+  - url: https://your-domain.com/api/files
+    description: 生产环境
+
+tags:
+  - name: 文件上传
+    description: 文件上传相关接口
+  - name: 文件管理
+    description: 文件列表、详情、更新、删除等管理接口
+  - name: 文件发布
+    description: 文件发布为地图服务的接口
+  - name: 系统管理
+    description: 统计信息、坐标系管理等系统接口
+
+paths:
+  /upload:
+    post:
+      tags:
+        - 文件上传
+      summary: 上传文件
+      description: |
+        上传单个文件到系统。支持多种GIS文件格式，包括SHP、DXF、DWG、GeoJSON等。
+        
+        ## 支持的文件格式
+        - SHP (Shapefile)
+        - DXF (AutoCAD Drawing Exchange Format)
+        - DWG (AutoCAD Drawing)
+        - GeoJSON
+        - KML/KMZ
+        - GML
+        - CSV (带坐标信息)
+        
+        ## 注意事项
+        - 文件大小限制：50GB
+        - DWG/DXF文件必须指定坐标系
+        - 上传成功后需要手动发布服务
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - file_name
+                - discipline
+                - dimension
+                - file_type
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 要上传的文件
+                file_name:
+                  type: string
+                  description: 文件名称
+                  example: "北京市建筑.shp"
+                original_name:
+                  type: string
+                  description: 原始文件名
+                  example: "beijing_buildings.shp"
+                discipline:
+                  type: string
+                  description: 专业分类
+                  enum: ["建筑", "道路", "水系", "地形", "其他"]
+                  example: "建筑"
+                dimension:
+                  type: string
+                  description: 维度
+                  enum: ["2D", "3D"]
+                  example: "2D"
+                is_public:
+                  type: boolean
+                  description: 是否公开
+                  default: true
+                file_type:
+                  type: string
+                  description: 文件类型
+                  enum: ["shp", "dxf", "dwg", "geojson", "kml", "kmz", "gml", "csv"]
+                  example: "shp"
+                coordinate_system:
+                  type: string
+                  description: 坐标系（DWG/DXF文件必填）
+                  example: "EPSG:4326"
+                tags:
+                  type: string
+                  description: 标签，多个标签用逗号分隔
+                  example: "建筑,北京,2024"
+                description:
+                  type: string
+                  description: 文件描述
+                  example: "北京市主要建筑物数据"
+                geometry_type:
+                  type: string
+                  description: 几何类型
+                  enum: ["Point", "LineString", "Polygon", "MultiPoint", "MultiLineString", "MultiPolygon"]
+                  example: "Polygon"
+                feature_count:
+                  type: integer
+                  description: 要素数量
+                  example: 1000
+                bbox:
+                  type: string
+                  description: 边界框，格式为"minX,minY,maxX,maxY"
+                  example: "116.0,39.0,117.0,40.0"
+                metadata:
+                  type: string
+                  description: 额外的元数据JSON字符串
+                  example: '{"source": "测绘局", "year": 2024}'
+      responses:
+        '200':
+          description: 文件上传成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: 文件ID
+                    example: "507f1f77bcf86cd799439011"
+                  message:
+                    type: string
+                    description: 成功消息
+                    example: "数据上传成功，如需发布服务请手动点击发布按钮"
+                  file:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        description: 文件ID
+                      file_name:
+                        type: string
+                        description: 文件名称
+                      original_name:
+                        type: string
+                        description: 原始文件名
+                      file_size:
+                        type: integer
+                        description: 文件大小（字节）
+                      file_type:
+                        type: string
+                        description: 文件类型
+                      discipline:
+                        type: string
+                        description: 专业分类
+                      dimension:
+                        type: string
+                        description: 维度
+                      coordinate_system:
+                        type: string
+                        description: 坐标系
+                      status:
+                        type: string
+                        description: 文件状态
+                      geometry_type:
+                        type: string
+                        description: 几何类型
+                      feature_count:
+                        type: integer
+                        description: 要素数量
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "未找到文件"
+        '401':
+          description: 未授权访问
+        '500':
+          description: 服务器内部错误
+
+  /upload/chunked/init:
+    post:
+      tags:
+        - 文件上传
+      summary: 初始化分片上传
+      description: |
+        初始化大文件的分片上传。用于处理大文件（>100MB）的上传，提高上传成功率。
+        
+        ## 分片上传流程
+        1. 调用此接口初始化上传
+        2. 循环调用 `/upload/chunked/chunk` 上传分片
+        3. 调用 `/upload/chunked/complete` 完成上传
+        4. 如出错可调用 `/upload/chunked/abort` 取消上传
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - file_name
+                - file_size
+                - chunk_size
+                - discipline
+                - dimension
+                - file_type
+              properties:
+                file_name:
+                  type: string
+                  description: 文件名称
+                  example: "大型地形数据.tif"
+                file_size:
+                  type: integer
+                  description: 文件总大小（字节）
+                  example: 1073741824
+                chunk_size:
+                  type: integer
+                  description: 分片大小（字节）
+                  example: 1048576
+                discipline:
+                  type: string
+                  description: 专业分类
+                  enum: ["建筑", "道路", "水系", "地形", "其他"]
+                dimension:
+                  type: string
+                  description: 维度
+                  enum: ["2D", "3D"]
+                file_type:
+                  type: string
+                  description: 文件类型
+                coordinate_system:
+                  type: string
+                  description: 坐标系
+                tags:
+                  type: string
+                  description: 标签
+                description:
+                  type: string
+                  description: 文件描述
+      responses:
+        '200':
+          description: 初始化成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  upload_id:
+                    type: string
+                    description: 上传ID
+                    example: "upload_123456789"
+                  chunk_size:
+                    type: integer
+                    description: 分片大小
+                  total_chunks:
+                    type: integer
+                    description: 总分片数
+        '400':
+          description: 请求参数错误
+        '401':
+          description: 未授权访问
+
+  /upload/chunked/chunk:
+    post:
+      tags:
+        - 文件上传
+      summary: 上传分片
+      description: 上传文件的一个分片
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - upload_id
+                - chunk_index
+                - chunk_data
+              properties:
+                upload_id:
+                  type: string
+                  description: 上传ID
+                chunk_index:
+                  type: integer
+                  description: 分片索引
+                chunk_data:
+                  type: string
+                  format: binary
+                  description: 分片数据
+      responses:
+        '200':
+          description: 分片上传成功
+        '400':
+          description: 请求参数错误
+        '401':
+          description: 未授权访问
+
+  /upload/chunked/complete:
+    post:
+      tags:
+        - 文件上传
+      summary: 完成分片上传
+      description: 完成分片上传，合并所有分片
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - upload_id
+              properties:
+                upload_id:
+                  type: string
+                  description: 上传ID
+      responses:
+        '200':
+          description: 上传完成
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: 文件ID
+                  message:
+                    type: string
+                    description: 成功消息
+        '400':
+          description: 请求参数错误
+        '401':
+          description: 未授权访问
+
+  /upload/chunked/abort:
+    post:
+      tags:
+        - 文件上传
+      summary: 取消分片上传
+      description: 取消分片上传，清理临时文件
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - upload_id
+              properties:
+                upload_id:
+                  type: string
+                  description: 上传ID
+      responses:
+        '200':
+          description: 取消成功
+        '400':
+          description: 请求参数错误
+        '401':
+          description: 未授权访问
+
+  /list:
+    get:
+      tags:
+        - 文件管理
+      summary: 获取文件列表
+      description: |
+        获取当前用户的文件列表，支持分页、筛选和排序。
+        
+        ## 筛选条件
+        - 文件类型筛选
+        - 专业分类筛选
+        - 状态筛选
+        - 时间范围筛选
+        
+        ## 排序选项
+        - 上传时间（最新/最早）
+        - 文件大小（最大/最小）
+        - 文件名（A-Z/Z-A）
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: 页码，从1开始
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: per_page
+          in: query
+          description: 每页数量
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: file_type
+          in: query
+          description: 文件类型筛选
+          required: false
+          schema:
+            type: string
+            enum: ["shp", "dxf", "dwg", "geojson", "kml", "kmz", "gml", "csv"]
+        - name: discipline
+          in: query
+          description: 专业分类筛选
+          required: false
+          schema:
+            type: string
+            enum: ["建筑", "道路", "水系", "地形", "其他"]
+        - name: status
+          in: query
+          description: 状态筛选
+          required: false
+          schema:
+            type: string
+            enum: ["uploaded", "processing", "published", "error"]
+        - name: sort_by
+          in: query
+          description: 排序字段
+          required: false
+          schema:
+            type: string
+            enum: ["upload_time", "file_size", "file_name"]
+            default: "upload_time"
+        - name: sort_order
+          in: query
+          description: 排序顺序
+          required: false
+          schema:
+            type: string
+            enum: ["desc", "asc"]
+            default: "desc"
+        - name: search
+          in: query
+          description: 搜索关键词（文件名、描述）
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 获取文件列表成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: 文件ID
+                        file_name:
+                          type: string
+                          description: 文件名称
+                        original_name:
+                          type: string
+                          description: 原始文件名
+                        file_size:
+                          type: integer
+                          description: 文件大小
+                        file_type:
+                          type: string
+                          description: 文件类型
+                        discipline:
+                          type: string
+                          description: 专业分类
+                        dimension:
+                          type: string
+                          description: 维度
+                        status:
+                          type: string
+                          description: 文件状态
+                        upload_time:
+                          type: string
+                          format: date-time
+                          description: 上传时间
+                        coordinate_system:
+                          type: string
+                          description: 坐标系
+                        geometry_type:
+                          type: string
+                          description: 几何类型
+                        feature_count:
+                          type: integer
+                          description: 要素数量
+                        tags:
+                          type: string
+                          description: 标签
+                        description:
+                          type: string
+                          description: 文件描述
+                        is_public:
+                          type: boolean
+                          description: 是否公开
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                        description: 当前页码
+                      per_page:
+                        type: integer
+                        description: 每页数量
+                      total:
+                        type: integer
+                        description: 总记录数
+                      total_pages:
+                        type: integer
+                        description: 总页数
+        '401':
+          description: 未授权访问
+        '500':
+          description: 服务器内部错误
+
+  /{file_id}:
+    get:
+      tags:
+        - 文件管理
+      summary: 获取文件详情
+      description: 根据文件ID获取文件的详细信息
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: file_id
+          in: path
+          description: 文件ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 获取文件详情成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: 文件ID
+                  file_name:
+                    type: string
+                    description: 文件名称
+                  original_name:
+                    type: string
+                    description: 原始文件名
+                  file_size:
+                    type: integer
+                    description: 文件大小
+                  file_type:
+                    type: string
+                    description: 文件类型
+                  discipline:
+                    type: string
+                    description: 专业分类
+                  dimension:
+                    type: string
+                    description: 维度
+                  status:
+                    type: string
+                    description: 文件状态
+                  upload_time:
+                    type: string
+                    format: date-time
+                    description: 上传时间
+                  coordinate_system:
+                    type: string
+                    description: 坐标系
+                  geometry_type:
+                    type: string
+                    description: 几何类型
+                  feature_count:
+                    type: integer
+                    description: 要素数量
+                  bbox:
+                    type: string
+                    description: 边界框
+                  tags:
+                    type: string
+                    description: 标签
+                  description:
+                    type: string
+                    description: 文件描述
+                  is_public:
+                    type: boolean
+                    description: 是否公开
+                  metadata:
+                    type: object
+                    description: 额外元数据
+        '404':
+          description: 文件不存在
+        '401':
+          description: 未授权访问
+
+    put:
+      tags:
+        - 文件管理
+      summary: 更新文件信息
+      description: 更新文件的元数据信息
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: file_id
+          in: path
+          description: 文件ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                file_name:
+                  type: string
+                  description: 文件名称
+                discipline:
+                  type: string
+                  description: 专业分类
+                dimension:
+                  type: string
+                  description: 维度
+                tags:
+                  type: string
+                  description: 标签
+                description:
+                  type: string
+                  description: 文件描述
+                is_public:
+                  type: boolean
+                  description: 是否公开
+                coordinate_system:
+                  type: string
+                  description: 坐标系
+      responses:
+        '200':
+          description: 更新成功
+        '404':
+          description: 文件不存在
+        '401':
+          description: 未授权访问
+        '400':
+          description: 请求参数错误
+
+    delete:
+      tags:
+        - 文件管理
+      summary: 删除文件
+      description: 删除指定文件及其相关数据
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: file_id
+          in: path
+          description: 文件ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 删除成功
+        '404':
+          description: 文件不存在
+        '401':
+          description: 未授权访问
+
+  /users:
+    get:
+      tags:
+        - 文件管理
+      summary: 获取用户文件统计
+      description: 获取当前用户的文件统计信息
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 获取统计信息成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_files:
+                    type: integer
+                    description: 总文件数
+                  total_size:
+                    type: integer
+                    description: 总文件大小
+                  file_types:
+                    type: object
+                    description: 各类型文件数量
+                  disciplines:
+                    type: object
+                    description: 各专业分类文件数量
+        '401':
+          description: 未授权访问
+
+  /statistics:
+    get:
+      tags:
+        - 系统管理
+      summary: 获取系统统计信息
+      description: 获取整个系统的文件统计信息
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 获取统计信息成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_files:
+                    type: integer
+                    description: 总文件数
+                  total_size:
+                    type: integer
+                    description: 总文件大小
+                  active_users:
+                    type: integer
+                    description: 活跃用户数
+                  file_types:
+                    type: object
+                    description: 各类型文件数量
+                  disciplines:
+                    type: object
+                    description: 各专业分类文件数量
+        '401':
+          description: 未授权访问
+
+  /disciplines:
+    get:
+      tags:
+        - 系统管理
+      summary: 获取专业分类列表
+      description: 获取系统支持的专业分类列表
+      responses:
+        '200':
+          description: 获取专业分类成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    value:
+                      type: string
+                      description: 分类值
+                    label:
+                      type: string
+                      description: 分类标签
+                    description:
+                      type: string
+                      description: 分类描述
+
+  /file-types:
+    get:
+      tags:
+        - 系统管理
+      summary: 获取文件类型列表
+      description: 获取系统支持的文件类型列表
+      responses:
+        '200':
+          description: 获取文件类型成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    value:
+                      type: string
+                      description: 类型值
+                    label:
+                      type: string
+                      description: 类型标签
+                    description:
+                      type: string
+                      description: 类型描述
+                    extensions:
+                      type: array
+                      items:
+                        type: string
+                      description: 支持的文件扩展名
+
+  /{file_id}/publish/martin:
+    post:
+      tags:
+        - 文件发布
+      summary: 发布为Martin瓦片服务
+      description: |
+        将文件发布为Martin瓦片服务，支持Web地图访问。
+        
+        ## 支持的文件类型
+        - SHP文件
+        - GeoJSON文件
+        - 其他矢量格式
+        
+        ## 发布流程
+        1. 验证文件格式和坐标系
+        2. 生成瓦片数据
+        3. 创建服务配置
+        4. 返回服务访问URL
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: file_id
+          in: path
+          description: 文件ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                layer_name:
+                  type: string
+                  description: 图层名称
+                min_zoom:
+                  type: integer
+                  description: 最小缩放级别
+                  default: 0
+                max_zoom:
+                  type: integer
+                  description: 最大缩放级别
+                  default: 18
+                style:
+                  type: object
+                  description: 样式配置
+      responses:
+        '200':
+          description: 发布成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service_id:
+                    type: string
+                    description: 服务ID
+                  service_url:
+                    type: string
+                    description: 服务访问URL
+                  layer_name:
+                    type: string
+                    description: 图层名称
+                  status:
+                    type: string
+                    description: 发布状态
+        '400':
+          description: 发布失败
+        '404':
+          description: 文件不存在
+        '401':
+          description: 未授权访问
+
+  /{file_id}/publish/martin-mbtiles:
+    post:
+      tags:
+        - 文件发布
+      summary: 发布为Martin MBTiles服务
+      description: 将文件发布为Martin MBTiles瓦片服务
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: file_id
+          in: path
+          description: 文件ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 发布成功
+        '400':
+          description: 发布失败
+        '404':
+          description: 文件不存在
+        '401':
+          description: 未授权访问
+
+  /{file_id}/publish/geoserver:
+    post:
+      tags:
+        - 文件发布
+      summary: 发布为GeoServer服务
+      description: 将文件发布为GeoServer WMS/WFS服务
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: file_id
+          in: path
+          description: 文件ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspace:
+                  type: string
+                  description: 工作空间名称
+                layer_name:
+                  type: string
+                  description: 图层名称
+                service_types:
+                  type: array
+                  items:
+                    type: string
+                    enum: ["WMS", "WFS", "WCS"]
+                  description: 服务类型
+      responses:
+        '200':
+          description: 发布成功
+        '400':
+          description: 发布失败
+        '404':
+          description: 文件不存在
+        '401':
+          description: 未授权访问
+
+  /{file_id}/publish/dom:
+    post:
+      tags:
+        - 文件发布
+      summary: 发布为DOM服务
+      description: 将文件发布为数字正射影像服务
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: file_id
+          in: path
+          description: 文件ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 发布成功
+        '400':
+          description: 发布失败
+        '404':
+          description: 文件不存在
+        '401':
+          description: 未授权访问
+
+  /{file_id}/unpublish/martin:
+    delete:
+      tags:
+        - 文件发布
+      summary: 取消Martin服务发布
+      description: 取消文件的Martin瓦片服务发布
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: file_id
+          in: path
+          description: 文件ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 取消发布成功
+        '404':
+          description: 文件或服务不存在
+        '401':
+          description: 未授权访问
+
+  /{file_id}/unpublish/geoserver:
+    delete:
+      tags:
+        - 文件发布
+      summary: 取消GeoServer服务发布
+      description: 取消文件的GeoServer服务发布
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: file_id
+          in: path
+          description: 文件ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 取消发布成功
+        '404':
+          description: 文件或服务不存在
+        '401':
+          description: 未授权访问
+
+  /coordinate-systems/search:
+    get:
+      tags:
+        - 系统管理
+      summary: 搜索坐标系
+      description: 根据关键词搜索坐标系
+      parameters:
+        - name: q
+          in: query
+          description: 搜索关键词
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: 返回结果数量限制
+          required: false
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: 搜索成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      description: 坐标系代码
+                    name:
+                      type: string
+                      description: 坐标系名称
+                    description:
+                      type: string
+                      description: 坐标系描述
+
+  /coordinate-systems/common:
+    get:
+      tags:
+        - 系统管理
+      summary: 获取常用坐标系列表
+      description: 获取系统预定义的常用坐标系列表
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                      description: 坐标系代码
+                    name:
+                      type: string
+                      description: 坐标系名称
+                    description:
+                      type: string
+                      description: 坐标系描述
+                    category:
+                      type: string
+                      description: 坐标系分类
+
+  /{file_id}/force-cleanup:
+    post:
+      tags:
+        - 文件管理
+      summary: 强制清理文件
+      description: 强制清理文件及其相关数据，用于处理异常状态的文件
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: file_id
+          in: path
+          description: 文件ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 清理成功
+        '404':
+          description: 文件不存在
+        '401':
+          description: 未授权访问
+
+  /{file_id}/coordinate-info:
+    get:
+      tags:
+        - 文件管理
+      summary: 获取文件坐标系信息
+      description: 获取文件的详细坐标系信息
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: file_id
+          in: path
+          description: 文件ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  coordinate_system:
+                    type: string
+                    description: 坐标系代码
+                  coordinate_system_name:
+                    type: string
+                    description: 坐标系名称
+                  bounds:
+                    type: object
+                    description: 边界信息
+                  projection:
+                    type: object
+                    description: 投影信息
+        '404':
+          description: 文件不存在
+        '401':
+          description: 未授权访问
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        使用JWT Bearer Token进行身份认证。
+        
+        请在请求头中添加：
+        ```
+        Authorization: Bearer <your-jwt-token>
+        ```
+
+  schemas:
+    FileInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 文件ID
+        file_name:
+          type: string
+          description: 文件名称
+        original_name:
+          type: string
+          description: 原始文件名
+        file_size:
+          type: integer
+          description: 文件大小（字节）
+        file_type:
+          type: string
+          description: 文件类型
+        discipline:
+          type: string
+          description: 专业分类
+        dimension:
+          type: string
+          description: 维度
+        status:
+          type: string
+          description: 文件状态
+        upload_time:
+          type: string
+          format: date-time
+          description: 上传时间
+        coordinate_system:
+          type: string
+          description: 坐标系
+        geometry_type:
+          type: string
+          description: 几何类型
+        feature_count:
+          type: integer
+          description: 要素数量
+        tags:
+          type: string
+          description: 标签
+        description:
+          type: string
+          description: 文件描述
+        is_public:
+          type: boolean
+          description: 是否公开
+
+    UploadResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 文件ID
+        message:
+          type: string
+          description: 成功消息
+        file:
+          $ref: '#/components/schemas/FileInfo'
+
+    PaginationInfo:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: 当前页码
+        per_page:
+          type: integer
+          description: 每页数量
+        total:
+          type: integer
+          description: 总记录数
+        total_pages:
+          type: integer
+          description: 总页数
+
+    FileListResponse:
+      type: object
+      properties:
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileInfo'
+        pagination:
+          $ref: '#/components/schemas/PaginationInfo'
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: 错误信息
+        code:
+          type: integer
+          description: 错误代码
+        details:
+          type: object
+          description: 错误详情

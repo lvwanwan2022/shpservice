@@ -1,0 +1,696 @@
+openapi: 3.0.3
+info:
+  title: GeoJSON Martin服务 API
+  description: GeoJSON文件到MVT瓦片服务的完整发布流程API接口，包括文件上传、服务发布、瓦片获取等
+  version: 1.0.0
+  contact:
+    name: SHP Service Team
+    email: support@shpservice.com
+
+servers:
+  - url: /api/geojson-martin
+    description: GeoJSON Martin服务
+
+paths:
+  /publish:
+    post:
+      tags:
+        - 服务发布
+      summary: 发布GeoJSON为MVT瓦片服务
+      description: 上传GeoJSON文件并发布为MVT瓦片服务，完整流程包括文件上传、PostGIS存储、Martin服务发布
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: GeoJSON文件（.geojson或.json格式）
+                user_id:
+                  type: integer
+                  description: 用户ID（可选）
+                  example: 1
+      responses:
+        '200':
+          description: 服务发布成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  file_id:
+                    type: string
+                    description: 文件ID
+                    example: "550e8400-e29b-41d4-a716-446655440000"
+                  table_name:
+                    type: string
+                    description: 数据库表名
+                    example: "martin_geojson_550e8400"
+                  mvt_info:
+                    type: object
+                    properties:
+                      mvt_url:
+                        type: string
+                        description: MVT瓦片URL模板
+                        example: "http://localhost:3000/public.martin_geojson_550e8400/{z}/{x}/{y}.pbf"
+                      tilejson_url:
+                        type: string
+                        description: TileJSON URL
+                        example: "http://localhost:3000/public.martin_geojson_550e8400"
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "只支持 .geojson 或 .json 文件"
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+
+  /publish-file:
+    post:
+      tags:
+        - 服务发布
+      summary: 通过文件ID发布已上传的GeoJSON文件
+      description: 通过文件ID发布已上传的GeoJSON文件到Martin服务
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - file_id
+              properties:
+                file_id:
+                  type: integer
+                  description: 文件ID
+                  example: 123
+                user_id:
+                  type: integer
+                  description: 用户ID（可选）
+                  example: 1
+      responses:
+        '200':
+          description: 服务发布成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  file_id:
+                    type: string
+                    description: 文件ID
+                    example: "550e8400-e29b-41d4-a716-446655440000"
+                  table_name:
+                    type: string
+                    description: 数据库表名
+                    example: "martin_geojson_550e8400"
+                  mvt_info:
+                    type: object
+                    properties:
+                      mvt_url:
+                        type: string
+                        description: MVT瓦片URL模板
+                        example: "http://localhost:3000/public.martin_geojson_550e8400/{z}/{x}/{y}.pbf"
+                      tilejson_url:
+                        type: string
+                        description: TileJSON URL
+                        example: "http://localhost:3000/public.martin_geojson_550e8400"
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "file_id参数是必需的"
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+
+  /services:
+    get:
+      tags:
+        - 服务管理
+      summary: 列出已发布的GeoJSON MVT瓦片服务
+      description: 获取已发布的GeoJSON MVT瓦片服务列表，支持分页和用户筛选
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+          description: 限制返回的记录数
+          example: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: 结果集的偏移量
+          example: 0
+        - name: user_id
+          in: query
+          schema:
+            type: integer
+          description: 用户ID过滤
+          example: 1
+      responses:
+        '200':
+          description: 服务列表获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  services:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GeoJsonService'
+                  total:
+                    type: integer
+                    description: 总记录数
+                    example: 25
+                  limit:
+                    type: integer
+                    description: 每页记录数
+                    example: 100
+                  offset:
+                    type: integer
+                    description: 偏移量
+                    example: 0
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+
+  /services/{file_id}:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 文件ID
+        example: "550e8400-e29b-41d4-a716-446655440000"
+    
+    get:
+      tags:
+        - 服务管理
+      summary: 获取已发布服务的详细信息
+      description: 获取指定GeoJSON MVT瓦片服务的详细信息
+      responses:
+        '200':
+          description: 服务信息获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  file_id:
+                    type: string
+                    description: 文件ID
+                    example: "550e8400-e29b-41d4-a716-446655440000"
+                  table_name:
+                    type: string
+                    description: 数据库表名
+                    example: "martin_geojson_550e8400"
+                  mvt_info:
+                    type: object
+                    properties:
+                      mvt_url:
+                        type: string
+                        description: MVT瓦片URL模板
+                        example: "http://localhost:3000/public.martin_geojson_550e8400/{z}/{x}/{y}.pbf"
+                      tilejson_url:
+                        type: string
+                        description: TileJSON URL
+                        example: "http://localhost:3000/public.martin_geojson_550e8400"
+        '404':
+          description: 服务不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+    
+    delete:
+      tags:
+        - 服务管理
+      summary: 删除已发布的GeoJSON MVT瓦片服务
+      description: 删除指定的GeoJSON MVT瓦片服务
+      parameters:
+        - name: user_id
+          in: query
+          schema:
+            type: integer
+          description: 用户ID（用于权限检查）
+          example: 1
+      responses:
+        '200':
+          description: 服务删除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "服务删除成功"
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+
+  /martin/status:
+    get:
+      tags:
+        - Martin服务管理
+      summary: 获取Martin服务状态
+      description: 获取Martin服务的运行状态信息
+      responses:
+        '200':
+          description: 状态获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  martin_status:
+                    type: object
+                    description: Martin服务状态信息
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+
+  /martin/restart:
+    post:
+      tags:
+        - Martin服务管理
+      summary: 重启Martin服务
+      description: 重启Martin瓦片服务
+      responses:
+        '200':
+          description: 服务重启成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Martin服务重启成功"
+        '500':
+          description: 服务重启失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+
+  /mvt/{file_id}/{z}/{x}/{y}.pbf:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 文件ID
+        example: "550e8400-e29b-41d4-a716-446655440000"
+      - name: z
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 缩放级别
+        example: 10
+      - name: x
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 瓦片X坐标
+        example: 512
+      - name: y
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 瓦片Y坐标
+        example: 256
+    
+    get:
+      tags:
+        - 瓦片服务
+      summary: 获取MVT瓦片
+      description: 代理MVT瓦片请求到Martin服务，返回指定坐标的瓦片数据
+      responses:
+        '200':
+          description: 瓦片获取成功
+          content:
+            application/x-protobuf:
+              schema:
+                type: string
+                format: binary
+                description: MVT瓦片数据
+          headers:
+            Content-Type:
+              schema:
+                type: string
+                example: "application/x-protobuf"
+            Content-Encoding:
+              schema:
+                type: string
+                example: "gzip"
+            Access-Control-Allow-Origin:
+              schema:
+                type: string
+                example: "*"
+        '503':
+          description: MVT服务不可用
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "MVT服务不可用"
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+
+  /tilejson/{file_id}:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 文件ID
+        example: "550e8400-e29b-41d4-a716-446655440000"
+    
+    get:
+      tags:
+        - 瓦片服务
+      summary: 获取TileJSON配置
+      description: 获取指定服务的TileJSON配置信息
+      responses:
+        '200':
+          description: TileJSON获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tiles:
+                    type: array
+                    items:
+                      type: string
+                    description: 瓦片URL列表
+                    example: ["http://localhost:5000/api/geojson-martin/mvt/550e8400-e29b-41d4-a716-446655440000/{z}/{x}/{y}.pbf"]
+                  name:
+                    type: string
+                    description: 图层名称
+                    example: "martin_geojson_550e8400"
+                  description:
+                    type: string
+                    description: 图层描述
+                    example: "GeoJSON MVT Layer"
+                  version:
+                    type: string
+                    description: 版本
+                    example: "1.0.0"
+                  attribution:
+                    type: string
+                    description: 归属信息
+                    example: "© OpenStreetMap contributors"
+                  center:
+                    type: array
+                    items:
+                      type: number
+                    description: 中心坐标 [经度, 纬度, 缩放级别]
+                    example: [116.3974, 39.9093, 10]
+                  bounds:
+                    type: array
+                    items:
+                      type: number
+                    description: 边界 [最小经度, 最小纬度, 最大经度, 最大纬度]
+                    example: [116.0, 39.0, 117.0, 40.0]
+                  minzoom:
+                    type: integer
+                    description: 最小缩放级别
+                    example: 0
+                  maxzoom:
+                    type: integer
+                    description: 最大缩放级别
+                    example: 22
+        '503':
+          description: MVT服务不可用
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "MVT服务不可用"
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+
+  /health:
+    get:
+      tags:
+        - 系统监控
+      summary: 健康检查
+      description: 检查GeoJSON Martin服务的健康状态
+      responses:
+        '200':
+          description: 服务健康
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  service:
+                    type: string
+                    example: "GeoJSON Martin Service"
+                  status:
+                    type: string
+                    example: "healthy"
+                  martin_status:
+                    type: object
+                    description: Martin服务状态
+                  timestamp:
+                    type: string
+                    format: date-time
+                    description: 检查时间
+                    example: "2024-01-01T12:00:00Z"
+        '500':
+          description: 服务不健康
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  service:
+                    type: string
+                    example: "GeoJSON Martin Service"
+                  status:
+                    type: string
+                    example: "unhealthy"
+                  error:
+                    type: string
+                    description: 错误信息
+                  timestamp:
+                    type: string
+                    format: date-time
+                    description: 检查时间
+                    example: "2024-01-01T12:00:00Z"
+
+components:
+  schemas:
+    GeoJsonService:
+      type: object
+      properties:
+        file_id:
+          type: string
+          description: 文件ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        table_name:
+          type: string
+          description: 数据库表名
+          example: "martin_geojson_550e8400"
+        original_filename:
+          type: string
+          description: 原始文件名
+          example: "buildings.geojson"
+        user_id:
+          type: integer
+          description: 用户ID
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+          example: "2024-01-01T12:00:00Z"
+        mvt_info:
+          type: object
+          properties:
+            mvt_url:
+              type: string
+              description: MVT瓦片URL模板
+              example: "http://localhost:3000/public.martin_geojson_550e8400/{z}/{x}/{y}.pbf"
+            tilejson_url:
+              type: string
+              description: TileJSON URL
+              example: "http://localhost:3000/public.martin_geojson_550e8400"
+
+tags:
+  - name: 服务发布
+    description: GeoJSON文件的MVT瓦片服务发布相关操作
+  - name: 服务管理
+    description: 已发布服务的查询、删除等管理操作
+  - name: Martin服务管理
+    description: Martin瓦片服务本身的状态管理和控制
+  - name: 瓦片服务
+    description: MVT瓦片和TileJSON配置的获取
+  - name: 系统监控
+    description: 服务健康状态检查

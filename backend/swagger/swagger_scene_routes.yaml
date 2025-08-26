@@ -1,0 +1,921 @@
+openapi: 3.0.3
+info:
+  title: 场景管理服务 API
+  description: 3D场景管理相关接口，包括场景的创建、编辑、删除、图层管理等
+  version: 1.0.0
+  contact:
+    name: SHP Service Team
+    email: support@shpservice.com
+
+servers:
+  - url: /api/scene
+    description: 场景管理服务
+
+security:
+  - BearerAuth: []
+
+paths:
+  /:
+    post:
+      tags:
+        - 场景管理
+      summary: 创建场景
+      description: 创建新的3D场景
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: 场景名称
+                  example: "我的3D场景"
+                description:
+                  type: string
+                  description: 场景描述
+                  example: "这是一个示例3D场景"
+                is_public:
+                  type: boolean
+                  description: 是否公开
+                  default: true
+                  example: true
+      responses:
+        '200':
+          description: 场景创建成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: 场景ID
+                    example: "123"
+                  message:
+                    type: string
+                    example: "场景创建成功"
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未授权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    
+    get:
+      tags:
+        - 场景管理
+      summary: 获取场景列表
+      description: 获取当前用户的场景列表，可选择包含公开场景
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: user_id
+          in: query
+          schema:
+            type: integer
+          description: 用户ID(指定时优先显示该用户场景，同时包含其他公开场景)
+          example: 1
+        - name: public_only
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: 是否只获取公开场景
+          example: false
+        - name: include_public
+          in: query
+          schema:
+            type: boolean
+            default: true
+          description: 是否包含其他用户的公开场景
+          example: true
+      responses:
+        '200':
+          description: 场景列表获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scenes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Scene'
+        '401':
+          description: 未授权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /{scene_id}:
+    parameters:
+      - name: scene_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 场景ID
+        example: 123
+    
+    get:
+      tags:
+        - 场景管理
+      summary: 获取场景详情
+      description: 获取指定场景的详细信息和图层列表
+      responses:
+        '200':
+          description: 场景详情获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scene:
+                    $ref: '#/components/schemas/Scene'
+                  layers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SceneLayer'
+        '404':
+          description: 场景不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    
+    put:
+      tags:
+        - 场景管理
+      summary: 更新场景
+      description: 更新指定场景的信息
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: 场景名称
+                  example: "更新后的场景名称"
+                description:
+                  type: string
+                  description: 场景描述
+                  example: "更新后的场景描述"
+                is_public:
+                  type: boolean
+                  description: 是否公开
+                  example: true
+      responses:
+        '200':
+          description: 场景更新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "场景更新成功"
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未授权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 场景不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    
+    delete:
+      tags:
+        - 场景管理
+      summary: 删除场景
+      description: 删除指定的场景及其所有图层
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 场景删除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "场景删除成功"
+        '401':
+          description: 未授权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 场景不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /{scene_id}/layers:
+    parameters:
+      - name: scene_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 场景ID
+        example: 123
+    
+    post:
+      tags:
+        - 场景图层管理
+      summary: 添加图层到场景
+      description: 向指定场景添加图层（支持GeoServer和Martin服务）
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - layer_id
+              properties:
+                layer_id:
+                  type: integer
+                  description: 图层ID（Martin服务使用负数虚拟ID）
+                  example: 1
+                layer_name:
+                  type: string
+                  description: 图层名称
+                  example: "我的图层"
+                service_type:
+                  type: string
+                  description: 服务类型（martin或geoserver）
+                  enum: [martin, geoserver]
+                  default: geoserver
+                  example: "geoserver"
+                martin_file_id:
+                  type: string
+                  description: Martin服务文件ID（UUID）
+                  example: "550e8400-e29b-41d4-a716-446655440000"
+                martin_service_id:
+                  type: integer
+                  description: Martin服务ID
+                  example: 1
+                mvt_url:
+                  type: string
+                  description: MVT瓦片URL
+                  example: "http://localhost:3000/tiles/{z}/{x}/{y}.pbf"
+                tilejson_url:
+                  type: string
+                  description: TileJSON URL
+                  example: "http://localhost:3000/tiles.json"
+                file_id:
+                  type: integer
+                  description: 原始文件ID
+                  example: 1
+                file_type:
+                  type: string
+                  description: 文件类型
+                  example: "shp"
+                discipline:
+                  type: string
+                  description: 专业
+                  example: "建筑"
+                layer_order:
+                  type: integer
+                  description: 图层顺序
+                  default: 0
+                  example: 0
+                visible:
+                  type: boolean
+                  description: 是否可见
+                  default: true
+                  example: true
+                opacity:
+                  type: number
+                  description: 透明度 (0.0-1.0)
+                  minimum: 0.0
+                  maximum: 1.0
+                  default: 1.0
+                  example: 1.0
+                style_name:
+                  type: string
+                  description: 样式名称
+                  example: "default"
+                custom_style:
+                  type: object
+                  description: 自定义样式配置
+                  example: {"color": "#ff0000", "width": 2}
+                queryable:
+                  type: boolean
+                  description: 是否可查询
+                  default: true
+                  example: true
+                selectable:
+                  type: boolean
+                  description: 是否可选择
+                  default: true
+                  example: true
+      responses:
+        '200':
+          description: 图层添加成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: 场景图层ID
+                    example: "456"
+                  message:
+                    type: string
+                    example: "图层添加成功"
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未授权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 场景不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /{scene_id}/layers/reorder:
+    parameters:
+      - name: scene_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 场景ID
+        example: 123
+    
+    post:
+      tags:
+        - 场景图层管理
+      summary: 重新排序场景图层
+      description: 批量重新排序场景中的图层
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - layer_order
+              properties:
+                layer_order:
+                  type: object
+                  description: 图层ID到顺序的映射
+                  additionalProperties:
+                    type: integer
+                  example:
+                    "1": 2
+                    "3": 1
+                    "5": 3
+      responses:
+        '200':
+          description: 图层重新排序成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "图层重新排序成功"
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未授权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 场景不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /{scene_id}/layers/{layer_id}:
+    parameters:
+      - name: scene_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 场景ID
+        example: 123
+      - name: layer_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 图层ID（可以是正数或负数）
+        example: "1"
+    
+    put:
+      tags:
+        - 场景图层管理
+      summary: 更新场景图层
+      description: 更新指定场景中图层的属性
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                layer_order:
+                  type: integer
+                  description: 图层顺序
+                  example: 2
+                visible:
+                  type: boolean
+                  description: 是否可见
+                  example: true
+                opacity:
+                  type: number
+                  description: 透明度 (0.0-1.0)
+                  minimum: 0.0
+                  maximum: 1.0
+                  example: 0.8
+                style_name:
+                  type: string
+                  description: 样式名称
+                  example: "highlight"
+                custom_style:
+                  type: object
+                  description: 自定义样式配置
+                  example: {"color": "#00ff00", "width": 3}
+                queryable:
+                  type: boolean
+                  description: 是否可查询
+                  example: true
+                selectable:
+                  type: boolean
+                  description: 是否可选择
+                  example: true
+      responses:
+        '200':
+          description: 图层更新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "图层更新成功"
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未授权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 场景或图层不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    
+    delete:
+      tags:
+        - 场景图层管理
+      summary: 删除场景图层
+      description: 从指定场景中删除图层
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 图层删除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "图层删除成功"
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未授权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 场景或图层不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /{scene_id}/layers/{layer_id}/order:
+    parameters:
+      - name: scene_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 场景ID
+        example: 123
+      - name: layer_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 图层ID
+        example: 1
+    
+    put:
+      tags:
+        - 场景图层管理
+      summary: 更新单个图层的顺序
+      description: 更新指定场景中单个图层的显示顺序
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - layer_order
+              properties:
+                layer_order:
+                  type: integer
+                  description: 新的图层顺序
+                  example: 3
+      responses:
+        '200':
+          description: 图层顺序更新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "图层顺序更新成功"
+                  layer_id:
+                    type: integer
+                    example: 1
+                  new_order:
+                    type: integer
+                    example: 3
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 未授权访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 场景或图层不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Bearer Token认证
+
+  schemas:
+    Scene:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 场景ID
+          example: "123"
+        name:
+          type: string
+          description: 场景名称
+          example: "我的3D场景"
+        description:
+          type: string
+          description: 场景描述
+          example: "这是一个示例3D场景"
+        is_public:
+          type: boolean
+          description: 是否公开
+          example: true
+        user_id:
+          type: integer
+          description: 创建者用户ID
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+          example: "2024-01-01T12:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+          example: "2024-01-01T12:00:00Z"
+
+    SceneLayer:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 场景图层ID
+          example: "456"
+        scene_id:
+          type: integer
+          description: 场景ID
+          example: 123
+        layer_id:
+          type: integer
+          description: 图层ID
+          example: 1
+        layer_name:
+          type: string
+          description: 图层名称
+          example: "我的图层"
+        service_type:
+          type: string
+          description: 服务类型
+          enum: [martin, geoserver]
+          example: "geoserver"
+        layer_order:
+          type: integer
+          description: 图层顺序
+          example: 0
+        visible:
+          type: boolean
+          description: 是否可见
+          example: true
+        opacity:
+          type: number
+          description: 透明度
+          example: 1.0
+        style_name:
+          type: string
+          description: 样式名称
+          example: "default"
+        custom_style:
+          type: object
+          description: 自定义样式配置
+          example: {"color": "#ff0000", "width": 2}
+        queryable:
+          type: boolean
+          description: 是否可查询
+          example: true
+        selectable:
+          type: boolean
+          description: 是否可选择
+          example: true
+        martin_file_id:
+          type: string
+          description: Martin服务文件ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        martin_service_id:
+          type: integer
+          description: Martin服务ID
+          example: 1
+        layer_service_type:
+          type: string
+          description: Martin图层服务类型
+          example: "geojson"
+        mvt_url:
+          type: string
+          description: MVT瓦片URL
+          example: "http://localhost:3000/tiles/{z}/{x}/{y}.pbf"
+        tilejson_url:
+          type: string
+          description: TileJSON URL
+          example: "http://localhost:3000/tiles.json"
+        geoserver_layer_name:
+          type: string
+          description: GeoServer图层名称
+          example: "workspace:layer"
+        wms_url:
+          type: string
+          description: WMS服务URL
+          example: "http://localhost:8080/geoserver/wms"
+        wfs_url:
+          type: string
+          description: WFS服务URL
+          example: "http://localhost:8080/geoserver/wfs"
+        file_id:
+          type: integer
+          description: 原始文件ID
+          example: 1
+        file_type:
+          type: string
+          description: 文件类型
+          example: "shp"
+        discipline:
+          type: string
+          description: 专业
+          example: "建筑"
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+          example: "2024-01-01T12:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+          example: "2024-01-01T12:00:00Z"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: 错误信息
+          example: "操作失败"
+        details:
+          type: string
+          description: 详细错误信息（仅在调试模式下）
+          example: "具体错误详情"
+        traceback:
+          type: string
+          description: 错误堆栈（仅在调试模式下）
+          example: "错误堆栈信息"
+
+tags:
+  - name: 场景管理
+    description: 场景的创建、编辑、删除、查询等基本操作
+  - name: 场景图层管理
+    description: 场景中图层的添加、删除、更新、排序等操作

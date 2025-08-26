@@ -1,0 +1,685 @@
+openapi: 3.0.3
+info:
+  title: TIF Martin服务 API
+  description: TIF文件转换为MBTiles并发布为Martin瓦片服务的API接口，支持同步/异步转换、批量处理、进度跟踪等
+  version: 1.0.0
+  contact:
+    name: SHP Service Team
+    email: support@shpservice.com
+
+servers:
+  - url: /api/tif-martin
+    description: TIF Martin服务
+
+security:
+  - BearerAuth: []
+
+paths:
+  /convert-and-publish/{file_id}:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 文件ID
+        example: "123"
+    
+    post:
+      tags:
+        - 文件转换
+      summary: 将TIF文件转换为MBTiles并发布为Martin服务
+      description: 同步转换已上传的TIF文件为MBTiles格式并发布为Martin瓦片服务
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                max_zoom:
+                  type: integer
+                  description: 最大缩放级别
+                  minimum: 1
+                  maximum: 25
+                  default: 18
+                  example: 18
+                min_zoom:
+                  type: integer
+                  description: 最小缩放级别
+                  minimum: 0
+                  default: 2
+                  example: 2
+      responses:
+        '200':
+          description: 转换并发布成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "TIF文件成功转换为MBTiles并发布为Martin服务"
+                  data:
+                    type: object
+                    properties:
+                      task_id:
+                        type: string
+                        description: 任务ID
+                        example: "550e8400-e29b-41d4-a716-446655440000"
+                      original_file:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: "123"
+                          name:
+                            type: string
+                            example: "satellite.tif"
+                          type:
+                            type: string
+                            example: "tif"
+                      conversion:
+                        type: object
+                        properties:
+                          mbtiles_filename:
+                            type: string
+                            example: "satellite_123.mbtiles"
+                          min_zoom:
+                            type: integer
+                            example: 2
+                          max_zoom:
+                            type: integer
+                            example: 18
+                          coordinate_system:
+                            type: string
+                            example: "EPSG:3857"
+                      martin_service:
+                        type: object
+                        properties:
+                          service_url:
+                            type: string
+                            example: "http://localhost:3000"
+                          mvt_url:
+                            type: string
+                            example: "http://localhost:3000/public.satellite_123/{z}/{x}/{y}.pbf"
+                          tilejson_url:
+                            type: string
+                            example: "http://localhost:3000/public.satellite_123"
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "只支持TIF/TIFF文件"
+        '401':
+          description: 未授权访问
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+        '404':
+          description: 文件不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "文件不存在"
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+
+  /convert-async/{file_id}:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 文件ID
+        example: "123"
+    
+    post:
+      tags:
+        - 文件转换
+      summary: 异步转换TIF文件
+      description: 异步转换TIF文件，立即返回task_id用于进度查询
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                max_zoom:
+                  type: integer
+                  description: 最大缩放级别
+                  minimum: 1
+                  maximum: 25
+                  default: 18
+                  example: 18
+                min_zoom:
+                  type: integer
+                  description: 最小缩放级别
+                  minimum: 0
+                  default: 2
+                  example: 2
+      responses:
+        '200':
+          description: 异步任务启动成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "异步转换任务已启动"
+                  task_id:
+                    type: string
+                    description: 任务ID，用于查询进度
+                    example: "550e8400-e29b-41d4-a716-446655440000"
+                  file_info:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "123"
+                      name:
+                        type: string
+                        example: "satellite.tif"
+                      type:
+                        type: string
+                        example: "tif"
+                  conversion_params:
+                    type: object
+                    properties:
+                      min_zoom:
+                        type: integer
+                        example: 2
+                      max_zoom:
+                        type: integer
+                        example: 18
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "只支持TIF/TIFF文件"
+        '401':
+          description: 未授权访问
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+        '404':
+          description: 文件不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "文件不存在"
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+
+  /progress/{task_id}:
+    parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 任务ID
+        example: "550e8400-e29b-41d4-a716-446655440000"
+    
+    get:
+      tags:
+        - 进度管理
+      summary: 获取转换任务的实时进度
+      description: 获取指定任务的实时转换进度信息
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 进度获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  task_id:
+                    type: string
+                    example: "550e8400-e29b-41d4-a716-446655440000"
+                  progress:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        description: 任务状态
+                        enum: [queued, processing, completed, error]
+                        example: "processing"
+                      progress:
+                        type: number
+                        description: 进度百分比
+                        minimum: 0
+                        maximum: 100
+                        example: 45.5
+                      message:
+                        type: string
+                        description: 当前步骤描述
+                        example: "正在生成瓦片..."
+                      current_step:
+                        type: string
+                        description: 当前处理步骤
+                        example: "generating_tiles"
+                      result:
+                        type: object
+                        description: 转换结果（仅在完成时返回）
+                        properties:
+                          success:
+                            type: boolean
+                            example: true
+                          mbtiles_filename:
+                            type: string
+                            example: "satellite_123.mbtiles"
+                          martin_service:
+                            type: object
+                            properties:
+                              service_url:
+                                type: string
+                                example: "http://localhost:3000"
+                              mvt_url:
+                                type: string
+                                example: "http://localhost:3000/public.satellite_123/{z}/{x}/{y}.pbf"
+                              tilejson_url:
+                                type: string
+                                example: "http://localhost:3000/public.satellite_123"
+        '401':
+          description: 未授权访问
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+
+  /cleanup-progress/{task_id}:
+    parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 任务ID
+        example: "550e8400-e29b-41d4-a716-446655440000"
+    
+    delete:
+      tags:
+        - 进度管理
+      summary: 清理转换任务的进度数据
+      description: 清理指定任务的进度数据，释放内存资源
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 进度数据清理成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "进度数据已清理"
+        '401':
+          description: 未授权访问
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+
+  /batch-convert:
+    post:
+      tags:
+        - 批量处理
+      summary: 批量转换多个TIF文件
+      description: 批量转换多个TIF文件为MBTiles并发布为Martin服务
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - file_ids
+              properties:
+                file_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: 文件ID列表
+                  example: ["123", "124", "125"]
+                  maxItems: 5
+                max_zoom:
+                  type: integer
+                  description: 最大缩放级别
+                  minimum: 1
+                  maximum: 25
+                  default: 18
+                  example: 18
+                min_zoom:
+                  type: integer
+                  description: 最小缩放级别
+                  minimum: 0
+                  default: 2
+                  example: 2
+      responses:
+        '200':
+          description: 批量处理完成
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "批量处理完成: 成功 3 个, 失败 0 个"
+                  summary:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                        description: 总文件数
+                        example: 3
+                      success_count:
+                        type: integer
+                        description: 成功数量
+                        example: 3
+                      error_count:
+                        type: integer
+                        description: 失败数量
+                        example: 0
+                      min_zoom:
+                        type: integer
+                        example: 2
+                      max_zoom:
+                        type: integer
+                        example: 18
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        file_id:
+                          type: string
+                          example: "123"
+                        file_name:
+                          type: string
+                          example: "satellite.tif"
+                        success:
+                          type: boolean
+                          example: true
+                        task_id:
+                          type: string
+                          example: "550e8400-e29b-41d4-a716-446655440000"
+                        mbtiles_filename:
+                          type: string
+                          example: "satellite_123.mbtiles"
+                        martin_service:
+                          type: object
+                          properties:
+                            service_url:
+                              type: string
+                              example: "http://localhost:3000"
+                            mvt_url:
+                              type: string
+                              example: "http://localhost:3000/public.satellite_123/{z}/{x}/{y}.pbf"
+                            tilejson_url:
+                              type: string
+                              example: "http://localhost:3000/public.satellite_123"
+                        error:
+                          type: string
+                          description: 错误信息（仅在失败时返回）
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "批量处理最多支持5个文件"
+        '401':
+          description: 未授权访问
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+
+  /conversion-status/{file_id}:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 文件ID
+        example: "123"
+    
+    get:
+      tags:
+        - 状态查询
+      summary: 获取TIF文件的转换状态
+      description: 查询指定TIF文件的转换状态和已发布的服务信息
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 状态查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  file_id:
+                    type: string
+                    example: "123"
+                  file_name:
+                    type: string
+                    example: "satellite.tif"
+                  file_type:
+                    type: string
+                    example: "tif"
+                  converted:
+                    type: boolean
+                    description: 是否已转换
+                    example: true
+                  services:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        service_id:
+                          type: integer
+                          example: 1
+                        service_url:
+                          type: string
+                          example: "http://localhost:3000"
+                        mvt_url:
+                          type: string
+                          example: "http://localhost:3000/public.satellite_123/{z}/{x}/{y}.pbf"
+                        tilejson_url:
+                          type: string
+                          example: "http://localhost:3000/public.satellite_123"
+                        vector_type:
+                          type: string
+                          example: "raster_mbtiles"
+                        created_at:
+                          type: string
+                          format: date-time
+                          example: "2024-01-01T12:00:00Z"
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "无效的文件ID格式"
+        '401':
+          description: 未授权访问
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+        '404':
+          description: 文件不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "文件不存在"
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Bearer Token认证
+
+tags:
+  - name: 文件转换
+    description: TIF文件的MBTiles转换和Martin服务发布
+  - name: 进度管理
+    description: 异步转换任务的进度跟踪和清理
+  - name: 批量处理
+    description: 多个TIF文件的批量转换处理
+  - name: 状态查询
+    description: 文件转换状态和服务信息查询

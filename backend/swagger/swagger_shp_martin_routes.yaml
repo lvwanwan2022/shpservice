@@ -1,0 +1,427 @@
+openapi: 3.0.3
+info:
+  title: SHP Martin服务 API
+  description: SHP文件到MVT瓦片服务的发布流程API接口，包括SHP压缩包上传、服务发布、管理等功能
+  version: 1.0.0
+  contact:
+    name: SHP Service Team
+    email: support@shpservice.com
+
+servers:
+  - url: /api/shp-martin
+    description: SHP Martin服务
+
+paths:
+  /upload:
+    post:
+      tags:
+        - 服务发布
+      summary: 上传并发布SHP压缩包为Martin瓦片服务
+      description: 上传SHP压缩包文件并直接发布为Martin MVT瓦片服务
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: SHP压缩包文件（.zip格式）
+                user_id:
+                  type: integer
+                  description: 用户ID（可选）
+                  example: 1
+      responses:
+        '200':
+          description: 服务发布成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "SHP Martin服务发布成功"
+                  data:
+                    type: object
+                    description: 服务发布结果数据
+                    properties:
+                      file_id:
+                        type: string
+                        description: 文件ID
+                        example: "550e8400-e29b-41d4-a716-446655440000"
+                      table_name:
+                        type: string
+                        description: 数据库表名
+                        example: "martin_shp_550e8400"
+                      mvt_info:
+                        type: object
+                        properties:
+                          mvt_url:
+                            type: string
+                            description: MVT瓦片URL模板
+                            example: "http://localhost:3000/public.martin_shp_550e8400/{z}/{x}/{y}.pbf"
+                          tilejson_url:
+                            type: string
+                            description: TileJSON URL
+                            example: "http://localhost:3000/public.martin_shp_550e8400"
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "只支持.zip格式的SHP压缩包"
+        '413':
+          description: 文件过大
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "文件太大，请选择小于200MB的文件"
+        '415':
+          description: 不支持的文件类型
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "不支持的文件类型，请上传ZIP格式的SHP压缩包"
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+
+  /publish/{file_id}:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 文件ID
+        example: "550e8400-e29b-41d4-a716-446655440000"
+    
+    post:
+      tags:
+        - 服务发布
+      summary: 发布已上传的SHP文件到Martin服务
+      description: 通过文件ID发布已上传的SHP文件到Martin MVT瓦片服务
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: integer
+                  description: 用户ID（可选）
+                  example: 1
+      responses:
+        '200':
+          description: 服务发布成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "SHP文件发布到Martin服务成功"
+                  data:
+                    type: object
+                    description: 服务发布结果数据
+                    properties:
+                      file_id:
+                        type: string
+                        description: 文件ID
+                        example: "550e8400-e29b-41d4-a716-446655440000"
+                      table_name:
+                        type: string
+                        description: 数据库表名
+                        example: "martin_shp_550e8400"
+                      mvt_info:
+                        type: object
+                        properties:
+                          mvt_url:
+                            type: string
+                            description: MVT瓦片URL模板
+                            example: "http://localhost:3000/public.martin_shp_550e8400/{z}/{x}/{y}.pbf"
+                          tilejson_url:
+                            type: string
+                            description: TileJSON URL
+                            example: "http://localhost:3000/public.martin_shp_550e8400"
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+
+  /services:
+    get:
+      tags:
+        - 服务管理
+      summary: 获取SHP Martin服务列表
+      description: 获取已发布的SHP Martin MVT瓦片服务列表，支持分页和用户筛选
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+          description: 限制返回的记录数
+          example: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: 结果集的偏移量
+          example: 0
+        - name: user_id
+          in: query
+          schema:
+            type: integer
+          description: 用户ID过滤
+          example: 1
+      responses:
+        '200':
+          description: 服务列表获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  services:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ShpService'
+                  total:
+                    type: integer
+                    description: 总记录数
+                    example: 25
+                  limit:
+                    type: integer
+                    description: 每页记录数
+                    example: 100
+                  offset:
+                    type: integer
+                    description: 偏移量
+                    example: 0
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+
+  /services/{file_id}:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 文件ID
+        example: "550e8400-e29b-41d4-a716-446655440000"
+    
+    get:
+      tags:
+        - 服务管理
+      summary: 获取指定SHP Martin服务的信息
+      description: 获取指定SHP Martin MVT瓦片服务的详细信息
+      responses:
+        '200':
+          description: 服务信息获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  file_id:
+                    type: string
+                    description: 文件ID
+                    example: "550e8400-e29b-41d4-a716-446655440000"
+                  table_name:
+                    type: string
+                    description: 数据库表名
+                    example: "martin_shp_550e8400"
+                  original_filename:
+                    type: string
+                    description: 原始文件名
+                    example: "buildings.zip"
+                  user_id:
+                    type: integer
+                    description: 用户ID
+                    example: 1
+                  status:
+                    type: string
+                    description: 服务状态
+                    example: "active"
+                  created_at:
+                    type: string
+                    format: date-time
+                    description: 创建时间
+                    example: "2024-01-01T12:00:00Z"
+                  mvt_info:
+                    type: object
+                    properties:
+                      mvt_url:
+                        type: string
+                        description: MVT瓦片URL模板
+                        example: "http://localhost:3000/public.martin_shp_550e8400/{z}/{x}/{y}.pbf"
+                      tilejson_url:
+                        type: string
+                        description: TileJSON URL
+                        example: "http://localhost:3000/public.martin_shp_550e8400"
+        '404':
+          description: 服务不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+    
+    delete:
+      tags:
+        - 服务管理
+      summary: 删除SHP Martin服务
+      description: 软删除指定的SHP Martin MVT瓦片服务（将状态设置为deleted）
+      responses:
+        '200':
+          description: 服务删除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "SHP Martin服务删除成功"
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+
+components:
+  schemas:
+    ShpService:
+      type: object
+      properties:
+        file_id:
+          type: string
+          description: 文件ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        table_name:
+          type: string
+          description: 数据库表名
+          example: "martin_shp_550e8400"
+        original_filename:
+          type: string
+          description: 原始文件名
+          example: "buildings.zip"
+        user_id:
+          type: integer
+          description: 用户ID
+          example: 1
+        status:
+          type: string
+          description: 服务状态
+          example: "active"
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+          example: "2024-01-01T12:00:00Z"
+        mvt_info:
+          type: object
+          properties:
+            mvt_url:
+              type: string
+              description: MVT瓦片URL模板
+              example: "http://localhost:3000/public.martin_shp_550e8400/{z}/{x}/{y}.pbf"
+            tilejson_url:
+              type: string
+              description: TileJSON URL
+              example: "http://localhost:3000/public.martin_shp_550e8400"
+
+tags:
+  - name: 服务发布
+    description: SHP文件的MVT瓦片服务发布相关操作
+  - name: 服务管理
+    description: 已发布服务的查询、删除等管理操作

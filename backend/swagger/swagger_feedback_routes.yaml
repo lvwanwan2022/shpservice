@@ -1,0 +1,1172 @@
+openapi: 3.0.3
+info:
+  title: 用户反馈系统 API
+  description: 用户反馈收集、管理、附件上传、评论等功能的API接口
+  version: 1.0.0
+  contact:
+    name: SHP Service Team
+    email: support@shpservice.com
+
+servers:
+  - url: /api/feedback
+    description: 用户反馈系统服务
+
+security:
+  - BearerAuth: []
+
+paths:
+  /items:
+    get:
+      tags:
+        - 反馈管理
+      summary: 获取反馈列表
+      description: 获取反馈列表，支持分页、过滤和搜索
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 页码
+          example: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页数量
+          example: 20
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [feature, bug]
+          description: 分类过滤
+          example: "feature"
+        - name: module
+          in: query
+          schema:
+            type: string
+            enum: [frontend, backend]
+          description: 模块过滤
+          example: "frontend"
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [ui, code]
+          description: 类型过滤
+          example: "ui"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, in_progress, resolved, closed]
+          description: 状态过滤
+          example: "open"
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, urgent]
+          description: 优先级过滤
+          example: "high"
+        - name: my_feedback
+          in: query
+          schema:
+            type: boolean
+          description: 只显示我的反馈
+          example: true
+        - name: keyword
+          in: query
+          schema:
+            type: string
+          description: 关键词搜索
+          example: "地图显示"
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            default: "created_at"
+            enum: [created_at, updated_at, priority, votes]
+          description: 排序字段
+          example: "created_at"
+        - name: sort_order
+          in: query
+          schema:
+            type: string
+            default: "desc"
+            enum: [asc, desc]
+          description: 排序方向
+          example: "desc"
+      responses:
+        '200':
+          description: 获取反馈列表成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          example: "1234567890123456789"
+                        title:
+                          type: string
+                          example: "地图显示问题"
+                        description:
+                          type: string
+                          example: "地图在某些浏览器中显示异常"
+                        category:
+                          type: string
+                          example: "bug"
+                        module:
+                          type: string
+                          example: "frontend"
+                        type:
+                          type: string
+                          example: "ui"
+                        status:
+                          type: string
+                          example: "open"
+                        priority:
+                          type: string
+                          example: "high"
+                        votes:
+                          type: integer
+                          example: 5
+                        comments_count:
+                          type: integer
+                          example: 3
+                        attachments_count:
+                          type: integer
+                          example: 2
+                        user_id:
+                          type: string
+                          example: "user123"
+                        username:
+                          type: string
+                          example: "张三"
+                        created_at:
+                          type: string
+                          format: date-time
+                          example: "2024-01-15T10:30:00Z"
+                        updated_at:
+                          type: string
+                          format: date-time
+                          example: "2024-01-15T10:30:00Z"
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                        example: 1
+                      page_size:
+                        type: integer
+                        example: 20
+                      total:
+                        type: integer
+                        example: 50
+                      total_pages:
+                        type: integer
+                        example: 3
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "未提供有效的认证令牌"
+        '500':
+          description: 获取反馈列表失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "获取反馈列表失败: 数据库连接错误"
+    
+    post:
+      tags:
+        - 反馈管理
+      summary: 创建新反馈
+      description: 创建新的用户反馈
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - description
+                - category
+                - module
+                - type
+              properties:
+                title:
+                  type: string
+                  description: 反馈标题
+                  example: "地图显示问题"
+                description:
+                  type: string
+                  description: 反馈详细描述
+                  example: "地图在某些浏览器中显示异常，需要修复"
+                category:
+                  type: string
+                  description: 分类
+                  enum: [feature, bug]
+                  example: "bug"
+                module:
+                  type: string
+                  description: 模块
+                  enum: [frontend, backend]
+                  example: "frontend"
+                type:
+                  type: string
+                  description: 类型
+                  enum: [ui, code]
+                  example: "ui"
+                priority:
+                  type: string
+                  description: 优先级
+                  enum: [low, medium, high, urgent]
+                  default: "medium"
+                  example: "high"
+                browser_info:
+                  type: string
+                  description: 浏览器信息
+                  example: "Chrome 120.0.0.0"
+                os_info:
+                  type: string
+                  description: 操作系统信息
+                  example: "Windows 10"
+                steps_to_reproduce:
+                  type: string
+                  description: 重现步骤
+                  example: "1. 打开地图页面\n2. 缩放地图\n3. 观察显示异常"
+      responses:
+        '200':
+          description: 创建反馈成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "反馈创建成功"
+                  feedback_id:
+                    type: string
+                    example: "1234567890123456789"
+                  feedback:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "1234567890123456789"
+                      title:
+                        type: string
+                        example: "地图显示问题"
+                      description:
+                        type: string
+                        example: "地图在某些浏览器中显示异常，需要修复"
+                      category:
+                        type: string
+                        example: "bug"
+                      module:
+                        type: string
+                        example: "frontend"
+                      type:
+                        type: string
+                        example: "ui"
+                      priority:
+                        type: string
+                        example: "high"
+                      status:
+                        type: string
+                        example: "open"
+                      created_at:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "缺少必填字段: title"
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "未提供有效的认证令牌"
+        '500':
+          description: 创建反馈失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "创建反馈失败: 数据库错误"
+
+  /items/{feedback_id}:
+    parameters:
+      - name: feedback_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 反馈ID
+        example: "1234567890123456789"
+    
+    get:
+      tags:
+        - 反馈管理
+      summary: 获取反馈详情
+      description: 获取指定反馈的详细信息
+      responses:
+        '200':
+          description: 获取反馈详情成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  feedback:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "1234567890123456789"
+                      title:
+                        type: string
+                        example: "地图显示问题"
+                      description:
+                        type: string
+                        example: "地图在某些浏览器中显示异常，需要修复"
+                      category:
+                        type: string
+                        example: "bug"
+                      module:
+                        type: string
+                        example: "frontend"
+                      type:
+                        type: string
+                        example: "ui"
+                      status:
+                        type: string
+                        example: "open"
+                      priority:
+                        type: string
+                        example: "high"
+                      votes:
+                        type: integer
+                        example: 5
+                      browser_info:
+                        type: string
+                        example: "Chrome 120.0.0.0"
+                      os_info:
+                        type: string
+                        example: "Windows 10"
+                      steps_to_reproduce:
+                        type: string
+                        example: "1. 打开地图页面\n2. 缩放地图\n3. 观察显示异常"
+                      user_id:
+                        type: string
+                        example: "user123"
+                      username:
+                        type: string
+                        example: "张三"
+                      created_at:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+                      updated_at:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+                      attachments:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              example: "att_123"
+                            filename:
+                              type: string
+                              example: "screenshot.png"
+                            file_size:
+                              type: integer
+                              example: 1024000
+                            uploaded_at:
+                              type: string
+                              format: date-time
+                              example: "2024-01-15T10:30:00Z"
+                      comments:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              example: "comment_123"
+                            content:
+                              type: string
+                              example: "这个问题我也遇到过"
+                            user_id:
+                              type: string
+                              example: "user456"
+                            username:
+                              type: string
+                              example: "李四"
+                            created_at:
+                              type: string
+                              format: date-time
+                              example: "2024-01-15T10:30:00Z"
+        '404':
+          description: 反馈不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "反馈不存在"
+        '500':
+          description: 获取反馈详情失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "获取反馈详情失败: 数据库错误"
+    
+    delete:
+      tags:
+        - 反馈管理
+      summary: 删除反馈
+      description: 删除指定的反馈（仅反馈创建者可删除）
+      responses:
+        '200':
+          description: 删除反馈成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "反馈删除成功"
+                  deleted_feedback:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "1234567890123456789"
+                      title:
+                        type: string
+                        example: "地图显示问题"
+        '403':
+          description: 无权限删除
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "无权限删除此反馈"
+        '404':
+          description: 反馈不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "反馈不存在"
+        '500':
+          description: 删除反馈失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "删除反馈失败: 数据库错误"
+
+  /items/{feedback_id}/attachments:
+    parameters:
+      - name: feedback_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 反馈ID
+        example: "1234567890123456789"
+    
+    post:
+      tags:
+        - 附件管理
+      summary: 上传反馈附件
+      description: 为指定反馈上传附件文件
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 附件文件
+                  required: true
+                description:
+                  type: string
+                  description: 附件描述
+                  example: "问题截图"
+      responses:
+        '200':
+          description: 上传附件成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "附件上传成功"
+                  attachment:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "att_123"
+                      filename:
+                        type: string
+                        example: "screenshot.png"
+                      original_filename:
+                        type: string
+                        example: "screenshot.png"
+                      file_size:
+                        type: integer
+                        example: 1024000
+                      mime_type:
+                        type: string
+                        example: "image/png"
+                      description:
+                        type: string
+                        example: "问题截图"
+                      uploaded_at:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "未提供文件"
+        '404':
+          description: 反馈不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "反馈不存在"
+        '413':
+          description: 文件太大
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "文件太大，请选择更小的文件"
+        '500':
+          description: 上传附件失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "上传附件失败: 存储错误"
+
+  /items/{feedback_id}/comments:
+    parameters:
+      - name: feedback_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 反馈ID
+        example: "1234567890123456789"
+    
+    post:
+      tags:
+        - 评论管理
+      summary: 添加反馈评论
+      description: 为指定反馈添加评论
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+                  description: 评论内容
+                  example: "这个问题我也遇到过，希望尽快修复"
+      responses:
+        '200':
+          description: 添加评论成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "评论添加成功"
+                  comment:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "comment_123"
+                      content:
+                        type: string
+                        example: "这个问题我也遇到过，希望尽快修复"
+                      user_id:
+                        type: string
+                        example: "user456"
+                      username:
+                        type: string
+                        example: "李四"
+                      created_at:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "评论内容不能为空"
+        '404':
+          description: 反馈不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "反馈不存在"
+        '500':
+          description: 添加评论失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "添加评论失败: 数据库错误"
+
+  /items/{feedback_id}/vote:
+    parameters:
+      - name: feedback_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 反馈ID
+        example: "1234567890123456789"
+    
+    post:
+      tags:
+        - 投票管理
+      summary: 为反馈投票
+      description: 为指定反馈投票（点赞）
+      responses:
+        '200':
+          description: 投票成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "投票成功"
+                  votes:
+                    type: integer
+                    example: 6
+                  has_voted:
+                    type: boolean
+                    example: true
+        '404':
+          description: 反馈不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "反馈不存在"
+        '500':
+          description: 投票失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "投票失败: 数据库错误"
+
+  /items/{feedback_id}/status:
+    parameters:
+      - name: feedback_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 反馈ID
+        example: "1234567890123456789"
+    
+    put:
+      tags:
+        - 反馈管理
+      summary: 更新反馈状态
+      description: 更新指定反馈的状态（仅管理员或反馈创建者可操作）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  description: 新状态
+                  enum: [open, in_progress, resolved, closed]
+                  example: "in_progress"
+                comment:
+                  type: string
+                  description: 状态更新说明
+                  example: "正在处理中，预计下周完成"
+      responses:
+        '200':
+          description: 更新状态成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "状态更新成功"
+                  feedback:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "1234567890123456789"
+                      status:
+                        type: string
+                        example: "in_progress"
+                      updated_at:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "无效的状态值"
+        '403':
+          description: 无权限更新
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "无权限更新此反馈状态"
+        '404':
+          description: 反馈不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "反馈不存在"
+        '500':
+          description: 更新状态失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "更新状态失败: 数据库错误"
+
+  /attachments/{filename}:
+    parameters:
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 文件名
+        example: "screenshot.png"
+    
+    get:
+      tags:
+        - 附件管理
+      summary: 下载附件
+      description: 下载指定的附件文件
+      responses:
+        '200':
+          description: 下载成功
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: 文件不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "文件不存在"
+        '500':
+          description: 下载失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "下载失败: 文件读取错误"
+
+  /stats:
+    get:
+      tags:
+        - 统计信息
+      summary: 获取反馈统计信息
+      description: 获取反馈系统的统计信息
+      responses:
+        '200':
+          description: 获取统计信息成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  stats:
+                    type: object
+                    properties:
+                      total_feedback:
+                        type: integer
+                        example: 150
+                      open_feedback:
+                        type: integer
+                        example: 45
+                      in_progress_feedback:
+                        type: integer
+                        example: 30
+                      resolved_feedback:
+                        type: integer
+                        example: 60
+                      closed_feedback:
+                        type: integer
+                        example: 15
+                      total_votes:
+                        type: integer
+                        example: 320
+                      total_comments:
+                        type: integer
+                        example: 180
+                      total_attachments:
+                        type: integer
+                        example: 90
+                      category_stats:
+                        type: object
+                        properties:
+                          feature:
+                            type: integer
+                            example: 80
+                          bug:
+                            type: integer
+                            example: 70
+                      module_stats:
+                        type: object
+                        properties:
+                          frontend:
+                            type: integer
+                            example: 90
+                          backend:
+                            type: integer
+                            example: 60
+                      priority_stats:
+                        type: object
+                        properties:
+                          low:
+                            type: integer
+                            example: 20
+                          medium:
+                            type: integer
+                            example: 60
+                          high:
+                            type: integer
+                            example: 50
+                          urgent:
+                            type: integer
+                            example: 20
+        '500':
+          description: 获取统计信息失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "获取统计信息失败: 数据库错误"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT认证令牌
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: 错误信息
+        details:
+          type: object
+          description: 错误详情
+          additionalProperties: true
+
+    Success:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: 操作是否成功
+        message:
+          type: string
+          description: 成功信息
+        data:
+          type: object
+          description: 返回数据
+          additionalProperties: true
+
+    Feedback:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 反馈ID
+        title:
+          type: string
+          description: 反馈标题
+        description:
+          type: string
+          description: 反馈描述
+        category:
+          type: string
+          description: 分类
+          enum: [feature, bug]
+        module:
+          type: string
+          description: 模块
+          enum: [frontend, backend]
+        type:
+          type: string
+          description: 类型
+          enum: [ui, code]
+        status:
+          type: string
+          description: 状态
+          enum: [open, in_progress, resolved, closed]
+        priority:
+          type: string
+          description: 优先级
+          enum: [low, medium, high, urgent]
+        votes:
+          type: integer
+          description: 投票数
+        user_id:
+          type: string
+          description: 用户ID
+        username:
+          type: string
+          description: 用户名
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+
+    Comment:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 评论ID
+        content:
+          type: string
+          description: 评论内容
+        user_id:
+          type: string
+          description: 用户ID
+        username:
+          type: string
+          description: 用户名
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+
+    Attachment:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 附件ID
+        filename:
+          type: string
+          description: 文件名
+        original_filename:
+          type: string
+          description: 原始文件名
+        file_size:
+          type: integer
+          description: 文件大小
+        mime_type:
+          type: string
+          description: MIME类型
+        description:
+          type: string
+          description: 附件描述
+        uploaded_at:
+          type: string
+          format: date-time
+          description: 上传时间
+
+tags:
+  - name: 反馈管理
+    description: 反馈CRUD操作相关接口
+  - name: 附件管理
+    description: 反馈附件上传下载相关接口
+  - name: 评论管理
+    description: 反馈评论相关接口
+  - name: 投票管理
+    description: 反馈投票相关接口
+  - name: 统计信息
+    description: 反馈统计信息相关接口

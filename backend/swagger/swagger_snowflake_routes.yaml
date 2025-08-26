@@ -1,0 +1,362 @@
+openapi: 3.0.3
+info:
+  title: 雪花算法ID生成 API
+  description: 雪花算法ID生成、批量生成、ID信息解析等功能的API接口
+  version: 1.0.0
+  contact:
+    name: SHP Service Team
+    email: support@shpservice.com
+
+servers:
+  - url: /api/snowflake
+    description: 雪花算法ID生成服务
+
+security:
+  - BearerAuth: []
+
+paths:
+  /generate:
+    get:
+      tags:
+        - ID生成
+      summary: 生成一个雪花算法ID
+      description: 生成一个雪花算法ID，支持指定表名
+      parameters:
+        - name: table
+          in: query
+          schema:
+            type: string
+          description: 表名（可选）
+          example: "users"
+      responses:
+        '200':
+          description: 生成ID成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: "1234567890123456789"
+                  info:
+                    type: object
+                    properties:
+                      timestamp:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+                      datacenter_id:
+                        type: integer
+                        example: 1
+                      worker_id:
+                        type: integer
+                        example: 1
+                      sequence:
+                        type: integer
+                        example: 0
+                      binary:
+                        type: string
+                        example: "1010101010101010101010101010101010101010101010101010101010101010"
+                      hex:
+                        type: string
+                        example: "aaaaaaaaaaaaaaaa"
+        '500':
+          description: 生成ID失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "生成ID失败: 系统错误"
+
+  /batch:
+    get:
+      tags:
+        - ID生成
+      summary: 批量生成雪花算法ID
+      description: 批量生成多个雪花算法ID
+      parameters:
+        - name: count
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: 生成数量
+          example: 10
+      responses:
+        '200':
+          description: 批量生成ID成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    example: 10
+                  ids:
+                    type: array
+                    items:
+                      type: string
+                    example: ["1234567890123456789", "1234567890123456790", "1234567890123456791"]
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "生成数量超出限制"
+        '500':
+          description: 批量生成ID失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "批量生成ID失败: 系统错误"
+
+  /info/{snowflake_id}:
+    parameters:
+      - name: snowflake_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 雪花算法ID
+        example: 1234567890123456789
+    
+    get:
+      tags:
+        - ID解析
+      summary: 获取雪花算法ID的信息
+      description: 解析雪花算法ID，获取时间戳、数据中心ID、工作节点ID等信息
+      responses:
+        '200':
+          description: 获取ID信息成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: "1234567890123456789"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
+                  datacenter_id:
+                    type: integer
+                    example: 1
+                  worker_id:
+                    type: integer
+                    example: 1
+                  sequence:
+                    type: integer
+                    example: 0
+                  binary:
+                    type: string
+                    example: "1010101010101010101010101010101010101010101010101010101010101010"
+                  hex:
+                    type: string
+                    example: "aaaaaaaaaaaaaaaa"
+                  created_at:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
+        '400':
+          description: 无效的ID格式
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "无效的雪花算法ID格式"
+        '500':
+          description: 解析ID失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "解析ID失败: 系统错误"
+
+  /example:
+    post:
+      tags:
+        - 示例记录
+      summary: 创建一条示例记录
+      description: 使用雪花算法ID创建一条示例记录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - table_name
+              properties:
+                table_name:
+                  type: string
+                  description: 表名
+                  example: "users"
+                name:
+                  type: string
+                  description: 记录名称
+                  example: "示例用户"
+                description:
+                  type: string
+                  description: 记录描述
+                  example: "这是一个示例记录"
+                data:
+                  type: object
+                  description: 额外数据
+                  additionalProperties: true
+                  example:
+                    key1: "value1"
+                    key2: "value2"
+      responses:
+        '200':
+          description: 创建示例记录成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  id:
+                    type: string
+                    example: "1234567890123456789"
+                  info:
+                    type: object
+                    properties:
+                      timestamp:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+                      datacenter_id:
+                        type: integer
+                        example: 1
+                      worker_id:
+                        type: integer
+                        example: 1
+                      sequence:
+                        type: integer
+                        example: 0
+                      binary:
+                        type: string
+                        example: "1010101010101010101010101010101010101010101010101010101010101010"
+                      hex:
+                        type: string
+                        example: "aaaaaaaaaaaaaaaa"
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "未提供表名"
+        '500':
+          description: 创建示例记录失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "创建示例记录失败: 数据库错误"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT认证令牌
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: 错误信息
+        details:
+          type: object
+          description: 错误详情
+          additionalProperties: true
+
+    Success:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: 操作是否成功
+        message:
+          type: string
+          description: 成功信息
+        data:
+          type: object
+          description: 返回数据
+          additionalProperties: true
+
+    SnowflakeID:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 雪花算法ID
+          example: "1234567890123456789"
+        timestamp:
+          type: string
+          format: date-time
+          description: 时间戳
+          example: "2024-01-15T10:30:00Z"
+        datacenter_id:
+          type: integer
+          description: 数据中心ID
+          example: 1
+        worker_id:
+          type: integer
+          description: 工作节点ID
+          example: 1
+        sequence:
+          type: integer
+          description: 序列号
+          example: 0
+        binary:
+          type: string
+          description: 二进制表示
+          example: "1010101010101010101010101010101010101010101010101010101010101010"
+        hex:
+          type: string
+          description: 十六进制表示
+          example: "aaaaaaaaaaaaaaaa"
+
+tags:
+  - name: ID生成
+    description: 雪花算法ID生成相关接口
+  - name: ID解析
+    description: 雪花算法ID解析相关接口
+  - name: 示例记录
+    description: 示例记录创建相关接口

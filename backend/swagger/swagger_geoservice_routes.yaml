@@ -1,0 +1,1143 @@
+openapi: 3.0.3
+info:
+  title: GeoService地图服务 API
+  description: |
+    SHP Service GeoService地图服务模块API接口文档
+    
+    提供基于GeoServer的地图服务功能，包括图层管理、服务发布、WMS/WFS服务等。
+    
+    ## 主要功能
+    - 图层信息查询和管理
+    - WMS/WFS服务能力查询
+    - 图层预览和发布
+    - GeoServer工作空间管理
+    - 地图服务调试工具
+    
+    ## 服务类型
+    - WMS (Web Map Service) - 地图服务
+    - WFS (Web Feature Service) - 要素服务
+    - WCS (Web Coverage Service) - 覆盖服务
+    
+    ## 认证要求
+    部分接口需要用户登录认证，请在请求头中包含有效的认证信息。
+  version: 1.0.0
+  contact:
+    name: SHP Service Team
+    email: 793145268@qq.com
+
+servers:
+  - url: http://localhost:5030/api
+    description: 开发环境
+  - url: https://your-domain.com/api
+    description: 生产环境
+
+tags:
+  - name: 图层管理
+    description: 图层信息查询、列表管理等接口
+  - name: 服务能力
+    description: WMS/WFS服务能力查询接口
+  - name: 服务发布
+    description: 图层发布、取消发布等接口
+  - name: 系统管理
+    description: GeoServer信息、工作空间管理等接口
+  - name: 调试工具
+    description: 调试和诊断相关接口
+
+paths:
+  /layer_info/{layer_name}:
+    get:
+      tags:
+        - 图层管理
+      summary: 获取图层信息
+      description: |
+        根据图层名称获取图层的详细信息，包括图层属性、样式、边界等。
+        
+        ## 返回信息
+        - 图层基本信息
+        - 图层样式配置
+        - 图层边界范围
+        - 图层属性字段
+        - 服务访问URL
+      parameters:
+        - name: layer_name
+          in: path
+          description: 图层名称
+          required: true
+          schema:
+            type: string
+            example: "beijing_buildings"
+      responses:
+        '200':
+          description: 获取图层信息成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                    description: 图层名称
+                  title:
+                    type: string
+                    description: 图层标题
+                  description:
+                    type: string
+                    description: 图层描述
+                  type:
+                    type: string
+                    description: 图层类型
+                  enabled:
+                    type: boolean
+                    description: 是否启用
+                  bounds:
+                    type: object
+                    description: 图层边界
+                    properties:
+                      minx:
+                        type: number
+                        description: 最小X坐标
+                      miny:
+                        type: number
+                        description: 最小Y坐标
+                      maxx:
+                        type: number
+                        description: 最大X坐标
+                      maxy:
+                        type: number
+                        description: 最大Y坐标
+                  styles:
+                    type: array
+                    description: 图层样式列表
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          description: 样式名称
+                        title:
+                          type: string
+                          description: 样式标题
+                  attributes:
+                    type: array
+                    description: 图层属性字段
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          description: 字段名称
+                        type:
+                          type: string
+                          description: 字段类型
+                        description:
+                          type: string
+                          description: 字段描述
+                  services:
+                    type: object
+                    description: 服务访问URL
+                    properties:
+                      wms:
+                        type: string
+                        description: WMS服务URL
+                      wfs:
+                        type: string
+                        description: WFS服务URL
+        '404':
+          description: 图层不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "图层不存在或无法访问"
+        '500':
+          description: 服务器内部错误
+
+  /wms_capabilities:
+    get:
+      tags:
+        - 服务能力
+      summary: 获取WMS服务能力
+      description: |
+        获取GeoServer的WMS服务能力文档URL。
+        
+        WMS (Web Map Service) 提供地图图像服务，支持地图渲染和样式配置。
+        
+        ## WMS服务功能
+        - GetCapabilities - 获取服务能力
+        - GetMap - 获取地图图像
+        - GetFeatureInfo - 获取要素信息
+        - GetLegendGraphic - 获取图例
+      responses:
+        '200':
+          description: 获取WMS服务能力成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  wms_capabilities_url:
+                    type: string
+                    description: WMS服务能力文档URL
+                    example: "http://localhost:8080/geoserver/wms?service=WMS&version=1.3.0&request=GetCapabilities"
+        '500':
+          description: 服务器内部错误
+
+  /wfs_capabilities:
+    get:
+      tags:
+        - 服务能力
+      summary: 获取WFS服务能力
+      description: |
+        获取GeoServer的WFS服务能力文档URL。
+        
+        WFS (Web Feature Service) 提供矢量要素服务，支持要素查询和编辑。
+        
+        ## WFS服务功能
+        - GetCapabilities - 获取服务能力
+        - GetFeature - 获取要素数据
+        - DescribeFeatureType - 描述要素类型
+        - Transaction - 要素编辑操作
+      responses:
+        '200':
+          description: 获取WFS服务能力成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  wfs_capabilities_url:
+                    type: string
+                    description: WFS服务能力文档URL
+                    example: "http://localhost:8080/geoserver/wfs?service=WFS&version=2.0.0&request=GetCapabilities"
+        '500':
+          description: 服务器内部错误
+
+  /layers:
+    get:
+      tags:
+        - 图层管理
+      summary: 获取所有图层
+      description: |
+        获取系统中所有已发布的图层列表。
+        
+        ## 返回信息
+        - 图层基本信息
+        - 服务访问URL
+        - 图层状态
+        - 发布信息
+      parameters:
+        - name: workspace
+          in: query
+          description: 工作空间名称筛选
+          required: false
+          schema:
+            type: string
+        - name: enabled
+          in: query
+          description: 是否启用筛选
+          required: false
+          schema:
+            type: boolean
+        - name: type
+          in: query
+          description: 图层类型筛选
+          required: false
+          schema:
+            type: string
+            enum: ["VECTOR", "RASTER", "GROUP"]
+      responses:
+        '200':
+          description: 获取图层列表成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      description: 文件ID
+                    file_name:
+                      type: string
+                      description: 文件名称
+                    file_type:
+                      type: string
+                      description: 文件类型
+                    discipline:
+                      type: string
+                      description: 专业分类
+                    geoserver_layer:
+                      type: string
+                      description: GeoServer图层名称
+                    wms_url:
+                      type: string
+                      description: WMS服务URL
+                    wfs_url:
+                      type: string
+                      description: WFS服务URL
+                    status:
+                      type: string
+                      description: 发布状态
+                    publish_time:
+                      type: string
+                      format: date-time
+                      description: 发布时间
+        '500':
+          description: 服务器内部错误
+
+  /layer_preview/{layer_name}:
+    get:
+      tags:
+        - 图层管理
+      summary: 获取图层预览
+      description: |
+        获取图层的预览图像，用于在地图界面中显示图层缩略图。
+        
+        ## 预览参数
+        - 图像格式：PNG、JPEG
+        - 图像尺寸：可自定义
+        - 地图范围：图层边界或自定义范围
+      parameters:
+        - name: layer_name
+          in: path
+          description: 图层名称
+          required: true
+          schema:
+            type: string
+        - name: width
+          in: query
+          description: 图像宽度
+          required: false
+          schema:
+            type: integer
+            default: 256
+        - name: height
+          in: query
+          description: 图像高度
+          required: false
+          schema:
+            type: integer
+            default: 256
+        - name: format
+          in: query
+          description: 图像格式
+          required: false
+          schema:
+            type: string
+            enum: ["image/png", "image/jpeg"]
+            default: "image/png"
+        - name: bbox
+          in: query
+          description: 边界框，格式为"minX,minY,maxX,maxY"
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 获取图层预览成功
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: 图层不存在
+        '500':
+          description: 服务器内部错误
+
+  /published_layers:
+    get:
+      tags:
+        - 图层管理
+      summary: 获取已发布图层
+      description: |
+        获取当前用户已发布的图层列表。
+        
+        ## 筛选条件
+        - 工作空间筛选
+        - 图层类型筛选
+        - 发布状态筛选
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: workspace
+          in: query
+          description: 工作空间名称
+          required: false
+          schema:
+            type: string
+        - name: layer_type
+          in: query
+          description: 图层类型
+          required: false
+          schema:
+            type: string
+            enum: ["VECTOR", "RASTER"]
+        - name: status
+          in: query
+          description: 发布状态
+          required: false
+          schema:
+            type: string
+            enum: ["published", "error", "processing"]
+      responses:
+        '200':
+          description: 获取已发布图层成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    file_id:
+                      type: string
+                      description: 文件ID
+                    file_name:
+                      type: string
+                      description: 文件名称
+                    layer_name:
+                      type: string
+                      description: 图层名称
+                    workspace:
+                      type: string
+                      description: 工作空间
+                    layer_type:
+                      type: string
+                      description: 图层类型
+                    status:
+                      type: string
+                      description: 发布状态
+                    publish_time:
+                      type: string
+                      format: date-time
+                      description: 发布时间
+                    services:
+                      type: object
+                      description: 服务URL
+                      properties:
+                        wms:
+                          type: string
+                          description: WMS服务URL
+                        wfs:
+                          type: string
+                          description: WFS服务URL
+        '401':
+          description: 未授权访问
+        '500':
+          description: 服务器内部错误
+
+  /publish/{file_id}:
+    post:
+      tags:
+        - 服务发布
+      summary: 发布图层到GeoServer
+      description: |
+        将文件发布为GeoServer图层服务。
+        
+        ## 发布流程
+        1. 验证文件格式和坐标系
+        2. 创建工作空间（如需要）
+        3. 上传数据到GeoServer
+        4. 创建图层和样式
+        5. 配置服务参数
+        
+        ## 支持的文件类型
+        - SHP文件
+        - GeoJSON文件
+        - GeoTIFF文件
+        - 其他GDAL支持的格式
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: file_id
+          in: path
+          description: 文件ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspace:
+                  type: string
+                  description: 工作空间名称
+                  default: "shpservice"
+                layer_name:
+                  type: string
+                  description: 图层名称
+                title:
+                  type: string
+                  description: 图层标题
+                description:
+                  type: string
+                  description: 图层描述
+                enabled:
+                  type: boolean
+                  description: 是否启用
+                  default: true
+                services:
+                  type: array
+                  items:
+                    type: string
+                    enum: ["WMS", "WFS", "WCS"]
+                  description: 启用的服务类型
+                  default: ["WMS", "WFS"]
+                style:
+                  type: object
+                  description: 样式配置
+                  properties:
+                    name:
+                      type: string
+                      description: 样式名称
+                    sld_body:
+                      type: string
+                      description: SLD样式内容
+      responses:
+        '200':
+          description: 发布成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: 发布是否成功
+                  layer_name:
+                    type: string
+                    description: 图层名称
+                  workspace:
+                    type: string
+                    description: 工作空间名称
+                  services:
+                    type: object
+                    description: 服务URL
+                    properties:
+                      wms:
+                        type: string
+                        description: WMS服务URL
+                      wfs:
+                        type: string
+                        description: WFS服务URL
+                  message:
+                    type: string
+                    description: 发布消息
+        '400':
+          description: 发布失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                  details:
+                    type: object
+                    description: 错误详情
+        '404':
+          description: 文件不存在
+        '401':
+          description: 未授权访问
+        '500':
+          description: 服务器内部错误
+
+  /unpublish/{file_id}:
+    delete:
+      tags:
+        - 服务发布
+      summary: 取消图层发布
+      description: |
+        取消文件的GeoServer图层发布，删除相关图层和服务。
+        
+        ## 删除内容
+        - GeoServer图层
+        - 相关样式
+        - 数据存储
+        - 服务配置
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: file_id
+          in: path
+          description: 文件ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 取消发布成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: 操作是否成功
+                  message:
+                    type: string
+                    description: 操作消息
+        '404':
+          description: 文件或图层不存在
+        '401':
+          description: 未授权访问
+        '500':
+          description: 服务器内部错误
+
+  /debug/layer/{file_id}:
+    get:
+      tags:
+        - 调试工具
+      summary: 调试图层信息
+      description: |
+        获取图层的详细调试信息，用于诊断发布问题。
+        
+        ## 调试信息
+        - 文件信息
+        - 坐标系信息
+        - 数据验证结果
+        - GeoServer配置
+        - 错误日志
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: file_id
+          in: path
+          description: 文件ID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 获取调试信息成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  file_info:
+                    type: object
+                    description: 文件信息
+                  coordinate_system:
+                    type: object
+                    description: 坐标系信息
+                  validation:
+                    type: object
+                    description: 数据验证结果
+                  geoserver_config:
+                    type: object
+                    description: GeoServer配置
+                  errors:
+                    type: array
+                    description: 错误信息
+                    items:
+                      type: string
+        '404':
+          description: 文件不存在
+        '401':
+          description: 未授权访问
+
+  /geoserver/info:
+    get:
+      tags:
+        - 系统管理
+      summary: 获取GeoServer信息
+      description: |
+        获取GeoServer服务器的基本信息和状态。
+        
+        ## 返回信息
+        - 服务器版本
+        - 工作空间列表
+        - 数据存储信息
+        - 服务状态
+      responses:
+        '200':
+          description: 获取GeoServer信息成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: string
+                    description: GeoServer版本
+                  status:
+                    type: string
+                    description: 服务器状态
+                  workspaces:
+                    type: array
+                    description: 工作空间列表
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          description: 工作空间名称
+                        enabled:
+                          type: boolean
+                          description: 是否启用
+                  datastores:
+                    type: array
+                    description: 数据存储列表
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          description: 数据存储名称
+                        type:
+                          type: string
+                          description: 数据存储类型
+                        workspace:
+                          type: string
+                          description: 所属工作空间
+                  services:
+                    type: object
+                    description: 服务状态
+                    properties:
+                      wms:
+                        type: object
+                        description: WMS服务状态
+                      wfs:
+                        type: object
+                        description: WFS服务状态
+                      wcs:
+                        type: object
+                        description: WCS服务状态
+        '500':
+          description: 服务器内部错误
+
+  /workspace/{workspace_name}/info:
+    get:
+      tags:
+        - 系统管理
+      summary: 获取工作空间信息
+      description: |
+        获取指定工作空间的详细信息。
+        
+        ## 工作空间信息
+        - 基本信息
+        - 图层列表
+        - 数据存储
+        - 样式列表
+      parameters:
+        - name: workspace_name
+          in: path
+          description: 工作空间名称
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 获取工作空间信息成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                    description: 工作空间名称
+                  enabled:
+                    type: boolean
+                    description: 是否启用
+                  isolated:
+                    type: boolean
+                    description: 是否隔离
+                  layers:
+                    type: array
+                    description: 图层列表
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          description: 图层名称
+                        type:
+                          type: string
+                          description: 图层类型
+                        enabled:
+                          type: boolean
+                          description: 是否启用
+                  datastores:
+                    type: array
+                    description: 数据存储列表
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          description: 数据存储名称
+                        type:
+                          type: string
+                          description: 数据存储类型
+                        enabled:
+                          type: boolean
+                          description: 是否启用
+                  styles:
+                    type: array
+                    description: 样式列表
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          description: 样式名称
+                        filename:
+                          type: string
+                          description: 样式文件名
+        '404':
+          description: 工作空间不存在
+        '500':
+          description: 服务器内部错误
+
+  /layer/{layer_id}/details:
+    get:
+      tags:
+        - 图层管理
+      summary: 获取图层详细信息
+      description: |
+        根据图层ID获取图层的详细信息。
+        
+        ## 详细信息
+        - 图层配置
+        - 数据源信息
+        - 样式配置
+        - 服务配置
+      parameters:
+        - name: layer_id
+          in: path
+          description: 图层ID
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 获取图层详细信息成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    description: 图层ID
+                  name:
+                    type: string
+                    description: 图层名称
+                  title:
+                    type: string
+                    description: 图层标题
+                  description:
+                    type: string
+                    description: 图层描述
+                  type:
+                    type: string
+                    description: 图层类型
+                  enabled:
+                    type: boolean
+                    description: 是否启用
+                  datastore:
+                    type: object
+                    description: 数据存储信息
+                    properties:
+                      name:
+                        type: string
+                        description: 数据存储名称
+                      type:
+                        type: string
+                        description: 数据存储类型
+                  styles:
+                    type: array
+                    description: 样式列表
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          description: 样式名称
+                        title:
+                          type: string
+                          description: 样式标题
+                        default:
+                          type: boolean
+                          description: 是否默认样式
+                  services:
+                    type: object
+                    description: 服务配置
+                    properties:
+                      wms:
+                        type: object
+                        description: WMS服务配置
+                      wfs:
+                        type: object
+                        description: WFS服务配置
+        '404':
+          description: 图层不存在
+        '500':
+          description: 服务器内部错误
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        使用JWT Bearer Token进行身份认证。
+        
+        请在请求头中添加：
+        ```
+        Authorization: Bearer <your-jwt-token>
+        ```
+
+  schemas:
+    LayerInfo:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 图层名称
+        title:
+          type: string
+          description: 图层标题
+        description:
+          type: string
+          description: 图层描述
+        type:
+          type: string
+          description: 图层类型
+        enabled:
+          type: boolean
+          description: 是否启用
+        bounds:
+          type: object
+          description: 图层边界
+          properties:
+            minx:
+              type: number
+              description: 最小X坐标
+            miny:
+              type: number
+              description: 最小Y坐标
+            maxx:
+              type: number
+              description: 最大X坐标
+            maxy:
+              type: number
+              description: 最大Y坐标
+        styles:
+          type: array
+          description: 图层样式列表
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                description: 样式名称
+              title:
+                type: string
+                description: 样式标题
+        attributes:
+          type: array
+          description: 图层属性字段
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                description: 字段名称
+              type:
+                type: string
+                description: 字段类型
+              description:
+                type: string
+                description: 字段描述
+        services:
+          type: object
+          description: 服务访问URL
+          properties:
+            wms:
+              type: string
+              description: WMS服务URL
+            wfs:
+              type: string
+              description: WFS服务URL
+
+    PublishedLayer:
+      type: object
+      properties:
+        file_id:
+          type: string
+          description: 文件ID
+        file_name:
+          type: string
+          description: 文件名称
+        layer_name:
+          type: string
+          description: 图层名称
+        workspace:
+          type: string
+          description: 工作空间
+        layer_type:
+          type: string
+          description: 图层类型
+        status:
+          type: string
+          description: 发布状态
+        publish_time:
+          type: string
+          format: date-time
+          description: 发布时间
+        services:
+          type: object
+          description: 服务URL
+          properties:
+            wms:
+              type: string
+              description: WMS服务URL
+            wfs:
+              type: string
+              description: WFS服务URL
+
+    PublishRequest:
+      type: object
+      properties:
+        workspace:
+          type: string
+          description: 工作空间名称
+          default: "shpservice"
+        layer_name:
+          type: string
+          description: 图层名称
+        title:
+          type: string
+          description: 图层标题
+        description:
+          type: string
+          description: 图层描述
+        enabled:
+          type: boolean
+          description: 是否启用
+          default: true
+        services:
+          type: array
+          items:
+            type: string
+            enum: ["WMS", "WFS", "WCS"]
+          description: 启用的服务类型
+          default: ["WMS", "WFS"]
+        style:
+          type: object
+          description: 样式配置
+          properties:
+            name:
+              type: string
+              description: 样式名称
+            sld_body:
+              type: string
+              description: SLD样式内容
+
+    PublishResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: 发布是否成功
+        layer_name:
+          type: string
+          description: 图层名称
+        workspace:
+          type: string
+          description: 工作空间名称
+        services:
+          type: object
+          description: 服务URL
+          properties:
+            wms:
+              type: string
+              description: WMS服务URL
+            wfs:
+              type: string
+              description: WFS服务URL
+        message:
+          type: string
+          description: 发布消息
+
+    GeoServerInfo:
+      type: object
+      properties:
+        version:
+          type: string
+          description: GeoServer版本
+        status:
+          type: string
+          description: 服务器状态
+        workspaces:
+          type: array
+          description: 工作空间列表
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                description: 工作空间名称
+              enabled:
+                type: boolean
+                description: 是否启用
+        datastores:
+          type: array
+          description: 数据存储列表
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                description: 数据存储名称
+              type:
+                type: string
+                description: 数据存储类型
+              workspace:
+                type: string
+                description: 所属工作空间
+        services:
+          type: object
+          description: 服务状态
+          properties:
+            wms:
+              type: object
+              description: WMS服务状态
+            wfs:
+              type: object
+              description: WFS服务状态
+            wcs:
+              type: object
+              description: WCS服务状态
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: 错误信息
+        code:
+          type: integer
+          description: 错误代码
+        details:
+          type: object
+          description: 错误详情

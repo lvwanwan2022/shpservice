@@ -1,0 +1,736 @@
+openapi: 3.0.3
+info:
+  title: 统一Martin服务 API
+  description: 统一Martin服务管理接口，包括GeoJSON和SHP Martin服务的统一管理、样式配置等
+  version: 1.0.0
+  contact:
+    name: SHP Service Team
+    email: support@shpservice.com
+
+servers:
+  - url: /api/martin-service
+    description: 统一Martin服务
+
+paths:
+  /martin-services/list:
+    get:
+      tags:
+        - 服务管理
+      summary: 获取所有Martin服务列表
+      description: 获取所有Martin服务列表（包括GeoJSON和SHP），支持分页和筛选
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+          description: 每页记录数
+          example: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: 偏移量
+          example: 0
+        - name: user_id
+          in: query
+          schema:
+            type: string
+          description: 用户ID筛选
+          example: "1"
+        - name: vector_type
+          in: query
+          schema:
+            type: string
+            enum: [geojson, shp]
+          description: 向量类型筛选
+          example: "geojson"
+      responses:
+        '200':
+          description: 服务列表获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  services:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MartinService'
+                  total:
+                    type: integer
+                    description: 总记录数
+                    example: 25
+                  limit:
+                    type: integer
+                    description: 每页记录数
+                    example: 100
+                  offset:
+                    type: integer
+                    description: 偏移量
+                    example: 0
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /martin-services/search:
+    get:
+      tags:
+        - 服务管理
+      summary: 搜索Martin服务
+      description: 根据文件ID或原始文件名搜索Martin服务
+      parameters:
+        - name: file_id
+          in: query
+          schema:
+            type: string
+          description: 文件ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        - name: original_filename
+          in: query
+          schema:
+            type: string
+          description: 原始文件名
+          example: "buildings.shp"
+        - name: vector_type
+          in: query
+          schema:
+            type: string
+            enum: [geojson, shp]
+          description: 向量类型筛选
+          example: "shp"
+      responses:
+        '200':
+          description: 搜索成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  services:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MartinService'
+                  total:
+                    type: integer
+                    description: 搜索结果数量
+                    example: 1
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "必须提供file_id或original_filename参数"
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /martin-services/{service_id}:
+    parameters:
+      - name: service_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 服务ID
+        example: 1
+    
+    get:
+      tags:
+        - 服务管理
+      summary: 根据ID获取Martin服务详细信息
+      description: 获取指定Martin服务的详细信息
+      responses:
+        '200':
+          description: 服务详情获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  service:
+                    $ref: '#/components/schemas/MartinServiceDetail'
+        '404':
+          description: 服务不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "Martin服务不存在"
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /martin-services/{service_id}/style:
+    parameters:
+      - name: service_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 服务ID
+        example: "1"
+    
+    get:
+      tags:
+        - 样式管理
+      summary: 获取Martin服务样式
+      description: 获取指定Martin服务的样式配置
+      responses:
+        '200':
+          description: 样式获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: 样式配置数据
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "无效的服务ID格式"
+        '404':
+          description: 服务不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+    
+    post:
+      tags:
+        - 样式管理
+      summary: 更新Martin服务样式
+      description: 更新指定Martin服务的样式配置
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - style_config
+              properties:
+                style_config:
+                  type: object
+                  description: 样式配置对象
+                  example:
+                    point:
+                      color: "#FF0000"
+                      size: 6
+                      shape: "circle"
+                      opacity: 1.0
+                    line:
+                      color: "#0000FF"
+                      width: 2
+                      style: "solid"
+                      opacity: 1.0
+                    polygon:
+                      fillColor: "#00FF00"
+                      fillOpacity: 0.3
+                      outlineColor: "#000000"
+                      outlineWidth: 1
+                      opacity: 1.0
+      responses:
+        '200':
+          description: 样式更新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "样式更新成功"
+                  data:
+                    type: object
+                    description: 更新后的样式数据
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "缺少样式配置数据"
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+
+  /martin-services/{service_id}/apply-style:
+    parameters:
+      - name: service_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 服务ID
+        example: "1"
+    
+    post:
+      tags:
+        - 样式管理
+      summary: 应用Martin服务样式
+      description: 保存并应用Martin服务的样式配置
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - style_config
+              properties:
+                style_config:
+                  type: object
+                  description: 样式配置对象
+                  example:
+                    point:
+                      color: "#FF0000"
+                      size: 6
+                      shape: "circle"
+                      opacity: 1.0
+                    line:
+                      color: "#0000FF"
+                      width: 2
+                      style: "solid"
+                      opacity: 1.0
+                    polygon:
+                      fillColor: "#00FF00"
+                      fillOpacity: 0.3
+                      outlineColor: "#000000"
+                      outlineWidth: 1
+                      opacity: 1.0
+      responses:
+        '200':
+          description: 样式应用成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "样式应用成功"
+                  data:
+                    type: object
+                    description: 应用后的样式数据
+        '400':
+          description: 参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "缺少样式配置数据"
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+
+  /martin-services/style-templates:
+    get:
+      tags:
+        - 样式管理
+      summary: 获取样式模板
+      description: 获取预定义的Martin服务样式模板
+      responses:
+        '200':
+          description: 样式模板获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  templates:
+                    type: object
+                    description: 样式模板集合
+                    properties:
+                      默认:
+                        type: object
+                        properties:
+                          description:
+                            type: string
+                            example: "默认样式配置"
+                          point:
+                            type: object
+                            properties:
+                              color:
+                                type: string
+                                example: "#FF0000"
+                              size:
+                                type: integer
+                                example: 6
+                              shape:
+                                type: string
+                                example: "circle"
+                              opacity:
+                                type: number
+                                example: 1.0
+                      建筑规划:
+                        type: object
+                        properties:
+                          description:
+                            type: string
+                            example: "适用于建筑和规划图纸"
+                      道路交通:
+                        type: object
+                        properties:
+                          description:
+                            type: string
+                            example: "适用于道路和交通设施图"
+                      地形地物:
+                        type: object
+                        properties:
+                          description:
+                            type: string
+                            example: "适用于地形图和地物标注"
+                      水系:
+                        type: object
+                        properties:
+                          description:
+                            type: string
+                            example: "适用于水系和水利设施"
+                      边界线:
+                        type: object
+                        properties:
+                          description:
+                            type: string
+                            example: "适用于行政边界和地块边界"
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+                  error_type:
+                    type: string
+                    example: "internal_error"
+
+  /martin-services/test:
+    get:
+      tags:
+        - 系统测试
+      summary: 测试Martin服务查询
+      description: 测试Martin服务数据库查询功能
+      responses:
+        '200':
+          description: 测试成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  all_services:
+                    type: array
+                    description: 所有服务列表
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 1
+                        vector_type:
+                          type: string
+                          example: "geojson"
+                        original_filename:
+                          type: string
+                          example: "buildings.geojson"
+                        status:
+                          type: string
+                          example: "active"
+                  active_services:
+                    type: array
+                    description: 活跃服务列表
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 1
+                        vector_type:
+                          type: string
+                          example: "geojson"
+                        original_filename:
+                          type: string
+                          example: "buildings.geojson"
+                  total_count:
+                    type: integer
+                    description: 总服务数量
+                    example: 10
+                  active_count:
+                    type: integer
+                    description: 活跃服务数量
+                    example: 8
+        '500':
+          description: 测试失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    description: 错误信息
+                  error_type:
+                    type: string
+                    example: "database_error"
+
+components:
+  schemas:
+    MartinService:
+      type: object
+      properties:
+        service_type:
+          type: string
+          description: 服务类型
+          enum: [geojson, shp]
+          example: "geojson"
+        id:
+          type: string
+          description: 服务ID
+          example: "1"
+        file_id:
+          type: string
+          description: 文件ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        original_filename:
+          type: string
+          description: 原始文件名
+          example: "buildings.geojson"
+        table_name:
+          type: string
+          description: 数据库表名
+          example: "martin_geojson_550e8400"
+        mvt_url:
+          type: string
+          description: MVT瓦片URL
+          example: "http://localhost:3000/martin_geojson_550e8400/{z}/{x}/{y}.pbf"
+        tilejson_url:
+          type: string
+          description: TileJSON URL
+          example: "http://localhost:3000/martin_geojson_550e8400"
+        style:
+          type: object
+          description: 样式配置
+          nullable: true
+        status:
+          type: string
+          description: 服务状态
+          example: "active"
+        user_id:
+          type: integer
+          description: 用户ID
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+          example: "2024-01-01T12:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+          example: "2024-01-01T12:00:00Z"
+        database_record_id:
+          type: string
+          description: 数据库记录ID
+          example: "1"
+
+    MartinServiceDetail:
+      type: object
+      properties:
+        service_type:
+          type: string
+          description: 服务类型
+          enum: [geojson, shp]
+          example: "geojson"
+        id:
+          type: string
+          description: 服务ID
+          example: "1"
+        file_id:
+          type: string
+          description: 文件ID
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        original_filename:
+          type: string
+          description: 原始文件名
+          example: "buildings.geojson"
+        table_name:
+          type: string
+          description: 数据库表名
+          example: "martin_geojson_550e8400"
+        service_url:
+          type: string
+          description: 服务URL
+          example: "http://localhost:3000"
+        mvt_url:
+          type: string
+          description: MVT瓦片URL
+          example: "http://localhost:3000/martin_geojson_550e8400/{z}/{x}/{y}.pbf"
+        tilejson_url:
+          type: string
+          description: TileJSON URL
+          example: "http://localhost:3000/martin_geojson_550e8400"
+        style:
+          type: object
+          description: 样式配置
+          nullable: true
+        vector_info:
+          type: object
+          description: 向量信息
+          nullable: true
+        postgis_info:
+          type: object
+          description: PostGIS信息
+          nullable: true
+        status:
+          type: string
+          description: 服务状态
+          example: "active"
+        user_id:
+          type: integer
+          description: 用户ID
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+          example: "2024-01-01T12:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+          example: "2024-01-01T12:00:00Z"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: 错误信息
+          example: "操作失败"
+
+tags:
+  - name: 服务管理
+    description: Martin服务的查询、搜索、详情获取等管理操作
+  - name: 样式管理
+    description: Martin服务的样式配置、模板管理
+  - name: 系统测试
+    description: 系统功能和数据库连接测试

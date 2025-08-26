@@ -1,0 +1,517 @@
+openapi: 3.0.3
+info:
+  title: MBTiles服务 API
+  description: MBTiles文件发布、管理、服务列表等功能的API接口
+  version: 1.0.0
+  contact:
+    name: SHP Service Team
+    email: support@shpservice.com
+
+servers:
+  - url: /api/mbtiles
+    description: MBTiles服务
+
+security:
+  - BearerAuth: []
+
+paths:
+  /services/list:
+    get:
+      tags:
+        - 服务管理
+      summary: 获取所有MBTiles服务列表
+      description: 获取所有已发布的MBTiles服务列表，支持分页
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 页码
+          example: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: 每页数量
+          example: 10
+      responses:
+        '200':
+          description: 获取服务列表成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  services:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          example: "1234567890123456789"
+                        file_id:
+                          type: string
+                          example: "123"
+                        original_filename:
+                          type: string
+                          example: "tiles.mbtiles"
+                        vector_type:
+                          type: string
+                          example: "mbtiles"
+                        table_name:
+                          type: string
+                          example: "vector_a1b2c3d4"
+                        service_url:
+                          type: string
+                          example: "http://localhost:3000/vector_a1b2c3d4"
+                        mvt_url:
+                          type: string
+                          example: "http://localhost:3000/vector_a1b2c3d4/{z}/{x}/{y}.pbf"
+                        tilejson_url:
+                          type: string
+                          example: "http://localhost:3000/vector_a1b2c3d4"
+                        status:
+                          type: string
+                          example: "active"
+                        created_at:
+                          type: string
+                          format: date-time
+                          example: "2024-01-15T10:30:00Z"
+                        file_name:
+                          type: string
+                          example: "tiles.mbtiles"
+                        file_size:
+                          type: integer
+                          example: 10485760
+                        file_type:
+                          type: string
+                          example: "mbtiles"
+                        upload_date:
+                          type: string
+                          format: date-time
+                          example: "2024-01-15T10:30:00Z"
+                  pagination:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                        example: 25
+                      page:
+                        type: integer
+                        example: 1
+                      per_page:
+                        type: integer
+                        example: 10
+                      total_pages:
+                        type: integer
+                        example: 3
+        '500':
+          description: 获取服务列表失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "获取MBTiles服务列表失败: 数据库连接错误"
+
+  /services/{service_id}:
+    parameters:
+      - name: service_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 服务ID
+        example: 1234567890123456789
+    
+    get:
+      tags:
+        - 服务管理
+      summary: 获取指定的MBTiles服务信息
+      description: 根据服务ID获取MBTiles服务的详细信息
+      responses:
+        '200':
+          description: 获取服务信息成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  service:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "1234567890123456789"
+                      file_id:
+                        type: string
+                        example: "123"
+                      original_filename:
+                        type: string
+                        example: "tiles.mbtiles"
+                      vector_type:
+                        type: string
+                        example: "mbtiles"
+                      table_name:
+                        type: string
+                        example: "vector_a1b2c3d4"
+                      service_url:
+                        type: string
+                        example: "http://localhost:3000/vector_a1b2c3d4"
+                      mvt_url:
+                        type: string
+                        example: "http://localhost:3000/vector_a1b2c3d4/{z}/{x}/{y}.pbf"
+                      tilejson_url:
+                        type: string
+                        example: "http://localhost:3000/vector_a1b2c3d4"
+                      status:
+                        type: string
+                        example: "active"
+                      created_at:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+                      user_id:
+                        type: string
+                        example: "user123"
+                      vector_info:
+                        type: object
+                        properties:
+                          mbtiles_type:
+                            type: string
+                            example: "vector"
+                          tile_count:
+                            type: integer
+                            example: 1000
+                          min_zoom:
+                            type: integer
+                            example: 0
+                          max_zoom:
+                            type: integer
+                            example: 18
+                          bbox:
+                            type: array
+                            items:
+                              type: number
+                            example: [116.0, 39.0, 117.0, 40.0]
+                      postgis_info:
+                        type: object
+                        properties:
+                          table_name:
+                            type: string
+                            example: "vector_a1b2c3d4"
+                          geometry_column:
+                            type: string
+                            example: "geom"
+                          srid:
+                            type: integer
+                            example: 3857
+        '404':
+          description: 服务不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "MBTiles服务不存在"
+        '500':
+          description: 获取服务信息失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "获取MBTiles服务信息失败: 数据库错误"
+    
+    delete:
+      tags:
+        - 服务管理
+      summary: 删除MBTiles服务
+      description: 删除指定的MBTiles服务
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "MBTiles服务删除成功"
+        '404':
+          description: 服务不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "MBTiles服务不存在"
+        '500':
+          description: 删除失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "MBTiles服务删除失败: 数据库错误"
+
+  /publish/{file_id}:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 文件ID
+        example: "123"
+    
+    post:
+      tags:
+        - 服务发布
+      summary: 发布MBTiles文件为Martin服务
+      description: 将MBTiles文件发布为Martin瓦片服务
+      responses:
+        '200':
+          description: 发布成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "MBTiles服务发布成功"
+                  service_info:
+                    type: object
+                    properties:
+                      service_id:
+                        type: string
+                        example: "1234567890123456789"
+                      table_name:
+                        type: string
+                        example: "vector_a1b2c3d4"
+                      service_url:
+                        type: string
+                        example: "http://localhost:3000/vector_a1b2c3d4"
+                      mvt_url:
+                        type: string
+                        example: "http://localhost:3000/vector_a1b2c3d4/{z}/{x}/{y}.pbf"
+                      tilejson_url:
+                        type: string
+                        example: "http://localhost:3000/vector_a1b2c3d4"
+                      mbtiles_type:
+                        type: string
+                        example: "vector"
+                      file_info:
+                        type: object
+                        properties:
+                          file_id:
+                            type: string
+                            example: "123"
+                          original_filename:
+                            type: string
+                            example: "tiles.mbtiles"
+                          file_size:
+                            type: integer
+                            example: 10485760
+                      tile_info:
+                        type: object
+                        properties:
+                          tile_count:
+                            type: integer
+                            example: 1000
+                          min_zoom:
+                            type: integer
+                            example: 0
+                          max_zoom:
+                            type: integer
+                            example: 18
+                          bbox:
+                            type: array
+                            items:
+                              type: number
+                            example: [116.0, 39.0, 117.0, 40.0]
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "只能发布MBTiles文件"
+        '404':
+          description: 文件不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "文件不存在"
+        '500':
+          description: 发布失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "MBTiles服务发布失败: 文件处理错误"
+
+  /unpublish/{file_id}:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 文件ID
+        example: "123"
+    
+    delete:
+      tags:
+        - 服务发布
+      summary: 取消发布MBTiles服务
+      description: 取消发布指定的MBTiles服务
+      responses:
+        '200':
+          description: 取消发布成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "MBTiles服务取消发布成功"
+        '404':
+          description: 文件或服务不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "文件未发布为MBTiles服务"
+        '500':
+          description: 取消发布失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "MBTiles服务取消发布失败: 数据库错误"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT认证令牌
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: 错误信息
+        details:
+          type: object
+          description: 错误详情
+          additionalProperties: true
+
+    Success:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: 操作是否成功
+        message:
+          type: string
+          description: 成功信息
+        data:
+          type: object
+          description: 返回数据
+          additionalProperties: true
+
+    MBTilesService:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 服务ID
+        file_id:
+          type: string
+          description: 文件ID
+        original_filename:
+          type: string
+          description: 原始文件名
+        vector_type:
+          type: string
+          description: 向量类型
+        table_name:
+          type: string
+          description: 数据库表名
+        service_url:
+          type: string
+          description: 服务URL
+        mvt_url:
+          type: string
+          description: MVT瓦片URL
+        tilejson_url:
+          type: string
+          description: TileJSON URL
+        status:
+          type: string
+          description: 服务状态
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+
+tags:
+  - name: 服务管理
+    description: MBTiles服务管理相关接口
+  - name: 服务发布
+    description: MBTiles服务发布相关接口

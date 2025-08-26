@@ -1,0 +1,1076 @@
+openapi: 3.0.3
+info:
+  title: DXF文件服务 API
+  description: DXF文件处理、样式分析、Martin服务发布等功能的API接口
+  version: 1.0.0
+  contact:
+    name: SHP Service Team
+    email: support@shpservice.com
+
+servers:
+  - url: /api/dxf
+    description: DXF文件服务
+
+security:
+  - BearerAuth: []
+
+paths:
+  /analyze-styles/{file_id}:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: DXF文件ID
+        example: "123"
+    
+    get:
+      tags:
+        - 样式分析
+      summary: 分析DXF文件的样式信息
+      description: 分析DXF文件中的图层、颜色、线型等样式信息
+      responses:
+        '200':
+          description: 样式分析成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  file_id:
+                    type: string
+                    example: "123"
+                  file_name:
+                    type: string
+                    example: "drawing.dxf"
+                  style_analysis:
+                    type: object
+                    properties:
+                      layers:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                              example: "0"
+                            color:
+                              type: integer
+                              example: 7
+                            linetype:
+                              type: string
+                              example: "CONTINUOUS"
+                            lineweight:
+                              type: number
+                              example: 0.25
+                      colors:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            index:
+                              type: integer
+                              example: 7
+                            name:
+                              type: string
+                              example: "White"
+                            rgb:
+                              type: array
+                              items:
+                                type: integer
+                              example: [255, 255, 255]
+                      linetypes:
+                        type: array
+                        items:
+                          type: string
+                        example: ["CONTINUOUS", "DASHED", "DOTTED"]
+        '400':
+          description: 无效的文件ID格式
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "无效的文件ID格式"
+        '404':
+          description: DXF文件不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "DXF文件不存在"
+        '500':
+          description: 样式分析失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "样式分析失败: 文件格式错误"
+
+  /publish-martin/{file_id}:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: DXF文件ID
+        example: "123"
+    
+    post:
+      tags:
+        - Martin服务发布
+      summary: 发布DXF文件为Martin MVT服务
+      description: 将DXF文件导入PostGIS并发布为Martin MVT瓦片服务
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                coordinate_system:
+                  type: string
+                  description: 坐标系，格式为EPSG:XXXX
+                  default: "EPSG:4326"
+                  example: "EPSG:4326"
+      responses:
+        '200':
+          description: 发布成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "DXF文件成功发布为Martin服务"
+                  service_id:
+                    type: string
+                    example: "1234567890123456789"
+                  table_name:
+                    type: string
+                    example: "vector_a1b2c3d4"
+                  service_url:
+                    type: string
+                    example: "http://localhost:3000/vector_a1b2c3d4"
+                  mvt_url:
+                    type: string
+                    example: "http://localhost:3000/vector_a1b2c3d4/{z}/{x}/{y}.pbf"
+                  tilejson_url:
+                    type: string
+                    example: "http://localhost:3000/vector_a1b2c3d4"
+                  dxf_info:
+                    type: object
+                    properties:
+                      total_features:
+                        type: integer
+                        example: 150
+                      imported_features:
+                        type: integer
+                        example: 148
+                      skipped_features:
+                        type: integer
+                        example: 2
+                      success_rate:
+                        type: number
+                        example: 98.67
+                      geometry_types:
+                        type: array
+                        items:
+                          type: string
+                        example: ["LINESTRING", "POINT", "POLYGON"]
+                      bbox:
+                        type: array
+                        items:
+                          type: number
+                        example: [116.0, 39.0, 117.0, 40.0]
+                      layers:
+                        type: array
+                        items:
+                          type: string
+                        example: ["0", "WALLS", "DOORS"]
+                      warnings:
+                        type: array
+                        items:
+                          type: string
+                        example: ["图层'UNUSED'为空，已跳过"]
+                  postgis_info:
+                    type: object
+                    properties:
+                      table_name:
+                        type: string
+                        example: "vector_a1b2c3d4"
+                      geometry_column:
+                        type: string
+                        example: "geom"
+                      srid:
+                        type: integer
+                        example: 3857
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "坐标系格式错误，请使用EPSG:XXXX格式"
+        '404':
+          description: 文件不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "文件不存在"
+        '500':
+          description: 发布失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "DXF导入PostGIS失败: 文件格式不支持"
+
+  /publish-martin-ezdxf/{file_id}:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: DXF文件ID
+        example: "123"
+    
+    post:
+      tags:
+        - Martin服务发布
+      summary: 发布DXF文件为Martin MVT服务（使用ezdxf库）
+      description: 使用ezdxf库直接导入DXF文件到PostGIS并发布为Martin MVT瓦片服务
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                coordinate_system:
+                  type: string
+                  description: 坐标系，格式为EPSG:XXXX
+                  default: "EPSG:4326"
+                  example: "EPSG:4326"
+      responses:
+        '200':
+          description: 发布成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "DXF文件成功发布为Martin服务(使用Enhanced EZDXF)"
+                  service_id:
+                    type: string
+                    example: "1234567890123456789"
+                  table_name:
+                    type: string
+                    example: "vector_e5f6g7h8"
+                  service_url:
+                    type: string
+                    example: "http://localhost:3000/vector_e5f6g7h8"
+                  mvt_url:
+                    type: string
+                    example: "http://localhost:3000/vector_e5f6g7h8/{z}/{x}/{y}.pbf"
+                  tilejson_url:
+                    type: string
+                    example: "http://localhost:3000/vector_e5f6g7h8"
+                  dxf_info:
+                    type: object
+                    properties:
+                      total_features:
+                        type: integer
+                        example: 150
+                      imported_features:
+                        type: integer
+                        example: 148
+                      skipped_features:
+                        type: integer
+                        example: 2
+                      success_rate:
+                        type: number
+                        example: 98.67
+                      geometry_types:
+                        type: array
+                        items:
+                          type: string
+                        example: ["LINESTRING", "POINT", "POLYGON"]
+                      bbox:
+                        type: array
+                        items:
+                          type: number
+                        example: [116.0, 39.0, 117.0, 40.0]
+                      layers:
+                        type: array
+                        items:
+                          type: string
+                        example: ["0", "WALLS", "DOORS"]
+                      warnings:
+                        type: array
+                        items:
+                          type: string
+                        example: ["图层'UNUSED'为空，已跳过"]
+                  postgis_info:
+                    type: object
+                    properties:
+                      table_name:
+                        type: string
+                        example: "vector_e5f6g7h8"
+                      geometry_column:
+                        type: string
+                        example: "geom"
+                      srid:
+                        type: integer
+                        example: 3857
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "坐标系格式错误，请使用EPSG:XXXX格式"
+        '404':
+          description: 文件不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "文件不存在"
+        '500':
+          description: 发布失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "DXF导入PostGIS失败: 文件格式不支持"
+
+  /martin-services:
+    get:
+      tags:
+        - 服务管理
+      summary: 获取所有DXF Martin服务列表
+      description: 获取当前用户发布的所有DXF Martin服务
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 页码
+          example: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页数量
+          example: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive, all]
+            default: "active"
+          description: 服务状态过滤
+          example: "active"
+      responses:
+        '200':
+          description: 获取服务列表成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  services:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          example: "1234567890123456789"
+                        file_id:
+                          type: string
+                          example: "123"
+                        original_filename:
+                          type: string
+                          example: "drawing.dxf"
+                        vector_type:
+                          type: string
+                          example: "dxf"
+                        table_name:
+                          type: string
+                          example: "vector_a1b2c3d4"
+                        service_url:
+                          type: string
+                          example: "http://localhost:3000/vector_a1b2c3d4"
+                        mvt_url:
+                          type: string
+                          example: "http://localhost:3000/vector_a1b2c3d4/{z}/{x}/{y}.pbf"
+                        tilejson_url:
+                          type: string
+                          example: "http://localhost:3000/vector_a1b2c3d4"
+                        status:
+                          type: string
+                          example: "active"
+                        created_at:
+                          type: string
+                          format: date-time
+                          example: "2024-01-15T10:30:00Z"
+                        dxf_info:
+                          type: object
+                          properties:
+                            total_features:
+                              type: integer
+                              example: 150
+                            imported_features:
+                              type: integer
+                              example: 148
+                            geometry_types:
+                              type: array
+                              items:
+                                type: string
+                              example: ["LINESTRING", "POINT", "POLYGON"]
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                        example: 1
+                      per_page:
+                        type: integer
+                        example: 20
+                      total:
+                        type: integer
+                        example: 5
+                      total_pages:
+                        type: integer
+                        example: 1
+        '500':
+          description: 获取服务列表失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "获取服务列表失败: 数据库连接错误"
+
+  /martin-services/{service_id}:
+    parameters:
+      - name: service_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 服务ID
+        example: 1234567890123456789
+    
+    delete:
+      tags:
+        - 服务管理
+      summary: 删除DXF Martin服务
+      description: 删除指定的DXF Martin服务，同时清理PostGIS表
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "DXF Martin服务已删除"
+                  deleted_service:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "1234567890123456789"
+                      table_name:
+                        type: string
+                        example: "vector_a1b2c3d4"
+                      original_filename:
+                        type: string
+                        example: "drawing.dxf"
+        '404':
+          description: 服务不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "服务不存在"
+        '500':
+          description: 删除失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "删除服务失败: 数据库错误"
+
+  /publish-both/{file_id}:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: DXF文件ID
+        example: "123"
+    
+    post:
+      tags:
+        - 服务发布
+      summary: 同时发布DXF为GeoJSON和Martin服务
+      description: 将DXF文件同时发布为GeoJSON直接服务和Martin MVT服务
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                coordinate_system:
+                  type: string
+                  description: 坐标系，格式为EPSG:XXXX
+                  default: "EPSG:4326"
+                  example: "EPSG:4326"
+                include_attributes:
+                  type: boolean
+                  description: 是否包含属性信息
+                  default: true
+                  example: true
+      responses:
+        '200':
+          description: 发布成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "DXF文件成功发布为GeoJSON和Martin服务"
+                  geojson_service:
+                    type: object
+                    properties:
+                      service_id:
+                        type: string
+                        example: "1234567890123456789"
+                      service_url:
+                        type: string
+                        example: "/api/geojson-direct/123"
+                      geojson_url:
+                        type: string
+                        example: "/api/geojson-direct/123/geojson"
+                  martin_service:
+                    type: object
+                    properties:
+                      service_id:
+                        type: string
+                        example: "1234567890123456790"
+                      table_name:
+                        type: string
+                        example: "vector_a1b2c3d4"
+                      service_url:
+                        type: string
+                        example: "http://localhost:3000/vector_a1b2c3d4"
+                      mvt_url:
+                        type: string
+                        example: "http://localhost:3000/vector_a1b2c3d4/{z}/{x}/{y}.pbf"
+                      tilejson_url:
+                        type: string
+                        example: "http://localhost:3000/vector_a1b2c3d4"
+                  dxf_info:
+                    type: object
+                    properties:
+                      total_features:
+                        type: integer
+                        example: 150
+                      imported_features:
+                        type: integer
+                        example: 148
+                      skipped_features:
+                        type: integer
+                        example: 2
+                      success_rate:
+                        type: number
+                        example: 98.67
+                      geometry_types:
+                        type: array
+                        items:
+                          type: string
+                        example: ["LINESTRING", "POINT", "POLYGON"]
+                      bbox:
+                        type: array
+                        items:
+                          type: number
+                        example: [116.0, 39.0, 117.0, 40.0]
+                      layers:
+                        type: array
+                        items:
+                          type: string
+                        example: ["0", "WALLS", "DOORS"]
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "坐标系格式错误，请使用EPSG:XXXX格式"
+        '404':
+          description: 文件不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "文件不存在"
+        '500':
+          description: 发布失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "发布服务失败: 文件处理错误"
+
+  /upload-and-publish:
+    post:
+      tags:
+        - 文件上传
+      summary: 上传DXF文件并发布服务
+      description: 上传DXF文件并立即发布为Martin MVT服务
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: DXF文件
+                coordinate_system:
+                  type: string
+                  description: 坐标系，格式为EPSG:XXXX
+                  default: "EPSG:4326"
+                  example: "EPSG:4326"
+                include_attributes:
+                  type: boolean
+                  description: 是否包含属性信息
+                  default: true
+                  example: true
+      responses:
+        '200':
+          description: 上传并发布成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "DXF文件上传并发布成功"
+                  file_info:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "123"
+                      name:
+                        type: string
+                        example: "drawing.dxf"
+                      size:
+                        type: integer
+                        example: 1024000
+                      upload_time:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+                  martin_service:
+                    type: object
+                    properties:
+                      service_id:
+                        type: string
+                        example: "1234567890123456789"
+                      table_name:
+                        type: string
+                        example: "vector_a1b2c3d4"
+                      service_url:
+                        type: string
+                        example: "http://localhost:3000/vector_a1b2c3d4"
+                      mvt_url:
+                        type: string
+                        example: "http://localhost:3000/vector_a1b2c3d4/{z}/{x}/{y}.pbf"
+                      tilejson_url:
+                        type: string
+                        example: "http://localhost:3000/vector_a1b2c3d4"
+                  dxf_info:
+                    type: object
+                    properties:
+                      total_features:
+                        type: integer
+                        example: 150
+                      imported_features:
+                        type: integer
+                        example: 148
+                      skipped_features:
+                        type: integer
+                        example: 2
+                      success_rate:
+                        type: number
+                        example: 98.67
+                      geometry_types:
+                        type: array
+                        items:
+                          type: string
+                        example: ["LINESTRING", "POINT", "POLYGON"]
+                      bbox:
+                        type: array
+                        items:
+                          type: number
+                        example: [116.0, 39.0, 117.0, 40.0]
+                      layers:
+                        type: array
+                        items:
+                          type: string
+                        example: ["0", "WALLS", "DOORS"]
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "请选择DXF文件"
+        '413':
+          description: 文件太大
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "文件太大，请选择更小的文件"
+        '500':
+          description: 上传或发布失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "文件上传失败: 存储空间不足"
+
+  /style-templates:
+    get:
+      tags:
+        - 样式模板
+      summary: 获取DXF样式模板
+      description: 获取预定义的DXF样式模板列表
+      responses:
+        '200':
+          description: 获取样式模板成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  templates:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          example: "template_1"
+                        name:
+                          type: string
+                          example: "建筑图纸模板"
+                        description:
+                          type: string
+                          example: "适用于建筑CAD图纸的样式模板"
+                        layers:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                                example: "WALLS"
+                              color:
+                                type: string
+                                example: "#FF0000"
+                              lineweight:
+                                type: number
+                                example: 0.5
+                              linetype:
+                                type: string
+                                example: "CONTINUOUS"
+                        colors:
+                          type: object
+                          properties:
+                            "1":
+                              type: string
+                              example: "#FF0000"
+                            "2":
+                              type: string
+                              example: "#00FF00"
+                            "3":
+                              type: string
+                              example: "#0000FF"
+                        created_at:
+                          type: string
+                          format: date-time
+                          example: "2024-01-15T10:30:00Z"
+        '500':
+          description: 获取样式模板失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "获取样式模板失败: 数据库连接错误"
+
+  /validate:
+    post:
+      tags:
+        - 文件验证
+      summary: 验证DXF文件
+      description: 验证DXF文件的格式和内容
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: DXF文件
+      responses:
+        '200':
+          description: 验证成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  valid:
+                    type: boolean
+                    example: true
+                  file_info:
+                    type: object
+                    properties:
+                      filename:
+                        type: string
+                        example: "drawing.dxf"
+                      size:
+                        type: integer
+                        example: 1024000
+                      version:
+                        type: string
+                        example: "AC1015"
+                      encoding:
+                        type: string
+                        example: "utf-8"
+                  validation_details:
+                    type: object
+                    properties:
+                      has_entities:
+                        type: boolean
+                        example: true
+                      entity_count:
+                        type: integer
+                        example: 150
+                      layer_count:
+                        type: integer
+                        example: 5
+                      geometry_types:
+                        type: array
+                        items:
+                          type: string
+                        example: ["LINE", "CIRCLE", "POLYLINE"]
+                      bbox:
+                        type: array
+                        items:
+                          type: number
+                        example: [0.0, 0.0, 100.0, 100.0]
+                      warnings:
+                        type: array
+                        items:
+                          type: string
+                        example: ["图层'UNUSED'为空"]
+                      errors:
+                        type: array
+                        items:
+                          type: string
+                        example: []
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "请选择DXF文件"
+        '413':
+          description: 文件太大
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "文件太大，请选择更小的文件"
+        '500':
+          description: 验证失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "文件验证失败: 格式不支持"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT认证令牌
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: 错误信息
+        details:
+          type: object
+          description: 错误详情
+          additionalProperties: true
+
+    Success:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: 操作是否成功
+        message:
+          type: string
+          description: 成功信息
+        data:
+          type: object
+          description: 返回数据
+          additionalProperties: true
+
+tags:
+  - name: 样式分析
+    description: DXF文件样式分析相关接口
+  - name: Martin服务发布
+    description: DXF文件发布为Martin MVT服务相关接口
+  - name: 服务管理
+    description: DXF Martin服务管理相关接口
+  - name: 服务发布
+    description: DXF文件服务发布相关接口
+  - name: 文件上传
+    description: DXF文件上传相关接口
+  - name: 样式模板
+    description: DXF样式模板相关接口
+  - name: 文件验证
+    description: DXF文件验证相关接口

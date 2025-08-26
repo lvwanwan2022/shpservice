@@ -1,0 +1,597 @@
+openapi: 3.0.3
+info:
+  title: Martin瓦片服务 API
+  description: Martin MVT瓦片服务管理接口，包括服务状态管理、表管理、配置管理等
+  version: 1.0.0
+  contact:
+    name: SHP Service Team
+    email: support@shpservice.com
+
+servers:
+  - url: /api/martin
+    description: Martin瓦片服务
+
+paths:
+  /status:
+    get:
+      tags:
+        - 服务状态管理
+      summary: 获取Martin服务状态
+      description: 获取Martin服务的运行状态、安装状态、配置信息等
+      responses:
+        '200':
+          description: 服务状态获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceStatus'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /start:
+    post:
+      tags:
+        - 服务状态管理
+      summary: 启动Martin服务
+      description: 启动Martin瓦片服务进程
+      responses:
+        '200':
+          description: 服务启动成功或已在运行
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: 操作结果消息
+                    example: "Martin服务启动成功"
+                  status:
+                    type: string
+                    description: 服务状态
+                    enum: [started, running]
+                    example: "started"
+        '500':
+          description: 服务启动失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: 错误消息
+                    example: "Martin服务启动失败"
+                  status:
+                    type: string
+                    description: 服务状态
+                    example: "failed"
+                  error:
+                    type: string
+                    description: 详细错误信息
+
+  /stop:
+    post:
+      tags:
+        - 服务状态管理
+      summary: 停止Martin服务
+      description: 停止Martin瓦片服务进程
+      responses:
+        '200':
+          description: 服务停止成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: 操作结果消息
+                    example: "Martin服务已停止"
+                  status:
+                    type: string
+                    description: 服务状态
+                    example: "stopped"
+        '500':
+          description: 服务停止失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: 错误消息
+                    example: "Martin服务停止失败"
+                  status:
+                    type: string
+                    description: 服务状态
+                    example: "failed"
+                  error:
+                    type: string
+                    description: 详细错误信息
+
+  /restart:
+    post:
+      tags:
+        - 服务状态管理
+      summary: 重启Martin服务
+      description: 重启Martin瓦片服务进程
+      responses:
+        '200':
+          description: 服务重启成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: 操作结果消息
+                    example: "Martin服务重启成功"
+                  status:
+                    type: string
+                    description: 服务状态
+                    example: "restarted"
+        '500':
+          description: 服务重启失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: 错误消息
+                    example: "Martin服务重启失败"
+                  status:
+                    type: string
+                    description: 服务状态
+                    example: "failed"
+                  error:
+                    type: string
+                    description: 详细错误信息
+
+  /tables:
+    get:
+      tags:
+        - 表管理
+      summary: 获取PostGIS空间表列表
+      description: 获取PostGIS数据库中所有可用的空间表信息
+      responses:
+        '200':
+          description: 表列表获取成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TableInfo'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /catalog:
+    get:
+      tags:
+        - 服务目录
+      summary: 获取Martin服务目录
+      description: 获取Martin服务的完整目录信息
+      responses:
+        '200':
+          description: 服务目录获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Martin服务目录信息
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: 服务未运行
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "Martin服务未运行"
+
+  /table/{table_id}:
+    parameters:
+      - name: table_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 表ID
+        example: "public.buildings"
+    
+    get:
+      tags:
+        - 表管理
+      summary: 获取特定表的TileJSON信息
+      description: 获取指定表的TileJSON格式信息
+      responses:
+        '200':
+          description: 表信息获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                description: TileJSON格式的表信息
+        '404':
+          description: 表不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "表 public.buildings 不存在或无法访问"
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: 服务未运行
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "Martin服务未运行"
+
+  /mvt/{table_id}:
+    parameters:
+      - name: table_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: 表ID
+        example: "public.buildings"
+    
+    get:
+      tags:
+        - MVT瓦片服务
+      summary: 获取MVT瓦片URL信息
+      description: 获取指定表的MVT瓦片服务URL信息
+      responses:
+        '200':
+          description: MVT信息获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MVTInfo'
+        '404':
+          description: 表不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "表 public.buildings 不存在"
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: 服务未运行
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: 错误信息
+                    example: "Martin服务未运行"
+
+  /refresh:
+    post:
+      tags:
+        - 配置管理
+      summary: 刷新表配置
+      description: 重新扫描数据库并重启服务以刷新表配置
+      responses:
+        '200':
+          description: 表配置刷新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: 操作结果消息
+                    example: "表配置刷新成功"
+                  status:
+                    type: string
+                    description: 操作状态
+                    example: "refreshed"
+                  tables_count:
+                    type: integer
+                    description: 可用表数量
+                    example: 15
+        '500':
+          description: 表配置刷新失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: 错误消息
+                    example: "表配置刷新失败"
+                  status:
+                    type: string
+                    description: 操作状态
+                    example: "failed"
+                  error:
+                    type: string
+                    description: 详细错误信息
+
+  /reload-config:
+    post:
+      tags:
+        - 配置管理
+      summary: 重新加载配置文件
+      description: 热重载配置文件，无需重启进程
+      responses:
+        '200':
+          description: 配置重载成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: 操作结果消息
+                    example: "配置重载成功"
+                  status:
+                    type: string
+                    description: 操作状态
+                    enum: [reloaded, reloaded_via_restart]
+                    example: "reloaded"
+                  tables_count:
+                    type: integer
+                    description: 可用表数量
+                    example: 15
+        '500':
+          description: 配置重载失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: 错误消息
+                    example: "配置重载失败"
+                  status:
+                    type: string
+                    description: 操作状态
+                    example: "failed"
+                  error:
+                    type: string
+                    description: 详细错误信息
+        '503':
+          description: 服务未运行
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: 错误消息
+                    example: "Martin服务未运行"
+                  status:
+                    type: string
+                    description: 操作状态
+                    example: "not_running"
+
+  /config:
+    get:
+      tags:
+        - 配置管理
+      summary: 获取Martin配置
+      description: 获取当前Martin服务的配置信息
+      responses:
+        '200':
+          description: 配置获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: 操作是否成功
+                    example: true
+                  config:
+                    type: object
+                    description: Martin配置信息
+        '500':
+          description: 配置获取失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: 操作是否成功
+                    example: false
+                  message:
+                    type: string
+                    description: 错误消息
+                    example: "获取配置失败: 配置文件不存在"
+
+  /logs:
+    get:
+      tags:
+        - 日志管理
+      summary: 获取Martin服务日志
+      description: 获取Martin服务的运行日志、版本信息和状态
+      responses:
+        '200':
+          description: 日志获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: 操作是否成功
+                    example: true
+                  logs:
+                    type: string
+                    description: 服务日志内容
+                    example: "2024-01-01 12:00:00 INFO Starting Martin service..."
+                  version:
+                    type: string
+                    description: Martin版本信息
+                    example: "Martin v0.10.0"
+                  status:
+                    $ref: '#/components/schemas/ServiceStatus'
+        '500':
+          description: 日志获取失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: 操作是否成功
+                    example: false
+                  message:
+                    type: string
+                    description: 错误消息
+                    example: "获取日志失败: 日志文件不存在"
+
+components:
+  schemas:
+    ServiceStatus:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          description: 服务是否启用
+          example: true
+        installed:
+          type: boolean
+          description: Martin是否已安装
+          example: true
+        running:
+          type: boolean
+          description: 服务是否运行中
+          example: true
+        base_url:
+          type: string
+          description: 服务基础URL
+          example: "http://localhost:3000"
+        config_file:
+          type: string
+          description: 配置文件路径
+          example: "/etc/martin/config.yaml"
+        tables_count:
+          type: integer
+          description: 可用表数量
+          example: 15
+
+    TableInfo:
+      type: object
+      properties:
+        schema:
+          type: string
+          description: 数据库模式
+          example: "public"
+        table:
+          type: string
+          description: 表名
+          example: "buildings"
+        geometry_column:
+          type: string
+          description: 几何列名
+          example: "geom"
+        srid:
+          type: integer
+          description: 空间参考系统ID
+          example: 4326
+        geometry_type:
+          type: string
+          description: 几何类型
+          example: "POLYGON"
+        source_id:
+          type: string
+          description: 数据源ID
+          example: "public.buildings"
+
+    MVTInfo:
+      type: object
+      properties:
+        table_id:
+          type: string
+          description: 表ID
+          example: "public.buildings"
+        mvt_url:
+          type: string
+          description: MVT瓦片URL模板
+          example: "http://localhost:3000/public.buildings/{z}/{x}/{y}.pbf"
+        tilejson_url:
+          type: string
+          description: TileJSON URL
+          example: "http://localhost:3000/public.buildings"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: 错误信息
+          example: "操作失败"
+
+tags:
+  - name: 服务状态管理
+    description: Martin服务的启动、停止、重启等状态管理操作
+  - name: 表管理
+    description: PostGIS空间表的查询和管理
+  - name: 服务目录
+    description: Martin服务目录信息查询
+  - name: MVT瓦片服务
+    description: MVT瓦片服务URL和配置信息
+  - name: 配置管理
+    description: Martin配置文件的管理和重载
+  - name: 日志管理
+    description: Martin服务日志查询

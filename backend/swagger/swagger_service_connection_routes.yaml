@@ -1,0 +1,867 @@
+openapi: 3.0.3
+info:
+  title: 用户服务连接管理 API
+  description: 用户服务连接CRUD操作、连接测试、默认连接管理等功能的API接口
+  version: 1.0.0
+  contact:
+    name: SHP Service Team
+    email: support@shpservice.com
+
+servers:
+  - url: /api/service-connections
+    description: 用户服务连接管理服务
+
+security:
+  - BearerAuth: []
+
+paths:
+  /:
+    get:
+      tags:
+        - 连接管理
+      summary: 获取用户的服务连接列表
+      description: 获取当前用户的服务连接列表，支持过滤和分页
+      parameters:
+        - name: service_type
+          in: query
+          schema:
+            type: string
+            enum: [geoserver, martin]
+          description: 服务类型过滤
+          example: "geoserver"
+        - name: is_active
+          in: query
+          schema:
+            type: boolean
+          description: 是否激活状态过滤
+          example: true
+      responses:
+        '200':
+          description: 获取连接列表成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          example: "1234567890123456789"
+                        user_id:
+                          type: string
+                          example: "user123"
+                        service_name:
+                          type: string
+                          example: "我的GeoServer"
+                        service_type:
+                          type: string
+                          example: "geoserver"
+                        server_url:
+                          type: string
+                          example: "http://localhost:8080/geoserver"
+                        description:
+                          type: string
+                          example: "本地GeoServer服务"
+                        connection_config:
+                          type: object
+                          properties:
+                            server_url:
+                              type: string
+                              example: "http://localhost:8080/geoserver"
+                            username:
+                              type: string
+                              example: "admin"
+                            password:
+                              type: string
+                              example: "***"
+                            workspace:
+                              type: string
+                              example: "myworkspace"
+                        is_default:
+                          type: boolean
+                          example: true
+                        is_active:
+                          type: boolean
+                          example: true
+                        last_test_result:
+                          type: object
+                          properties:
+                            success:
+                              type: boolean
+                              example: true
+                            message:
+                              type: string
+                              example: "连接正常"
+                            test_time:
+                              type: string
+                              format: date-time
+                              example: "2024-01-15T10:30:00Z"
+                        created_at:
+                          type: string
+                          format: date-time
+                          example: "2024-01-15T10:30:00Z"
+                        updated_at:
+                          type: string
+                          format: date-time
+                          example: "2024-01-15T10:30:00Z"
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "无法获取用户信息"
+        '500':
+          description: 获取连接列表失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "获取连接列表失败: 数据库连接错误"
+    
+    post:
+      tags:
+        - 连接管理
+      summary: 创建新的服务连接
+      description: 创建新的服务连接
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - service_name
+                - service_type
+                - server_url
+              properties:
+                service_name:
+                  type: string
+                  description: 服务连接名称
+                  example: "我的GeoServer"
+                service_type:
+                  type: string
+                  description: 服务类型
+                  enum: [geoserver, martin]
+                  example: "geoserver"
+                server_url:
+                  type: string
+                  description: 服务器URL
+                  example: "http://localhost:8080/geoserver"
+                description:
+                  type: string
+                  description: 连接描述
+                  example: "本地GeoServer服务"
+                username:
+                  type: string
+                  description: 用户名
+                  example: "admin"
+                password:
+                  type: string
+                  description: 密码
+                  example: "password123"
+                workspace:
+                  type: string
+                  description: 工作空间（GeoServer专用）
+                  example: "myworkspace"
+                api_key:
+                  type: string
+                  description: API密钥
+                  example: "api_key_123"
+                is_default:
+                  type: boolean
+                  description: 是否设为默认连接
+                  example: false
+                is_active:
+                  type: boolean
+                  description: 是否激活
+                  example: true
+      responses:
+        '200':
+          description: 创建连接成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "服务连接创建成功"
+                  connection_id:
+                    type: string
+                    example: "1234567890123456789"
+                  connection:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "1234567890123456789"
+                      service_name:
+                        type: string
+                        example: "我的GeoServer"
+                      service_type:
+                        type: string
+                        example: "geoserver"
+                      server_url:
+                        type: string
+                        example: "http://localhost:8080/geoserver"
+                      created_at:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "缺少必填字段: service_name"
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "无法获取用户信息"
+        '500':
+          description: 创建连接失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "创建连接失败: 数据库错误"
+
+  /{connection_id}:
+    parameters:
+      - name: connection_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 连接ID
+        example: 1234567890123456789
+    
+    put:
+      tags:
+        - 连接管理
+      summary: 更新服务连接
+      description: 更新指定的服务连接信息
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                service_name:
+                  type: string
+                  description: 服务连接名称
+                  example: "更新后的GeoServer"
+                server_url:
+                  type: string
+                  description: 服务器URL
+                  example: "http://localhost:8080/geoserver"
+                description:
+                  type: string
+                  description: 连接描述
+                  example: "更新后的描述"
+                username:
+                  type: string
+                  description: 用户名
+                  example: "admin"
+                password:
+                  type: string
+                  description: 密码
+                  example: "newpassword123"
+                workspace:
+                  type: string
+                  description: 工作空间
+                  example: "myworkspace"
+                api_key:
+                  type: string
+                  description: API密钥
+                  example: "new_api_key_123"
+                is_default:
+                  type: boolean
+                  description: 是否设为默认连接
+                  example: true
+                is_active:
+                  type: boolean
+                  description: 是否激活
+                  example: true
+      responses:
+        '200':
+          description: 更新连接成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "服务连接更新成功"
+                  connection:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "1234567890123456789"
+                      service_name:
+                        type: string
+                        example: "更新后的GeoServer"
+                      service_type:
+                        type: string
+                        example: "geoserver"
+                      server_url:
+                        type: string
+                        example: "http://localhost:8080/geoserver"
+                      updated_at:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "无效的服务类型"
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "无法获取用户信息"
+        '404':
+          description: 连接不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "连接不存在或无权限访问"
+        '500':
+          description: 更新连接失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "更新连接失败: 数据库错误"
+    
+    delete:
+      tags:
+        - 连接管理
+      summary: 删除服务连接
+      description: 删除指定的服务连接
+      responses:
+        '200':
+          description: 删除连接成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "服务连接删除成功"
+                  deleted_connection:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "1234567890123456789"
+                      service_name:
+                        type: string
+                        example: "我的GeoServer"
+                      service_type:
+                        type: string
+                        example: "geoserver"
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "无法获取用户信息"
+        '404':
+          description: 连接不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "连接不存在或无权限访问"
+        '500':
+          description: 删除连接失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "删除连接失败: 数据库错误"
+
+  /test:
+    post:
+      tags:
+        - 连接测试
+      summary: 测试服务连接
+      description: 测试服务连接是否可用
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - service_type
+                - server_url
+              properties:
+                service_type:
+                  type: string
+                  description: 服务类型
+                  enum: [geoserver, martin]
+                  example: "geoserver"
+                server_url:
+                  type: string
+                  description: 服务器URL
+                  example: "http://localhost:8080/geoserver"
+                username:
+                  type: string
+                  description: 用户名
+                  example: "admin"
+                password:
+                  type: string
+                  description: 密码
+                  example: "password123"
+                workspace:
+                  type: string
+                  description: 工作空间
+                  example: "myworkspace"
+                api_key:
+                  type: string
+                  description: API密钥
+                  example: "api_key_123"
+      responses:
+        '200':
+          description: 连接测试成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  test_result:
+                    type: object
+                    properties:
+                      connected:
+                        type: boolean
+                        example: true
+                      message:
+                        type: string
+                        example: "连接成功"
+                      response_time:
+                        type: number
+                        example: 0.5
+                      server_info:
+                        type: object
+                        properties:
+                          version:
+                            type: string
+                            example: "2.21.0"
+                          status:
+                            type: string
+                            example: "running"
+                          workspaces:
+                            type: array
+                            items:
+                              type: string
+                            example: ["myworkspace", "public"]
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "缺少必填字段: service_type"
+        '500':
+          description: 连接测试失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "连接测试失败: 网络超时"
+
+  /{connection_id}/test:
+    parameters:
+      - name: connection_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 连接ID
+        example: 1234567890123456789
+    
+    post:
+      tags:
+        - 连接测试
+      summary: 测试指定的服务连接
+      description: 测试指定的服务连接是否可用
+      responses:
+        '200':
+          description: 连接测试成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  connection_id:
+                    type: string
+                    example: "1234567890123456789"
+                  test_result:
+                    type: object
+                    properties:
+                      connected:
+                        type: boolean
+                        example: true
+                      message:
+                        type: string
+                        example: "连接成功"
+                      response_time:
+                        type: number
+                        example: 0.5
+                      server_info:
+                        type: object
+                        properties:
+                          version:
+                            type: string
+                            example: "2.21.0"
+                          status:
+                            type: string
+                            example: "running"
+                          workspaces:
+                            type: array
+                            items:
+                              type: string
+                            example: ["myworkspace", "public"]
+                  updated_at:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "无法获取用户信息"
+        '404':
+          description: 连接不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "连接不存在或无权限访问"
+        '500':
+          description: 连接测试失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "连接测试失败: 网络超时"
+
+  /defaults:
+    get:
+      tags:
+        - 默认连接
+      summary: 获取默认服务连接
+      description: 获取用户的默认服务连接
+      responses:
+        '200':
+          description: 获取默认连接成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  default_connections:
+                    type: object
+                    properties:
+                      geoserver:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: "1234567890123456789"
+                          service_name:
+                            type: string
+                            example: "默认GeoServer"
+                          server_url:
+                            type: string
+                            example: "http://localhost:8080/geoserver"
+                          connection_config:
+                            type: object
+                            properties:
+                              server_url:
+                                type: string
+                                example: "http://localhost:8080/geoserver"
+                              username:
+                                type: string
+                                example: "admin"
+                              password:
+                                type: string
+                                example: "***"
+                      martin:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: "1234567890123456790"
+                          service_name:
+                            type: string
+                            example: "默认Martin"
+                          server_url:
+                            type: string
+                            example: "http://localhost:3000"
+                          connection_config:
+                            type: object
+                            properties:
+                              server_url:
+                                type: string
+                                example: "http://localhost:3000"
+                              api_key:
+                                type: string
+                                example: "***"
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "无法获取用户信息"
+        '500':
+          description: 获取默认连接失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "获取默认连接失败: 数据库错误"
+
+  /file-service/download:
+    get:
+      tags:
+        - 文件服务
+      summary: 下载文件服务
+      description: 下载文件服务相关资源
+      parameters:
+        - name: file_path
+          in: query
+          schema:
+            type: string
+          description: 文件路径
+          example: "/path/to/file"
+      responses:
+        '200':
+          description: 下载成功
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "缺少文件路径参数"
+        '404':
+          description: 文件不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "文件不存在"
+        '500':
+          description: 下载失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "下载失败: 文件读取错误"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT认证令牌
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: 错误信息
+        details:
+          type: object
+          description: 错误详情
+          additionalProperties: true
+
+    Success:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: 操作是否成功
+        message:
+          type: string
+          description: 成功信息
+        data:
+          type: object
+          description: 返回数据
+          additionalProperties: true
+
+    ServiceConnection:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 连接ID
+        user_id:
+          type: string
+          description: 用户ID
+        service_name:
+          type: string
+          description: 服务名称
+        service_type:
+          type: string
+          description: 服务类型
+          enum: [geoserver, martin]
+        server_url:
+          type: string
+          description: 服务器URL
+        description:
+          type: string
+          description: 连接描述
+        connection_config:
+          type: object
+          description: 连接配置
+          additionalProperties: true
+        is_default:
+          type: boolean
+          description: 是否默认连接
+        is_active:
+          type: boolean
+          description: 是否激活
+        last_test_result:
+          type: object
+          description: 最后测试结果
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+
+tags:
+  - name: 连接管理
+    description: 服务连接CRUD操作相关接口
+  - name: 连接测试
+    description: 服务连接测试相关接口
+  - name: 默认连接
+    description: 默认服务连接管理相关接口
+  - name: 文件服务
+    description: 文件服务相关接口

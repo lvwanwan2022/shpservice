@@ -72,9 +72,17 @@ api = Api(
     version='1.0',
     title='SHP Service API',
     description='GIS文件管理和地图服务API',
-    doc='/swagger/',
+    doc=False,  # 禁用默认的Swagger UI
     prefix='/api'
 )
+
+# 加载Swagger YAML配置文件
+try:
+    from swagger_config import load_swagger_configs, get_combined_swagger_config
+    load_swagger_configs(api)
+    logger.info("✅ Swagger配置文件加载成功")
+except Exception as e:
+    logger.warning(f"⚠️ Swagger配置文件加载失败: {str(e)}")
 
 # 尝试数据库连接和初始化
 try:
@@ -358,13 +366,42 @@ def api_health_check():
         'service': 'shpservice-api'
     })
 
+# 添加自定义Swagger JSON路由
+@app.route('/api/swagger-custom.json')
+def swagger_json():
+    """返回合并后的Swagger配置JSON"""
+    try:
+        from swagger_config import get_combined_swagger_config
+        config = get_combined_swagger_config()
+        return jsonify(config)
+    except Exception as e:
+        logger.error(f"获取Swagger配置失败: {str(e)}")
+        return jsonify({'error': '获取Swagger配置失败'}), 500
+
+# 添加自定义Swagger UI页面路由
+@app.route('/swagger/')
+def swagger_ui():
+    """返回自定义的Swagger UI页面"""
+    try:
+        from flask import render_template_string
+        with open('templates/swagger.html', 'r', encoding='utf-8') as f:
+            template_content = f.read()
+        return render_template_string(template_content)
+    except Exception as e:
+        logger.error(f"加载Swagger UI页面失败: {str(e)}")
+        return f"Swagger UI加载失败: {str(e)}", 500
+
+
 @app.route('/')
 def index():
     """首页"""
     return """
     <h1>SHP Service API</h1>
     <p>GIS文件管理和地图服务API</p>
-    <p><a href="/swagger/">API文档</a></p>
+    <p><a href="/swagger/">API文档（修复版）</a></p>
+    <p><a href="/swagger-official/">API文档（官方标准版）</a></p>
+    <p><a href="/swagger-simple/">API文档（简单版）</a></p>
+    <p><a href="/swagger-test/">API文档测试页面</a></p>
     """
 
 @app.errorhandler(404)

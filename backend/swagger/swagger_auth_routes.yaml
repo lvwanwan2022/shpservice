@@ -1,0 +1,557 @@
+openapi: 3.0.3
+info:
+  title: 用户认证 API
+  description: 用户登录、注册、注销、Token验证等认证功能的API接口
+  version: 1.0.0
+  contact:
+    name: SHP Service Team
+    email: support@shpservice.com
+
+servers:
+  - url: /api/auth
+    description: 用户认证服务
+
+security:
+  - BearerAuth: []
+
+paths:
+  /login:
+    post:
+      tags:
+        - 用户认证
+      summary: 用户登录
+      description: 用户登录接口，验证用户名和密码，返回JWT token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  description: 用户名
+                  example: "admin"
+                password:
+                  type: string
+                  description: 密码
+                  example: "password123"
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: "登录成功"
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+                        description: JWT认证令牌
+                        example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIiwiaWF0IjoxNjM5NzQ5NjAwLCJleHAiOjE2Mzk4MzYwMDB9.signature"
+                      user:
+                        type: object
+                        properties:
+                          id:
+                            type: integer
+                            example: 1
+                          username:
+                            type: string
+                            example: "admin"
+                          name:
+                            type: string
+                            example: "管理员"
+                          email:
+                            type: string
+                            example: "admin@example.com"
+                          role:
+                            type: string
+                            example: "admin"
+                          created_at:
+                            type: string
+                            format: date-time
+                            example: "2024-01-15T10:30:00Z"
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 400
+                  message:
+                    type: string
+                    example: "用户名和密码不能为空"
+        '401':
+          description: 认证失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 401
+                  message:
+                    type: string
+                    example: "用户名或密码错误"
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 500
+                  message:
+                    type: string
+                    example: "服务器错误: 数据库连接失败"
+
+  /register:
+    post:
+      tags:
+        - 用户认证
+      summary: 用户注册
+      description: 用户注册接口，创建新用户账户
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+                - email
+              properties:
+                username:
+                  type: string
+                  description: 用户名（至少3位）
+                  example: "newuser"
+                password:
+                  type: string
+                  description: 密码（至少6位）
+                  example: "password123"
+                email:
+                  type: string
+                  format: email
+                  description: 邮箱地址
+                  example: "newuser@example.com"
+      responses:
+        '200':
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: "注册成功"
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        type: object
+                        properties:
+                          id:
+                            type: integer
+                            example: 2
+                          username:
+                            type: string
+                            example: "newuser"
+                          name:
+                            type: string
+                            example: "新用户"
+                          email:
+                            type: string
+                            example: "newuser@example.com"
+                          role:
+                            type: string
+                            example: "user"
+                          created_at:
+                            type: string
+                            format: date-time
+                            example: "2024-01-15T10:30:00Z"
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 400
+                  message:
+                    type: string
+                    example: "用户名长度不能少于3位"
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 500
+                  message:
+                    type: string
+                    example: "服务器错误: 数据库连接失败"
+
+  /logout:
+    post:
+      tags:
+        - 用户认证
+      summary: 用户注销
+      description: 用户注销接口，前端处理token清理
+      responses:
+        '200':
+          description: 注销成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: "注销成功"
+
+  /userinfo:
+    get:
+      tags:
+        - 用户信息
+      summary: 获取当前用户信息
+      description: 获取当前登录用户的详细信息
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 获取用户信息成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: "获取成功"
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      username:
+                        type: string
+                        example: "admin"
+                      name:
+                        type: string
+                        example: "管理员"
+                      email:
+                        type: string
+                        example: "admin@example.com"
+                      role:
+                        type: string
+                        example: "admin"
+                      avatar:
+                        type: string
+                        example: "https://example.com/avatar.jpg"
+                      last_login:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+                      created_at:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+                      updated_at:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 401
+                  message:
+                    type: string
+                    example: "未提供有效的认证令牌"
+
+  /verify:
+    post:
+      tags:
+        - Token验证
+      summary: 验证Token
+      description: 验证JWT token的有效性
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                  description: JWT token（可选，也可通过Authorization header提供）
+                  example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIiwiaWF0IjoxNjM5NzQ5NjAwLCJleHAiOjE2Mzk4MzYwMDB9.signature"
+      responses:
+        '200':
+          description: Token验证成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: "Token有效"
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      username:
+                        type: string
+                        example: "admin"
+                      name:
+                        type: string
+                        example: "管理员"
+                      email:
+                        type: string
+                        example: "admin@example.com"
+                      role:
+                        type: string
+                        example: "admin"
+                      exp:
+                        type: integer
+                        description: Token过期时间戳
+                        example: 1639836000
+        '401':
+          description: Token无效或过期
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 401
+                  message:
+                    type: string
+                    example: "Token无效或已过期"
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 500
+                  message:
+                    type: string
+                    example: "服务器错误: Token验证失败"
+
+  /protected:
+    get:
+      tags:
+        - 示例接口
+      summary: 受保护的示例接口
+      description: 需要登录权限的示例接口，演示如何添加认证保护
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 访问成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: "你好 admin，这是一个需要登录的接口"
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      username:
+                        type: string
+                        example: "admin"
+                      name:
+                        type: string
+                        example: "管理员"
+                      email:
+                        type: string
+                        example: "admin@example.com"
+                      role:
+                        type: string
+                        example: "admin"
+        '401':
+          description: 未授权
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 401
+                  message:
+                    type: string
+                    example: "未提供有效的认证令牌"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT认证令牌
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: 错误代码
+        message:
+          type: string
+          description: 错误信息
+        details:
+          type: object
+          description: 错误详情
+          additionalProperties: true
+
+    Success:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: 成功代码
+        message:
+          type: string
+          description: 成功信息
+        data:
+          type: object
+          description: 返回数据
+          additionalProperties: true
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 用户ID
+        username:
+          type: string
+          description: 用户名
+        name:
+          type: string
+          description: 用户姓名
+        email:
+          type: string
+          format: email
+          description: 邮箱地址
+        role:
+          type: string
+          description: 用户角色
+          enum: [admin, user]
+        avatar:
+          type: string
+          description: 头像URL
+        last_login:
+          type: string
+          format: date-time
+          description: 最后登录时间
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          description: 用户名
+        password:
+          type: string
+          description: 密码
+
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - password
+        - email
+      properties:
+        username:
+          type: string
+          description: 用户名（至少3位）
+        password:
+          type: string
+          description: 密码（至少6位）
+        email:
+          type: string
+          format: email
+          description: 邮箱地址
+
+tags:
+  - name: 用户认证
+    description: 用户登录、注册、注销相关接口
+  - name: 用户信息
+    description: 用户信息查询相关接口
+  - name: Token验证
+    description: JWT Token验证相关接口
+  - name: 示例接口
+    description: 示例和演示接口

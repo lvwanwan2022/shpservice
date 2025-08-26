@@ -1,0 +1,980 @@
+openapi: 3.0.3
+info:
+  title: SLD样式管理 API
+  description: SLD样式文件上传、管理、应用等功能的API接口
+  version: 1.0.0
+  contact:
+    name: SHP Service Team
+    email: support@shpservice.com
+
+servers:
+  - url: /api/sld-styles
+    description: SLD样式管理服务
+
+security:
+  - BearerAuth: []
+
+paths:
+  /initialize:
+    post:
+      tags:
+        - 数据库管理
+      summary: 初始化SLD样式数据库
+      description: 初始化SLD样式数据库表结构
+      responses:
+        '200':
+          description: 初始化成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "SLD样式数据库初始化成功"
+        '500':
+          description: 初始化失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "SLD样式数据库初始化失败"
+
+  /upload:
+    post:
+      tags:
+        - 样式上传
+      summary: 上传SLD样式文件
+      description: 上传SLD样式文件并保存到数据库
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: SLD样式文件
+                  required: true
+                name:
+                  type: string
+                  description: 样式名称
+                  required: true
+                  example: "点样式"
+                description:
+                  type: string
+                  description: 样式描述
+                  example: "用于显示点要素的样式"
+                geometry_type:
+                  type: string
+                  description: 几何类型
+                  required: true
+                  enum: [point, line, polygon]
+                  example: "point"
+      responses:
+        '200':
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "SLD样式文件上传成功"
+                  style_id:
+                    type: integer
+                    example: 123
+                  style_info:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 123
+                      name:
+                        type: string
+                        example: "点样式"
+                      description:
+                        type: string
+                        example: "用于显示点要素的样式"
+                      geometry_type:
+                        type: string
+                        example: "point"
+                      file_path:
+                        type: string
+                        example: "/path/to/style.sld"
+                      created_at:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+                      updated_at:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "未找到上传文件"
+        '500':
+          description: 上传失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "SLD样式文件上传失败: 文件格式错误"
+
+  /:
+    get:
+      tags:
+        - 样式管理
+      summary: 获取SLD样式列表
+      description: 获取所有SLD样式列表，支持分页和过滤
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 页码
+          example: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页数量
+          example: 20
+        - name: geometry_type
+          in: query
+          schema:
+            type: string
+            enum: [point, line, polygon]
+          description: 几何类型过滤
+          example: "point"
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: 搜索关键词
+          example: "点样式"
+      responses:
+        '200':
+          description: 获取样式列表成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  styles:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 123
+                        name:
+                          type: string
+                          example: "点样式"
+                        description:
+                          type: string
+                          example: "用于显示点要素的样式"
+                        geometry_type:
+                          type: string
+                          example: "point"
+                        file_path:
+                          type: string
+                          example: "/path/to/style.sld"
+                        created_at:
+                          type: string
+                          format: date-time
+                          example: "2024-01-15T10:30:00Z"
+                        updated_at:
+                          type: string
+                          format: date-time
+                          example: "2024-01-15T10:30:00Z"
+                        applied_layers:
+                          type: integer
+                          example: 5
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                        example: 1
+                      per_page:
+                        type: integer
+                        example: 20
+                      total:
+                        type: integer
+                        example: 25
+                      total_pages:
+                        type: integer
+                        example: 2
+        '500':
+          description: 获取样式列表失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "获取SLD样式列表失败: 数据库连接错误"
+
+  /{style_id}:
+    parameters:
+      - name: style_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 样式ID
+        example: 123
+    
+    get:
+      tags:
+        - 样式管理
+      summary: 获取SLD样式详情
+      description: 根据样式ID获取SLD样式的详细信息
+      responses:
+        '200':
+          description: 获取样式详情成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  style:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 123
+                      name:
+                        type: string
+                        example: "点样式"
+                      description:
+                        type: string
+                        example: "用于显示点要素的样式"
+                      geometry_type:
+                        type: string
+                        example: "point"
+                      file_path:
+                        type: string
+                        example: "/path/to/style.sld"
+                      created_at:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+                      updated_at:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+                      applied_layers:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            layer_id:
+                              type: integer
+                              example: 456
+                            layer_name:
+                              type: string
+                              example: "城市点"
+                            applied_at:
+                              type: string
+                              format: date-time
+                              example: "2024-01-15T10:30:00Z"
+        '404':
+          description: 样式不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "SLD样式不存在"
+        '500':
+          description: 获取样式详情失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "获取SLD样式详情失败: 数据库错误"
+
+  /{style_id}/content:
+    parameters:
+      - name: style_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 样式ID
+        example: 123
+    
+    get:
+      tags:
+        - 样式内容
+      summary: 获取SLD样式内容
+      description: 获取SLD样式文件的内容
+      responses:
+        '200':
+          description: 获取样式内容成功
+          content:
+            application/xml:
+              schema:
+                type: string
+                description: SLD样式文件内容
+                example: |
+                  <?xml version="1.0" encoding="UTF-8"?>
+                  <StyledLayerDescriptor version="1.0.0" xmlns="http://www.opengis.net/sld">
+                    <NamedLayer>
+                      <Name>点样式</Name>
+                      <UserStyle>
+                        <Title>点样式</Title>
+                        <FeatureTypeStyle>
+                          <Rule>
+                            <PointSymbolizer>
+                              <Graphic>
+                                <Mark>
+                                  <WellKnownName>circle</WellKnownName>
+                                  <Fill>
+                                    <CssParameter name="fill">#FF0000</CssParameter>
+                                  </Fill>
+                                </Mark>
+                                <Size>6</Size>
+                              </Graphic>
+                            </PointSymbolizer>
+                          </Rule>
+                        </FeatureTypeStyle>
+                      </UserStyle>
+                    </NamedLayer>
+                  </StyledLayerDescriptor>
+        '404':
+          description: 样式不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "SLD样式不存在"
+        '500':
+          description: 获取样式内容失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "获取SLD样式内容失败: 文件读取错误"
+    
+    put:
+      tags:
+        - 样式内容
+      summary: 更新SLD样式内容
+      description: 更新SLD样式文件的内容
+      requestBody:
+        required: true
+        content:
+          application/xml:
+            schema:
+              type: string
+              description: SLD样式文件内容
+              example: |
+                <?xml version="1.0" encoding="UTF-8"?>
+                <StyledLayerDescriptor version="1.0.0" xmlns="http://www.opengis.net/sld">
+                  <NamedLayer>
+                    <Name>点样式</Name>
+                    <UserStyle>
+                      <Title>点样式</Title>
+                      <FeatureTypeStyle>
+                        <Rule>
+                          <PointSymbolizer>
+                            <Graphic>
+                              <Mark>
+                                <WellKnownName>circle</WellKnownName>
+                                <Fill>
+                                  <CssParameter name="fill">#FF0000</CssParameter>
+                                </Fill>
+                              </Mark>
+                              <Size>6</Size>
+                            </Graphic>
+                          </PointSymbolizer>
+                        </Rule>
+                      </FeatureTypeStyle>
+                    </UserStyle>
+                  </NamedLayer>
+                </StyledLayerDescriptor>
+      responses:
+        '200':
+          description: 更新样式内容成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "SLD样式内容更新成功"
+                  style_id:
+                    type: integer
+                    example: 123
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "SLD样式内容格式错误"
+        '404':
+          description: 样式不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "SLD样式不存在"
+        '500':
+          description: 更新样式内容失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "更新SLD样式内容失败: 文件写入错误"
+
+  /{style_id}/download:
+    parameters:
+      - name: style_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 样式ID
+        example: 123
+    
+    get:
+      tags:
+        - 样式下载
+      summary: 下载SLD样式文件
+      description: 下载SLD样式文件
+      responses:
+        '200':
+          description: 下载成功
+          content:
+            application/xml:
+              schema:
+                type: string
+                description: SLD样式文件内容
+        '404':
+          description: 样式不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "SLD样式不存在"
+        '500':
+          description: 下载失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "下载SLD样式文件失败: 文件读取错误"
+
+  /{style_id}:
+    parameters:
+      - name: style_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 样式ID
+        example: 123
+    
+    delete:
+      tags:
+        - 样式管理
+      summary: 删除SLD样式
+      description: 删除指定的SLD样式
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "SLD样式删除成功"
+                  deleted_style:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 123
+                      name:
+                        type: string
+                        example: "点样式"
+        '404':
+          description: 样式不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "SLD样式不存在"
+        '500':
+          description: 删除失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "删除SLD样式失败: 数据库错误"
+    
+    put:
+      tags:
+        - 样式管理
+      summary: 更新SLD样式信息
+      description: 更新SLD样式的基本信息
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: 样式名称
+                  example: "更新后的点样式"
+                description:
+                  type: string
+                  description: 样式描述
+                  example: "更新后的点样式描述"
+                geometry_type:
+                  type: string
+                  description: 几何类型
+                  enum: [point, line, polygon]
+                  example: "point"
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "SLD样式信息更新成功"
+                  style:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 123
+                      name:
+                        type: string
+                        example: "更新后的点样式"
+                      description:
+                        type: string
+                        example: "更新后的点样式描述"
+                      geometry_type:
+                        type: string
+                        example: "point"
+                      updated_at:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "不支持的几何类型"
+        '404':
+          description: 样式不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "SLD样式不存在"
+        '500':
+          description: 更新失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "更新SLD样式信息失败: 数据库错误"
+
+  /apply:
+    post:
+      tags:
+        - 样式应用
+      summary: 应用SLD样式到图层
+      description: 将SLD样式应用到指定的图层
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                style_id:
+                  type: integer
+                  description: 样式ID
+                  required: true
+                  example: 123
+                layer_id:
+                  type: integer
+                  description: 图层ID
+                  required: true
+                  example: 456
+                layer_type:
+                  type: string
+                  description: 图层类型
+                  enum: [wms, wfs, geoserver]
+                  example: "wms"
+      responses:
+        '200':
+          description: 应用成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "SLD样式应用成功"
+                  applied_style:
+                    type: object
+                    properties:
+                      style_id:
+                        type: integer
+                        example: 123
+                      layer_id:
+                        type: integer
+                        example: 456
+                      layer_type:
+                        type: string
+                        example: "wms"
+                      applied_at:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "样式和图层类型不匹配"
+        '404':
+          description: 样式或图层不存在
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "SLD样式或图层不存在"
+        '500':
+          description: 应用失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "应用SLD样式失败: 服务配置错误"
+
+  /layer/{layer_id}:
+    parameters:
+      - name: layer_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 图层ID
+        example: 456
+    
+    get:
+      tags:
+        - 样式应用
+      summary: 获取图层应用的样式
+      description: 获取指定图层当前应用的SLD样式
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  layer_id:
+                    type: integer
+                    example: 456
+                  applied_style:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 123
+                      name:
+                        type: string
+                        example: "点样式"
+                      description:
+                        type: string
+                        example: "用于显示点要素的样式"
+                      geometry_type:
+                        type: string
+                        example: "point"
+                      applied_at:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+        '404':
+          description: 图层不存在或未应用样式
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "图层未应用SLD样式"
+        '500':
+          description: 获取失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "获取图层样式失败: 数据库错误"
+
+  /layer/{layer_id}/remove:
+    parameters:
+      - name: layer_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 图层ID
+        example: 456
+    
+    post:
+      tags:
+        - 样式应用
+      summary: 移除图层的SLD样式
+      description: 移除指定图层当前应用的SLD样式
+      responses:
+        '200':
+          description: 移除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "图层SLD样式移除成功"
+                  layer_id:
+                    type: integer
+                    example: 456
+                  removed_style:
+                    type: object
+                    properties:
+                      style_id:
+                        type: integer
+                        example: 123
+                      style_name:
+                        type: string
+                        example: "点样式"
+                      removed_at:
+                        type: string
+                        format: date-time
+                        example: "2024-01-15T10:30:00Z"
+        '404':
+          description: 图层不存在或未应用样式
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "图层未应用SLD样式"
+        '500':
+          description: 移除失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "移除图层样式失败: 数据库错误"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT认证令牌
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: 错误信息
+        details:
+          type: object
+          description: 错误详情
+          additionalProperties: true
+
+    Success:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: 操作是否成功
+        message:
+          type: string
+          description: 成功信息
+        data:
+          type: object
+          description: 返回数据
+          additionalProperties: true
+
+    SLDStyle:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 样式ID
+        name:
+          type: string
+          description: 样式名称
+        description:
+          type: string
+          description: 样式描述
+        geometry_type:
+          type: string
+          description: 几何类型
+          enum: [point, line, polygon]
+        file_path:
+          type: string
+          description: 文件路径
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+
+tags:
+  - name: 数据库管理
+    description: SLD样式数据库管理相关接口
+  - name: 样式上传
+    description: SLD样式文件上传相关接口
+  - name: 样式管理
+    description: SLD样式管理相关接口
+  - name: 样式内容
+    description: SLD样式内容管理相关接口
+  - name: 样式下载
+    description: SLD样式文件下载相关接口
+  - name: 样式应用
+    description: SLD样式应用到图层相关接口

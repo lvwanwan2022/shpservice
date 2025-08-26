@@ -1,0 +1,497 @@
+openapi: 3.0.3
+info:
+  title: GIS通用工具 API
+  description: GIS坐标系信息查询、proj4定义获取等通用工具的API接口
+  version: 1.0.0
+  contact:
+    name: SHP Service Team
+    email: support@shpservice.com
+
+servers:
+  - url: /api/gis
+    description: GIS通用工具服务
+
+security:
+  - BearerAuth: []
+
+paths:
+  /layer/{layer_id}/crs-info:
+    parameters:
+      - name: layer_id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: 场景图层ID
+        example: 123
+    
+    get:
+      tags:
+        - 图层信息
+      summary: 获取图层的坐标系信息
+      description: 根据场景图层ID获取对应的坐标系信息，包括EPSG代码、proj4定义等
+      responses:
+        '200':
+          description: 获取坐标系信息成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  layer_id:
+                    type: integer
+                    example: 123
+                  layer_type:
+                    type: string
+                    example: "martin"
+                  service_layer_id:
+                    type: integer
+                    example: 456
+                  file_id:
+                    type: string
+                    example: "789"
+                  crs_info:
+                    type: object
+                    properties:
+                      epsg_code:
+                        type: string
+                        example: "EPSG:4326"
+                      srid:
+                        type: integer
+                        example: 4326
+                      auth_name:
+                        type: string
+                        example: "EPSG"
+                      auth_srid:
+                        type: integer
+                        example: 4326
+                      name:
+                        type: string
+                        example: "WGS 84"
+                      srtext:
+                        type: string
+                        example: "GEOGCS[\"WGS 84\",DATUM[\"WGS_1984\",SPHEROID[\"WGS 84\",6378137,298.257223563,AUTHORITY[\"EPSG\",\"7030\"]],AUTHORITY[\"EPSG\",\"6326\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4326\"]]"
+                      proj4_definition:
+                        type: string
+                        example: "+proj=longlat +datum=WGS84 +no_defs"
+                      bbox:
+                        type: array
+                        items:
+                          type: number
+                        example: [116.0, 39.0, 117.0, 40.0]
+                      extent:
+                        type: object
+                        properties:
+                          min_x:
+                            type: number
+                            example: 116.0
+                          min_y:
+                            type: number
+                            example: 39.0
+                          max_x:
+                            type: number
+                            example: 117.0
+                          max_y:
+                            type: number
+                            example: 40.0
+        '404':
+          description: 图层不存在或无法获取坐标系信息
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "未找到ID为123的场景图层"
+        '500':
+          description: 获取坐标系信息失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "获取坐标系信息失败: 数据库连接错误"
+
+  /coordinate-systems/proj4-definitions:
+    get:
+      tags:
+        - 坐标系工具
+      summary: 获取常用坐标系的proj4定义
+      description: 获取常用坐标系的proj4定义，用于前端初始化
+      responses:
+        '200':
+          description: 获取proj4定义成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  proj4_definitions:
+                    type: object
+                    properties:
+                      "EPSG:4326":
+                        type: object
+                        properties:
+                          proj4:
+                            type: string
+                            example: "+proj=longlat +datum=WGS84 +no_defs"
+                          name:
+                            type: string
+                            example: "WGS 84"
+                          epsg_code:
+                            type: string
+                            example: "EPSG:4326"
+                          auth_srid:
+                            type: integer
+                            example: 4326
+                      "EPSG:3857":
+                        type: object
+                        properties:
+                          proj4:
+                            type: string
+                            example: "+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs"
+                          name:
+                            type: string
+                            example: "Web Mercator"
+                          epsg_code:
+                            type: string
+                            example: "EPSG:3857"
+                          auth_srid:
+                            type: integer
+                            example: 3857
+                      "EPSG:4490":
+                        type: object
+                        properties:
+                          proj4:
+                            type: string
+                            example: "+proj=longlat +ellps=GRS80 +no_defs"
+                          name:
+                            type: string
+                            example: "CGCS2000"
+                          epsg_code:
+                            type: string
+                            example: "EPSG:4490"
+                          auth_srid:
+                            type: integer
+                            example: 4490
+                      "EPSG:4214":
+                        type: object
+                        properties:
+                          proj4:
+                            type: string
+                            example: "+proj=longlat +ellps=krass +no_defs"
+                          name:
+                            type: string
+                            example: "Beijing 1954"
+                          epsg_code:
+                            type: string
+                            example: "EPSG:4214"
+                          auth_srid:
+                            type: integer
+                            example: 4214
+                      "EPSG:4610":
+                        type: object
+                        properties:
+                          proj4:
+                            type: string
+                            example: "+proj=longlat +ellps=xian80 +no_defs"
+                          name:
+                            type: string
+                            example: "Xian 1980"
+                          epsg_code:
+                            type: string
+                            example: "EPSG:4610"
+                          auth_srid:
+                            type: integer
+                            example: 4610
+                      "EPSG:2379":
+                        type: object
+                        properties:
+                          proj4:
+                            type: string
+                            example: "+proj=tmerc +lat_0=0 +lon_0=102 +k=1 +x_0=500000 +y_0=0 +ellps=xian80 +units=m +no_defs"
+                          name:
+                            type: string
+                            example: "Xian 1980 / 3-degree Gauss-Kruger CM 102E"
+                          epsg_code:
+                            type: string
+                            example: "EPSG:2379"
+                          auth_srid:
+                            type: integer
+                            example: 2379
+                      "EPSG:2343":
+                        type: object
+                        properties:
+                          proj4:
+                            type: string
+                            example: "+proj=tmerc +lat_0=0 +lon_0=105 +k=1 +x_0=500000 +y_0=0 +ellps=krass +units=m +no_defs"
+                          name:
+                            type: string
+                            example: "Pulkovo 1942 / 3-degree Gauss-Kruger CM 105E"
+                          epsg_code:
+                            type: string
+                            example: "EPSG:2343"
+                          auth_srid:
+                            type: integer
+                            example: 2343
+                      "EPSG:2431":
+                        type: object
+                        properties:
+                          proj4:
+                            type: string
+                            example: "+proj=tmerc +lat_0=0 +lon_0=105 +k=1 +x_0=500000 +y_0=0 +ellps=krass +units=m +no_defs"
+                          name:
+                            type: string
+                            example: "Beijing 1954 / 3-degree Gauss-Kruger CM 105E"
+                          epsg_code:
+                            type: string
+                            example: "EPSG:2431"
+                          auth_srid:
+                            type: integer
+                            example: 2431
+                      "EPSG:4545":
+                        type: object
+                        properties:
+                          proj4:
+                            type: string
+                            example: "+proj=tmerc +lat_0=0 +lon_0=105 +k=1 +x_0=500000 +y_0=0 +ellps=GRS80 +units=m +no_defs"
+                          name:
+                            type: string
+                            example: "CGCS2000 / 3-degree Gauss-Kruger CM 105E"
+                          epsg_code:
+                            type: string
+                            example: "EPSG:4545"
+                          auth_srid:
+                            type: integer
+                            example: 4545
+                      "EPSG:4547":
+                        type: object
+                        properties:
+                          proj4:
+                            type: string
+                            example: "+proj=tmerc +lat_0=0 +lon_0=102 +k=1 +x_0=500000 +y_0=0 +ellps=GRS80 +units=m +no_defs"
+                          name:
+                            type: string
+                            example: "CGCS2000 / 3-degree Gauss-Kruger CM 102E"
+                          epsg_code:
+                            type: string
+                            example: "EPSG:4547"
+                          auth_srid:
+                            type: integer
+                            example: 4547
+                  total:
+                    type: integer
+                    example: 10
+        '500':
+          description: 获取proj4定义失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "获取proj4定义失败: 数据库连接错误"
+
+  /coordinate-systems/{epsg_code}/proj4:
+    parameters:
+      - name: epsg_code
+        in: path
+        required: true
+        schema:
+          type: string
+        description: EPSG代码，如'EPSG:2379'或'2379'
+        example: "EPSG:4326"
+    
+    get:
+      tags:
+        - 坐标系工具
+      summary: 获取单个坐标系的proj4定义
+      description: 根据EPSG代码获取指定坐标系的proj4定义
+      responses:
+        '200':
+          description: 获取proj4定义成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  crs_info:
+                    type: object
+                    properties:
+                      epsg_code:
+                        type: string
+                        example: "EPSG:4326"
+                      srid:
+                        type: integer
+                        example: 4326
+                      auth_name:
+                        type: string
+                        example: "EPSG"
+                      auth_srid:
+                        type: integer
+                        example: 4326
+                      name:
+                        type: string
+                        example: "WGS 84"
+                      srtext:
+                        type: string
+                        example: "GEOGCS[\"WGS 84\",DATUM[\"WGS_1984\",SPHEROID[\"WGS 84\",6378137,298.257223563,AUTHORITY[\"EPSG\",\"7030\"]],AUTHORITY[\"EPSG\",\"6326\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4326\"]]"
+                      proj4_definition:
+                        type: string
+                        example: "+proj=longlat +datum=WGS84 +no_defs"
+        '400':
+          description: 无效的EPSG代码格式
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "无效的EPSG代码格式: invalid_epsg"
+        '404':
+          description: 未找到指定的坐标系定义
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "未找到EPSG:9999的定义"
+        '500':
+          description: 获取proj4定义失败
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "获取proj4定义失败: 数据库连接错误"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT认证令牌
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: 操作是否成功
+        message:
+          type: string
+          description: 错误信息
+        details:
+          type: object
+          description: 错误详情
+          additionalProperties: true
+
+    Success:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: 操作是否成功
+        message:
+          type: string
+          description: 成功信息
+        data:
+          type: object
+          description: 返回数据
+          additionalProperties: true
+
+    CRSInfo:
+      type: object
+      properties:
+        epsg_code:
+          type: string
+          description: EPSG代码
+          example: "EPSG:4326"
+        srid:
+          type: integer
+          description: 空间参考系统ID
+          example: 4326
+        auth_name:
+          type: string
+          description: 权威机构名称
+          example: "EPSG"
+        auth_srid:
+          type: integer
+          description: 权威机构空间参考系统ID
+          example: 4326
+        name:
+          type: string
+          description: 坐标系名称
+          example: "WGS 84"
+        srtext:
+          type: string
+          description: 空间参考系统文本定义
+          example: "GEOGCS[\"WGS 84\",DATUM[\"WGS_1984\",SPHEROID[\"WGS 84\",6378137,298.257223563,AUTHORITY[\"EPSG\",\"7030\"]],AUTHORITY[\"EPSG\",\"6326\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4326\"]]"
+        proj4_definition:
+          type: string
+          description: proj4定义字符串
+          example: "+proj=longlat +datum=WGS84 +no_defs"
+
+    Proj4Definition:
+      type: object
+      properties:
+        proj4:
+          type: string
+          description: proj4定义字符串
+          example: "+proj=longlat +datum=WGS84 +no_defs"
+        name:
+          type: string
+          description: 坐标系名称
+          example: "WGS 84"
+        epsg_code:
+          type: string
+          description: EPSG代码
+          example: "EPSG:4326"
+        auth_srid:
+          type: integer
+          description: 权威机构空间参考系统ID
+          example: 4326
+
+tags:
+  - name: 图层信息
+    description: 图层坐标系信息查询相关接口
+  - name: 坐标系工具
+    description: 坐标系proj4定义查询相关接口
