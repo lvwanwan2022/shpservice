@@ -612,7 +612,8 @@ export default {
             minZoom: 3,               // 最小缩放级别
            // cacheSize: cacheSize      // 设置缓存大小
           });
-          gaodeSource.setTileLoadFunction(wmtsTileLoadFunction_gaode);
+          //切片缓存功能关闭
+          //gaodeSource.setTileLoadFunction(wmtsTileLoadFunction_gaode);
 
         // 高德地图 - 使用GCJ02坐标系修正偏移
         const gaodeLayer = new TileLayer({
@@ -643,7 +644,8 @@ export default {
           minZoom: 3,
           preload: preloadLevel       // 设置预加载级别
         })
-        gaodeSatelliteSource.setTileLoadFunction(wmtsTileLoadFunction_gaodeSatellite);
+        //切片缓存功能关闭
+        //gaodeSatelliteSource.setTileLoadFunction(wmtsTileLoadFunction_gaodeSatellite);
         
         const wmtsTileLoadFunction_osm = createWmtsTileLoadFunction({
           layerId: 'osm',
@@ -657,7 +659,8 @@ export default {
           minZoom: 1,
           cacheSize: cacheSize      // 设置缓存大小
         });
-        osmSource.setTileLoadFunction(wmtsTileLoadFunction_osm);
+        //切片缓存功能关闭
+        //osmSource.setTileLoadFunction(wmtsTileLoadFunction_osm);
         
         // OpenStreetMap
         const osmLayer = new TileLayer({
@@ -679,7 +682,8 @@ export default {
           minZoom: 1,
           cacheSize: cacheSize      // 设置缓存大小
         });
-        esriSatelliteSource.setTileLoadFunction(wmtsTileLoadFunction_esriSatellite);
+        //切片缓存功能关闭
+        //esriSatelliteSource.setTileLoadFunction(wmtsTileLoadFunction_esriSatellite);
         // Esri 世界影像（卫星图）
         const esriSatelliteLayer = new TileLayer({
           source: esriSatelliteSource,
@@ -1518,7 +1522,8 @@ export default {
               // 设置瓦片缓存大小
               cacheSize: 128,
               // 设置自定义的瓦片加载函数，支持缓存
-              tileLoadFunction: mvtTileLoadFunction
+              //mvt图层缓存功能关闭
+              //tileLoadFunction: mvtTileLoadFunction
             }),
             style: createStyleFunction(),
             opacity: typeof layer.opacity === 'number' ? layer.opacity : 1.0,
@@ -2358,7 +2363,8 @@ export default {
               tileCacheService: tileCacheService,
               enableCacheStorage: layersCacheEnabled.value
             })
-            gaodeSource.setTileLoadFunction(wmtsTileLoadFunction_gaode)
+            //切片缓存功能关闭
+            //gaodeSource.setTileLoadFunction(wmtsTileLoadFunction_gaode)
           }
         }
         
@@ -2371,7 +2377,8 @@ export default {
               tileCacheService: tileCacheService,
               enableCacheStorage: layersCacheEnabled.value
             })
-            gaodeSatelliteSource.setTileLoadFunction(wmtsTileLoadFunction_gaodeSatellite)
+            //切片缓存功能关闭
+            //gaodeSatelliteSource.setTileLoadFunction(wmtsTileLoadFunction_gaodeSatellite)
           }
         }
         
@@ -2384,7 +2391,8 @@ export default {
               tileCacheService: tileCacheService,
               enableCacheStorage: layersCacheEnabled.value
             })
-            osmSource.setTileLoadFunction(wmtsTileLoadFunction_osm)
+            //切片缓存功能关闭
+            //osmSource.setTileLoadFunction(wmtsTileLoadFunction_osm)
           }
         }
         
@@ -2397,7 +2405,8 @@ export default {
               tileCacheService: tileCacheService,
               enableCacheStorage: layersCacheEnabled.value
             })
-            esriSatelliteSource.setTileLoadFunction(wmtsTileLoadFunction_esriSatellite)
+            //切片缓存功能关闭
+            //esriSatelliteSource.setTileLoadFunction(wmtsTileLoadFunction_esriSatellite)
           }
         }
       }
@@ -2415,7 +2424,8 @@ export default {
                   tileCacheService: tileCacheService,
                   enableCacheStorage: layersCacheEnabled.value
                 })
-                source.setTileLoadFunction(mvtTileLoadFunction)
+                //mvt图层缓存功能关闭
+                //source.setTileLoadFunction(mvtTileLoadFunction)
                 console.log(`MVT图层 ${layerId} 缓存状态已更新:`, layersCacheEnabled.value ? '开启' : '关闭')
               }
             }

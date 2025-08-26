@@ -26,12 +26,12 @@
         <div class="card-title">场景管理</div>
         <div class="card-desc">创建和管理地图场景配置</div>
       </el-card>
-      <el-card class="home-card" @click="goToMapOL">
+      <el-card class="home-card" @click="goToMapDeck">
         <div class="card-icon">
           <i class="el-icon-location"></i>
         </div>
         <div class="card-title">地图浏览</div>
-        <div class="card-desc">使用OpenLayers浏览地图服务和图层数据</div>
+        <div class="card-desc">使用DeckGL浏览地图服务和图层数据</div>
       </el-card>
 
       
@@ -60,8 +60,8 @@
 export default {
   name: 'HomeView',
   methods: {
-    goToMapOL() {
-      this.$router.push('/map-ol')
+    goToMapDeck() {
+      this.$router.push('/map-deck')
     },
     goToUpload() {
       this.$router.push('/upload')

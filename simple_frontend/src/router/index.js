@@ -32,9 +32,9 @@ const routes = [
     meta: { requiresAuth: false }
   },
   {
-    path: '/map-ol',
-    name: 'MapOL',
-    component: () => import('@/views/MapViewOL.vue')
+    path: '/map-deck',
+    name: 'MapDeck',
+    component: () => import('@/views/MapViewDeckGL.vue')
   },
   {
     path: '/upload',

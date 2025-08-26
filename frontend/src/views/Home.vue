@@ -26,27 +26,14 @@
         <div class="card-title">场景管理</div>
         <div class="card-desc">创建和管理地图场景配置</div>
       </el-card>
-      <el-card class="home-card" @click="goToMapOL">
+      <el-card class="home-card" @click="goToMapDeckGL">
         <div class="card-icon">
           <i class="el-icon-location"></i>
         </div>
-        <div class="card-title">地图浏览(OpenLayers)</div>
-        <div class="card-desc">使用OpenLayers浏览地图服务和图层数据</div>
+        <div class="card-title">地图浏览</div>
+        <div class="card-desc">使用DeckGL浏览地图服务和图层数据</div>
       </el-card>
-      <el-card class="home-card" @click="goToMapDeckGL">
-        <div class="card-icon">
-          <i class="el-icon-view"></i>
-        </div>
-        <div class="card-title">地图浏览(Deck.gl)</div>
-        <div class="card-desc">使用Deck.gl浏览地图服务和图层数据，支持3D可视化</div>
-      </el-card>
-      <el-card class="home-card" @click="goToMap">
-        <div class="card-icon">
-          <i class="el-icon-map-location"></i>
-        </div>
-        <div class="card-title">地图浏览(Leaflet-测试)</div>
-        <div class="card-desc">使用Leaflet浏览地图服务和图层数据</div>
-      </el-card>
+      
       
       <el-card class="home-card" @click="goToCacheManager">
         <div class="card-icon">
@@ -73,12 +60,8 @@
 export default {
   name: 'HomeView',
   methods: {
-    goToMap() {
-      this.$router.push('/map-lf')
-    },
-    goToMapOL() {
-      this.$router.push('/map-ol')
-    },
+   
+   
     goToMapDeckGL() {
       this.$router.push('/map-deckgl')
     },
