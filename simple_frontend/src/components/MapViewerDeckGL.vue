@@ -72,6 +72,18 @@
         <span v-else>© Deck.gl</span>
       </div>
     </div>
+    
+    <!-- 🔥 新增：要素选择弹窗 -->
+    <div 
+      v-if="selectedFeatureState.popupVisible" 
+      class="feature-popup"
+    >
+      <div class="popup-header">
+        <span class="popup-title">要素信息</span>
+        <button class="popup-close" @click="clearFeatureSelection">×</button>
+      </div>
+      <div class="popup-content" v-html="selectedFeatureState.popupContent"></div>
+    </div>
   </div>
 </template>
 
@@ -83,6 +95,8 @@ import { TileLayer } from '@deck.gl/geo-layers'
 import { BitmapLayer } from '@deck.gl/layers'
 // 导入MVT支持
 import { MVTLayer } from '@deck.gl/geo-layers'
+// 导入GeoJson图层（用于高亮）
+import { GeoJsonLayer } from '@deck.gl/layers'
 // 导入地形支持
 import { TerrainLayer } from '@deck.gl/geo-layers'
 // 导入TerrainExtension用于将2D图层贴合到3D地形
@@ -135,14 +149,22 @@ export default {
       lat: 0
     })
     
-    // 自定义tooltip状态
-    const tooltipState = ref({
-      visible: false,
-      content: '',
-      x: 0,
-      y: 0,
-      timeout: null
+    // 🔥 简化：要素选择状态管理
+    const selectedFeatureState = ref({
+      feature: null,
+      layer: null,
+      coordinate: null,
+      popupVisible: false,
+      popupContent: '',
+      popupPosition: { x: 0, y: 0 },
+      selectedFeatureId: null
     })
+    
+    // 🔥 简化：使用简单的状态变量来跟踪选中的要素
+    const selectedFeatureId = ref(null)
+    const selectedLayerId = ref(null)
+    
+
     
     // 当前底图 - 参考OpenLayers的配置，支持三维模式
     const currentBaseMap = ref({
@@ -202,83 +224,13 @@ export default {
             try {
               updateMouseCoordinates(info)
               
-              // 清除之前的定时器
-              if (tooltipState.value.timeout) {
-                clearTimeout(tooltipState.value.timeout)
-                tooltipState.value.timeout = null
-              }
-              
+              // 🔥 修改：只处理光标变化，不显示弹窗
               if (info.object && info.object.properties) {
                 // 有要素时显示手型指针
                 document.body.style.cursor = 'pointer'
-                
-                // 构建tooltip内容
-                const layerInfo = info.object.layerInfo || {}
-                const properties = info.object.properties
-                
-                // 过滤有效的属性
-                const filteredProperties = Object.entries(properties)
-                  .filter(([key, value]) => {
-                    if (key === 'geometry' || key === 'geom') return false
-                    if (value == null || value === 'NULL' || value === '') return false
-                    if (typeof value === 'object') return false
-                    return true
-                  })
-                  .slice(0, 6)
-                
-                let content = `<div style="max-width: 300px; font-family: 'Microsoft YaHei', sans-serif;">
-                  <div style="margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.3);">
-                    <strong style="color: #fff;">${layerInfo.layerName || '图层'}</strong>
-                    <small style="background: rgba(255,255,255,0.2); padding: 1px 4px; border-radius: 2px; font-size: 10px; margin-left: 4px;">
-                      ${layerInfo.fileType?.toUpperCase() || 'MVT'}
-                    </small>
-                  </div>`
-                
-                if (filteredProperties.length === 0) {
-                  content += '<div style="color: rgba(255,255,255,0.7); font-style: italic; font-size: 12px;">暂无属性信息</div>'
-                } else {
-                  filteredProperties.forEach(([key, value]) => {
-                    let displayKey = key.length > 12 ? key.substring(0, 12) + '...' : key
-                    let displayValue = String(value).length > 20 ? String(value).substring(0, 20) + '...' : value
-                    
-                    if (typeof value === 'number' && value % 1 !== 0) {
-                      displayValue = Number(value).toFixed(3)
-                    }
-                    
-                    content += `
-                      <div style="margin-bottom: 4px; font-size: 12px; display: flex;">
-                        <span style="color: rgba(255,255,255,0.8); margin-right: 8px; min-width: 60px; font-weight: 500;">${displayKey}：</span>
-                        <span style="color: #fff; flex: 1;">${displayValue}</span>
-                      </div>
-                    `
-                  })
-                  
-                  const totalProperties = Object.keys(properties).length - 2
-                  if (totalProperties > 6) {
-                    content += `<div style="margin-top: 6px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.3); color: rgba(255,255,255,0.6); font-style: italic; font-size: 10px; text-align: center;">共 ${totalProperties} 个属性</div>`
-                  }
-                }
-                
-                content += '</div>'
-                
-                // 设置tooltip位置（靠近鼠标）
-                tooltipState.value = {
-                  visible: true,
-                  content: content,
-                  x: info.x + 15, // 向右偏移15px
-                  y: info.y - 10, // 向上偏移10px
-                  timeout: null
-                }
-                
-                // 设置3秒后自动隐藏
-                tooltipState.value.timeout = setTimeout(() => {
-                  tooltipState.value.visible = false
-                }, 3000)
-                
               } else {
-                // 无要素时恢复默认指针并隐藏tooltip
+                // 无要素时恢复默认指针
                 document.body.style.cursor = 'default'
-                tooltipState.value.visible = false
               }
             } catch (error) {
               console.warn('鼠标悬停处理出错，已忽略:', error)
@@ -293,81 +245,8 @@ export default {
               // 不抛出错误，避免视口锁定
             }
           },
-          getTooltip: ({ object }) => {
-            if (!object || !object.properties) return null
-            
-            // 获取图层信息
-            const layerInfo = object.layerInfo || {}
-            const properties = object.properties
-            
-            // 过滤有效的属性
-            const filteredProperties = Object.entries(properties)
-              .filter(([key, value]) => {
-                // 排除几何相关和内部属性
-                if (key === 'geometry' || key === 'geom') return false
-                if (value == null || value === 'NULL' || value === '') return false
-                if (typeof value === 'object') return false
-                return true
-              })
-              .slice(0, 6) // 限制显示前6个属性
-            
-            // 构建tooltip内容
-            let content = `<div style="max-width: 300px; font-family: 'Microsoft YaHei', sans-serif;">
-              <div style="margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.3);">
-                <strong style="color: #fff;">${layerInfo.layerName || '图层'}</strong>
-                <small style="background: rgba(255,255,255,0.2); padding: 1px 4px; border-radius: 2px; font-size: 10px; margin-left: 4px;">
-                  ${layerInfo.fileType?.toUpperCase() || 'MVT'}
-                </small>
-              </div>`
-            
-            if (filteredProperties.length === 0) {
-              content += '<div style="color: rgba(255,255,255,0.7); font-style: italic; font-size: 12px;">暂无属性信息</div>'
-            } else {
-              filteredProperties.forEach(([key, value]) => {
-                // 格式化属性名和值
-                let displayKey = key.length > 12 ? key.substring(0, 12) + '...' : key
-                let displayValue = String(value).length > 20 ? String(value).substring(0, 20) + '...' : value
-                
-                // 特殊格式化数字
-                if (typeof value === 'number' && value % 1 !== 0) {
-                  displayValue = Number(value).toFixed(3)
-                }
-                
-                content += `
-                  <div style="margin-bottom: 4px; font-size: 12px; display: flex;">
-                    <span style="color: rgba(255,255,255,0.8); margin-right: 8px; min-width: 60px; font-weight: 500;">${displayKey}：</span>
-                    <span style="color: #fff; flex: 1;">${displayValue}</span>
-                  </div>
-                `
-              })
-              
-              const totalProperties = Object.keys(properties).length - 2 // 排除geometry等
-              if (totalProperties > 6) {
-                content += `<div style="margin-top: 6px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.3); color: rgba(255,255,255,0.6); font-style: italic; font-size: 10px; text-align: center;">共 ${totalProperties} 个属性</div>`
-              }
-            }
-            
-            content += '</div>'
-            
-            return {
-              html: content,
-              style: {
-                backgroundColor: 'rgba(0, 0, 0, 0.9)',
-                color: 'white',
-                padding: '10px',
-                borderRadius: '6px',
-                fontSize: '12px',
-                lineHeight: '1.4',
-                maxWidth: '320px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                border: '1px solid rgba(255,255,255,0.1)'
-              },
-              // 设置tooltip位置偏移，让弹出框更靠近鼠标
-              offset: [10, 10],
-              // 设置tooltip停留时间（毫秒）
-              timeout: 3000
-            }
-          }
+          // 🔥 修改：禁用hover tooltip，只保留点击弹窗
+          getTooltip: () => null
         })
 
         console.log('Deck.gl地图初始化成功')
@@ -536,6 +415,252 @@ export default {
     
 
 
+    // 🔥 新增：生成稳定的要素ID
+    const generateFeatureId = (feature) => {
+      const properties = feature.properties || {}
+      let featureId = feature.id || properties.gid || properties.id
+      
+      // 如果没有ID，基于要素的几何和属性生成一个稳定的ID
+      if (!featureId) {
+        const geometryType = feature.geometry?.type || 'unknown'
+        const coordStr = JSON.stringify(feature.geometry?.coordinates || []).slice(0, 50)
+        featureId = `feature_${geometryType}_${Object.keys(properties).length}_${coordStr.length}`
+      }
+      
+      return featureId
+    }
+    
+    // 🔥 新增：创建基于几何的高亮图层
+    const createHighlightLayer = (feature) => {
+      if (!feature || !feature.geometry) return null
+      
+      try {
+        // 构建GeoJSON数据
+        const highlightData = {
+          type: 'FeatureCollection',
+          features: [{
+            type: 'Feature',
+            geometry: feature.geometry,
+            properties: {
+              id: 'highlight-feature',
+              ...feature.properties
+            }
+          }]
+        }
+        
+        console.log('🎯 创建高亮图层，几何类型:', feature.geometry.type)
+        
+        // 创建高亮图层配置
+        const highlightLayerConfig = {
+          id: 'highlight-layer',
+          data: highlightData,
+          pickable: false, // 高亮图层不需要拾取
+          stroked: true,
+          filled: true,
+          extruded: false,
+          // 高亮样式
+          getFillColor: [255, 255, 0, 120], // 半透明黄色填充
+          getLineColor: [255, 0, 0, 255],   // 红色边框
+          getLineWidth: 4,                  // 粗边框
+          getPointRadius: 15,               // 大点
+          lineWidthMinPixels: 2,
+          pointRadiusMinPixels: 10,
+          // 设置较高的渲染顺序，确保在最上层
+          renderOrder: 1000,
+          // 图层信息
+          layerInfo: {
+            layerName: 'highlight-layer',
+            fileType: 'geojson',
+            serviceType: 'highlight'
+          }
+        }
+        
+        // 🔥 在三维模式下添加地形贴合
+        if (is3DModeEnabled.value) {
+          highlightLayerConfig.extensions = [new TerrainExtension()]
+          highlightLayerConfig.terrainDrawMode = 'drape'
+          console.log('🏔️ 高亮图层已启用三维地形贴合')
+        }
+        
+        return new GeoJsonLayer(highlightLayerConfig)
+      } catch (error) {
+        console.error('❌ 创建高亮图层失败:', error)
+        return null
+      }
+    }
+    
+    // 🔥 新增：尝试获取完整要素几何信息
+    const getCompleteFeatureGeometry = async (feature, layer) => {
+      try {
+        // 检查是否有要素ID或唯一标识符
+        const featureId = feature.properties?.id || feature.properties?.gid || feature.properties?.fid || feature.properties?.OBJECTID
+        
+        if (!featureId) {
+          console.log('⚠️ 未找到要素ID，使用当前几何进行高亮')
+          return feature.geometry
+        }
+        
+        // 检查图层信息，确定服务类型
+        const layerInfo = layer?.props?.layerInfo || feature.layerInfo
+        const serviceType = layerInfo?.service_type || layerInfo?.serviceType
+        
+        if (serviceType === 'martin') {
+          // 对于Martin服务，尝试获取完整几何
+          return await getMartinCompleteGeometry(featureId, layerInfo)
+        } else if (serviceType === 'geoserver') {
+          // 对于GeoServer服务，尝试获取完整几何
+          return await getGeoServerCompleteGeometry(featureId, layerInfo)
+        } else {
+          console.log('⚠️ 未知服务类型，使用当前几何进行高亮')
+          return feature.geometry
+        }
+      } catch (error) {
+        console.warn('❌ 获取完整几何失败，使用当前几何:', error)
+        return feature.geometry
+      }
+    }
+    
+    // 🔥 新增：通过图层样式高亮要素（备选方案）
+    const highlightFeatureByStyle = (featureId, layer) => {
+      if (!deckgl.value || !layer) return
+      
+      try {
+        // 获取当前所有图层
+        const currentLayers = deckgl.value.props.layers || []
+        
+        // 找到对应的图层并修改其样式
+        const updatedLayers = currentLayers.map(l => {
+          if (l.id === layer.id) {
+            // 创建新的图层配置，添加高亮样式
+            const newLayerConfig = {
+              ...l.props,
+              // 添加高亮样式函数
+              getFillColor: (d) => {
+                // 如果是选中的要素，使用高亮颜色
+                if (d.properties?.id === featureId || 
+                    d.properties?.gid === featureId || 
+                    d.properties?.fid === featureId || 
+                    d.properties?.OBJECTID === featureId) {
+                  return [255, 255, 0, 200] // 黄色高亮
+                }
+                // 其他要素使用原始颜色
+                return l.props.getFillColor ? l.props.getFillColor(d) : [0, 0, 0, 255]
+              },
+              getLineColor: (d) => {
+                // 如果是选中的要素，使用高亮边框
+                if (d.properties?.id === featureId || 
+                    d.properties?.gid === featureId || 
+                    d.properties?.fid === featureId || 
+                    d.properties?.OBJECTID === featureId) {
+                  return [255, 0, 0, 255] // 红色边框
+                }
+                // 其他要素使用原始边框颜色
+                return l.props.getLineColor ? l.props.getLineColor(d) : [0, 0, 0, 255]
+              },
+              getLineWidth: (d) => {
+                // 如果是选中的要素，使用粗边框
+                if (d.properties?.id === featureId || 
+                    d.properties?.gid === featureId || 
+                    d.properties?.fid === featureId || 
+                    d.properties?.OBJECTID === featureId) {
+                  return 4 // 粗边框
+                }
+                // 其他要素使用原始边框宽度
+                return l.props.getLineWidth ? l.props.getLineWidth(d) : 1
+              }
+            }
+            
+            // 根据图层类型创建新的图层实例
+            if (l.constructor.name === 'GeoJsonLayer') {
+              return new GeoJsonLayer(newLayerConfig)
+            } else if (l.constructor.name === 'MVTLayer') {
+              return new MVTLayer(newLayerConfig)
+            } else {
+              // 对于其他类型的图层，尝试直接更新属性
+              return l
+            }
+          }
+          return l
+        })
+        
+        // 更新图层
+        deckgl.value.setProps({ layers: updatedLayers })
+        
+        console.log('✅ 通过图层样式高亮要素:', featureId)
+      } catch (error) {
+        console.error('❌ 通过图层样式高亮失败:', error)
+      }
+    }
+    
+    // 🔥 新增：从Martin服务获取完整几何
+    const getMartinCompleteGeometry = async (featureId, layerInfo) => {
+      try {
+        const layerName = layerInfo?.layer_name || layerInfo?.layerName
+        if (!layerName) {
+          throw new Error('缺少图层名称')
+        }
+        
+        // 构建Martin查询URL
+        const queryUrl = `${MARTIN_BASE_URL}/tiles/${layerName}/features/${featureId}`
+        
+        console.log('🔍 从Martin服务获取完整几何:', queryUrl)
+        
+        const response = await fetch(queryUrl)
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        }
+        
+        const data = await response.json()
+        
+        if (data && data.features && data.features.length > 0) {
+          const completeFeature = data.features[0]
+          console.log('✅ 获取到完整几何:', completeFeature.geometry?.type)
+          return completeFeature.geometry
+        } else {
+          throw new Error('未找到要素数据')
+        }
+      } catch (error) {
+        console.warn('❌ 从Martin服务获取完整几何失败:', error)
+        throw error
+      }
+    }
+    
+    // 🔥 新增：从GeoServer服务获取完整几何
+    const getGeoServerCompleteGeometry = async (featureId, layerInfo) => {
+      try {
+        const workspace = layerInfo?.workspace || 'cite'
+        const layerName = layerInfo?.layer_name || layerInfo?.layerName
+        if (!layerName) {
+          throw new Error('缺少图层名称')
+        }
+        
+        // 构建GeoServer WFS查询URL
+        const queryUrl = `${layerInfo?.base_url || 'http://localhost:8080/geoserver'}/wfs?` +
+          `service=WFS&version=1.0.0&request=GetFeature&typeName=${workspace}:${layerName}&` +
+          `featureID=${featureId}&outputFormat=application/json`
+        
+        console.log('🔍 从GeoServer服务获取完整几何:', queryUrl)
+        
+        const response = await fetch(queryUrl)
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        }
+        
+        const data = await response.json()
+        
+        if (data && data.features && data.features.length > 0) {
+          const completeFeature = data.features[0]
+          console.log('✅ 获取到完整几何:', completeFeature.geometry?.type)
+          return completeFeature.geometry
+        } else {
+          throw new Error('未找到要素数据')
+        }
+      } catch (error) {
+        console.warn('❌ 从GeoServer服务获取完整几何失败:', error)
+        throw error
+      }
+    }
+    
     // 更新鼠标坐标
     const updateMouseCoordinates = (info) => {
       if (info.coordinate) {
@@ -544,15 +669,199 @@ export default {
       }
     }
 
-    // 处理地图点击
+    // 🔥 简化：处理地图点击
     const handleMapClick = (info) => {
-      if (info.layer && info.object) {
+      console.log('地图点击事件:', info)
+      
+      if (info.layer && info.object && info.object.properties) {
+        const feature = info.object
+        const layer = info.layer
+        const coordinate = info.coordinate
+        // 🔥 生成稳定的要素ID
+        const featureId = generateFeatureId(feature)
+        
+        // 🔥 使用几何高亮方案：设置选中状态
+        selectedFeatureId.value = featureId
+        selectedLayerId.value = layer.id
+        
+        // 设置弹窗状态
+        selectedFeatureState.value = {
+          feature: feature,
+          layer: layer,
+          coordinate: coordinate,
+          popupVisible: true,
+          popupContent: buildFeaturePopupContent(feature, layer),
+          popupPosition: { x: 0, y: 0 }, // 不再使用动态位置
+          selectedFeatureId: featureId
+        }
+        
+        // 🔥 创建高亮图层并添加到地图
+        // 优先尝试获取完整几何进行高亮，如果失败则使用图层样式高亮
+        const originalFeatureId = feature.properties?.id || feature.properties?.gid || feature.properties?.fid || feature.properties?.OBJECTID
+        
+        if (originalFeatureId) {
+          // 尝试使用完整几何高亮
+          addHighlightLayer(feature, layer).catch(() => {
+            // 如果获取完整几何失败，使用图层样式高亮
+            console.log('🔄 回退到图层样式高亮')
+            highlightFeatureByStyle(originalFeatureId, layer)
+          })
+        } else {
+          // 没有要素ID，直接使用当前几何高亮
+          addHighlightLayer(feature, layer)
+        }
+        
+        // 🔥 调试信息
+        console.log('✅ 选中要素:', featureId, '图层:', layer.id, '几何:', feature.geometry?.type)
+        
+        // 触发图层点击事件
         emit('layer-click', {
-          layer: info.layer,
-          feature: info.object,
-          coordinate: info.coordinate
+          layer: layer,
+          feature: feature,
+          coordinate: coordinate
         })
+        
+        console.log('要素已选择:', featureId, feature.properties)
+      } else {
+        // 点击空白区域，清除选择
+        clearFeatureSelection()
       }
+    }
+    
+    // 🔥 新增：构建要素弹窗内容
+    const buildFeaturePopupContent = (feature, layer) => {
+      const properties = feature.properties || {}
+      const layerInfo = feature.layerInfo || layer?.props?.layerInfo || {}
+      
+      // 过滤有效的属性，显示所有属性
+      const filteredProperties = Object.entries(properties)
+        .filter(([key, value]) => {
+          if (key === 'geometry' || key === 'geom') return false
+          if (value == null || value === 'NULL' || value === '') return false
+          if (typeof value === 'object') return false
+          return true
+        })
+      
+      let content = `<div style="max-width: 350px; font-family: 'Microsoft YaHei', sans-serif; user-select: text;">
+        <div style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid rgba(255,255,255,0.3);">
+          <strong style="color: #fff; font-size: 14px;">${layerInfo.layerName || '图层'}</strong>
+          <small style="background: rgba(255,255,255,0.2); padding: 2px 6px; border-radius: 3px; font-size: 10px; margin-left: 8px;">
+            ${layerInfo.fileType?.toUpperCase() || 'MVT'}
+          </small>
+        </div>`
+      
+      if (filteredProperties.length === 0) {
+        content += '<div style="color: rgba(255,255,255,0.7); font-style: italic; font-size: 12px; user-select: text;">暂无属性信息</div>'
+      } else {
+        filteredProperties.forEach(([key, value]) => {
+          let displayKey = key.length > 15 ? key.substring(0, 15) + '...' : key
+          let displayValue = String(value).length > 30 ? String(value).substring(0, 30) + '...' : value
+          
+          if (typeof value === 'number' && value % 1 !== 0) {
+            displayValue = Number(value).toFixed(3)
+          }
+          
+          content += `
+            <div style="margin-bottom: 6px; font-size: 12px; display: flex; user-select: text;">
+              <span style="color: rgba(255,255,255,0.8); margin-right: 10px; min-width: 70px; font-weight: 500;">${displayKey}：</span>
+              <span style="color: #fff; flex: 1;">${displayValue}</span>
+            </div>
+          `
+        })
+        
+        content += `<div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.3); color: rgba(255,255,255,0.6); font-style: italic; font-size: 10px; text-align: center; user-select: text;">共 ${filteredProperties.length} 个属性</div>`
+      }
+      
+      content += '</div>'
+      return content
+    }
+    
+
+
+    // 🔥 添加高亮图层到地图
+    const addHighlightLayer = async (feature, layer) => {
+      if (!deckgl.value) return
+      
+      try {
+        // 先移除现有的高亮图层
+        removeHighlightLayer()
+        
+        // 🔥 尝试获取完整的几何信息
+        const completeGeometry = await getCompleteFeatureGeometry(feature, layer)
+        
+        // 创建包含完整几何的要素对象
+        const completeFeature = {
+          ...feature,
+          geometry: completeGeometry
+        }
+        
+        // 创建新的高亮图层
+        const highlightLayer = createHighlightLayer(completeFeature)
+        if (!highlightLayer) return
+        
+        // 获取当前所有图层
+        const currentLayers = deckgl.value.props.layers || []
+        
+        // 添加高亮图层到最上层
+        const newLayers = [...currentLayers, highlightLayer]
+        
+        deckgl.value.setProps({ layers: newLayers })
+        
+        console.log('✅ 高亮图层已添加（使用完整几何）')
+      } catch (error) {
+        console.error('❌ 添加高亮图层失败:', error)
+        
+        // 如果获取完整几何失败，回退到使用当前几何
+        try {
+          const highlightLayer = createHighlightLayer(feature)
+          if (highlightLayer) {
+            const currentLayers = deckgl.value.props.layers || []
+            const newLayers = [...currentLayers, highlightLayer]
+            deckgl.value.setProps({ layers: newLayers })
+            console.log('✅ 高亮图层已添加（使用当前几何）')
+          }
+        } catch (fallbackError) {
+          console.error('❌ 回退高亮也失败:', fallbackError)
+        }
+      }
+    }
+    
+    // 🔥 移除高亮图层
+    const removeHighlightLayer = () => {
+      if (!deckgl.value) return
+      
+      try {
+        const currentLayers = deckgl.value.props.layers || []
+        const filteredLayers = currentLayers.filter(layer => layer.id !== 'highlight-layer')
+        
+        if (filteredLayers.length !== currentLayers.length) {
+          deckgl.value.setProps({ layers: filteredLayers })
+          console.log('✅ 高亮图层已移除')
+        }
+      } catch (error) {
+        console.error('❌ 移除高亮图层失败:', error)
+      }
+    }
+    
+    // 🔥 清除要素选择
+    const clearFeatureSelection = () => {
+      // 清除状态
+      selectedFeatureId.value = null
+      selectedLayerId.value = null
+      selectedFeatureState.value = {
+        feature: null,
+        layer: null,
+        coordinate: null,
+        popupVisible: false,
+        popupContent: '',
+        popupPosition: { x: 0, y: 0 },
+        selectedFeatureId: null
+      }
+      
+      // 🔥 移除高亮图层
+      removeHighlightLayer()
+      
+      console.log('✅ 要素选择已清除，高亮已移除')
     }
 
     // 三维模式状态
@@ -843,6 +1152,8 @@ export default {
         },
         // 启用拾取
         pickable: true,
+        // 🔥 修改：禁用自动高亮，改为手动控制
+        autoHighlight: false,
         // 图层信息 - 便于调试
         layerInfo: {
           layerName: layer.layer_name,
@@ -913,6 +1224,8 @@ export default {
             const properties = feature.properties || {}
             const geometryType = feature.geometry?.type
             
+            // 🔥 移除自定义高亮逻辑，让Deck.gl内置高亮处理
+            
             // 获取DXF图层名称 - 参考OpenLayers的图层名称提取
             let dxfLayerName = null
             if (properties.cad_layer && typeof properties.cad_layer === 'string') {
@@ -973,6 +1286,8 @@ export default {
           getLineColor: (feature) => {
             const properties = feature.properties || {}
             
+            // 🔥 移除自定义高亮逻辑，让Deck.gl内置高亮处理
+            
             // 获取DXF图层名称
             let dxfLayerName = null
             if (properties.cad_layer && typeof properties.cad_layer === 'string') {
@@ -1012,6 +1327,8 @@ export default {
           getLineWidth: (feature) => {
             const properties = feature.properties || {}
             
+            // 🔥 移除自定义高亮逻辑，让Deck.gl内置高亮处理
+            
             // 获取DXF图层名称
             let dxfLayerName = null
             if (properties.cad_layer && typeof properties.cad_layer === 'string') {
@@ -1037,6 +1354,8 @@ export default {
           // 点半径函数 - 参考OpenLayers的点样式
           getPointRadius: (feature) => {
             const properties = feature.properties || {}
+            
+            // 🔥 移除自定义高亮逻辑，让Deck.gl内置高亮处理
             
             // 获取DXF图层名称
             let dxfLayerName = null
@@ -1083,8 +1402,8 @@ export default {
         pointRadiusMinPixels: 2,
         // 启用拾取
         pickable: true,
-        // 自动高亮
-        autoHighlight: true,
+        // 🔥 使用几何高亮方案：禁用内置高亮
+        autoHighlight: false,
         // 图层信息 - 便于调试
         layerInfo: {
           layerName: layer.layer_name,
@@ -1187,7 +1506,7 @@ export default {
           // 构建实际的WMS请求URL
           const actualUrl = wmsTileUrl.replace('{bbox}', `${west},${south},${east},${north}`)
           
-          console.log(`WMS瓦片请求: z=${z}, x=${x}, y=${y}, bbox=${west.toFixed(2)},${south.toFixed(2)},${east.toFixed(2)},${north.toFixed(2)}`)
+          
           
           // 返回图像URL，Deck.gl会自动加载这个图像
           return actualUrl
@@ -1607,6 +1926,40 @@ export default {
       console.log('✅ 二维模式已恢复')
     }
 
+    // 🔥 样式更新相关方法
+    const updateMartinLayerStyle = async (layer, styleConfig) => {
+      console.log('更新Martin图层样式:', layer.layer_name, styleConfig)
+      // 这里可以实现Martin图层的样式更新逻辑
+      // 由于Deck.gl的图层管理方式不同，可能需要重新创建图层
+      ElMessage.success('Martin图层样式已更新')
+    }
+    
+    const updateGeoServerLayerStyle = async (layer, styleConfig) => {
+      console.log('更新GeoServer图层样式:', layer.layer_name, styleConfig)
+      // 这里可以实现GeoServer图层的样式更新逻辑
+      ElMessage.success('GeoServer图层样式已更新')
+    }
+    
+    const updateDxfStyles = (layer, styles) => {
+      console.log('更新DXF样式:', layer.layer_name, styles)
+      // 这里可以实现DXF样式的更新逻辑
+      ElMessage.success('DXF样式已更新')
+    }
+    
+    const updatePopupConfig = (layer, popupConfig) => {
+      console.log('更新弹窗配置:', layer.layer_name, popupConfig)
+      // 这里可以实现弹窗配置的更新逻辑
+      ElMessage.success('弹窗配置已更新')
+    }
+    
+    const refreshLayers = () => {
+      console.log('刷新地图图层')
+      // 这里可以实现图层刷新逻辑
+      ElMessage.success('地图图层已刷新')
+    }
+
+
+
     // 组件挂载
     onMounted(async () => {
       await nextTick()
@@ -1633,14 +1986,36 @@ export default {
       locationLoading,
       userLocationVisible,
       currentBaseMapAttribution,
+      // 🔥 简化：要素选择相关状态
+      selectedFeatureState,
+      selectedFeatureId,
+      selectedLayerId,
       // 方法
       onBaseMapChange,
       refreshMap,
       toggleUserLocation,
       toggleLayersCache,
-      updateBaseMapAttribution
+      updateBaseMapAttribution,
+      // 🔥 样式更新相关方法
+      updateMartinLayerStyle,
+      updateGeoServerLayerStyle,
+      updateDxfStyles,
+      updatePopupConfig,
+      refreshLayers,
+      // 🔥 新增：要素选择相关方法
+      clearFeatureSelection
     }
-  }
+  },
+  // 🔥 暴露方法给父组件
+  expose: [
+    'updateMartinLayerStyle', 
+    'updateGeoServerLayerStyle', 
+    'updateDxfStyles', 
+    'updatePopupConfig', 
+    'refreshLayers',
+    'deckgl',
+    'clearFeatureSelection' // �� 新增：暴露清除要素选择方法
+  ]
 }
 </script>
 
@@ -1731,38 +2106,119 @@ export default {
 }
 
 /* 按钮样式 - 参考OpenLayers的按钮样式 */
-.refresh-button {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  border: 1px solid #67c23a;
-}
-
-.refresh-button:hover {
-  background-color: #5daf34;
-  border-color: #5daf34;
-}
-
-.refresh-button.is-loading {
-  background-color: #85ce61;
-  border-color: #85ce61;
-}
-
+.refresh-button,
+.cache-toggle-button,
 .location-button {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  border: 1px solid #409EFF;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #333;
 }
 
+.refresh-button:hover,
+.cache-toggle-button:hover,
 .location-button:hover {
-  background-color: #3a8ee6;
-  border-color: #3a8ee6;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-.location-button.is-loading {
-  background-color: #66b1ff;
-  border-color: #66b1ff;
+.refresh-button:active,
+.cache-toggle-button:active,
+.location-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
-.cache-toggle-button {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+/* 🔥 新增：要素选择弹窗样式 */
+.feature-popup {
+  position: absolute;
+  top: 10px;
+  right: 60px; /* 避开右上角控制按钮 */
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.95);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  max-width: 400px;
+  min-width: 300px;
+  max-height: 80vh; /* 限制最大高度为视口高度的80% */
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px 6px 0 0;
+  user-select: none; /* 标题栏不允许选择 */
+}
+
+.popup-title {
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.popup-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.popup-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.popup-content {
+  padding: 12px;
+  flex: 1;
+  overflow-y: auto;
+  cursor: text;
+  min-height: 0; /* 确保flex子元素可以收缩 */
+  user-select: text; /* 允许文字选择 */
+}
+
+/* 弹窗内容滚动条样式 */
+.popup-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.popup-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.popup-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+}
+
+.popup-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
 }
 
 /* 移动端适配 - 参考OpenLayers的移动端样式 */
@@ -1823,6 +2279,26 @@ export default {
   .map-info-panel {
     bottom: 8px;
     right: 8px;
+  }
+  
+  /* 🔥 移动端弹窗适配 */
+  .feature-popup {
+    max-width: calc(100vw - 20px);
+    min-width: 280px;
+    max-height: 70vh; /* 移动端限制更小的高度 */
+    font-size: 14px;
+  }
+  
+  .popup-header {
+    padding: 10px 12px;
+  }
+  
+  .popup-title {
+    font-size: 14px;
+  }
+  
+  .popup-content {
+    padding: 10px;
   }
 }
 </style> 

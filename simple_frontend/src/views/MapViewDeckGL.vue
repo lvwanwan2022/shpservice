@@ -515,6 +515,136 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 🔥 图层样式设置对话框 -->
+    <el-dialog title="图层样式设置" v-model="styleDialogVisible" width="800px" :close-on-click-modal="false">
+      <div class="style-dialog-content" v-if="styleDialogVisible && currentStyleLayer && activeStyleTab">
+        <el-tabs v-model="activeStyleTab" :key="`style-tabs-${currentStyleLayer.id || 'unknown'}-${activeStyleTab}`">
+          <el-tab-pane label="基础样式" name="basic">
+            
+            
+            <el-form :model="styleForm" label-width="100px">
+              <template v-if="isVectorLayer">
+                <template v-if="hasPointGeometry">
+                  <h4>点样式</h4>
+                  <el-form-item label="大小">
+                    <el-slider v-model="styleForm.point.size" :min="1" :max="15" :step="1"></el-slider>
+                  </el-form-item>
+                  <el-form-item label="颜色">
+                    <el-color-picker v-model="styleForm.point.color"></el-color-picker>
+                  </el-form-item>
+                </template>
+                
+                <template v-if="hasLineGeometry">
+                  <h4>线样式</h4>
+                  <el-form-item label="线宽">
+                    <el-slider v-model="styleForm.line.width" :min="1" :max="8" :step="1"></el-slider>
+                  </el-form-item>
+                  <el-form-item label="颜色">
+                    <el-color-picker v-model="styleForm.line.color"></el-color-picker>
+                  </el-form-item>
+                </template>
+                
+                <template v-if="hasPolygonGeometry">
+                  <h4>面样式</h4>
+                  <el-form-item label="填充颜色">
+                    <el-color-picker v-model="styleForm.polygon.fillColor"></el-color-picker>
+                  </el-form-item>
+                  <el-form-item label="填充透明度">
+                    <el-slider v-model="styleForm.polygon.fillOpacity" :min="0" :max="1" :step="0.1"></el-slider>
+                  </el-form-item>
+                  <el-form-item label="边框颜色">
+                    <el-color-picker v-model="styleForm.polygon.outlineColor"></el-color-picker>
+                  </el-form-item>
+                </template>
+                
+                <!-- 如果没有检测到具体的几何类型，显示通用样式设置 -->
+                <template v-if="!hasPointGeometry && !hasLineGeometry && !hasPolygonGeometry">
+                  <h4>通用样式</h4>
+                  <el-form-item label="点大小">
+                    <el-slider v-model="styleForm.point.size" :min="1" :max="15" :step="1"></el-slider>
+                  </el-form-item>
+                  <el-form-item label="点颜色">
+                    <el-color-picker v-model="styleForm.point.color"></el-color-picker>
+                  </el-form-item>
+                  <el-form-item label="线宽">
+                    <el-slider v-model="styleForm.line.width" :min="1" :max="8" :step="1"></el-slider>
+                  </el-form-item>
+                  <el-form-item label="线颜色">
+                    <el-color-picker v-model="styleForm.line.color"></el-color-picker>
+                  </el-form-item>
+                  <el-form-item label="填充颜色">
+                    <el-color-picker v-model="styleForm.polygon.fillColor"></el-color-picker>
+                  </el-form-item>
+                  <el-form-item label="填充透明度">
+                    <el-slider v-model="styleForm.polygon.fillOpacity" :min="0" :max="1" :step="0.1"></el-slider>
+                  </el-form-item>
+                  <el-form-item label="边框颜色">
+                    <el-color-picker v-model="styleForm.polygon.outlineColor"></el-color-picker>
+                  </el-form-item>
+                </template>
+              </template>
+              
+              <template v-else>
+                <h4>栅格样式</h4>
+                <el-form-item label="透明度">
+                  <el-slider v-model="styleForm.raster.opacity" :min="0" :max="1" :step="0.1"></el-slider>
+                </el-form-item>
+              </template>
+            </el-form>
+          </el-tab-pane>
+
+          <el-tab-pane v-if="isDxfMartinLayer === true" label="Martin(DXF)" name="dxf">
+            <div v-if="currentStyleLayer && currentStyleLayer.martin_service_id">
+              <DxfStyleEditor 
+                :key="`dxf-editor-${currentStyleLayer.martin_service_id}`"
+                :layer-data="currentStyleLayer" 
+                :martin-service-id="currentStyleLayer.martin_service_id"
+                @styles-updated="onDxfStylesUpdated"
+                @popup-control-changed="onPopupControlChanged"
+                ref="dxfStyleEditorRef"
+              />
+            </div>
+            <div v-else class="loading-placeholder">
+              <el-icon class="is-loading"><Loading /></el-icon>
+              <span>正在加载样式编辑器...</span>
+              <div style="margin-top: 10px; font-size: 12px; color: #999;">
+                调试信息: martin_service_id = {{ currentStyleLayer?.martin_service_id }} ({{ typeof currentStyleLayer?.martin_service_id }})
+              </div>
+            </div>
+          </el-tab-pane>
+
+          <el-tab-pane v-if="!isMartinLayer" label="SLD样式" name="sld">
+            <div v-if="currentStyleLayer">
+              <SldStyleSelector 
+                :key="`sld-selector-${currentStyleLayer.id}`"
+                :layer-id="currentStyleLayer.id"
+                :layer-geometry-type="getLayerGeometryType(currentStyleLayer)"
+                @style-applied="onSldStyleApplied"
+                @style-removed="onSldStyleRemoved"
+                ref="sldStyleSelectorRef"
+              />
+            </div>
+            <div v-else class="loading-placeholder">
+              <el-icon class="is-loading"><Loading /></el-icon>
+              <span>正在加载SLD样式选择器...</span>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+      <div v-else class="dialog-loading">
+        <el-icon class="is-loading"><Loading /></el-icon>
+        <span>正在初始化对话框...</span>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="styleDialogVisible = false">取消</el-button>
+          <el-button v-if="activeStyleTab === 'basic'" type="primary" @click="applyStyle">应用样式</el-button>
+          <el-button v-if="activeStyleTab === 'dxf' && isDxfMartinLayer === true" type="primary" @click="applyAndSaveDxfStyles" :loading="savingDxfStyles">保存样式到数据库</el-button>
+          <el-button v-if="activeStyleTab === 'sld' && !isMartinLayer" type="primary" @click="refreshMapLayers">刷新地图</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -525,11 +655,19 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import MapViewerDeckGL from '@/components/MapViewerDeckGL.vue'
 import { isMobileDevice } from '@/utils/deviceUtils'
 import gisApi from '@/api/gis'
+// 🔥 添加样式设置相关组件导入
+import DxfStyleEditor from '@/components/DxfStyleEditor.vue'
+import SldStyleSelector from '@/components/SldStyleSelector.vue'
+import { Loading } from '@element-plus/icons-vue'
 
 export default {
   name: 'MapViewDeckGL',
   components: {
-    MapViewerDeckGL
+    MapViewerDeckGL,
+    // 🔥 添加样式设置相关组件
+    DxfStyleEditor,
+    SldStyleSelector,
+    Loading
   },
   setup() {
     const route = useRoute()
@@ -552,6 +690,25 @@ export default {
     const layersCacheEnabled = ref(true)
     const loading = ref(false)
     const currentActiveLayer = ref(null)
+    
+    // 🔥 样式设置相关响应式数据
+    const styleDialogVisible = ref(false)
+    const currentStyleLayer = ref(null)
+    const activeStyleTab = ref('basic')
+    const savingDxfStyles = ref(false)
+    const dxfStyleEditorRef = ref(null)
+    const sldStyleSelectorRef = ref(null)
+    
+    // 样式表单
+    const styleForm = reactive({
+      point: { color: '#FF0000', size: 6 },
+      line: { color: '#0000FF', width: 2 },
+      polygon: { fillColor: '#00FF00', fillOpacity: 0.3, outlineColor: '#000000' },
+      raster: { opacity: 1 }
+    })
+    
+    // 图层样式缓存
+    const layerStyleCache = ref({})
     
     // 图层管理
     const layersList = ref([])
@@ -579,6 +736,49 @@ export default {
       return [...layersList.value].sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0))
     })
     
+    // 🔥 样式设置相关计算属性
+    const isVectorLayer = computed(() => {
+      if (!currentStyleLayer.value) return false
+      // 更宽松的向量图层判断，包括更多文件类型
+      const vectorTypes = ['shp', 'dxf', 'dwg', 'geojson', 'kml', 'gml']
+      return vectorTypes.includes(currentStyleLayer.value.file_type) || 
+             currentStyleLayer.value.service_type === 'martin' // Martin服务通常是向量图层
+    })
+    
+    const isMartinLayer = computed(() => {
+      return currentStyleLayer.value?.service_type === 'martin'
+    })
+    
+    const isDxfMartinLayer = computed(() => {
+      return currentStyleLayer.value?.service_type === 'martin' && 
+             currentStyleLayer.value?.file_type === 'dxf' && 
+             Boolean(currentStyleLayer.value?.martin_service_id)
+    })
+    
+    const hasPointGeometry = computed(() => {
+      if (!currentStyleLayer.value) return false
+      const geometryType = currentStyleLayer.value.geometry_type || currentStyleLayer.value.dimension || currentStyleLayer.value.geom_type
+      if (!geometryType) return false
+      const normalizedType = geometryType.toLowerCase()
+      return normalizedType.includes('point')
+    })
+    
+    const hasLineGeometry = computed(() => {
+      if (!currentStyleLayer.value) return false
+      const geometryType = currentStyleLayer.value.geometry_type || currentStyleLayer.value.dimension || currentStyleLayer.value.geom_type
+      if (!geometryType) return false
+      const normalizedType = geometryType.toLowerCase()
+      return normalizedType.includes('line') || normalizedType.includes('linestring')
+    })
+    
+    const hasPolygonGeometry = computed(() => {
+      if (!currentStyleLayer.value) return false
+      const geometryType = currentStyleLayer.value.geometry_type || currentStyleLayer.value.dimension || currentStyleLayer.value.geom_type
+      if (!geometryType) return false
+      const normalizedType = geometryType.toLowerCase()
+      return normalizedType.includes('polygon')
+    })
+    
     // 地图准备完成
     const onMapReady = (mapInstance) => {
       deckglMap.value = mapInstance
@@ -588,7 +788,19 @@ export default {
     // 图层点击事件
     const onLayerClick = (event) => {
       console.log('图层点击:', event)
-      // 这里可以显示要素信息弹窗
+      // 🔥 修改：处理要素选择事件
+      if (event.feature && event.layer) {
+        // 可以在这里添加额外的要素选择逻辑
+        // 例如：更新当前活动图层、显示要素详情等
+        console.log('要素已选择:', event.feature.properties)
+      }
+    }
+    
+    // 🔥 新增：清除要素选择
+    const clearFeatureSelection = () => {
+      if (mapViewer.value && mapViewer.value.clearFeatureSelection) {
+        mapViewer.value.clearFeatureSelection()
+      }
     }
     
     // 切换图层面板
@@ -753,17 +965,96 @@ export default {
       }
     }
     
-    // 显示样式设置对话框
-    const showStyleDialog = (layer) => {
-      console.log('显示样式设置对话框:', layer.layer_name)
+    // 🔥 显示样式设置对话框
+    const showStyleDialog = async (layer) => {
+      console.log('=== showStyleDialog 被调用 ===')
+      console.log('传入的 layer 参数:', layer)
+      console.log('layer 完整对象:', JSON.stringify(layer, null, 2))
+      
+      currentStyleLayer.value = layer
+      
+      // 调试 isDxfMartinLayer 计算
+      console.log('计算 isDxfMartinLayer:')
+      console.log('  service_type:', currentStyleLayer.value?.service_type)
+      console.log('  file_type:', currentStyleLayer.value?.file_type)
+      console.log('  martin_service_id:', currentStyleLayer.value?.martin_service_id)
+      console.log('  Boolean(martin_service_id):', Boolean(currentStyleLayer.value?.martin_service_id))
+      
+      const isDxfResult = currentStyleLayer.value?.service_type === 'martin' && 
+                         currentStyleLayer.value?.file_type === 'dxf' && 
+                         Boolean(currentStyleLayer.value?.martin_service_id)
+      console.log('  最终计算结果:', isDxfResult)
+      
+      activeStyleTab.value = isDxfResult ? 'dxf' : 'basic'
+      
+      console.log('设置后的状态:')
+      console.log('currentStyleLayer.value:', currentStyleLayer.value)
+      console.log('activeStyleTab.value:', activeStyleTab.value)
+      console.log('isDxfMartinLayer.value:', isDxfMartinLayer.value)
+      
+      // 从后端获取保存的样式配置
+      try {
+        let savedStyleConfig = null
+        
+        if (currentStyleLayer.value.service_type === 'martin' && currentStyleLayer.value.martin_service_id) {
+          // Martin服务样式
+          const response = await gisApi.getMartinServiceStyle(currentStyleLayer.value.martin_service_id)
+          if (response?.success && response.data) {
+            savedStyleConfig = response.data
+            console.log('✅ 从Martin服务获取到样式配置:', savedStyleConfig)
+          }
+        } else {
+          // GeoServer服务样式
+          const response = await gisApi.getLayerStyle(currentStyleLayer.value.id)
+          if (response?.success && response.data) {
+            savedStyleConfig = response.data
+            console.log('✅ 从GeoServer服务获取到样式配置:', savedStyleConfig)
+          }
+        }
+        
+        if (savedStyleConfig) {
+          console.log('✅ 应用保存的样式配置')
+          // 应用保存的样式配置到表单
+          if (savedStyleConfig.point) {
+            styleForm.point = { ...styleForm.point, ...savedStyleConfig.point }
+          }
+          if (savedStyleConfig.line) {
+            styleForm.line = { ...styleForm.line, ...savedStyleConfig.line }
+          }
+          if (savedStyleConfig.polygon) {
+            styleForm.polygon = { ...styleForm.polygon, ...savedStyleConfig.polygon }
+          }
+          if (savedStyleConfig.raster) {
+            styleForm.raster = { ...styleForm.raster, ...savedStyleConfig.raster }
+          }
+          
+          // 保存到缓存
+          layerStyleCache.value[currentStyleLayer.value.id] = savedStyleConfig
+        } else {
+          console.log('⚠️ 未找到保存的样式配置，使用默认值')
+          // 重置样式表单为默认值
+          styleForm.point = { color: '#FF0000', size: 6 }
+          styleForm.line = { color: '#0000FF', width: 2 }
+          styleForm.polygon = { fillColor: '#00FF00', fillOpacity: 0.3, outlineColor: '#000000' }
+          styleForm.raster = { opacity: 1 }
+        }
+      } catch (error) {
+        console.error('❌ 获取样式配置失败:', error)
+        // 出错时使用默认值
+        styleForm.point = { color: '#FF0000', size: 6 }
+        styleForm.line = { color: '#0000FF', width: 2 }
+        styleForm.polygon = { fillColor: '#00FF00', fillOpacity: 0.3, outlineColor: '#000000' }
+        styleForm.raster = { opacity: 1 }
+      }
+      
+      styleDialogVisible.value = true
+      console.log('styleDialogVisible 设置为 true')
+      console.log('================================')
       
       // 🔥 手机端：样式设置后自动关闭图层管理抽屉
       if (isMobile.value && mobileDrawerVisible.value) {
         closeMobileDrawer()
       }
-      
-      ElMessage.info('样式设置功能开发中...')
-      // TODO: 实现样式设置对话框
     }
     
     // 获取服务类型样式类
@@ -1275,6 +1566,100 @@ export default {
       fetchSceneList()
     })
     
+    // 🔥 应用样式
+    const applyStyle = async () => {
+      if (!currentStyleLayer.value) return
+      
+      const styleConfig = isVectorLayer.value 
+        ? { point: { ...styleForm.point }, line: { ...styleForm.line }, polygon: { ...styleForm.polygon } }
+        : { raster: { ...styleForm.raster } }
+      
+      // 将样式配置保存到缓存中，供重新加载图层时使用
+      layerStyleCache.value[currentStyleLayer.value.id] = styleConfig
+      
+      if (currentStyleLayer.value.service_type === 'martin' && currentStyleLayer.value.martin_service_id) {
+        await gisApi.updateMartinServiceStyle(currentStyleLayer.value.martin_service_id, styleConfig)
+      } else {
+        await gisApi.updateLayerStyle(currentStyleLayer.value.id, styleConfig)
+      }
+      
+      // 重新加载图层
+      if (currentStyleLayer.value.service_type === 'martin') {
+        // 通知MapViewerDeckGL组件更新图层样式
+        if (mapViewer.value && mapViewer.value.updateMartinLayerStyle) {
+          await mapViewer.value.updateMartinLayerStyle(currentStyleLayer.value, styleConfig)
+        }
+      } else {
+        // 通知MapViewerDeckGL组件更新GeoServer图层样式
+        if (mapViewer.value && mapViewer.value.updateGeoServerLayerStyle) {
+          await mapViewer.value.updateGeoServerLayerStyle(currentStyleLayer.value, styleConfig)
+        }
+      }
+      
+      styleDialogVisible.value = false
+      ElMessage.success('样式应用成功')
+    }
+    
+    // 🔥 应用并保存DXF样式
+    const applyAndSaveDxfStyles = async () => {
+      if (!currentStyleLayer.value || !dxfStyleEditorRef.value) return
+      
+      try {
+        savingDxfStyles.value = true
+        await dxfStyleEditorRef.value.saveStylesToDatabase()
+        ElMessage.success('DXF样式保存成功')
+        styleDialogVisible.value = false
+      } catch (error) {
+        console.error('保存DXF样式失败:', error)
+        ElMessage.error('保存DXF样式失败')
+      } finally {
+        savingDxfStyles.value = false
+      }
+    }
+    
+    // 🔥 DXF样式更新回调
+    const onDxfStylesUpdated = (styles) => {
+      console.log('DXF样式已更新:', styles)
+      // 通知地图组件更新样式
+      if (mapViewer.value && mapViewer.value.updateDxfStyles) {
+        mapViewer.value.updateDxfStyles(currentStyleLayer.value, styles)
+      }
+    }
+    
+    // 🔥 弹窗控制变化回调
+    const onPopupControlChanged = (popupConfig) => {
+      console.log('弹窗控制配置已更新:', popupConfig)
+      // 通知地图组件更新弹窗配置
+      if (mapViewer.value && mapViewer.value.updatePopupConfig) {
+        mapViewer.value.updatePopupConfig(currentStyleLayer.value, popupConfig)
+      }
+    }
+    
+    // 🔥 SLD样式应用回调
+    const onSldStyleApplied = (styleInfo) => {
+      console.log('SLD样式已应用:', styleInfo)
+      ElMessage.success('SLD样式应用成功')
+    }
+    
+    // 🔥 SLD样式移除回调
+    const onSldStyleRemoved = () => {
+      console.log('SLD样式已移除')
+      ElMessage.success('SLD样式移除成功')
+    }
+    
+    // 🔥 刷新地图图层
+    const refreshMapLayers = () => {
+      if (mapViewer.value && mapViewer.value.refreshLayers) {
+        mapViewer.value.refreshLayers()
+        ElMessage.success('地图图层已刷新')
+      }
+    }
+    
+    // 🔥 获取图层几何类型
+    const getLayerGeometryType = (layer) => {
+      return layer.geometry_type || layer.dimension || 'unknown'
+    }
+    
     return {
       // 组件引用
       mapViewer,
@@ -1307,9 +1692,27 @@ export default {
       layerSearchForm,
       currentActiveLayer,
       
+      // 🔥 样式设置相关响应式数据
+      styleDialogVisible,
+      currentStyleLayer,
+      activeStyleTab,
+      savingDxfStyles,
+      dxfStyleEditorRef,
+      sldStyleSelectorRef,
+      styleForm,
+      layerStyleCache,
+      
       // 计算属性
       isMobile,
       sortedLayersList,
+      
+      // 🔥 样式设置相关计算属性
+      isVectorLayer,
+      isMartinLayer,
+      isDxfMartinLayer,
+      hasPointGeometry,
+      hasLineGeometry,
+      hasPolygonGeometry,
       
       // 方法
       onMapReady,
@@ -1342,7 +1745,17 @@ export default {
       toggleLayersCache,
       fetchSceneList,
       fetchSceneLayers,
-      selectLayer
+      selectLayer,
+      
+      applyStyle,
+      applyAndSaveDxfStyles,
+      onDxfStylesUpdated,
+      onPopupControlChanged,
+      onSldStyleApplied,
+      onSldStyleRemoved,
+      refreshMapLayers,
+      getLayerGeometryType,
+      clearFeatureSelection
     }
   }
 }
@@ -2958,5 +3371,88 @@ export default {
     width: 100% !important;
     margin-left: 0 !important;
   }
+}
+
+/* 🔥 样式设置对话框样式 */
+.style-dialog-content {
+  min-height: 400px;
+}
+
+.style-dialog-content .el-tabs {
+  height: 100%;
+}
+
+.style-dialog-content .el-tab-pane {
+  padding: 20px 0;
+}
+
+.style-dialog-content h4 {
+  margin: 20px 0 15px 0;
+  color: #303133;
+  font-size: 16px;
+  font-weight: 600;
+  border-bottom: 1px solid #ebeef5;
+  padding-bottom: 8px;
+}
+
+.style-dialog-content .el-form-item {
+  margin-bottom: 20px;
+}
+
+.style-dialog-content .el-color-picker {
+  width: 100%;
+}
+
+.style-dialog-content .el-slider {
+  margin: 10px 0;
+}
+
+.loading-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #909399;
+  text-align: center;
+}
+
+.loading-placeholder .el-icon {
+  font-size: 32px;
+  margin-bottom: 16px;
+  color: #409eff;
+}
+
+.loading-placeholder span {
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.dialog-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  color: #909399;
+  text-align: center;
+}
+
+.dialog-loading .el-icon {
+  font-size: 48px;
+  margin-bottom: 20px;
+  color: #409eff;
+}
+
+.dialog-loading span {
+  font-size: 16px;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 20px;
+  border-top: 1px solid #ebeef5;
 }
 </style>
