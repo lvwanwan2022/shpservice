@@ -47,7 +47,7 @@
             <!-- 图层卡片列表 -->
             <div class="layer-cards" v-if="layersList && layersList.length > 0">
               <div 
-                v-for="(layer, index) in sortedLayersList" 
+                v-for="layer in sortedLayersList" 
                 :key="layer.scene_layer_id || layer.id" 
                 class="layer-card"
                 :class="{ 
@@ -319,7 +319,8 @@
                       :step="0.1"
                       :show-tooltip="false"
                       size="small"
-                      @input="updateLayerOpacity(layer)"
+                      @input="updateLayerOpacityInMap(layer)"
+                      @change="updateLayerOpacityInDatabase(layer)"
                       class="mobile-opacity-slider"
                     />
                     <span class="opacity-value">{{ Math.round((layer.opacity || 1) * 100) }}%</span>
@@ -645,7 +646,8 @@
                 :step="0.01"
                 :show-tooltip="true"
                 :format-tooltip="(val) => Math.round(val * 100) + '%'"
-                @input="updateLayerOpacity(currentSettingsLayer)"
+                @input="updateLayerOpacityInMap(currentSettingsLayer)"
+                @change="updateLayerOpacityInDatabase(currentSettingsLayer)"
                 class="opacity-slider"
               />
               <span class="opacity-value">{{ Math.round((currentSettingsLayer.opacity || 1) * 100) }}%</span>
@@ -712,6 +714,7 @@
 </template>
 
 <script>
+/* eslint-disable */
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -1032,7 +1035,21 @@ export default {
       }
     }
     
-    // 更新图层透明度
+    // 更新地图中的图层透明度（不调用API）
+    const updateLayerOpacityInMap = (layer) => {
+      // 限制透明度范围
+      if (layer.opacity < 0) layer.opacity = 0
+      if (layer.opacity > 1) layer.opacity = 1
+      
+      console.log(`更新图层 ${layer.layer_name} 透明度: ${Math.round(layer.opacity * 100)}%`)
+      
+      // 立即更新地图中的图层透明度
+      if (mapViewer.value && mapViewer.value.updateLayerOpacity) {
+        mapViewer.value.updateLayerOpacity(layer, layer.opacity)
+      }
+    }
+    
+    // 更新图层透明度（兼容原有调用）
     const updateLayerOpacity = (layer, newOpacity = null) => {
       if (newOpacity !== null) {
         layer.opacity = newOpacity
@@ -1413,6 +1430,12 @@ export default {
         await updateLayersOrder(newOrders)
         ElMessage.success('图层上移成功')
         await fetchSceneLayers(selectedSceneId.value)
+        // 打印当前图层顺序
+        console.log('图层顺序（上移后）:', layersList.value.map(layer => ({ 
+          name: layer.layer_name, 
+          order: layer.layer_order, 
+          zIndex: layer.zIndex 
+        })))
       } catch (error) {
         console.error('图层上移失败', error)
         ElMessage.error('图层上移失败')
@@ -1427,6 +1450,12 @@ export default {
         await updateLayersOrder(newOrders)
         ElMessage.success('图层下移成功')
         await fetchSceneLayers(selectedSceneId.value)
+        // 打印当前图层顺序
+        console.log('图层顺序（下移后）:', layersList.value.map(layer => ({ 
+          name: layer.layer_name, 
+          order: layer.layer_order, 
+          zIndex: layer.zIndex 
+        })))
       } catch (error) {
         console.error('图层下移失败', error)
         ElMessage.error('图层下移失败')
@@ -1435,7 +1464,12 @@ export default {
     
     // 计算新的图层顺序
     const calculateNewLayersOrder = (fromIndex, toIndex) => {
-      const sortedLayers = [...sortedLayersList.value]
+      // 使用原始图层列表而不是排序后的列表来进行顺序调整
+      const originalLayers = [...layersList.value]
+      
+      // 首先按layer_order降序排序，确保顺序一致
+      const sortedLayers = [...originalLayers].sort((a, b) => (b.layer_order || 0) - (a.layer_order || 0))
+      
       const movedLayer = sortedLayers[fromIndex]
       
       // 移除被移动的图层
@@ -1443,11 +1477,14 @@ export default {
       // 插入到新位置
       sortedLayers.splice(toIndex, 0, movedLayer)
       
-      // 重新分配zIndex
+      // 重新分配layer_order值
       const newOrders = {}
+      const totalLayers = sortedLayers.length
+      
+      // 从1开始分配，值越大越在上面
       sortedLayers.forEach((layer, index) => {
-        // 使用zIndex来控制图层顺序，值越大越在上面
-        newOrders[layer.scene_layer_id || layer.id] = sortedLayers.length - index
+        const newOrder = totalLayers - index
+        newOrders[layer.id] = newOrder
       })
       
       return newOrders

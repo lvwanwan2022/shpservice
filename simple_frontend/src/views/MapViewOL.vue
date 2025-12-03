@@ -164,15 +164,16 @@
                       <i class="el-icon-view opacity-icon"></i>
                       <span class="opacity-text">不透明度</span>
                       <el-slider
-                        v-model="layer.opacity"
-                        :min="0"
-                        :max="1"
-                        :step="0.1"
-                        :show-tooltip="false"
-                        size="small"
-                        @input="onLayerOpacityChange(layer)"
-                        class="opacity-slider"
-                      />
+                          v-model="layer.opacity"
+                          :min="0"
+                          :max="1"
+                          :step="0.1"
+                          :show-tooltip="false"
+                          size="small"
+                          @input="updateLayerOpacityInMap(layer)"
+                          @change="updateLayerOpacityInDatabase(layer)"
+                          class="opacity-slider"
+                        />
                       <span class="opacity-value">{{ Math.round((layer.opacity || 1) * 100) }}%</span>
                     </div>
                   </div>
@@ -421,15 +422,16 @@
                   <div class="mobile-opacity-control" @click.stop>
                     <span class="opacity-label">透明度</span>
                     <el-slider
-                      v-model="layer.opacity"
-                      :min="0"
-                      :max="1"
-                      :step="0.1"
-                      :show-tooltip="false"
-                      size="small"
-                      @input="onLayerOpacityChange(layer)"
-                      class="mobile-opacity-slider"
-                    />
+                        v-model="layer.opacity"
+                        :min="0"
+                        :max="1"
+                        :step="0.1"
+                        :show-tooltip="false"
+                        size="small"
+                        @input="updateLayerOpacityInMap(layer)"
+                        @change="updateLayerOpacityInDatabase(layer)"
+                        class="mobile-opacity-slider"
+                      />
                     <span class="opacity-value">{{ Math.round((layer.opacity || 1) * 100) }}%</span>
                   </div>
                 </div>
@@ -797,18 +799,21 @@ export default {
       }
     }
 
-    // 🔥 图层透明度变化处理
-    const onLayerOpacityChange = (layer) => {
+    // 更新地图中的图层透明度（不调用API）
+    const updateLayerOpacityInMap = (layer) => {
       // 限制透明度范围
       if (layer.opacity < 0) layer.opacity = 0
       if (layer.opacity > 1) layer.opacity = 1
       
-      // 1. 立即更新地图中的图层透明度
+      // 立即更新地图中的图层透明度
       if (mapViewerRef.value && mapViewerRef.value.updateLayerOpacity) {
         mapViewerRef.value.updateLayerOpacity(layer, layer.opacity)
       }
-      
-      // 2. 防抖更新数据库
+    }
+    
+    // 🔥 图层透明度变化处理（兼容原有调用）
+    const onLayerOpacityChange = (layer) => {
+      updateLayerOpacityInMap(layer)
       updateLayerOpacityInDatabase(layer)
     }
     
