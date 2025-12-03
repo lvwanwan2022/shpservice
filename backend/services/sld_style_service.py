@@ -270,27 +270,33 @@ class SLDStyleService:
             # 从文件系统读取原始SLD文件内容，确保内容完整和编码正确
             sld_content = None
             file_path = style.get('file_path')
+            content_source = None
+            
             if file_path and os.path.exists(file_path):
                 try:
+                    logger.info(f"尝试从文件系统读取SLD文件: {file_path}")
                     # 尝试多种编码读取文件
                     encodings = ['utf-8', 'utf-8-sig', 'gbk', 'gb2312']
                     for encoding in encodings:
                         try:
                             with open(file_path, 'r', encoding=encoding) as f:
                                 sld_content = f.read()
-                            logger.info(f"成功从文件系统读取SLD文件，使用编码: {encoding}")
+                            logger.info(f"✅ 成功从文件系统读取SLD文件，使用编码: {encoding}, 内容长度: {len(sld_content)} 字符")
+                            content_source = f"文件系统({encoding})"
                             break
                         except UnicodeDecodeError:
                             continue
                     
                     if sld_content is None:
                         # 如果所有编码都失败，尝试二进制读取后解码
+                        logger.info("文本模式读取失败，尝试二进制模式读取")
                         with open(file_path, 'rb') as f:
                             file_bytes = f.read()
                         for encoding in encodings:
                             try:
                                 sld_content = file_bytes.decode(encoding)
-                                logger.info(f"成功从二进制读取SLD文件，使用编码: {encoding}")
+                                logger.info(f"✅ 成功从二进制读取SLD文件，使用编码: {encoding}, 内容长度: {len(sld_content)} 字符")
+                                content_source = f"文件系统(二进制,{encoding})"
                                 break
                             except UnicodeDecodeError:
                                 continue
@@ -302,10 +308,23 @@ class SLDStyleService:
                 sld_content = style.get('content')
                 if not sld_content:
                     raise ValueError("SLD内容为空，无法应用样式")
-                logger.info("使用数据库中的SLD内容")
+                logger.info(f"使用数据库中的SLD内容，内容长度: {len(sld_content)} 字符")
+                content_source = "数据库"
             
-            # 记录SLD内容的前500个字符用于调试
+            # 记录SLD内容的详细信息用于调试
+            logger.info(f"准备应用的SLD内容来源: {content_source}")
+            logger.info(f"准备应用的SLD内容长度: {len(sld_content)} 字符")
             logger.debug(f"准备应用的SLD内容前500字符: {sld_content[:500]}")
+            
+            # 如果从文件系统读取成功，验证与数据库内容是否一致
+            if content_source and content_source.startswith("文件系统"):
+                db_content = style.get('content')
+                if db_content:
+                    if sld_content.strip() != db_content.strip():
+                        logger.warning("⚠️ 警告：文件系统中的SLD内容与数据库中的内容不一致，使用文件系统中的内容")
+                        logger.debug(f"文件系统内容长度: {len(sld_content)}, 数据库内容长度: {len(db_content)}")
+                    else:
+                        logger.info("✅ 文件系统中的SLD内容与数据库中的内容一致")
             
             # 应用样式到GeoServer
             success = self.geoserver_service.update_layer_style(
