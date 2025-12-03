@@ -267,12 +267,52 @@ class SLDStyleService:
             #if not self._validate_geometry_type_match(style['geometry_type'], layer_info):
                 #raise ValueError(f"SLD样式几何类型({style['geometry_type']})与图层几何类型不匹配")
             
+            # 从文件系统读取原始SLD文件内容，确保内容完整和编码正确
+            sld_content = None
+            file_path = style.get('file_path')
+            if file_path and os.path.exists(file_path):
+                try:
+                    # 尝试多种编码读取文件
+                    encodings = ['utf-8', 'utf-8-sig', 'gbk', 'gb2312']
+                    for encoding in encodings:
+                        try:
+                            with open(file_path, 'r', encoding=encoding) as f:
+                                sld_content = f.read()
+                            logger.info(f"成功从文件系统读取SLD文件，使用编码: {encoding}")
+                            break
+                        except UnicodeDecodeError:
+                            continue
+                    
+                    if sld_content is None:
+                        # 如果所有编码都失败，尝试二进制读取后解码
+                        with open(file_path, 'rb') as f:
+                            file_bytes = f.read()
+                        for encoding in encodings:
+                            try:
+                                sld_content = file_bytes.decode(encoding)
+                                logger.info(f"成功从二进制读取SLD文件，使用编码: {encoding}")
+                                break
+                            except UnicodeDecodeError:
+                                continue
+                except Exception as e:
+                    logger.warning(f"从文件系统读取SLD文件失败: {str(e)}，将使用数据库中的内容")
+            
+            # 如果从文件系统读取失败，使用数据库中的内容
+            if sld_content is None:
+                sld_content = style.get('content')
+                if not sld_content:
+                    raise ValueError("SLD内容为空，无法应用样式")
+                logger.info("使用数据库中的SLD内容")
+            
+            # 记录SLD内容的前500个字符用于调试
+            logger.debug(f"准备应用的SLD内容前500字符: {sld_content[:500]}")
+            
             # 应用样式到GeoServer
             success = self.geoserver_service.update_layer_style(
                 workspace=layer_info['workspace_name'],
                 layer=layer_info['name'],
                 style_name=style['name'],
-                sld_content=style['content']
+                sld_content=sld_content
             )
             
             if not success:

@@ -4926,19 +4926,43 @@ AbsolutePath=false
         """
         try:
             print(f"在工作空间 {workspace} 下创建或更新样式: {style_name}")
+            logger.info(f"开始创建/更新样式: {workspace}:{style_name}")
             
             # 确保SLD内容是UTF-8编码的字符串
             if isinstance(sld_content, bytes):
                 sld_content = sld_content.decode('utf-8')
             
-            # 验证SLD内容是否为有效的XML
+            # 记录SLD内容的前1000个字符用于调试
+            logger.debug(f"SLD内容前1000字符: {sld_content[:1000]}")
+            logger.debug(f"SLD内容长度: {len(sld_content)} 字符")
+            
+            # 验证SLD内容是否为有效的XML（只验证，不修改内容）
             try:
+                # 使用解析但不修改内容的方式验证
                 ET.fromstring(sld_content)
+                logger.debug("SLD XML格式验证通过")
             except ET.ParseError as e:
                 error_msg = f"SLD内容不是有效的XML: {str(e)}"
                 print(error_msg)
                 logger.error(error_msg)
+                logger.error(f"XML解析错误位置: {getattr(e, 'position', '未知')}")
                 return False
+            
+            # 确保XML声明包含UTF-8编码
+            if not sld_content.strip().startswith('<?xml'):
+                # 如果没有XML声明，添加一个
+                sld_content = '<?xml version="1.0" encoding="UTF-8"?>\n' + sld_content
+                logger.debug("添加了XML声明")
+            elif 'encoding=' in sld_content[:100] and 'UTF-8' not in sld_content[:100].upper():
+                # 如果XML声明中没有UTF-8，确保添加
+                import re
+                sld_content = re.sub(
+                    r'<\?xml[^>]*encoding=["\']([^"\']*)["\']',
+                    r'<?xml version="1.0" encoding="UTF-8"',
+                    sld_content,
+                    count=1
+                )
+                logger.debug("确保XML声明使用UTF-8编码")
             
             # URL编码样式名称（处理中文等特殊字符）
             # 使用quote进行URL编码，但保留一些字符不编码
@@ -4957,8 +4981,10 @@ AbsolutePath=false
                 style_check_response = type('obj', (object,), {'status_code': 404})()
             
             # 设置正确的Content-Type，包含字符编码
+            # 使用 application/vnd.ogc.sld+xml 或 application/xml
             headers_xml = {
-                'Content-Type': 'application/vnd.ogc.sld+xml; charset=utf-8'
+                'Content-Type': 'application/vnd.ogc.sld+xml; charset=utf-8',
+                'Accept': 'application/xml'
             }
             
             if style_check_response.status_code == 200:
@@ -4974,14 +5000,26 @@ AbsolutePath=false
                 for style_url in style_urls:
                     try:
                         # 确保内容以UTF-8编码发送
+                        sld_bytes = sld_content.encode('utf-8')
+                        logger.debug(f"发送SLD内容到 {style_url}，大小: {len(sld_bytes)} 字节")
                         style_response = requests.put(
                             style_url,
-                            data=sld_content.encode('utf-8'),
+                            data=sld_bytes,
                             headers=headers_xml,
                             auth=self.auth,
                             timeout=30
                         )
+                        logger.debug(f"响应状态码: {style_response.status_code}")
                         if style_response.status_code in [200, 201]:
+                            logger.info(f"样式更新成功，使用URL: {style_url}")
+                            # 验证上传后的内容
+                            verify_response = requests.get(
+                                f"{style_url}.xml" if not style_url.endswith('.xml') else style_url,
+                                auth=self.auth,
+                                timeout=10
+                            )
+                            if verify_response.status_code == 200:
+                                logger.debug(f"验证上传内容，响应长度: {len(verify_response.text)} 字符")
                             break
                     except requests.exceptions.RequestException as e:
                         logger.warning(f"尝试URL {style_url} 失败: {str(e)}")
@@ -5040,14 +5078,31 @@ AbsolutePath=false
                 for style_content_url in style_content_urls:
                     try:
                         # 确保内容以UTF-8编码发送
+                        sld_bytes = sld_content.encode('utf-8')
+                        logger.debug(f"发送SLD内容到 {style_content_url}，大小: {len(sld_bytes)} 字节")
                         style_response = requests.put(
                             style_content_url,
-                            data=sld_content.encode('utf-8'),
+                            data=sld_bytes,
                             headers=headers_xml,
                             auth=self.auth,
                             timeout=30
                         )
+                        logger.debug(f"响应状态码: {style_response.status_code}")
                         if style_response.status_code in [200, 201]:
+                            logger.info(f"样式内容上传成功，使用URL: {style_content_url}")
+                            # 验证上传后的内容
+                            verify_response = requests.get(
+                                f"{style_content_url}.xml" if not style_content_url.endswith('.xml') else style_content_url,
+                                auth=self.auth,
+                                timeout=10
+                            )
+                            if verify_response.status_code == 200:
+                                logger.debug(f"验证上传内容，响应长度: {len(verify_response.text)} 字符")
+                                # 检查内容是否完整
+                                if 'Fill' in verify_response.text and 'Stroke' in verify_response.text:
+                                    logger.info("✅ 验证通过：上传的SLD内容包含Fill和Stroke元素")
+                                else:
+                                    logger.warning("⚠️ 警告：上传的SLD内容可能不完整，缺少Fill或Stroke元素")
                             break
                     except requests.exceptions.RequestException as e:
                         logger.warning(f"尝试URL {style_content_url} 失败: {str(e)}")
