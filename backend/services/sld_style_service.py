@@ -7,6 +7,7 @@ SLD样式文件管理服务
 import os
 import uuid
 import logging
+import re
 from datetime import datetime
 from models.sld_styles import SLDStyleModel
 from services.geoserver_service import GeoServerService
@@ -74,15 +75,37 @@ class SLDStyleService:
                 logger.error(error_msg)
                 raise ValueError(error_msg)
             
+            # 确保XML声明中包含正确的UTF-8编码声明
+            if content.strip().startswith('<?xml'):
+                xml_declaration_match = re.match(r'<\?xml\s+[^>]*\?>', content.strip())
+                if xml_declaration_match:
+                    xml_declaration = xml_declaration_match.group(0)
+                    # 如果编码声明不是UTF-8，替换为UTF-8
+                    if 'encoding=' in xml_declaration:
+                        # 替换任何编码声明为UTF-8
+                        xml_declaration_fixed = re.sub(
+                            r'encoding\s*=\s*["\']?[^"\']+["\']?',
+                            'encoding="UTF-8"',
+                            xml_declaration
+                        )
+                        if xml_declaration != xml_declaration_fixed:
+                            content = content.replace(xml_declaration, xml_declaration_fixed)
+                            logger.info(f"已修正XML声明中的编码为UTF-8")
+                    else:
+                        # 如果没有编码声明，添加UTF-8编码声明
+                        xml_declaration_fixed = xml_declaration.replace('?>', ' encoding="UTF-8"?>')
+                        content = content.replace(xml_declaration, xml_declaration_fixed)
+                        logger.info(f"已添加UTF-8编码声明到XML声明中")
+            
             # 生成唯一文件名
             file_extension = os.path.splitext(file.filename)[1]
             unique_filename = f"{uuid.uuid4().hex}{file_extension}"
             file_path = os.path.join(self.sld_upload_dir, unique_filename)
             
-            # 保存文件到磁盘
-            file.seek(0)  # 重置文件指针
-            with open(file_path, 'wb') as f:
-                f.write(file.read())
+            # 保存文件到磁盘，使用UTF-8编码确保中文字符正确保存
+            # 这样可以确保文件始终以UTF-8编码保存，避免编码问题
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
             
             # 获取文件大小
             file_size = os.path.getsize(file_path)
