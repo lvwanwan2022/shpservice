@@ -5241,15 +5241,37 @@ AbsolutePath=false
                 return False
             
             # 保存原始内容，尽量不修改SLD内容
-            # 只有在确实缺少XML声明时才添加，且不修改已有的XML声明
+            # 确保XML声明中包含正确的UTF-8编码声明
             sld_content_to_upload = original_sld_content
             if not sld_content.strip().startswith('<?xml'):
                 # 只有在完全没有XML声明时才添加
                 sld_content_to_upload = '<?xml version="1.0" encoding="UTF-8"?>\n' + sld_content
                 logger.info("⚠️ 添加了XML声明（原文件缺少XML声明）")
             else:
-                # 如果已有XML声明，保持原样，不修改
-                logger.debug("保持原始XML声明不变")
+                # 如果已有XML声明，检查并确保编码声明为UTF-8
+                import re
+                # 检查XML声明中的编码
+                xml_declaration_match = re.match(r'<\?xml\s+[^>]*\?>', sld_content.strip())
+                if xml_declaration_match:
+                    xml_declaration = xml_declaration_match.group(0)
+                    # 如果编码声明不是UTF-8，替换为UTF-8
+                    if 'encoding=' in xml_declaration:
+                        # 替换任何编码声明为UTF-8
+                        xml_declaration_fixed = re.sub(
+                            r'encoding\s*=\s*["\']?[^"\']+["\']?',
+                            'encoding="UTF-8"',
+                            xml_declaration
+                        )
+                        sld_content_to_upload = sld_content.replace(xml_declaration, xml_declaration_fixed)
+                        if xml_declaration != xml_declaration_fixed:
+                            logger.info(f"✅ 已修正XML声明中的编码为UTF-8: {xml_declaration} -> {xml_declaration_fixed}")
+                    else:
+                        # 如果没有编码声明，添加UTF-8编码声明
+                        xml_declaration_fixed = xml_declaration.replace('?>', ' encoding="UTF-8"?>')
+                        sld_content_to_upload = sld_content.replace(xml_declaration, xml_declaration_fixed)
+                        logger.info(f"✅ 已添加UTF-8编码声明到XML声明中")
+                else:
+                    logger.debug("保持原始XML声明不变")
             
             # 记录将要上传的内容
             logger.info(f"准备上传的SLD内容长度: {len(sld_content_to_upload)} 字符")
@@ -5277,6 +5299,7 @@ AbsolutePath=false
             # 设置正确的Content-Type，包含字符编码
             # 使用 application/vnd.ogc.sld+xml 或 application/xml
             # 注意：使用 ?raw=true 参数可以避免GeoServer解析和转换SLD，保持原始格式（包括SLD 1.1.0）
+            # 重要：确保Content-Type明确指定charset=utf-8，这样requests库和GeoServer都能正确识别编码
             headers_xml = {
                 'Content-Type': 'application/vnd.ogc.sld+xml; charset=utf-8',
                 'Accept': 'application/xml'
@@ -5298,12 +5321,19 @@ AbsolutePath=false
                 style_response = None
                 for style_url in style_urls:
                     try:
-                        # 确保内容以UTF-8编码发送
-                        sld_bytes = sld_content.encode('utf-8')
-                        logger.debug(f"发送SLD内容到 {style_url}，大小: {len(sld_bytes)} 字节")
+                        # 确保内容是UTF-8编码的字符串（不是bytes）
+                        if isinstance(sld_content, bytes):
+                            sld_content = sld_content.decode('utf-8')
+                        
+                        logger.debug(f"发送SLD内容到 {style_url}，内容长度: {len(sld_content)} 字符")
+                        logger.debug(f"SLD内容前200字符（用于验证编码）: {sld_content[:200]}")
+                        
+                        # 关键修复：直接传递字符串，让requests库根据Content-Type中的charset自动编码
+                        # 这样可以确保UTF-8编码被正确识别和处理
+                        # 当传递字符串时，requests会根据Content-Type中的charset=utf-8自动进行UTF-8编码
                         style_response = requests.put(
                             style_url,
-                            data=sld_bytes,
+                            data=sld_content,  # 传递字符串，让requests自动处理编码
                             headers=headers_xml,
                             auth=self.auth,
                             timeout=30
@@ -5392,12 +5422,19 @@ AbsolutePath=false
                 style_response = None
                 for style_content_url in style_content_urls:
                     try:
-                        # 确保内容以UTF-8编码发送
-                        sld_bytes = sld_content.encode('utf-8')
-                        logger.debug(f"发送SLD内容到 {style_content_url}，大小: {len(sld_bytes)} 字节")
+                        # 确保内容是UTF-8编码的字符串（不是bytes）
+                        if isinstance(sld_content, bytes):
+                            sld_content = sld_content.decode('utf-8')
+                        
+                        logger.debug(f"发送SLD内容到 {style_content_url}，内容长度: {len(sld_content)} 字符")
+                        logger.debug(f"SLD内容前200字符（用于验证编码）: {sld_content[:200]}")
+                        
+                        # 关键修复：直接传递字符串，让requests库根据Content-Type中的charset自动编码
+                        # 这样可以确保UTF-8编码被正确识别和处理
+                        # 当传递字符串时，requests会根据Content-Type中的charset=utf-8自动进行UTF-8编码
                         style_response = requests.put(
                             style_content_url,
-                            data=sld_bytes,
+                            data=sld_content,  # 传递字符串，让requests自动处理编码
                             headers=headers_xml,
                             auth=self.auth,
                             timeout=30
