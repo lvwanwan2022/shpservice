@@ -389,13 +389,14 @@
         
         <!-- 可用图层列表 -->
         <div class="available-layers" v-loading="loadingLayers">
-          <!-- 电脑端：列表式显示 -->
+          <!-- 电脑端：列表式显示（表格形式） -->
           <el-table 
             v-if="!isMobile"
             :data="availableLayers" 
             style="width: 100%"
             :row-class-name="getRowClassName"
             @row-click="toggleLayerSelectionByRow"
+            class="desktop-layer-list"
           >
             <el-table-column width="50" align="center">
               <template #default="scope">
@@ -470,7 +471,7 @@
           </el-table>
           
           <!-- 移动端：卡片式显示 -->
-          <div v-else class="available-layers-mobile">
+          <div v-else class="available-layers-mobile mobile-layer-cards">
             <div 
               v-for="layer in availableLayers" 
               :key="layer.id"
@@ -883,7 +884,14 @@ export default {
     const currentSettingsLayer = ref(null)
     
     // 计算属性
-    const isMobile = computed(() => isMobileDevice())
+    // 🔥 优化：使用窗口宽度判断，确保电脑端（宽度>768px）始终显示列表形式
+    const isMobile = computed(() => {
+      // 优先使用窗口宽度判断，避免误判
+      if (typeof window !== 'undefined') {
+        return window.innerWidth <= 768
+      }
+      return isMobileDevice()
+    })
     
     const sortedLayersList = computed(() => {
       return [...layersList.value].sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0))
@@ -3463,10 +3471,13 @@ export default {
 .available-layers :deep(.el-table) {
   border: 1px solid #ebeef5;
   border-radius: 4px;
+  /* 🔥 确保电脑端始终显示列表形式 */
+  display: table !important;
 }
 
 .available-layers :deep(.el-table__row) {
   cursor: pointer;
+  transition: background-color 0.2s ease;
 }
 
 .available-layers :deep(.el-table__row:hover) {
@@ -3481,11 +3492,48 @@ export default {
   background-color: #e0f2fe;
 }
 
+/* 🔥 确保电脑端不显示卡片样式 */
+@media (min-width: 769px) {
+  .available-layers-mobile {
+    display: none !important;
+  }
+  
+  .available-layers :deep(.el-table) {
+    display: table !important;
+  }
+}
+
 /* 移动端：卡片式 */
 .available-layers-mobile {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 15px;
+}
+
+/* 🔥 确保电脑端（宽度>768px）不显示卡片，只显示列表 */
+@media (min-width: 769px) {
+  .available-layers-mobile,
+  .mobile-layer-cards {
+    display: none !important;
+  }
+  
+  .available-layers :deep(.el-table),
+  .desktop-layer-list {
+    display: table !important;
+  }
+}
+
+/* 🔥 确保移动端（宽度<=768px）不显示表格，只显示卡片 */
+@media (max-width: 768px) {
+  .available-layers :deep(.el-table),
+  .desktop-layer-list {
+    display: none !important;
+  }
+  
+  .available-layers-mobile,
+  .mobile-layer-cards {
+    display: grid !important;
+  }
 }
 
 .available-layer-item {
