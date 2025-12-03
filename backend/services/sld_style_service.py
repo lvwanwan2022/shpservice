@@ -315,26 +315,73 @@ class SLDStyleService:
             # 解析XML
             root = ET.fromstring(content)
             
-            # 检查基本结构
-            if root.tag != '{http://www.opengis.net/sld}StyledLayerDescriptor':
-                return False
+            # 检查基本结构 - 支持多种命名空间
+            valid_root_tags = [
+                '{http://www.opengis.net/sld}StyledLayerDescriptor',
+                '{http://www.opengis.net/se}StyledLayerDescriptor',
+                'StyledLayerDescriptor'  # 无命名空间的情况
+            ]
             
-            # 检查是否包含指定几何类型的符号化器
-            geometry_tags = {
-                'point': '{http://www.opengis.net/sld}PointSymbolizer',
-                'line': '{http://www.opengis.net/sld}LineSymbolizer',
-                'polygon': '{http://www.opengis.net/sld}PolygonSymbolizer'
+            root_tag = root.tag
+            if root_tag not in valid_root_tags:
+                # 检查是否包含StyledLayerDescriptor（忽略命名空间）
+                if 'StyledLayerDescriptor' not in root_tag:
+                    logger.warning(f"SLD根标签不匹配: {root_tag}")
+                    return False
+            
+            # 定义多种命名空间变体的符号化器标签
+            geometry_tag_variants = {
+                'point': [
+                    '{http://www.opengis.net/sld}PointSymbolizer',
+                    '{http://www.opengis.net/se}PointSymbolizer',
+                    'PointSymbolizer'
+                ],
+                'line': [
+                    '{http://www.opengis.net/sld}LineSymbolizer',
+                    '{http://www.opengis.net/se}LineSymbolizer',
+                    'LineSymbolizer'
+                ],
+                'polygon': [
+                    '{http://www.opengis.net/sld}PolygonSymbolizer',
+                    '{http://www.opengis.net/se}PolygonSymbolizer',
+                    'PolygonSymbolizer'
+                ]
             }
             
-            target_tag = geometry_tags.get(geometry_type)
-            if not target_tag:
+            tag_variants = geometry_tag_variants.get(geometry_type)
+            if not tag_variants:
+                logger.warning(f"不支持的几何类型: {geometry_type}")
                 return False
             
-            # 查找对应的符号化器
-            symbolizers = root.findall(f'.//{target_tag}')
-            return len(symbolizers) > 0
+            # 尝试查找任意一种命名空间变体的符号化器
+            for tag in tag_variants:
+                symbolizers = root.findall(f'.//{tag}')
+                if len(symbolizers) > 0:
+                    logger.info(f"找到{geometry_type}符号化器: {tag}")
+                    return True
             
-        except ET.ParseError:
+            # 如果精确匹配失败，尝试使用通配符查找（忽略命名空间）
+            # 使用XPath查找所有可能的符号化器
+            all_symbolizers = root.findall('.//*[local-name()="PointSymbolizer" or local-name()="LineSymbolizer" or local-name()="PolygonSymbolizer"]')
+            
+            if len(all_symbolizers) > 0:
+                # 检查找到的符号化器是否匹配几何类型
+                expected_local_name = {
+                    'point': 'PointSymbolizer',
+                    'line': 'LineSymbolizer',
+                    'polygon': 'PolygonSymbolizer'
+                }.get(geometry_type)
+                
+                for symbolizer in all_symbolizers:
+                    if symbolizer.tag.endswith(expected_local_name) or symbolizer.tag == expected_local_name:
+                        logger.info(f"通过本地名称找到{geometry_type}符号化器")
+                        return True
+            
+            logger.warning(f"未找到{geometry_type}类型的符号化器")
+            return False
+            
+        except ET.ParseError as e:
+            logger.error(f"SLD XML解析失败: {str(e)}")
             return False
         except Exception as e:
             logger.error(f"SLD内容验证失败: {str(e)}")
