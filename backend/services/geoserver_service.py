@@ -4743,12 +4743,13 @@ AbsolutePath=false
             print(f"创建DEM样式失败: {str(e)}")
             return False
     
-    def _apply_style_to_layer(self, layer_name, style_name):
+    def _apply_style_to_layer(self, layer_name, style_name, workspace=None):
         """将样式应用到图层
         
         Args:
-            layer_name: 图层名称
-            style_name: 样式名称
+            layer_name: 图层名称（可以包含工作空间前缀，如 workspace:layer）
+            style_name: 样式名称（可以包含工作空间前缀，如 workspace:style）
+            workspace: 工作空间名称（可选，如果 layer_name 和 style_name 已包含工作空间前缀则不需要）
             
         Returns:
             bool: 是否应用成功
@@ -4756,20 +4757,50 @@ AbsolutePath=false
         try:
             print(f"将样式 {style_name} 应用到图层 {layer_name}")
             
-            # 获取完整的图层名称（包含工作空间前缀）
-            full_layer_name = f"{self.workspace}:{layer_name}" if ':' not in layer_name else layer_name
+            # 确保图层名称包含工作空间前缀
+            if ':' not in layer_name:
+                workspace_to_use = workspace or self.workspace
+                full_layer_name = f"{workspace_to_use}:{layer_name}"
+            else:
+                full_layer_name = layer_name
+            
+            # 确保样式名称包含工作空间前缀
+            if ':' not in style_name:
+                workspace_to_use = workspace or self.workspace
+                full_style_name = f"{workspace_to_use}:{style_name}"
+            else:
+                full_style_name = style_name
             
             # 图层信息更新URL
             layer_url = f"{self.rest_url}/layers/{full_layer_name}"
             
+            # 解析样式名称（可能包含工作空间前缀）
+            if ':' in full_style_name:
+                style_workspace, style_name_only = full_style_name.split(':', 1)
+            else:
+                style_workspace = None
+                style_name_only = full_style_name
+            
             # 构建更新请求数据
-            update_data = {
-                "layer": {
-                    "defaultStyle": {
-                        "name": style_name
+            if style_workspace:
+                # 如果样式在工作空间下，需要指定工作空间
+                update_data = {
+                    "layer": {
+                        "defaultStyle": {
+                            "name": style_name_only,
+                            "workspace": style_workspace
+                        }
                     }
                 }
-            }
+            else:
+                # 全局样式
+                update_data = {
+                    "layer": {
+                        "defaultStyle": {
+                            "name": style_name_only
+                        }
+                    }
+                }
             
             headers = {'Content-Type': 'application/json'}
             
@@ -4783,13 +4814,16 @@ AbsolutePath=false
             
             if response.status_code not in [200, 201]:
                 print(f"应用样式失败: {response.status_code} - {response.text}")
+                logger.error(f"应用样式失败: {response.status_code} - {response.text}")
                 return False
             
-            print(f"✅ 样式应用成功")
+            print(f"✅ 样式应用成功: {full_layer_name} -> {full_style_name}")
             return True
             
         except Exception as e:
-            print(f"应用样式失败: {str(e)}")
+            error_msg = f"应用样式失败: {str(e)}"
+            print(error_msg)
+            logger.error(error_msg, exc_info=True)
             return False
     
     def update_layer_style(self, workspace, layer, style_name, sld_content):
@@ -4807,24 +4841,27 @@ AbsolutePath=false
         try:
             print(f"更新图层样式: {workspace}:{layer} -> {style_name}")
             
-            # 1. 创建或更新样式
-            style_created = self._create_or_update_style(style_name, sld_content)
+            # 1. 在工作空间下创建或更新样式
+            style_created = self._create_or_update_style(workspace, style_name, sld_content)
             if not style_created:
-                print(f"❌ 创建样式失败: {style_name}")
+                print(f"❌ 创建样式失败: {workspace}:{style_name}")
                 return False
             
-            # 2. 应用样式到图层
+            # 2. 应用样式到图层（使用工作空间前缀的样式名称）
             full_layer_name = f"{workspace}:{layer}"
-            style_applied = self._apply_style_to_layer(full_layer_name, style_name)
+            # 样式名称需要包含工作空间前缀，格式为 workspace:style_name
+            full_style_name = f"{workspace}:{style_name}"
+            style_applied = self._apply_style_to_layer(full_layer_name, full_style_name, workspace)
             if not style_applied:
                 print(f"❌ 应用样式到图层失败: {full_layer_name}")
                 return False
             
-            print(f"✅ 图层样式更新成功: {full_layer_name} -> {style_name}")
+            print(f"✅ 图层样式更新成功: {full_layer_name} -> {full_style_name}")
             return True
             
         except Exception as e:
             print(f"更新图层样式失败: {str(e)}")
+            logger.error(f"更新图层样式失败: {str(e)}", exc_info=True)
             return False
     
     def remove_layer_style(self, workspace, layer):
@@ -4876,10 +4913,11 @@ AbsolutePath=false
             print(f"移除图层样式失败: {str(e)}")
             return False
     
-    def _create_or_update_style(self, style_name, sld_content):
-        """创建或更新样式
+    def _create_or_update_style(self, workspace, style_name, sld_content):
+        """创建或更新样式（在工作空间下）
         
         Args:
+            workspace: 工作空间名称
             style_name: 样式名称
             sld_content: SLD样式内容
             
@@ -4887,7 +4925,7 @@ AbsolutePath=false
             bool: 是否成功
         """
         try:
-            print(f"创建或更新样式: {style_name}")
+            print(f"在工作空间 {workspace} 下创建或更新样式: {style_name}")
             
             # 确保SLD内容是UTF-8编码的字符串
             if isinstance(sld_content, bytes):
@@ -4905,9 +4943,10 @@ AbsolutePath=false
             # URL编码样式名称（处理中文等特殊字符）
             # 使用quote进行URL编码，但保留一些字符不编码
             encoded_style_name = quote(style_name, safe='')
+            encoded_workspace = quote(workspace, safe='')
             
-            # 检查样式是否已存在
-            style_check_url = f"{self.rest_url}/styles/{encoded_style_name}.xml"
+            # 检查样式是否已存在（在工作空间下）
+            style_check_url = f"{self.rest_url}/workspaces/{encoded_workspace}/styles/{encoded_style_name}.xml"
             try:
                 style_check_response = requests.get(style_check_url, auth=self.auth, timeout=10)
             except requests.exceptions.RequestException as e:
@@ -4923,12 +4962,12 @@ AbsolutePath=false
             }
             
             if style_check_response.status_code == 200:
-                print(f"样式 {style_name} 已存在，将更新")
+                print(f"样式 {style_name} 在工作空间 {workspace} 下已存在，将更新")
                 # 更新现有样式
                 # 尝试两种URL格式
                 style_urls = [
-                    f"{self.rest_url}/styles/{encoded_style_name}",
-                    f"{self.rest_url}/styles/{encoded_style_name}.xml"
+                    f"{self.rest_url}/workspaces/{encoded_workspace}/styles/{encoded_style_name}",
+                    f"{self.rest_url}/workspaces/{encoded_workspace}/styles/{encoded_style_name}.xml"
                 ]
                 
                 style_response = None
@@ -4954,10 +4993,10 @@ AbsolutePath=false
                     logger.error(error_msg)
                     return False
             else:
-                print(f"创建新样式: {style_name}")
+                print(f"在工作空间 {workspace} 下创建新样式: {style_name}")
                 # 创建新样式
-                # 1. 先创建样式定义
-                create_style_url = f"{self.rest_url}/styles"
+                # 1. 先创建样式定义（在工作空间下）
+                create_style_url = f"{self.rest_url}/workspaces/{encoded_workspace}/styles"
                 create_style_data = {
                     "style": {
                         "name": style_name,
@@ -4990,11 +5029,11 @@ AbsolutePath=false
                     else:
                         return False
                 
-                # 2. 上传样式内容
+                # 2. 上传样式内容（在工作空间下）
                 # 尝试两种URL格式
                 style_content_urls = [
-                    f"{self.rest_url}/styles/{encoded_style_name}",
-                    f"{self.rest_url}/styles/{encoded_style_name}.xml"
+                    f"{self.rest_url}/workspaces/{encoded_workspace}/styles/{encoded_style_name}",
+                    f"{self.rest_url}/workspaces/{encoded_workspace}/styles/{encoded_style_name}.xml"
                 ]
                 
                 style_response = None
@@ -5025,13 +5064,13 @@ AbsolutePath=false
                 print(error_msg)
                 logger.error(error_msg)
                 # 尝试记录更多调试信息
-                logger.error(f"样式名称: {style_name}, 编码后: {encoded_style_name}")
+                logger.error(f"工作空间: {workspace}, 样式名称: {style_name}, 编码后: {encoded_style_name}")
                 logger.error(f"请求URL: {style_response.url if hasattr(style_response, 'url') else '未知'}")
                 logger.error(f"响应头: {style_response.headers if hasattr(style_response, 'headers') else '未知'}")
                 logger.debug(f"SLD内容前500字符: {sld_content[:500]}")
                 return False
             
-            print(f"✅ 样式创建/更新成功: {style_name}")
+            print(f"✅ 样式创建/更新成功: {workspace}:{style_name}")
             return True
             
         except Exception as e:
