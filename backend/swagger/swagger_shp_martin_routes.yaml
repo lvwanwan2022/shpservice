@@ -15,7 +15,7 @@ paths:
   /upload:
     post:
       tags:
-        - 服务发布
+        - shp-martin服务相关
       summary: 上传并发布SHP压缩包为Martin瓦片服务
       description: 上传SHP压缩包文件并直接发布为Martin MVT瓦片服务
       requestBody:
@@ -128,7 +128,7 @@ paths:
     
     post:
       tags:
-        - 服务发布
+        - shp-martin服务相关
       summary: 发布已上传的SHP文件到Martin服务
       description: 通过文件ID发布已上传的SHP文件到Martin MVT瓦片服务
       requestBody:
@@ -203,7 +203,7 @@ paths:
   /services:
     get:
       tags:
-        - 服务管理
+        - shp-martin服务相关
       summary: 获取SHP Martin服务列表
       description: 获取已发布的SHP Martin MVT瓦片服务列表，支持分页和用户筛选
       parameters:
@@ -277,7 +277,7 @@ paths:
     
     get:
       tags:
-        - 服务管理
+        - shp-martin服务相关
       summary: 获取指定SHP Martin服务的信息
       description: 获取指定SHP Martin MVT瓦片服务的详细信息
       responses:
@@ -350,7 +350,7 @@ paths:
     
     delete:
       tags:
-        - 服务管理
+        - shp-martin服务相关
       summary: 删除SHP Martin服务
       description: 软删除指定的SHP Martin MVT瓦片服务（将状态设置为deleted）
       responses:
@@ -421,7 +421,5 @@ components:
               example: "http://localhost:3000/public.martin_shp_550e8400"
 
 tags:
-  - name: 服务发布
+  - name: shp-martin服务相关
     description: SHP文件的MVT瓦片服务发布相关操作
-  - name: 服务管理
-    description: 已发布服务的查询、删除等管理操作

@@ -18,9 +18,17 @@ class VectorMartinService:
     
     def __init__(self):
         """初始化服务"""
-        # 构建PostgreSQL连接字符串
-        self.db_url = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
-        self.engine = create_engine(self.db_url)
+        # 构建PostgreSQL连接字符串，添加编码参数
+        password = DB_CONFIG['password'].replace('@', '%40')  # URL编码密码中的@符号
+        self.db_url = f"postgresql://{DB_CONFIG['user']}:{password}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}?client_encoding=utf8"
+        # 创建引擎时指定编码相关参数
+        self.engine = create_engine(
+            self.db_url,
+            connect_args={
+                "client_encoding": "utf8",
+                "options": "-c client_encoding=utf8"
+            }
+        )
         
     def publish_geojson_martin(self, file_id, file_path, original_filename, user_id=None):
         """发布GeoJSON文件为Martin服务
@@ -38,6 +46,23 @@ class VectorMartinService:
             # 读取GeoJSON文件
             print(f"正在读取GeoJSON文件: {file_path}")
             gdf = gpd.read_file(file_path)
+            
+            # 处理ID字段：如果存在id字段则重命名为old_id，否则添加id字段
+            if 'gid' in gdf.columns:
+                print("检测到原数据包含gid字段，重命名为old_gid")
+                gdf = gdf.rename(columns={'gid': 'old_gid'})
+                # 添加新的唯一id字段
+                gdf['gid'] = range(1, len(gdf) + 1)
+            else:
+                print("原数据不包含gid字段，添加唯一gid字段")
+                gdf['gid'] = range(1, len(gdf) + 1)
+            
+            # 确保id字段为整数类型
+            gdf['gid'] = gdf['gid'].astype(int)
+            
+            # 将gid字段移到第一列
+            cols = ['gid'] + [col for col in gdf.columns if col != 'gid']
+            gdf = gdf[cols]
             
             # 生成PostGIS表名
             table_name = f"vector_{uuid.uuid4().hex[:8]}"
@@ -181,6 +206,23 @@ class VectorMartinService:
             if gdf.crs and gdf.crs.to_epsg() != 4326:
                 print(f"正在转换坐标系从 {gdf.crs} 到 EPSG:4326")
                 gdf = gdf.to_crs(epsg=4326)
+            
+            # 处理ID字段：如果存在id字段则重命名为old_id，否则添加id字段
+            if 'gid' in gdf.columns:
+                print("检测到原数据包含gid字段，重命名为old_gid")
+                gdf = gdf.rename(columns={'gid': 'old_gid'})
+                # 添加新的唯一id字段
+                gdf['gid'] = range(1, len(gdf) + 1)
+            else:
+                print("原数据不包含gid字段，添加唯一id字段")
+                gdf['gid'] = range(1, len(gdf) + 1)
+            
+            # 确保id字段为整数类型
+            gdf['gid'] = gdf['gid'].astype(int)
+            
+            # 将gid字段移到第一列
+            cols = ['gid'] + [col for col in gdf.columns if col != 'gid']
+            gdf = gdf[cols]
             
             # 生成PostGIS表名，使用vector前缀
             table_name = f"vector_{uuid.uuid4().hex[:8]}"

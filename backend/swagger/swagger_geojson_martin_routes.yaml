@@ -15,7 +15,7 @@ paths:
   /publish:
     post:
       tags:
-        - 服务发布
+        - geojson-martin相关
       summary: 发布GeoJSON为MVT瓦片服务
       description: 上传GeoJSON文件并发布为MVT瓦片服务，完整流程包括文件上传、PostGIS存储、Martin服务发布
       requestBody:
@@ -96,7 +96,7 @@ paths:
   /publish-file:
     post:
       tags:
-        - 服务发布
+        - geojson-martin相关
       summary: 通过文件ID发布已上传的GeoJSON文件
       description: 通过文件ID发布已上传的GeoJSON文件到Martin服务
       requestBody:
@@ -177,7 +177,7 @@ paths:
   /services:
     get:
       tags:
-        - 服务管理
+        - geojson-martin相关
       summary: 列出已发布的GeoJSON MVT瓦片服务
       description: 获取已发布的GeoJSON MVT瓦片服务列表，支持分页和用户筛选
       parameters:
@@ -255,7 +255,7 @@ paths:
     
     get:
       tags:
-        - 服务管理
+        - geojson-martin相关
       summary: 获取已发布服务的详细信息
       description: 获取指定GeoJSON MVT瓦片服务的详细信息
       responses:
@@ -304,7 +304,7 @@ paths:
     
     delete:
       tags:
-        - 服务管理
+        - geojson-martin相关
       summary: 删除已发布的GeoJSON MVT瓦片服务
       description: 删除指定的GeoJSON MVT瓦片服务
       parameters:
@@ -345,7 +345,7 @@ paths:
   /martin/status:
     get:
       tags:
-        - Martin服务管理
+        - geojson-martin相关
       summary: 获取Martin服务状态
       description: 获取Martin服务的运行状态信息
       responses:
@@ -379,7 +379,7 @@ paths:
   /martin/restart:
     post:
       tags:
-        - Martin服务管理
+        - geojson-martin相关
       summary: 重启Martin服务
       description: 重启Martin瓦片服务
       responses:
@@ -443,7 +443,7 @@ paths:
     
     get:
       tags:
-        - 瓦片服务
+        - geojson-martin相关
       summary: 获取MVT瓦片
       description: 代理MVT瓦片请求到Martin服务，返回指定坐标的瓦片数据
       responses:
@@ -508,7 +508,7 @@ paths:
     
     get:
       tags:
-        - 瓦片服务
+        - geojson-martin相关
       summary: 获取TileJSON配置
       description: 获取指定服务的TileJSON配置信息
       responses:
@@ -592,7 +592,7 @@ paths:
   /health:
     get:
       tags:
-        - 系统监控
+        - geojson-martin相关
       summary: 健康检查
       description: 检查GeoJSON Martin服务的健康状态
       responses:
@@ -684,13 +684,6 @@ components:
               example: "http://localhost:3000/public.martin_geojson_550e8400"
 
 tags:
-  - name: 服务发布
+  - name: geojson-martin相关
     description: GeoJSON文件的MVT瓦片服务发布相关操作
-  - name: 服务管理
-    description: 已发布服务的查询、删除等管理操作
-  - name: Martin服务管理
-    description: Martin瓦片服务本身的状态管理和控制
-  - name: 瓦片服务
-    description: MVT瓦片和TileJSON配置的获取
-  - name: 系统监控
-    description: 服务健康状态检查
+  

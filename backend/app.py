@@ -108,17 +108,17 @@ try:
 except Exception as import_error:
     logger.warning(f"⚠️ 数据库模块导入失败: {str(import_error)}")
 
-# 注册蓝图
+# 注册蓝图 - 统一使用Blueprint内置前缀
 try:
     from routes.file_routes import file_bp
-    app.register_blueprint(file_bp, url_prefix='/api/files')
+    app.register_blueprint(file_bp)  # 移除前缀，使用Blueprint内置
     logger.info("✅ 文件路由注册成功")
 except Exception as e:
     logger.warning(f"⚠️ 文件路由注册失败: {str(e)}")
 
 try:
     from routes.geoservice_routes import geoservice_bp
-    app.register_blueprint(geoservice_bp, url_prefix='/api')
+    app.register_blueprint(geoservice_bp)  # 移除前缀，使用Blueprint内置
     logger.info("✅ GeoService路由注册成功")
 except Exception as e:
     logger.warning(f"⚠️ GeoService路由注册失败: {str(e)}")
@@ -126,7 +126,7 @@ except Exception as e:
 # 可选的蓝图（如果存在的话）
 try:
     from routes.layer_routes import layer_bp
-    app.register_blueprint(layer_bp, url_prefix='/api/layers')
+    app.register_blueprint(layer_bp)  # 移除前缀，使用Blueprint内置
     logger.info("✅ 图层路由注册成功")
 except ImportError:
     logger.info("图层路由不存在，跳过")
@@ -135,7 +135,7 @@ except Exception as e:
 
 try:
     from routes.scene_routes import scene_bp
-    app.register_blueprint(scene_bp, url_prefix='/api/scenes')
+    app.register_blueprint(scene_bp)  # 移除前缀，使用Blueprint内置
     logger.info("✅ 场景路由注册成功")
 except ImportError:
     logger.info("场景路由不存在，跳过")
@@ -175,7 +175,7 @@ except Exception as e:
 # 统一Martin 服务路由
 try:
     from routes.martin_service_routes import martin_service_bp
-    app.register_blueprint(martin_service_bp, url_prefix='/api')
+    app.register_blueprint(martin_service_bp)  # 移除前缀，使用Blueprint内置
     logger.info("✅ 统一Martin 服务路由注册成功")
 except ImportError:
     logger.info("统一Martin 路由不存在，跳过")
@@ -205,7 +205,7 @@ except Exception as e:
 # MBTiles 服务路由
 try:
     from routes.mbtiles_routes import mbtiles_bp
-    app.register_blueprint(mbtiles_bp, url_prefix='/api/mbtiles')
+    app.register_blueprint(mbtiles_bp)  # 移除前缀，使用Blueprint内置
     logger.info("✅ MBTiles 服务路由注册成功")
 except ImportError:
     logger.info("MBTiles 服务路由不存在，跳过")
@@ -230,7 +230,7 @@ except Exception as e:
 # TIF Martin 服务路由
 try:
     from routes.tif_martin_routes import tif_martin_bp
-    app.register_blueprint(tif_martin_bp,url_prefix='/api/tif-martin')
+    app.register_blueprint(tif_martin_bp)  # 移除前缀，使用Blueprint内置
     logger.info("✅ TIF Martin 服务路由注册成功")
 except ImportError:
     logger.info("TIF Martin 服务路由不存在，跳过")
@@ -240,7 +240,7 @@ except Exception as e:
 # GIS 通用路由
 try:
     from routes.gis import gis_bp
-    app.register_blueprint(gis_bp, url_prefix='/api/gis')
+    app.register_blueprint(gis_bp)  # 移除前缀，使用Blueprint内置
     logger.info("✅ GIS 通用路由注册成功")
 except ImportError:
     logger.info("GIS 通用路由不存在，跳过")
@@ -250,7 +250,7 @@ except Exception as e:
 # 登录认证路由 - 独立模块，方便移植
 try:
     from auth.auth_routes import auth_bp
-    app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    app.register_blueprint(auth_bp)  # 移除前缀，使用Blueprint内置
     logger.info("✅ 登录认证路由注册成功")
 except ImportError:
     logger.info("登录认证路由不存在，跳过")
@@ -274,15 +274,6 @@ except ImportError:
 except Exception as e:
     logger.warning(f"⚠️ 用户反馈路由注册失败: {str(e)}")
 
-# 用户服务管理路由
-try:
-    from routes.user_service_routes import user_service_bp
-    app.register_blueprint(user_service_bp)
-    logger.info("✅ 用户服务管理路由注册成功")
-except ImportError:
-    logger.info("用户服务管理路由不存在，跳过")
-except Exception as e:
-    logger.warning(f"⚠️ 用户服务管理路由注册失败: {str(e)}")
 
 # 用户服务连接管理路由
 try:

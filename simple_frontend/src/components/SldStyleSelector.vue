@@ -453,13 +453,36 @@ export default {
           return
         }
 
+        // 添加调试日志
+        console.log('准备上传SLD文件:')
+        console.log('- name:', uploadForm.name)
+        console.log('- description:', uploadForm.description)
+        console.log('- geometry_type:', uploadForm.geometry_type)
+        console.log('- file:', uploadForm.file)
+
+        // 验证必填字段
+        if (!uploadForm.name) {
+          ElMessage.error('样式名称不能为空')
+          return
+        }
+        if (!uploadForm.geometry_type) {
+          ElMessage.error('几何类型不能为空')
+          return
+        }
+
         uploading.value = true
         
         const formData = new FormData()
         formData.append('name', uploadForm.name)
-        formData.append('description', uploadForm.description)
+        formData.append('description', uploadForm.description || '')
         formData.append('geometry_type', uploadForm.geometry_type)
         formData.append('file', uploadForm.file)
+
+        // 打印 FormData 内容用于调试
+        console.log('FormData 内容:')
+        for (let pair of formData.entries()) {
+          console.log(pair[0] + ':', pair[1])
+        }
 
         await sldStyleApi.uploadSldFile(formData)
         
@@ -469,6 +492,7 @@ export default {
         loadSldStyles()
       } catch (error) {
         console.error('上传SLD文件失败:', error)
+        console.error('错误详情:', error.response?.data)
         ElMessage.error(error.response?.data?.error || '上传SLD文件失败')
       } finally {
         uploading.value = false

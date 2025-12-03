@@ -27,7 +27,7 @@ paths:
     
     post:
       tags:
-        - 文件转换
+        - tif-martin相关
       summary: 将TIF文件转换为MBTiles并发布为Martin服务
       description: 同步转换已上传的TIF文件为MBTiles格式并发布为Martin瓦片服务
       security:
@@ -167,7 +167,7 @@ paths:
     
     post:
       tags:
-        - 文件转换
+        - tif-martin相关
       summary: 异步转换TIF文件
       description: 异步转换TIF文件，立即返回task_id用于进度查询
       security:
@@ -286,7 +286,7 @@ paths:
     
     get:
       tags:
-        - 进度管理
+        - tif-martin相关
       summary: 获取转换任务的实时进度
       description: 获取指定任务的实时转换进度信息
       security:
@@ -382,7 +382,7 @@ paths:
     
     delete:
       tags:
-        - 进度管理
+        - tif-martin相关
       summary: 清理转换任务的进度数据
       description: 清理指定任务的进度数据，释放内存资源
       security:
@@ -425,7 +425,7 @@ paths:
   /batch-convert:
     post:
       tags:
-        - 批量处理
+        - tif-martin相关
       summary: 批量转换多个TIF文件
       description: 批量转换多个TIF文件为MBTiles并发布为Martin服务
       security:
@@ -573,7 +573,7 @@ paths:
     
     get:
       tags:
-        - 状态查询
+        - tif-martin相关
       summary: 获取TIF文件的转换状态
       description: 查询指定TIF文件的转换状态和已发布的服务信息
       security:
@@ -675,11 +675,6 @@ components:
       description: JWT Bearer Token认证
 
 tags:
-  - name: 文件转换
+  - name: tif-martin相关
     description: TIF文件的MBTiles转换和Martin服务发布
-  - name: 进度管理
-    description: 异步转换任务的进度跟踪和清理
-  - name: 批量处理
-    description: 多个TIF文件的批量转换处理
-  - name: 状态查询
-    description: 文件转换状态和服务信息查询
+  

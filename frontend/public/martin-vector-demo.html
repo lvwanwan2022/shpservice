@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Martin Vector Tile DXF 样式演示</title>
-    
+
     <!-- Leaflet CSS -->
     <link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet" />
-    
+
     <!-- Leaflet VectorGrid CSS -->
     <style>
         body {
@@ -15,12 +16,12 @@
             padding: 0;
             font-family: 'Microsoft YaHei', Arial, sans-serif;
         }
-        
+
         #map {
             width: 100%;
             height: 100vh;
         }
-        
+
         .info-panel {
             position: absolute;
             top: 10px;
@@ -28,50 +29,50 @@
             background: white;
             padding: 15px;
             border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             z-index: 1000;
             max-width: 280px;
         }
-        
+
         .info-panel h3 {
             margin: 0 0 10px 0;
             color: #333;
         }
-        
+
         .info-panel p {
             margin: 5px 0;
             font-size: 14px;
             color: #666;
         }
-        
+
         .layer-toggle {
             margin: 10px 0;
         }
-        
+
         .layer-toggle label {
             display: block;
             margin: 5px 0;
             cursor: pointer;
             font-size: 13px;
         }
-        
+
         .layer-toggle input {
             margin-right: 8px;
         }
-        
+
         .status {
             padding: 5px 10px;
             border-radius: 4px;
             font-size: 12px;
             margin-top: 10px;
         }
-        
+
         .status.success {
             background: #d4edda;
             color: #155724;
             border: 1px solid #c3e6cb;
         }
-        
+
         .status.error {
             background: #f8d7da;
             color: #721c24;
@@ -79,16 +80,17 @@
         }
     </style>
 </head>
+
 <body>
     <div id="map"></div>
-    
+
     <div class="info-panel">
         <h3>DXF Vector Tile 演示</h3>
         <p><strong>底图:</strong> 高德地图</p>
         <p><strong>数据源:</strong> Martin Vector Tile 服务</p>
-        <p><strong>表名:</strong> <span id="table-name">vector_05492e03</span></p>
-        <p><strong>服务地址:</strong> <span id="service-url">http://localhost:3000</span></p>
-        
+        <p><strong>表名:</strong> <span id="table-name">vector_0b83d5eb</span></p>
+        <p><strong>服务地址:</strong> <span id="service-url">http://10.20.124.20:3000</span></p>
+
         <div class="layer-toggle">
             <h4>图层控制:</h4>
             <label><input type="checkbox" checked data-layer="DMTZ"> 地貌图层</label>
@@ -100,13 +102,13 @@
             <label><input type="checkbox" data-layer="sqx"> 1米等高线</label>
             <label><input type="checkbox" checked data-layer="KZD"> 控制点</label>
         </div>
-        
+
         <div id="status" class="status"></div>
     </div>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
+
     <!-- Leaflet VectorGrid JS -->
     <script src="https://unpkg.com/leaflet.vectorgrid@latest/dist/Leaflet.VectorGrid.bundled.js"></script>
 
@@ -187,17 +189,17 @@
 
         // Martin服务配置
         const martinConfig = {
-            baseUrl: 'http://localhost:3000',
-            tableName: 'vector_05492e03',
+            baseUrl: 'http://10.20.124.20:3000',
+            tableName: 'vector_0b83d5eb',
             layerField: 'layer'
         };
 
         // 创建样式函数
         function createStyleFunction(layerStyles, layerField) {
-            return function(properties, zoom) {
+            return function (properties, zoom) {
                 const layerName = properties[layerField];
                 const baseStyle = layerStyles[layerName];
-                
+
                 if (!baseStyle) {
                     // 默认样式
                     return {
@@ -209,10 +211,10 @@
                         fillOpacity: 0.3
                     };
                 }
-                
+
                 // 复制基础样式
                 const adjustedStyle = { ...baseStyle };
-                
+
                 // 根据缩放级别调整样式
                 if (zoom < 10) {
                     adjustedStyle.weight = Math.max((adjustedStyle.weight || 1) - 0.5, 0.5);
@@ -221,16 +223,16 @@
                     adjustedStyle.weight = (adjustedStyle.weight || 1) + 0.5;
                     adjustedStyle.opacity = Math.min((adjustedStyle.opacity || 0.7) + 0.1, 1);
                 }
-                
+
                 // 特殊图层处理
                 if (layerName === 'sqx' && zoom < 14) {
                     adjustedStyle.opacity = 0;
                 }
-                
+
                 if (layerName === 'jqx' && zoom < 12) {
                     adjustedStyle.opacity = Math.max((adjustedStyle.opacity || 0.6) - 0.3, 0.2);
                 }
-                
+
                 return adjustedStyle;
             };
         }
@@ -249,13 +251,13 @@
             attribution: '© 高德地图',
             maxZoom: 18
         });
-        
+
         const gaodeSatelliteLayer = L.tileLayer('https://webst{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}', {
             subdomains: ['01', '02', '03', '04'],
             attribution: '© 高德地图',
             maxZoom: 18
         });
-        
+
         const gaodeRoadLayer = L.tileLayer('https://webst{s}.is.autonavi.com/appmaptile?style=8&x={x}&y={y}&z={z}', {
             subdomains: ['01', '02', '03', '04'],
             attribution: '© 高德地图',
@@ -264,7 +266,7 @@
 
         // 默认添加高德普通地图
         gaodeNormalLayer.addTo(map);
-        
+
         // 创建底图控制器
         const baseMaps = {
             "高德普通": gaodeNormalLayer,
@@ -273,8 +275,8 @@
         };
 
         // Martin Vector Tile URL
-        const tileUrl = `${martinConfig.baseUrl}/${martinConfig.tableName}/{z}/{x}/{y}.pbf`;
-        
+        const tileUrl = `${martinConfig.baseUrl}/${martinConfig.tableName}/{z}/{x}/{y}`;
+
         // 更新界面显示
         document.getElementById('table-name').textContent = martinConfig.tableName;
         document.getElementById('service-url').textContent = martinConfig.baseUrl;
@@ -285,22 +287,22 @@
                 [martinConfig.tableName]: createStyleFunction(dxfLayerStyles, martinConfig.layerField)
             },
             interactive: true,
-            getFeatureId: function(f) {
+            getFeatureId: function (f) {
                 return f.properties.gid || f.properties.id || f.id;
             },
-            
+
             // 点击事件
-            onclick: function(e) {
+            onclick: function (e) {
                 //console.log('要素点击:', e.layer.properties);
                 showFeaturePopup(e);
             },
-            
+
             // 悬停事件
-            onmouseover: function(e) {
+            onmouseover: function (e) {
                 highlightFeature(e);
             },
-            
-            onmouseout: function(e) {
+
+            onmouseout: function (e) {
                 resetHighlight(e);
             }
         });
@@ -310,7 +312,7 @@
         // 要素弹窗
         function showFeaturePopup(e) {
             if (!e.layer.properties) return;
-            
+
             const props = e.layer.properties;
             const content = `
                 <div style="font-family: Microsoft YaHei;">
@@ -323,7 +325,7 @@
                     </table>
                 </div>
             `;
-            
+
             L.popup()
                 .setLatLng(e.latlng)
                 .setContent(content)
@@ -357,8 +359,8 @@
         layerToggles.forEach(toggle => {
             const layerName = toggle.dataset.layer;
             layerVisibility[layerName] = toggle.checked;
-            
-            toggle.addEventListener('change', function() {
+
+            toggle.addEventListener('change', function () {
                 layerVisibility[layerName] = this.checked;
                 updateLayerVisibility();
             });
@@ -366,17 +368,17 @@
 
         function updateLayerVisibility() {
             // 重新创建样式函数，考虑图层可见性
-            const styleFunction = function(properties, zoom) {
+            const styleFunction = function (properties, zoom) {
                 const layerName = properties[martinConfig.layerField];
-                
+
                 // 检查图层是否可见
                 if (!layerVisibility[layerName]) {
                     return { opacity: 0, fillOpacity: 0 };
                 }
-                
+
                 return createStyleFunction(dxfLayerStyles, martinConfig.layerField)(properties, zoom);
             };
-            
+
             vectorLayer.options.vectorTileLayerStyles[martinConfig.tableName] = styleFunction;
             vectorLayer.redraw();
         }
@@ -384,7 +386,7 @@
         // 检查Martin服务状态
         async function checkServiceStatus() {
             const statusDiv = document.getElementById('status');
-            
+
             try {
                 const response = await fetch(`${martinConfig.baseUrl}/catalog`);
                 if (response.ok) {
@@ -409,7 +411,7 @@
             metric: true,
             imperial: false
         }).addTo(map);
-        
+
         // 添加底图切换控制器
         L.control.layers(baseMaps, {
             'DXF矢量图层': vectorLayer
@@ -419,9 +421,10 @@
         }).addTo(map);
 
         // 缩放事件
-        map.on('zoomend', function() {
+        map.on('zoomend', function () {
             vectorLayer.redraw();
         });
     </script>
 </body>
-</html> 
+
+</html>

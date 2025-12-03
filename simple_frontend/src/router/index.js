@@ -46,12 +46,12 @@ const routes = [
     name: 'Scene',
     component: () => import('@/views/SceneView.vue')
   },
-  {
+  /* {
     path: '/cache-manager',
     name: 'CacheManager',
     component: () => import('@/views/CacheManagerView.vue'),
     meta: { requiresAuth: false } // 缓存管理页面
-  },
+  }, */
   {
     path: '/feedback',
     name: 'Feedback',

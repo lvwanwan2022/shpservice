@@ -8,7 +8,7 @@ info:
     email: support@shpservice.com
 
 servers:
-  - url: /api/scene
+  - url: /api/scenes
     description: 场景管理服务
 
 security:
@@ -78,7 +78,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-    
+  /list:  
     get:
       tags:
         - 场景管理

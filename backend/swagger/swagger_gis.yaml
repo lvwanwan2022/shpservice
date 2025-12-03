@@ -27,7 +27,7 @@ paths:
     
     get:
       tags:
-        - 图层信息
+        - GIS工具
       summary: 获取图层的坐标系信息
       description: 根据场景图层ID获取对应的坐标系信息，包括EPSG代码、proj4定义等
       responses:
@@ -127,7 +127,7 @@ paths:
   /coordinate-systems/proj4-definitions:
     get:
       tags:
-        - 坐标系工具
+        - GIS工具
       summary: 获取常用坐标系的proj4定义
       description: 获取常用坐标系的proj4定义，用于前端初始化
       responses:
@@ -323,7 +323,7 @@ paths:
     
     get:
       tags:
-        - 坐标系工具
+        - GIS工具
       summary: 获取单个坐标系的proj4定义
       description: 根据EPSG代码获取指定坐标系的proj4定义
       responses:
@@ -491,7 +491,5 @@ components:
           example: 4326
 
 tags:
-  - name: 图层信息
-    description: 图层坐标系信息查询相关接口
-  - name: 坐标系工具
-    description: 坐标系proj4定义查询相关接口
+  - name: GIS工具
+    description: 图层坐标系、坐标系proj4信息查询相关接口

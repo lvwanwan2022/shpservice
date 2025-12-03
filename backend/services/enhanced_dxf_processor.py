@@ -38,7 +38,7 @@ class EnhancedDXFProcessor:
     
     def __init__(self):
         gdal.UseExceptions()
-        db_url = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
+        db_url = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password'].replace('@', '%40')}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
         self.engine = create_engine(db_url)
     
     def process_dxf_with_enhanced_styles(self, file_path, table_name, coordinate_system='EPSG:4326'):

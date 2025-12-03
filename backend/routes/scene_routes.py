@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify, current_app
 from services.scene_service import SceneService
 from auth.auth_service import require_auth, get_current_user  # 🔥 添加认证导入
 
-scene_bp = Blueprint('scene', __name__)
+scene_bp = Blueprint('scene', __name__, url_prefix='/api/scenes')
 scene_service = SceneService()
 
 def verify_scene_permission(scene_id, operation="操作"):
@@ -219,7 +219,7 @@ def delete_scene(scene_id):
         current_app.logger.error(f"删除场景错误: {str(e)}")
         return jsonify({'error': '服务器内部错误'}), 500
 
-@scene_bp.route('', methods=['GET'])
+@scene_bp.route('/list', methods=['GET'])
 @require_auth  # 🔥 添加认证装饰器
 def list_scenes():
     """获取场景列表

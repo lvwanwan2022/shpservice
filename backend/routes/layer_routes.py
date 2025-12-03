@@ -11,7 +11,7 @@ import logging
 # 创建logger
 logger = logging.getLogger(__name__)
 
-layer_bp = Blueprint('layer', __name__)
+layer_bp = Blueprint('layer', __name__, url_prefix='/api/layers')
 layer_service = LayerService()
 geoserver_service = GeoServerService()
 

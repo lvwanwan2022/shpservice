@@ -9,8 +9,8 @@ import tempfile
 import requests
 from services.file_service import FileService
 from config import GEOSERVER_CONFIG
-
-geoservice_bp = Blueprint('geoservice', __name__)
+#lvwan20250827修改，可能引起前端调用问题，增加/geoservice
+geoservice_bp = Blueprint('geoservice', __name__, url_prefix='/api/geoservice')
 geoserver_service = GeoServerService()
 
 @geoservice_bp.route('/layer_info/<layer_name>', methods=['GET'])

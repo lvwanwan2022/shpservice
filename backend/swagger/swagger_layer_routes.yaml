@@ -33,15 +33,8 @@ servers:
 
 tags:
   - name: 图层管理
-    description: 图层CRUD操作、列表查询等接口
-  - name: 图层发布
-    description: 图层发布、配置等接口
-  - name: 样式管理
-    description: 图层样式配置、模板等接口
-  - name: 图层预览
-    description: 图层预览、边界查询等接口
-  - name: 统计信息
-    description: 图层统计相关接口
+    description: 图层CRUD操作、列表查询、图层发布、图层样式等接口
+  
 
 paths:
   /:
@@ -314,7 +307,7 @@ paths:
   /publish/{file_id}:
     post:
       tags:
-        - 图层发布
+        - 图层管理
       summary: 发布文件为图层
       description: |
         将文件发布为图层，支持多种文件格式。
@@ -512,7 +505,7 @@ paths:
   /{layer_id}/preview:
     get:
       tags:
-        - 图层预览
+        - 图层管理
       summary: 获取图层预览
       description: |
         获取图层的预览图像。
@@ -590,7 +583,7 @@ paths:
   /statistics:
     get:
       tags:
-        - 统计信息
+        - 图层管理
       summary: 获取图层统计信息
       description: |
         获取图层的统计信息，包括数量、类型分布等。
@@ -670,7 +663,7 @@ paths:
   /{layer_id}/style:
     get:
       tags:
-        - 样式管理
+        - 图层管理
       summary: 获取图层样式
       description: |
         获取图层的样式配置信息。
@@ -739,7 +732,7 @@ paths:
 
     put:
       tags:
-        - 样式管理
+        - 图层管理
       summary: 更新图层样式
       description: |
         更新图层的样式配置。
@@ -820,7 +813,7 @@ paths:
   /style/template/{geometry_type}:
     get:
       tags:
-        - 样式管理
+        - 图层管理
       summary: 获取样式模板
       description: |
         根据几何类型获取样式模板。
@@ -888,7 +881,7 @@ paths:
   /{scene_layer_id}/scenelayerbounds:
     get:
       tags:
-        - 图层预览
+        - 图层管理
       summary: 获取场景图层边界
       description: |
         获取3D场景图层的边界信息。
@@ -981,7 +974,7 @@ paths:
   /{layer_id}/bounds:
     get:
       tags:
-        - 图层预览
+        - 图层管理
       summary: 获取图层边界
       description: |
         获取图层的边界信息。

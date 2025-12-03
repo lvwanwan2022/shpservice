@@ -7,7 +7,7 @@ from services.raster_martin_service import RasterMartinService
 from services.file_service import FileService
 
 # 创建蓝图
-mbtiles_bp = Blueprint('mbtiles', __name__)
+mbtiles_bp = Blueprint('mbtiles', __name__, url_prefix='/api/mbtiles')
 file_service = FileService()
 raster_martin_service = RasterMartinService()
 

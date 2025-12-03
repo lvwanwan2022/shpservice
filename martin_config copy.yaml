@@ -1,0 +1,31 @@
+listen_addresses: '0.0.0.0:3000'
+worker_processes: 32
+cache_size_mb: 5120
+# Enable or disable Martin web UI. At the moment, only allows `enable-for-all` which enables the web UI for all connections. This may be undesirable in a production environment. [default: disable]
+web_ui: disable
+
+# CORS Configuration
+#
+# Defaults to `cors: true`, which allows all origins.
+# Sending/Acting on CORS headers can be completely disabled via `cors: false`
+cors: true
+#cors:
+  # Sets the `Access-Control-Allow-Origin` header [default: *]
+  # '*' will use the requests `ORIGIN` header
+  #origin:
+    #- http://localhost:8080
+  # Sets `Access-Control-Max-Age` Header. [default: null]
+  # null means not setting the header for preflight requests
+  #max_age: 3600
+postgres:
+  connection_string: postgresql://postgres:pbim%40421@10.20.124.12:5433/Geometry
+  pool_size: 20
+  auto_publish:
+    tables:
+      from_schemas: ["public"]
+      id_regex: "^vector_.*"  # 只发布符合规则的表
+mbtiles:
+  paths:
+    # scan this whole dir, matching all *.mbtiles files
+    - F:/PluginDevelopment/shpservice/FilesData/mbtiles
+    

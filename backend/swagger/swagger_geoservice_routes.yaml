@@ -32,22 +32,15 @@ servers:
     description: 生产环境
 
 tags:
-  - name: 图层管理
+  - name: geoserver相关
     description: 图层信息查询、列表管理等接口
-  - name: 服务能力
-    description: WMS/WFS服务能力查询接口
-  - name: 服务发布
-    description: 图层发布、取消发布等接口
-  - name: 系统管理
-    description: GeoServer信息、工作空间管理等接口
-  - name: 调试工具
-    description: 调试和诊断相关接口
+  
 
 paths:
   /layer_info/{layer_name}:
     get:
       tags:
-        - 图层管理
+        - geoserver相关
       summary: 获取图层信息
       description: |
         根据图层名称获取图层的详细信息，包括图层属性、样式、边界等。
@@ -159,7 +152,7 @@ paths:
   /wms_capabilities:
     get:
       tags:
-        - 服务能力
+        - geoserver相关
       summary: 获取WMS服务能力
       description: |
         获取GeoServer的WMS服务能力文档URL。
@@ -189,7 +182,7 @@ paths:
   /wfs_capabilities:
     get:
       tags:
-        - 服务能力
+        - geoserver相关
       summary: 获取WFS服务能力
       description: |
         获取GeoServer的WFS服务能力文档URL。
@@ -219,7 +212,7 @@ paths:
   /layers:
     get:
       tags:
-        - 图层管理
+        - geoserver相关
       summary: 获取所有图层
       description: |
         获取系统中所有已发布的图层列表。
@@ -293,7 +286,7 @@ paths:
   /layer_preview/{layer_name}:
     get:
       tags:
-        - 图层管理
+        - geoserver相关
       summary: 获取图层预览
       description: |
         获取图层的预览图像，用于在地图界面中显示图层缩略图。
@@ -357,7 +350,7 @@ paths:
   /published_layers:
     get:
       tags:
-        - 图层管理
+        - geoserver相关
       summary: 获取已发布图层
       description: |
         获取当前用户已发布的图层列表。
@@ -439,7 +432,7 @@ paths:
   /publish/{file_id}:
     post:
       tags:
-        - 服务发布
+        - geoserver相关
       summary: 发布图层到GeoServer
       description: |
         将文件发布为GeoServer图层服务。
@@ -559,7 +552,7 @@ paths:
   /unpublish/{file_id}:
     delete:
       tags:
-        - 服务发布
+        - geoserver相关
       summary: 取消图层发布
       description: |
         取消文件的GeoServer图层发布，删除相关图层和服务。
@@ -602,7 +595,7 @@ paths:
   /debug/layer/{file_id}:
     get:
       tags:
-        - 调试工具
+        - geoserver相关
       summary: 调试图层信息
       description: |
         获取图层的详细调试信息，用于诊断发布问题。
@@ -655,7 +648,7 @@ paths:
   /geoserver/info:
     get:
       tags:
-        - 系统管理
+        - geoserver相关
       summary: 获取GeoServer信息
       description: |
         获取GeoServer服务器的基本信息和状态。
@@ -725,7 +718,7 @@ paths:
   /workspace/{workspace_name}/info:
     get:
       tags:
-        - 系统管理
+        - geoserver相关
       summary: 获取工作空间信息
       description: |
         获取指定工作空间的详细信息。
@@ -809,7 +802,7 @@ paths:
   /layer/{layer_id}/details:
     get:
       tags:
-        - 图层管理
+        - geoserver相关
       summary: 获取图层详细信息
       description: |
         根据图层ID获取图层的详细信息。

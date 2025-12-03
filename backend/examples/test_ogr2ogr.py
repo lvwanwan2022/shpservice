@@ -307,7 +307,7 @@ def dxf_to_postgis(dxf_file_path, db_config, table_name=None, source_srid=4326, 
             port=db_config['port'],
             dbname=db_config['dbname'],
             user=db_config['user'],
-            password=db_config['password']
+            password=DB_CONFIG['password']
         )
         conn.autocommit = False  # 使用事务
         cursor = conn.cursor()
@@ -524,7 +524,7 @@ def dxf_to_postgis(dxf_file_path, db_config, table_name=None, source_srid=4326, 
                             port=db_config['port'],
                             dbname=db_config['dbname'],
                             user=db_config['user'],
-                            password=db_config['password']
+                            password=DB_CONFIG['password']
                         )
                         conn.autocommit = False
                         cursor = conn.cursor()

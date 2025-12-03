@@ -19,7 +19,7 @@ from pathlib import Path
 
 from config import FILE_STORAGE, DB_CONFIG
 from models.db import execute_query, insert_with_snowflake_id
-from backend.services.postgis_service_copy import PostGISService
+from services.postgis_service_copy import PostGISService
 from services.martin_service import MartinService
 
 
@@ -364,7 +364,7 @@ class ShpMartinService:
             # 2. 从PostGIS删除表
             try:
                 from sqlalchemy import create_engine, text
-                connection_string = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
+                connection_string = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password'].replace('@', '%40')}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
                 engine = create_engine(connection_string, echo=False)
                 
                 with engine.connect() as conn:
@@ -672,7 +672,7 @@ class ShpMartinService:
             table_name = f"shp_{file_id.replace('-', '_')}"
             
             # 创建数据库连接
-            connection_string = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
+            connection_string = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password'].replace('@', '%40')}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
             engine = create_engine(connection_string, echo=False)
             
             # 将几何列重命名为'geom'以符合PostGIS标准

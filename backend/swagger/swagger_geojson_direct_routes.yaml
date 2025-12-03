@@ -18,7 +18,7 @@ paths:
   /upload:
     post:
       tags:
-        - 文件上传
+        - Geojson文件相关-弃用
       summary: 上传GeoJSON文件
       description: 上传GeoJSON文件并返回文件信息和访问URL
       requestBody:
@@ -149,7 +149,7 @@ paths:
     
     get:
       tags:
-        - 文件获取
+        - Geojson文件相关-弃用
       summary: 获取GeoJSON文件内容
       description: 获取GeoJSON文件内容，用于前端Leaflet加载
       responses:
@@ -209,7 +209,7 @@ paths:
     
     get:
       tags:
-        - 文件信息
+        - Geojson文件相关-弃用
       summary: 获取GeoJSON文件信息
       description: 获取GeoJSON文件的元数据信息
       responses:
@@ -302,7 +302,7 @@ paths:
     
     get:
       tags:
-        - 文件下载
+        - Geojson文件相关-弃用
       summary: 下载GeoJSON文件
       description: 下载GeoJSON文件
       responses:
@@ -343,7 +343,7 @@ paths:
   /files:
     get:
       tags:
-        - 文件管理
+        - Geojson文件相关-弃用
       summary: 获取GeoJSON文件列表
       description: 获取当前用户的GeoJSON文件列表
       parameters:
@@ -468,7 +468,7 @@ paths:
     
     delete:
       tags:
-        - 文件管理
+        - Geojson文件相关-弃用
       summary: 删除GeoJSON文件
       description: 删除指定的GeoJSON文件
       responses:
@@ -533,7 +533,7 @@ paths:
     
     get:
       tags:
-        - Leaflet配置
+        - Geojson文件相关-弃用
       summary: 获取Leaflet配置
       description: 获取用于Leaflet地图的GeoJSON配置信息
       responses:
@@ -650,7 +650,7 @@ paths:
   /health:
     get:
       tags:
-        - 系统状态
+        - Geojson文件相关-弃用
       summary: 服务健康检查
       description: 检查GeoJSON直接服务的健康状态
       responses:
@@ -776,17 +776,6 @@ components:
             $ref: '#/components/schemas/GeoJSONFeature'
 
 tags:
-  - name: 文件上传
-    description: GeoJSON文件上传相关接口
-  - name: 文件获取
-    description: GeoJSON文件获取相关接口
-  - name: 文件信息
-    description: GeoJSON文件信息查询相关接口
-  - name: 文件下载
-    description: GeoJSON文件下载相关接口
-  - name: 文件管理
-    description: GeoJSON文件管理相关接口
-  - name: Leaflet配置
-    description: Leaflet地图配置相关接口
-  - name: 系统状态
-    description: 系统健康检查相关接口
+  - name: Geojson文件相关-弃用
+    description: Geojson文件相关-弃用接口
+  

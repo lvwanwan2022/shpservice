@@ -12,12 +12,12 @@ import json
 import logging
 
 logger = logging.getLogger(__name__)
-
+#lvwan20250827修改，可能引起前端调用问题，增加/martin_service
 # 创建蓝图
-martin_service_bp = Blueprint('martin_service', __name__)
+martin_service_bp = Blueprint('martin_service', __name__, url_prefix='/api/martin_services')
 
 
-@martin_service_bp.route('/martin-services/list', methods=['GET'])
+@martin_service_bp.route('/list', methods=['GET'])
 def get_all_martin_services():
     """获取所有Martin服务列表（包括GeoJSON和SHP）"""
     try:
@@ -109,7 +109,7 @@ def get_all_martin_services():
         return jsonify({'error': f'获取Martin服务列表失败: {str(e)}'}), 500
 
 
-@martin_service_bp.route('/martin-services/search', methods=['GET'])
+@martin_service_bp.route('/search', methods=['GET'])
 def search_martin_services():
     """搜索Martin服务"""
     try:
@@ -191,7 +191,7 @@ def search_martin_services():
         return jsonify({'error': f'搜索Martin服务失败: {str(e)}'}), 500
 
 
-@martin_service_bp.route('/martin-services/<int:service_id>', methods=['GET'])
+@martin_service_bp.route('/<int:service_id>', methods=['GET'])
 def get_martin_service_by_id(service_id):
     """根据ID获取Martin服务详细信息"""
     try:
@@ -251,7 +251,7 @@ def get_martin_service_by_id(service_id):
         return jsonify({'error': f'获取Martin服务详情失败: {str(e)}'}), 500
 
 
-@martin_service_bp.route('/martin-services/<string:service_id>/style', methods=['POST'])
+@martin_service_bp.route('/<string:service_id>/style', methods=['POST'])
 def update_martin_service_style(service_id):
     """更新Martin服务样式"""
     try:
@@ -295,7 +295,7 @@ def update_martin_service_style(service_id):
         }), 500
 
 
-@martin_service_bp.route('/martin-services/<string:service_id>/style', methods=['GET'])
+@martin_service_bp.route('/<string:service_id>/style', methods=['GET'])
 def get_martin_service_style(service_id):
     """获取Martin服务样式"""
     try:
@@ -329,7 +329,7 @@ def get_martin_service_style(service_id):
         }), 500
 
 
-@martin_service_bp.route('/martin-services/<string:service_id>/apply-style', methods=['POST'])
+@martin_service_bp.route('/<string:service_id>/apply-style', methods=['POST'])
 def apply_martin_service_style(service_id):
     """应用Martin服务样式（保存并应用）"""
     try:
@@ -373,7 +373,7 @@ def apply_martin_service_style(service_id):
         }), 500
 
 
-@martin_service_bp.route('/martin-services/style-templates', methods=['GET'])
+@martin_service_bp.route('/style-templates', methods=['GET'])
 def get_style_templates():
     """获取Martin服务样式模板"""
     try:
@@ -526,7 +526,7 @@ def get_style_templates():
         }), 500
 
 
-@martin_service_bp.route('/martin-services/test', methods=['GET'])
+@martin_service_bp.route('/test', methods=['GET'])
 def test_martin_services():
     """测试Martin服务查询"""
     try:

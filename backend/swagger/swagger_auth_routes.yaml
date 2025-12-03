@@ -38,7 +38,7 @@ paths:
                 password:
                   type: string
                   description: 密码
-                  example: "password123"
+                  example: "admin123"
       responses:
         '200':
           description: 登录成功
@@ -242,7 +242,7 @@ paths:
   /userinfo:
     get:
       tags:
-        - 用户信息
+        - 用户认证
       summary: 获取当前用户信息
       description: 获取当前登录用户的详细信息
       security:
@@ -311,7 +311,7 @@ paths:
   /verify:
     post:
       tags:
-        - Token验证
+        - 用户认证
       summary: 验证Token
       description: 验证JWT token的有效性
       requestBody:
@@ -391,7 +391,7 @@ paths:
   /protected:
     get:
       tags:
-        - 示例接口
+        - 用户认证
       summary: 受保护的示例接口
       description: 需要登录权限的示例接口，演示如何添加认证保护
       security:
@@ -549,9 +549,4 @@ components:
 tags:
   - name: 用户认证
     description: 用户登录、注册、注销相关接口
-  - name: 用户信息
-    description: 用户信息查询相关接口
-  - name: Token验证
-    description: JWT Token验证相关接口
-  - name: 示例接口
-    description: 示例和演示接口
+

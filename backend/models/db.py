@@ -18,17 +18,36 @@ def get_connection():
         # 设置环境变量强制使用英文错误信息
         os.environ['LC_ALL'] = 'C'
         os.environ['LANG'] = 'C'
+        os.environ['LANGUAGE'] = 'C'
         
-        conn = psycopg2.connect(
-            host=DB_CONFIG['host'],
-            port=DB_CONFIG['port'],
-            database=DB_CONFIG['database'],
-            user=DB_CONFIG['user'],
-            password=DB_CONFIG['password'],
-            client_encoding='utf8'
-        )
-        # 设置会话编码
-        conn.set_client_encoding('UTF8')
+        # 构建连接参数，特别处理编码问题
+        connection_params = {
+            'host': DB_CONFIG['host'],
+            'port': DB_CONFIG['port'],
+            'database': DB_CONFIG['database'],
+            'user': DB_CONFIG['user'],
+            'password': DB_CONFIG['password'],
+            'client_encoding': 'utf8',
+            'connect_timeout': DB_CONFIG.get('connect_timeout', 30)
+        }
+        
+        # 如果有额外的连接选项，添加它们
+        if 'options' in DB_CONFIG:
+            connection_params['options'] = DB_CONFIG['options']
+        
+        conn = psycopg2.connect(**connection_params)
+        
+        # 设置会话编码和参数
+        with conn.cursor() as cursor:
+            cursor.execute("SET client_encoding TO 'utf8'")
+            cursor.execute("SET standard_conforming_strings TO on")
+            # 如果是远程连接，设置额外的编码参数
+            if DB_CONFIG['host'] not in ['localhost', '127.0.0.1']:
+                cursor.execute("SET lc_messages TO 'C'")
+                cursor.execute("SET lc_numeric TO 'C'")
+                cursor.execute("SET lc_time TO 'C'")
+        conn.commit()
+        
         return conn
     except psycopg2.OperationalError as e:
         # 处理编码问题 - 尝试解析GB2312编码的错误信息

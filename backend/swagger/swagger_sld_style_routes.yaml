@@ -18,7 +18,7 @@ paths:
   /initialize:
     post:
       tags:
-        - 数据库管理
+        - geoserver服务SLD样式
       summary: 初始化SLD样式数据库
       description: 初始化SLD样式数据库表结构
       responses:
@@ -46,7 +46,7 @@ paths:
   /upload:
     post:
       tags:
-        - 样式上传
+        - geoserver-sld样式相关
       summary: 上传SLD样式文件
       description: 上传SLD样式文件并保存到数据库
       requestBody:
@@ -143,7 +143,7 @@ paths:
   /:
     get:
       tags:
-        - 样式管理
+        - geoserver-sld样式相关
       summary: 获取SLD样式列表
       description: 获取所有SLD样式列表，支持分页和过滤
       parameters:
@@ -257,7 +257,7 @@ paths:
     
     get:
       tags:
-        - 样式管理
+        - geoserver-sld样式相关
       summary: 获取SLD样式详情
       description: 根据样式ID获取SLD样式的详细信息
       responses:
@@ -345,7 +345,7 @@ paths:
     
     get:
       tags:
-        - 样式内容
+        - geoserver-sld样式相关
       summary: 获取SLD样式内容
       description: 获取SLD样式文件的内容
       responses:
@@ -404,7 +404,7 @@ paths:
     
     put:
       tags:
-        - 样式内容
+        - geoserver-sld样式相关
       summary: 更新SLD样式内容
       description: 更新SLD样式文件的内容
       requestBody:
@@ -499,7 +499,7 @@ paths:
     
     get:
       tags:
-        - 样式下载
+        - geoserver-sld样式相关
       summary: 下载SLD样式文件
       description: 下载SLD样式文件
       responses:
@@ -543,7 +543,7 @@ paths:
     
     delete:
       tags:
-        - 样式管理
+        - geoserver-sld样式相关
       summary: 删除SLD样式
       description: 删除指定的SLD样式
       responses:
@@ -592,7 +592,7 @@ paths:
     
     put:
       tags:
-        - 样式管理
+        - geoserver-sld样式相关
       summary: 更新SLD样式信息
       description: 更新SLD样式的基本信息
       requestBody:
@@ -682,7 +682,7 @@ paths:
   /apply:
     post:
       tags:
-        - 样式应用
+        - geoserver-sld样式相关
       summary: 应用SLD样式到图层
       description: 将SLD样式应用到指定的图层
       requestBody:
@@ -780,7 +780,7 @@ paths:
     
     get:
       tags:
-        - 样式应用
+        - geoserver-sld样式相关
       summary: 获取图层应用的样式
       description: 获取指定图层当前应用的SLD样式
       responses:
@@ -849,7 +849,7 @@ paths:
     
     post:
       tags:
-        - 样式应用
+        - geoserver-sld样式相关
       summary: 移除图层的SLD样式
       description: 移除指定图层当前应用的SLD样式
       responses:
@@ -966,15 +966,6 @@ components:
           description: 更新时间
 
 tags:
-  - name: 数据库管理
-    description: SLD样式数据库管理相关接口
-  - name: 样式上传
-    description: SLD样式文件上传相关接口
-  - name: 样式管理
-    description: SLD样式管理相关接口
-  - name: 样式内容
-    description: SLD样式内容管理相关接口
-  - name: 样式下载
-    description: SLD样式文件下载相关接口
-  - name: 样式应用
-    description: SLD样式应用到图层相关接口
+  - name: geoserver-sld样式相关
+    description: geoserver-SLD样式数据库管理相关接口
+  

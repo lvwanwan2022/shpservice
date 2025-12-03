@@ -11,7 +11,7 @@ from flask import Blueprint, request, jsonify
 from .auth_service import auth_service, require_auth, get_current_user
 
 # 创建认证蓝图
-auth_bp = Blueprint('auth', __name__)
+auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
 @auth_bp.route('/login', methods=['POST'])
 def login():

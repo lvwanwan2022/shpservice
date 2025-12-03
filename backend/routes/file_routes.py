@@ -12,7 +12,7 @@ import os
 import json
 import time
 
-file_bp = Blueprint('file', __name__)
+file_bp = Blueprint('file', __name__, url_prefix='/api/files')
 file_service = FileService()
 
 @file_bp.route('/upload', methods=['POST'])

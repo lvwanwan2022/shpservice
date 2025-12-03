@@ -76,7 +76,7 @@ class PostGISService:
     def _create_sqlalchemy_engine(self):
         """创建SQLAlchemy引擎"""
         from sqlalchemy import create_engine
-        connection_string = f"postgresql://{self.db_config['user']}:{self.db_config['password']}@{self.db_config['host']}:{self.db_config['port']}/{self.db_config['database']}"
+        connection_string = f"postgresql://{self.db_config['user']}:{self.db_config['password'].replace('@', '%40')}@{self.db_config['host']}:{self.db_config['port']}/{self.db_config['database']}"
         engine = create_engine(connection_string, echo=False)
         return engine
     

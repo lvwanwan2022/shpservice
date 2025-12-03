@@ -47,7 +47,7 @@
             <!-- 图层卡片列表 -->
             <div class="layer-cards" v-if="layersList && layersList.length > 0">
               <div 
-                v-for="(layer) in sortedLayersList" 
+                v-for="(layer, index) in sortedLayersList" 
                 :key="layer.scene_layer_id || layer.id" 
                 class="layer-card"
                 :class="{ 
@@ -56,7 +56,7 @@
                 }"
                 @click="selectLayer(layer)"
               >
-                <div class="layer-card-header">
+                <div class="layer-card-header" :class="{ 'invisible': !layer.visibility }">
                   <div class="layer-title">
                     <!-- 可见性控制checkbox -->
                     <el-checkbox 
@@ -68,7 +68,11 @@
                     <i v-if="currentActiveLayer && currentActiveLayer.scene_layer_id === layer.scene_layer_id" 
                        class="el-icon-location active-indicator" 
                        title="当前活动图层"></i>
-                    <span class="layer-name">{{ layer.layer_name || layer.name || '未命名图层' }}</span>
+                    <div class="layer-name-wrapper">
+                      <span class="layer-name" :title="layer.layer_name || layer.name || '未命名图层'">
+                        {{ layer.layer_name || layer.name || '未命名图层' }}
+                      </span>
+                    </div>
                   </div>
                   <div class="layer-actions">
                     <!-- 缩放到图层范围 -->
@@ -85,72 +89,20 @@
                         </svg>
                       </span>
                     </el-button>
-                    
-                    <!-- 样式设置 -->
+
+                    <!-- 设置按钮 -->
                     <el-button 
                       link 
-                      @click.stop="showStyleDialog(layer)"
-                      class="style-btn"
-                      title="样式设置"
+                      @click.stop="toggleLayerSettings(layer)"
+                      class="settings-btn"
+                      title="图层设置"
                     >
                       <span>
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                          <path d="M12,2A2,2 0 0,1 14,4C14,4.74 13.6,5.39 13,5.73V7H14A7,7 0 0,1 21,14H22A1,1 0 0,1 23,15V18A1,1 0 0,1 22,19H21V20A2,2 0 0,1 19,22H5A2,2 0 0,1 3,20V19H2A1,1 0 0,1 1,18V15A1,1 0 0,1 2,14H3A7,7 0 0,1 10,7H11V5.73C10.4,5.39 10,4.74 10,4A2,2 0 0,1 12,2M7.5,13A2.5,2.5 0 0,0 5,15.5A2.5,2.5 0 0,0 7.5,18A2.5,2.5 0 0,0 10,15.5A2.5,2.5 0 0,0 7.5,13M16.5,13A2.5,2.5 0 0,0 14,15.5A2.5,2.5 0 0,0 16.5,18A2.5,2.5 0 0,0 19,15.5A2.5,2.5 0 0,0 16.5,13Z"/>
+                          <path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/>
                         </svg>
                       </span>
                     </el-button>
-                    
-                    <!-- 删除图层 -->
-                    <el-button 
-                      link 
-                      @click.stop="removeLayer(layer)" 
-                      class="remove-btn"
-                      title="删除图层"
-                    >
-                      <span>
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                          <path d="M9,3V4H4V6H5V19A2,2 0 0,0 7,21H17A2,2 0 0,0 19,19V6H20V4H15V3H9M7,6H17V19H7V6M9,8V17H11V8H9M13,8V17H15V8H13Z"/>
-                        </svg>
-                      </span>
-                    </el-button>
-                  </div>
-                </div>
-                <div class="layer-card-info">
-                  <span class="tag">{{ layer.file_type }}</span>
-                  <span class="tag">{{ layer.discipline }}</span>
-                  <span class="tag">{{ layer.dimension }}</span>
-                  <!-- 显示服务类型 -->
-                  <span v-if="layer.service_type" class="tag" :class="getServiceTypeClass(layer.service_type)">
-                    {{ getServiceTypeText(layer) }}
-                  </span>
-                  <!-- 显示图层状态 -->
-                  <span class="tag" :class="getLayerStatusClass(layer)">
-                    {{ getLayerStatusText(layer) }}
-                  </span>
-                </div>
-                
-                <!-- 🔥 透明度控制 -->
-                <div 
-                  class="layer-opacity-control" 
-                  @click.stop
-                  @mousedown.stop
-                  @dragstart.stop="$event.preventDefault()"
-                  @drag.stop="$event.preventDefault()"
-                >
-                  <div class="opacity-row">
-                    <i class="el-icon-view opacity-icon"></i>
-                    <span class="opacity-label">透明度</span>
-                    <el-slider
-                      :model-value="layer.opacity || 1"
-                      @update:model-value="val => updateLayerOpacity(layer, val)"
-                      :min="0"
-                      :max="1"
-                      :step="0.01"
-                      size="small"
-                      class="opacity-slider"
-                      :show-tooltip="false"
-                    />
-                    <span class="opacity-value">{{ Math.round((layer.opacity || 1) * 100) }}%</span>
                   </div>
                 </div>
               </div>
@@ -342,9 +294,11 @@
                       @change="toggleLayerVisibility(layer)"
                       @click.stop
                     />
-                    <span class="layer-name">{{ layer.layer_name }}</span>
-                    <i v-if="currentActiveLayer && currentActiveLayer.scene_layer_id === layer.scene_layer_id" 
-                       class="el-icon-location active-indicator"></i>
+                    <div class="layer-name-container">
+                      <span class="layer-name" :title="layer.layer_name">{{ layer.layer_name }}</span>
+                      <i v-if="currentActiveLayer && currentActiveLayer.scene_layer_id === layer.scene_layer_id" 
+                         class="el-icon-location active-indicator"></i>
+                    </div>
                   </div>
                   
                   <div class="layer-tags">
@@ -645,6 +599,115 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- 🔥 图层设置对话框 -->
+    <el-dialog 
+      :title="currentSettingsLayer ? `图层设置 - ${currentSettingsLayer.layer_name || currentSettingsLayer.name || '未命名图层'}` : '图层设置'" 
+      v-model="layerSettingsDialogVisible" 
+      width="600px" 
+      :close-on-click-modal="false"
+      @close="closeLayerSettingsDialog"
+    >
+      <div class="layer-settings-dialog-content" v-if="layerSettingsDialogVisible && currentSettingsLayer">
+        <!-- 图层信息标签 -->
+        <div class="settings-section">
+          <div class="section-title">
+            <i class="el-icon-info"></i>
+            <span>图层信息</span>
+          </div>
+          <div class="layer-card-info">
+            <span class="tag">{{ currentSettingsLayer.file_type }}</span>
+            <span class="tag">{{ currentSettingsLayer.discipline }}</span>
+            <span class="tag">{{ currentSettingsLayer.dimension }}</span>
+            <!-- 显示服务类型 -->
+            <span v-if="currentSettingsLayer.service_type" class="tag" :class="getServiceTypeClass(currentSettingsLayer.service_type)">
+              {{ getServiceTypeText(currentSettingsLayer) }}
+            </span>
+            <!-- 显示图层状态 -->
+            <span class="tag" :class="getLayerStatusClass(currentSettingsLayer)">
+              {{ getLayerStatusText(currentSettingsLayer) }}
+            </span>
+          </div>
+        </div>
+        
+        <!-- 透明度控制 -->
+        <div class="settings-section">
+          <div class="section-title">
+            <i class="el-icon-view"></i>
+            <span>透明度调节</span>
+          </div>
+          <div class="layer-opacity-control">
+            <div class="opacity-row">
+              <el-slider
+                v-model="currentSettingsLayer.opacity"
+                :min="0"
+                :max="1"
+                :step="0.01"
+                :show-tooltip="true"
+                :format-tooltip="(val) => Math.round(val * 100) + '%'"
+                @input="updateLayerOpacity(currentSettingsLayer)"
+                class="opacity-slider"
+              />
+              <span class="opacity-value">{{ Math.round((currentSettingsLayer.opacity || 1) * 100) }}%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 图层顺序控制 -->
+        <div class="settings-section">
+          <div class="section-title">
+            <i class="el-icon-sort"></i>
+            <span>图层顺序</span>
+          </div>
+          <div class="layer-order-control">
+            <el-button 
+              size="small" 
+              icon="el-icon-top" 
+              @click="moveLayerUp(sortedLayersList.findIndex(l => l.scene_layer_id === currentSettingsLayer.scene_layer_id))"
+              :disabled="sortedLayersList.findIndex(l => l.scene_layer_id === currentSettingsLayer.scene_layer_id) === 0"
+              class="order-btn"
+            >上移一层</el-button>
+            <el-button 
+              size="small" 
+              icon="el-icon-bottom" 
+              @click="moveLayerDown(sortedLayersList.findIndex(l => l.scene_layer_id === currentSettingsLayer.scene_layer_id))"
+              :disabled="sortedLayersList.findIndex(l => l.scene_layer_id === currentSettingsLayer.scene_layer_id) === sortedLayersList.length - 1"
+              class="order-btn"
+            >下移一层</el-button>
+          </div>
+        </div>
+
+        <!-- 图层操作按钮 -->
+        <div class="settings-section settings-actions">
+          <el-button 
+            size="small" 
+            type="primary" 
+            @click="showStyleDialog(currentSettingsLayer)"
+            class="action-btn style-action-btn"
+            title="样式设置"
+          >
+            <i class="el-icon-brush"></i>
+            <span>样式设置</span>
+          </el-button>
+          
+          <el-button 
+            size="small" 
+            type="danger" 
+            @click="handleRemoveLayerFromDialog" 
+            class="action-btn delete-action-btn"
+            title="删除图层"
+          >
+            <i class="el-icon-delete"></i>
+            <span>删除图层</span>
+          </el-button>
+        </div>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="closeLayerSettingsDialog">关闭</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -728,6 +791,10 @@ export default {
       file_type: '',
       keyword: ''
     })
+    
+    // 🔥 图层设置对话框相关
+    const layerSettingsDialogVisible = ref(false)
+    const currentSettingsLayer = ref(null)
     
     // 计算属性
     const isMobile = computed(() => isMobileDevice())
@@ -935,15 +1002,33 @@ export default {
     }
     
     // 切换图层可见性
-    const toggleLayerVisibility = (layer) => {
-      // 更新图层状态
-      layer.visibility = !layer.visibility
-      console.log(`切换图层 ${layer.layer_name} 可见性: ${layer.visibility}`)
-      
-      // 通知地图组件更新
-      if (mapViewer.value) {
-        // 触发图层列表的响应式更新
-        layersList.value = [...layersList.value]
+    const toggleLayerVisibility = async (layer) => {
+      try {
+        // 先更新数据库中的可见性状态
+        await gisApi.updateSceneLayer(selectedSceneId.value, layer.id, {
+          visible: layer.visibility
+        })
+        
+        // 通知MapViewerDeckGL组件更新地图显示
+        if (mapViewer.value && mapViewer.value.toggleLayerVisibility) {
+          mapViewer.value.toggleLayerVisibility(layer)
+        } else {
+          // 如果直接调用方法不可用，则发送自定义事件
+          const event = new CustomEvent('layerVisibilityChanged', {
+            detail: {
+              layerId: layer.id,
+              layer: layer,
+              visibility: layer.visibility
+            }
+          })
+          window.dispatchEvent(event)
+        }
+        
+      } catch (error) {
+        console.error('更新图层可见性失败', error)
+        ElMessage.error('更新图层可见性失败')
+        // 回滚状态
+        layer.visibility = !layer.visibility
       }
     }
     
@@ -953,16 +1038,55 @@ export default {
         layer.opacity = newOpacity
       }
       
+      // 限制透明度范围
+      if (layer.opacity < 0) layer.opacity = 0
+      if (layer.opacity > 1) layer.opacity = 1
+      
       console.log(`更新图层 ${layer.layer_name} 透明度: ${Math.round(layer.opacity * 100)}%`)
       
-      // 确保透明度在有效范围内
-      layer.opacity = Math.max(0, Math.min(1, parseFloat(layer.opacity) || 1.0))
-      
-      // 通知地图组件更新
-      if (mapViewer.value) {
-        // 触发图层列表的响应式更新
-        layersList.value = [...layersList.value]
+      // 1. 立即更新地图中的图层透明度
+      if (mapViewer.value && mapViewer.value.updateLayerOpacity) {
+        mapViewer.value.updateLayerOpacity(layer, layer.opacity)
       }
+      
+      // 2. 防抖更新数据库
+      updateLayerOpacityInDatabase(layer)
+    }
+    
+    // 防抖定时器映射
+    const opacityUpdateTimers = ref(new Map())
+    
+    // 🔥 更新数据库中的图层透明度（防抖）
+    const updateLayerOpacityInDatabase = async (layer) => {
+      if (!selectedSceneId.value || !layer.scene_layer_id) {
+        console.warn('缺少场景ID或图层ID，跳过数据库更新')
+        return
+      }
+      
+      // 清除之前的定时器
+      if (opacityUpdateTimers.value.has(layer.id)) {
+        clearTimeout(opacityUpdateTimers.value.get(layer.id))
+      }
+      
+      // 设置新的防抖定时器（500ms后执行）
+      const timer = setTimeout(async () => {
+        try {
+          const updateData = {
+            opacity: layer.opacity
+          }
+          
+          // 调用后端API更新透明度
+          await gisApi.updateSceneLayer(selectedSceneId.value, layer.id, updateData)
+          
+          // 清除定时器
+          opacityUpdateTimers.value.delete(layer.id)
+        } catch (error) {
+          console.error('保存透明度失败:', error)
+          ElMessage.error('透明度设置保存失败')
+        }
+      }, 500)
+      
+      opacityUpdateTimers.value.set(layer.id, timer)
     }
     
     // 🔥 显示样式设置对话框
@@ -1238,6 +1362,25 @@ export default {
       ElMessage.success(`已选中图层: ${layer.layer_name}`)
     }
 
+    // 🔥 打开图层设置对话框
+    const toggleLayerSettings = (layer) => {
+      currentSettingsLayer.value = layer
+      layerSettingsDialogVisible.value = true
+    }
+    
+    // 🔥 关闭图层设置对话框
+    const closeLayerSettingsDialog = () => {
+      layerSettingsDialogVisible.value = false
+      currentSettingsLayer.value = null
+    }
+    
+    // 🔥 从对话框删除图层
+    const handleRemoveLayerFromDialog = async () => {
+      if (!currentSettingsLayer.value) return
+      await removeLayer(currentSettingsLayer.value)
+      closeLayerSettingsDialog()
+    }
+
     // 移除图层
     const removeLayer = async (layer) => {
       try {
@@ -1259,6 +1402,60 @@ export default {
       } catch {
         // 用户取消
       }
+    }
+
+    // 🔥 图层顺序调整方法
+    const moveLayerUp = async (index) => {
+      if (index === 0) return
+      
+      try {
+        const newOrders = calculateNewLayersOrder(index, index - 1)
+        await updateLayersOrder(newOrders)
+        ElMessage.success('图层上移成功')
+        await fetchSceneLayers(selectedSceneId.value)
+      } catch (error) {
+        console.error('图层上移失败', error)
+        ElMessage.error('图层上移失败')
+      }
+    }
+    
+    const moveLayerDown = async (index) => {
+      if (index === sortedLayersList.value.length - 1) return
+      
+      try {
+        const newOrders = calculateNewLayersOrder(index, index + 1)
+        await updateLayersOrder(newOrders)
+        ElMessage.success('图层下移成功')
+        await fetchSceneLayers(selectedSceneId.value)
+      } catch (error) {
+        console.error('图层下移失败', error)
+        ElMessage.error('图层下移失败')
+      }
+    }
+    
+    // 计算新的图层顺序
+    const calculateNewLayersOrder = (fromIndex, toIndex) => {
+      const sortedLayers = [...sortedLayersList.value]
+      const movedLayer = sortedLayers[fromIndex]
+      
+      // 移除被移动的图层
+      sortedLayers.splice(fromIndex, 1)
+      // 插入到新位置
+      sortedLayers.splice(toIndex, 0, movedLayer)
+      
+      // 重新分配zIndex
+      const newOrders = {}
+      sortedLayers.forEach((layer, index) => {
+        // 使用zIndex来控制图层顺序，值越大越在上面
+        newOrders[layer.scene_layer_id || layer.id] = sortedLayers.length - index
+      })
+      
+      return newOrders
+    }
+    
+    // 批量更新图层顺序
+    const updateLayersOrder = async (newOrders) => {
+      await gisApi.reorderSceneLayers(selectedSceneId.value, newOrders)
     }
     
     // 获取图层类型文本
@@ -1541,6 +1738,9 @@ export default {
           }
           // 确保数值在有效范围内
           layer.opacity = Math.max(0, Math.min(1, parseFloat(layer.opacity) || 1.0))
+          
+          // 🔥 关键修复：将layer_order映射到zIndex，确保排序正确
+          layer.zIndex = layer.layer_order || 0
         })
         
         // 清除选中状态
@@ -1691,6 +1891,9 @@ export default {
       selectedSceneId,
       layerSearchForm,
       currentActiveLayer,
+      // 🔥 图层设置对话框相关
+      layerSettingsDialogVisible,
+      currentSettingsLayer,
       
       // 🔥 样式设置相关响应式数据
       styleDialogVisible,
@@ -1721,6 +1924,7 @@ export default {
 
       toggleLayerVisibility,
       updateLayerOpacity,
+      updateLayerOpacityInDatabase,
       zoomToLayer,
       removeLayer,
       getLayerTypeText,
@@ -1733,6 +1937,12 @@ export default {
       getLayerStatusText,
       searchLayers,
       resetSearch,
+      // 🔥 图层设置相关方法
+      toggleLayerSettings,
+      closeLayerSettingsDialog,
+      handleRemoveLayerFromDialog,
+      moveLayerUp,
+      moveLayerDown,
       
       toggleLayerSelection,
       addSelectedLayers,
@@ -2093,6 +2303,13 @@ export default {
   gap: 8px;
   font-weight: 500;
   flex: 1;
+  min-width: 0; /* 允许flex子项收缩 */
+}
+
+.layer-name-wrapper {
+  flex: 1;
+  min-width: 0; /* 允许收缩 */
+  overflow: hidden;
 }
 
 .layer-name {
@@ -2101,6 +2318,8 @@ export default {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: block;
+  width: 100%;
 }
 
 .active-indicator {
@@ -2112,9 +2331,11 @@ export default {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0; /* 防止按钮被压缩 */
+  margin-left: auto; /* 推到右边 */
 }
 
-.zoom-btn, .remove-btn {
+.zoom-btn, .remove-btn, .settings-btn {
   padding: 4px;
   color: #666;
   transition: color 0.2s;
@@ -2128,12 +2349,78 @@ export default {
   color: #f56c6c;
 }
 
+.settings-btn {
+  padding: 4px;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.settings-btn:hover {
+  color: #409eff;
+  background: transparent;
+}
+
+.settings-btn.active {
+  color: #409eff;
+  background: transparent;
+}
+
+.settings-btn.active svg {
+  animation: rotate 0.5s ease;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(180deg); }
+}
+
+/* 🔥 设置面板样式优化 */
+.layer-settings-panel {
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  border-top: 2px solid #e4e7ed;
+  animation: slideDown 0.3s ease;
+  overflow: hidden;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 1000px;
+  }
+}
+
+.settings-section {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f2f5;
+}
+
+.settings-section:last-child {
+  border-bottom: none;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #606266;
+  margin-bottom: 10px;
+}
+
+.section-title i {
+  color: #909399;
+  font-size: 14px;
+}
+
 .layer-card-info {
-  padding: var(--layer-card-padding);
   display: flex;
   flex-wrap: wrap;
-  gap: var(--layer-info-spacing);
-  border-bottom: 1px solid #f5f7fa;
+  gap: 6px;
 }
 
 .tag {
@@ -2176,62 +2463,62 @@ export default {
   color: #f56c6c;
 }
 
-/* 🔥 透明度控制样式 */
+/* 🔥 透明度控制样式优化 */
 .layer-opacity-control {
-  padding: var(--layer-card-padding);
-  background: #fafbfc;
-  border-radius: 0 0 var(--layer-card-border-radius) var(--layer-card-border-radius);
+  background: white;
+  border-radius: 6px;
+  padding: 8px 12px;
+  border: 1px solid #e4e7ed;
 }
 
 .opacity-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   width: 100%;
 }
 
-.opacity-icon {
-  color: #909399;
-  font-size: 12px;
-  flex-shrink: 0;
-}
-
-.opacity-label {
-  font-size: 11px;
-  color: #606266;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
 .opacity-value {
-  font-size: 11px;
+  font-size: 13px;
   color: #409eff;
-  font-weight: 500;
-  min-width: 30px;
+  font-weight: 600;
+  min-width: 42px;
   text-align: right;
   flex-shrink: 0;
+  background: #ecf5ff;
+  padding: 4px 8px;
+  border-radius: 4px;
 }
 
 .opacity-slider {
   flex: 1;
-  margin: 0 8px;
 }
 
 .opacity-slider :deep(.el-slider__runway) {
-  height: 4px;
-  background: #e4e7ed;
+  height: 6px;
+  background: linear-gradient(90deg, #f0f2f5 0%, #e4e7ed 100%);
+  border-radius: 3px;
 }
 
 .opacity-slider :deep(.el-slider__bar) {
-  height: 4px;
-  background: linear-gradient(90deg, #409eff, #67c23a);
+  height: 6px;
+  background: linear-gradient(90deg, #409eff 0%, #67c23a 100%);
+  border-radius: 3px;
+  box-shadow: 0 0 4px rgba(64, 158, 255, 0.3);
 }
 
 .opacity-slider :deep(.el-slider__button) {
-  width: 14px;
-  height: 14px;
-  border: 2px solid #409eff;
+  width: 16px;
+  height: 16px;
+  border: 3px solid #409eff;
   background: #fff;
+  box-shadow: 0 2px 6px rgba(64, 158, 255, 0.3);
+  transition: all 0.2s;
+}
+
+.opacity-slider :deep(.el-slider__button:hover) {
+  transform: scale(1.2);
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.5);
 }
 
 
@@ -2460,9 +2747,7 @@ export default {
   outline: none;
 }
 
-.map-container-wrapper.with-panel {
-  /* 当面板展开时不需要额外的margin */
-}
+/* .map-container-wrapper.with-panel 样式已移除，不再需要 */
 
 /* 🔥 手机端专用样式 - 桌面端隐藏移动端组件 */
 .mobile-layer-fab,
@@ -3291,6 +3576,68 @@ export default {
   margin-bottom: 4px;
 }
 
+/* 🔥 修复图层名称过长覆盖按钮的问题 */
+.layer-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0; /* 允许flex子项收缩 */
+}
+
+.layer-name-container {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0; /* 允许收缩 */
+  overflow: hidden;
+}
+
+.layer-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #303133;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0; /* 允许收缩 */
+}
+
+.layer-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0; /* 防止按钮被压缩 */
+  margin-left: auto; /* 推到右边 */
+}
+
+.mobile-layer-item {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.layer-main-info {
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start; /* 改为顶部对齐 */
+  background: linear-gradient(90deg, #fafbfc 0%, #fff 100%);
+  min-width: 0; /* 允许收缩 */
+}
+
+.layer-main-info > div:first-child {
+  flex: 1;
+  min-width: 0; /* 允许收缩 */
+  margin-right: 12px; /* 给按钮留出空间 */
+}
+
 .mobile-layer-item .layer-info .layer-type {
   font-size: 12px;
   color: #909399;
@@ -3454,5 +3801,74 @@ export default {
   gap: 12px;
   padding-top: 20px;
   border-top: 1px solid #ebeef5;
+}
+
+/* 🔥 图层设置对话框样式 */
+.layer-settings-dialog-content {
+  padding: 0;
+}
+
+.layer-settings-dialog-content .settings-section {
+  padding: 16px 0;
+  border-bottom: 1px solid #f0f2f5;
+}
+
+.layer-settings-dialog-content .settings-section:last-child {
+  border-bottom: none;
+}
+
+.layer-settings-dialog-content .section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 12px;
+}
+
+.layer-settings-dialog-content .section-title i {
+  color: #409eff;
+  font-size: 16px;
+}
+
+.layer-settings-dialog-content .layer-opacity-control {
+  padding: 12px 0;
+}
+
+.layer-settings-dialog-content .opacity-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.layer-settings-dialog-content .opacity-slider {
+  flex: 1;
+}
+
+.layer-settings-dialog-content .opacity-value {
+  min-width: 50px;
+  text-align: right;
+  color: #606266;
+  font-size: 14px;
+}
+
+.layer-settings-dialog-content .layer-order-control {
+  display: flex;
+  gap: 12px;
+}
+
+.layer-settings-dialog-content .order-btn {
+  flex: 1;
+}
+
+.layer-settings-dialog-content .settings-actions {
+  display: flex;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.layer-settings-dialog-content .action-btn {
+  flex: 1;
 }
 </style>

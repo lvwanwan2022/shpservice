@@ -129,7 +129,7 @@ export default {
       })
     }
   },
-  emits: ['map-ready', 'layer-click', 'view-change'],
+  emits: ['map-ready', 'layer-click', 'view-change', 'layer-visibility-changed', 'layer-opacity-changed'],
   setup(props, { emit }) {
     const mapContainer = ref(null)
     const deckgl = ref(null)
@@ -964,8 +964,12 @@ export default {
       }
 
       try {
+        // 🔥 修改：按照 layer_order 从小到大排序图层，确保渲染顺序与面板显示顺序一致
+        // layer_order 小的图层先渲染（在下面），layer_order 大的图层后渲染（在上面）
+        const sortedLayers = [...layers].sort((a, b) => (a.layer_order || 0) - (b.layer_order || 0))
+        
         // 创建数据图层
-        const dataLayers = await createDataLayers(layers)
+        const dataLayers = await createDataLayers(sortedLayers)
         
         let allLayers = []
         
@@ -1001,6 +1005,58 @@ export default {
       }
     }
 
+    // 🔥 新增：图层可见性控制方法 - 参考OpenLayers版本的实现
+    const toggleLayerVisibility = (layer) => {
+      console.log(`切换图层 ${layer.layer_name} 可见性: ${layer.visibility}`)
+      
+      // 注意：layer.visibility 已经由父组件的 v-model 更新，这里不需要再次切换
+      // 直接重新更新地图图层
+      updateMapLayers(props.layers)
+      
+      // 触发图层可见性变化事件
+      emit('layer-visibility-changed', {
+        layer: layer,
+        visibility: layer.visibility
+      })
+    }
+
+    // 🔥 新增：更新图层透明度方法 - 参考OpenLayers版本的实现
+    const updateLayerOpacity = (layer, opacity) => {
+      console.log(`更新图层 ${layer.layer_name} 透明度: ${opacity}`)
+      
+      // 更新图层透明度
+      layer.opacity = opacity
+      
+      // 重新更新地图图层
+      updateMapLayers(props.layers)
+      
+      // 触发图层透明度变化事件
+      emit('layer-opacity-changed', {
+        layer: layer,
+        opacity: opacity
+      })
+    }
+
+    // 🔥 新增：刷新所有图层方法 - 参考OpenLayers版本的实现
+    const refreshAllLayers = () => {
+      console.log('刷新所有图层')
+      updateMapLayers(props.layers)
+    }
+
+    // 🔥 新增：刷新图层顺序方法 - 参考OpenLayers版本的实现
+    const refreshLayerOrder = () => {
+      console.log('刷新图层顺序')
+      updateMapLayers(props.layers)
+    }
+
+    // 🔥 新增：加载场景方法 - 参考OpenLayers版本的实现
+    const loadScene = (sceneId) => {
+      console.log('加载场景:', sceneId)
+      // 这个方法由父组件调用，实际的数据更新在父组件中处理
+      // 这里只需要重新渲染当前图层
+      updateMapLayers(props.layers)
+    }
+
     // 创建数据图层
     const createDataLayers = async (layers) => {
       const deckLayers = []
@@ -1008,14 +1064,8 @@ export default {
       //console.log('开始创建数据图层，总数:', layers.length)
       
       for (const layer of layers) {
-        // 检查图层可见性（兼容visibility和visible字段）
-        const isVisible = layer.visibility !== false && layer.visible !== false
-        //console.log(`图层 ${layer.layer_name}: 可见性=${isVisible}, service_type=${layer.service_type}, file_type=${layer.file_type}`)
-        
-        if (!isVisible) {
-          //console.log(`跳过隐藏图层: ${layer.layer_name}`)
-          continue
-        }
+        // 🔥 修改：不再跳过隐藏图层，而是创建图层但设置visible为false
+        // 这样可以支持动态显示/隐藏图层
         
         try {
           let deckLayer = null
@@ -1115,7 +1165,7 @@ export default {
         minZoom: layer.min_zoom || 0,
         maxZoom: layer.max_zoom || 22,
         opacity: typeof layer.opacity === 'number' ? layer.opacity : 1.0,
-        visible: (layer.visibility !== false && layer.visible !== false),
+        visible: (layer.visibility !== false && layer.visible !== false), // 🔥 检查图层可见性
         tileSize: 256,
         renderSubLayers: props => {
           const {
@@ -2028,7 +2078,17 @@ export default {
       // 🔥 优化：要素选择相关方法
       clearFeatureSelection,
       // 🔥 新增：调试方法
-      debugHoverState
+      debugHoverState,
+      // �� 新增：图层可见性控制方法
+      toggleLayerVisibility,
+      // 🔥 新增：更新图层透明度方法
+      updateLayerOpacity,
+      // 🔥 新增：刷新所有图层方法
+      refreshAllLayers,
+      // 🔥 新增：刷新图层顺序方法
+      refreshLayerOrder,
+      // 🔥 新增：加载场景方法
+      loadScene
     }
   },
   // 🔥 暴露方法给父组件
@@ -2040,7 +2100,12 @@ export default {
     'refreshLayers',
     'deckgl',
     'clearFeatureSelection', // 🔥 优化：暴露清除要素选择方法
-    'debugHoverState' // 🔥 新增：暴露调试方法
+    'debugHoverState', // 🔥 新增：暴露调试方法
+    'toggleLayerVisibility', // 🔥 新增：暴露图层可见性控制方法
+    'updateLayerOpacity', // 🔥 新增：暴露更新图层透明度方法
+    'refreshAllLayers', // 🔥 新增：暴露刷新所有图层方法
+    'refreshLayerOrder', // 🔥 新增：暴露刷新图层顺序方法
+    'loadScene' // 🔥 新增：暴露加载场景方法
   ]
 }
 </script>

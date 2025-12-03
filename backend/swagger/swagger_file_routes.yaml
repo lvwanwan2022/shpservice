@@ -23,26 +23,21 @@ info:
     email: 793145268@qq.com
 
 servers:
-  - url: http://localhost:5030/api/files
-    description: 开发环境
-  - url: https://your-domain.com/api/files
-    description: 生产环境
+  - url: /api/files
+    description: 文件管理服务
 
 tags:
-  - name: 文件上传
-    description: 文件上传相关接口
+
   - name: 文件管理
-    description: 文件列表、详情、更新、删除等管理接口
+    description: 文件上传，文件列表、详情、更新、删除等管理接口
   - name: 文件发布
     description: 文件发布为地图服务的接口
-  - name: 系统管理
-    description: 统计信息、坐标系管理等系统接口
 
 paths:
   /upload:
     post:
       tags:
-        - 文件上传
+        - 文件管理
       summary: 上传文件
       description: |
         上传单个文件到系统。支持多种GIS文件格式，包括SHP、DXF、DWG、GeoJSON等。
@@ -206,7 +201,7 @@ paths:
   /upload/chunked/init:
     post:
       tags:
-        - 文件上传
+        - 文件管理
       summary: 初始化分片上传
       description: |
         初始化大文件的分片上传。用于处理大文件（>100MB）的上传，提高上传成功率。
@@ -290,7 +285,7 @@ paths:
   /upload/chunked/chunk:
     post:
       tags:
-        - 文件上传
+        - 文件管理
       summary: 上传分片
       description: 上传文件的一个分片
       security:
@@ -327,7 +322,7 @@ paths:
   /upload/chunked/complete:
     post:
       tags:
-        - 文件上传
+        - 文件管理
       summary: 完成分片上传
       description: 完成分片上传，合并所有分片
       security:
@@ -366,7 +361,7 @@ paths:
   /upload/chunked/abort:
     post:
       tags:
-        - 文件上传
+        - 文件管理
       summary: 取消分片上传
       description: 取消分片上传，清理临时文件
       security:
@@ -739,7 +734,7 @@ paths:
   /statistics:
     get:
       tags:
-        - 系统管理
+        - 文件管理
       summary: 获取系统统计信息
       description: 获取整个系统的文件统计信息
       security:
@@ -773,7 +768,7 @@ paths:
   /disciplines:
     get:
       tags:
-        - 系统管理
+        - 文件管理
       summary: 获取专业分类列表
       description: 获取系统支持的专业分类列表
       responses:
@@ -799,7 +794,7 @@ paths:
   /file-types:
     get:
       tags:
-        - 系统管理
+        - 文件管理
       summary: 获取文件类型列表
       description: 获取系统支持的文件类型列表
       responses:
@@ -1045,11 +1040,11 @@ paths:
   /coordinate-systems/search:
     get:
       tags:
-        - 系统管理
+        - 文件管理
       summary: 搜索坐标系
       description: 根据关键词搜索坐标系
       parameters:
-        - name: q
+        - name: keyword
           in: query
           description: 搜索关键词
           required: true
@@ -1085,7 +1080,7 @@ paths:
   /coordinate-systems/common:
     get:
       tags:
-        - 系统管理
+        - 文件管理
       summary: 获取常用坐标系列表
       description: 获取系统预定义的常用坐标系列表
       responses:

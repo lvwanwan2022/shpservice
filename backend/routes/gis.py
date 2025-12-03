@@ -9,7 +9,7 @@ import logging
 # 创建logger
 logger = logging.getLogger(__name__)
 
-gis_bp = Blueprint('gis', __name__)
+gis_bp = Blueprint('gis', __name__, url_prefix='/api/gis')
 
 @gis_bp.route('/layer/<int:layer_id>/crs-info', methods=['GET'])
 def get_layer_crs_info(layer_id):

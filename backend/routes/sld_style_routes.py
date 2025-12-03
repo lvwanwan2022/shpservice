@@ -74,12 +74,21 @@ def upload_sld_file():
         description: 服务器内部错误
     """
     try:
+        # 添加调试日志
+        current_app.logger.info("=== 开始处理SLD文件上传请求 ===")
+        current_app.logger.info(f"请求文件: {list(request.files.keys())}")
+        current_app.logger.info(f"请求表单: {dict(request.form)}")
+        
         # 检查文件是否存在
         if 'file' not in request.files:
+            current_app.logger.error("错误: 未找到上传文件")
             return jsonify({'error': '未找到上传文件'}), 400
         
         file = request.files['file']
+        current_app.logger.info(f"文件名: {file.filename}")
+        
         if file.filename == '':
+            current_app.logger.error("错误: 未选择文件")
             return jsonify({'error': '未选择文件'}), 400
         
         # 获取表单参数
@@ -87,15 +96,29 @@ def upload_sld_file():
         description = request.form.get('description', '')
         geometry_type = request.form.get('geometry_type')
         
+        current_app.logger.info(f"样式名称: {name}")
+        current_app.logger.info(f"样式描述: {description}")
+        current_app.logger.info(f"几何类型: {geometry_type}")
+        
         if not name or not geometry_type:
-            return jsonify({'error': '缺少必要参数'}), 400
+            missing = []
+            if not name:
+                missing.append('name')
+            if not geometry_type:
+                missing.append('geometry_type')
+            error_msg = f'缺少必要参数: {", ".join(missing)}'
+            current_app.logger.error(f"错误: {error_msg}")
+            return jsonify({'error': error_msg}), 400
         
         # 验证几何类型
         valid_geometry_types = ['point', 'line', 'polygon']
         if geometry_type not in valid_geometry_types:
-            return jsonify({'error': f'不支持的几何类型: {geometry_type}'}), 400
+            error_msg = f'不支持的几何类型: {geometry_type}'
+            current_app.logger.error(f"错误: {error_msg}")
+            return jsonify({'error': error_msg}), 400
         
         # 上传文件
+        current_app.logger.info("开始调用 upload_sld_file 服务...")
         result = sld_style_service.upload_sld_file(
             file=file,
             name=name,
@@ -103,16 +126,18 @@ def upload_sld_file():
             geometry_type=geometry_type
         )
         
+        current_app.logger.info(f"SLD文件上传成功: {result}")
         return jsonify({
             'message': 'SLD文件上传成功',
             'data': result
         }), 200
         
     except ValueError as e:
+        current_app.logger.error(f"值错误: {str(e)}")
         return jsonify({'error': str(e)}), 400
     except Exception as e:
-        current_app.logger.error(f"上传SLD文件失败: {str(e)}")
-        return jsonify({'error': '服务器内部错误'}), 500
+        current_app.logger.error(f"上传SLD文件失败: {str(e)}", exc_info=True)
+        return jsonify({'error': f'服务器内部错误: {str(e)}'}), 500
 
 @sld_style_bp.route('', methods=['GET'])
 def get_sld_styles():

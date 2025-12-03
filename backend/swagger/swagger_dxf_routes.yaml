@@ -27,7 +27,7 @@ paths:
     
     get:
       tags:
-        - 样式分析
+        - Dxf文件相关
       summary: 分析DXF文件的样式信息
       description: 分析DXF文件中的图层、颜色、线型等样式信息
       responses:
@@ -131,7 +131,7 @@ paths:
     
     post:
       tags:
-        - Martin服务发布
+        - Dxf文件相关
       summary: 发布DXF文件为Martin MVT服务
       description: 将DXF文件导入PostGIS并发布为Martin MVT瓦片服务
       requestBody:
@@ -265,7 +265,7 @@ paths:
     
     post:
       tags:
-        - Martin服务发布
+        - Dxf文件相关
       summary: 发布DXF文件为Martin MVT服务（使用ezdxf库）
       description: 使用ezdxf库直接导入DXF文件到PostGIS并发布为Martin MVT瓦片服务
       requestBody:
@@ -390,7 +390,7 @@ paths:
   /martin-services:
     get:
       tags:
-        - 服务管理
+        - Dxf文件相关
       summary: 获取所有DXF Martin服务列表
       description: 获取当前用户发布的所有DXF Martin服务
       parameters:
@@ -518,7 +518,7 @@ paths:
     
     delete:
       tags:
-        - 服务管理
+        - Dxf文件相关
       summary: 删除DXF Martin服务
       description: 删除指定的DXF Martin服务，同时清理PostGIS表
       responses:
@@ -580,7 +580,7 @@ paths:
     
     post:
       tags:
-        - 服务发布
+        - Dxf文件相关
       summary: 同时发布DXF为GeoJSON和Martin服务
       description: 将DXF文件同时发布为GeoJSON直接服务和Martin MVT服务
       requestBody:
@@ -708,7 +708,7 @@ paths:
   /upload-and-publish:
     post:
       tags:
-        - 文件上传
+        - Dxf文件相关
       summary: 上传DXF文件并发布服务
       description: 上传DXF文件并立即发布为Martin MVT服务
       requestBody:
@@ -844,7 +844,7 @@ paths:
   /style-templates:
     get:
       tags:
-        - 样式模板
+        - Dxf文件相关
       summary: 获取DXF样式模板
       description: 获取预定义的DXF样式模板列表
       responses:
@@ -919,7 +919,7 @@ paths:
   /validate:
     post:
       tags:
-        - 文件验证
+        - Dxf文件相关
       summary: 验证DXF文件
       description: 验证DXF文件的格式和内容
       requestBody:
@@ -1060,17 +1060,6 @@ components:
           additionalProperties: true
 
 tags:
-  - name: 样式分析
-    description: DXF文件样式分析相关接口
-  - name: Martin服务发布
-    description: DXF文件发布为Martin MVT服务相关接口
-  - name: 服务管理
-    description: DXF Martin服务管理相关接口
-  - name: 服务发布
-    description: DXF文件服务发布相关接口
-  - name: 文件上传
-    description: DXF文件上传相关接口
-  - name: 样式模板
-    description: DXF样式模板相关接口
-  - name: 文件验证
-    description: DXF文件验证相关接口
+  - name: Dxf文件相关
+    description: DXF文件相关接口
+  

@@ -98,3 +98,8 @@ error.log
 
 # Martin 服务相关
 martin.toml
+
+# 特定配置文件 - 不推送到仓库
+backend/config.py
+martin_config.yaml
+frontend/vue.config.js

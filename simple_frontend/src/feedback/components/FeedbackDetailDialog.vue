@@ -64,14 +64,14 @@
           <el-button-group>
             <el-button
               :type="feedback.user_vote === 'support' ? 'success' : 'default'"
-              :icon="Like"
+              :icon="ThumbsUp"
               @click="voteFeedback('support')"
             >
               {{ feedback.support_count || 0 }}
             </el-button>
             <el-button
               :type="feedback.user_vote === 'oppose' ? 'danger' : 'default'"
-              :icon="DisLike"
+              :icon="ThumbsDown"
               @click="voteFeedback('oppose')"
             >
               {{ feedback.oppose_count || 0 }}
@@ -221,7 +221,8 @@ import { ref, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   User, Clock, View, ChatDotRound,
-  Picture, Document, Folder, Download
+  Picture, Document, Folder, Download,
+  ThumbsUp, ThumbsDown
 } from '@element-plus/icons-vue'
 import feedbackApi from '../api/feedbackApi'
 
@@ -624,6 +625,10 @@ export default {
       currentUser,
       isAdmin,
       canDeleteFeedback,
+
+      // 图标
+      ThumbsUp,
+      ThumbsDown,
 
       // 方法
       loadFeedbackDetail,

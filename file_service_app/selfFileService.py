@@ -27,11 +27,30 @@ upload_sessions = {}  # Store active upload sessions
 def get_folder_size_mb(folder_path):
     """Calculate total size of folder in MB."""
     total_size = 0
-    for dirpath, dirnames, filenames in os.walk(folder_path):
-        for filename in filenames:
-            filepath = os.path.join(dirpath, filename)
-            if os.path.exists(filepath):
-                total_size += os.path.getsize(filepath)
+    max_iterations = 100000  # 限制最大迭代次数，避免在根目录时遍历整个磁盘
+    iteration_count = 0
+    
+    try:
+        for dirpath, dirnames, filenames in os.walk(folder_path):
+            # 限制遍历深度，避免在根目录时遍历整个磁盘
+            if iteration_count > max_iterations:
+                break
+            
+            for filename in filenames:
+                if iteration_count > max_iterations:
+                    break
+                try:
+                    filepath = os.path.join(dirpath, filename)
+                    if os.path.exists(filepath):
+                        total_size += os.path.getsize(filepath)
+                        iteration_count += 1
+                except (OSError, PermissionError):
+                    # 跳过无法访问的文件
+                    continue
+    except (OSError, PermissionError) as e:
+        # 如果无法访问某些目录，返回已计算的大小
+        pass
+    
     return total_size / (1024 * 1024)
 
 def check_disk_usage(path, file_size_mb, max_size_mb):
@@ -68,10 +87,10 @@ def safe_filename(filename):
 
 def create_gui():
     root = tk.Tk()
-    root.title("文件服务设置 - 作者: @Lvwan")  # 汉化标题并添加作者信息
+    root.title("文件服务设置 - 作者: @BIM中心")  # 汉化标题并添加作者信息
 
     # Copyright label
-    copyright_label = tk.Label(root, text="© 2024 文件服务 | 作者: @Lvwan | 邮箱: 793145268@qq.com", 
+    copyright_label = tk.Label(root, text="© 2025 文件服务 | 作者: @BIM中心 | 邮箱: 793145268@qq.com", 
                               font=("Arial", 8), fg="gray")
     copyright_label.grid(row=0, column=0, columnspan=3, pady=(5, 10))
 
@@ -179,42 +198,10 @@ def upload_file():
     filename = safe_filename(file.filename)
     file_path = os.path.join(CONFIG['folder'], filename)
     
-    # Get exact file size
-    file.seek(0, os.SEEK_END)
-    file_size = file.tell()
-    file.seek(0)  # Reset position
-    file_size_mb = file_size / (1024 * 1024)
-
-    # Check capacity
-    if not check_disk_usage(CONFIG['folder'], file_size_mb, CONFIG['max_size_mb']):
-        return jsonify({'message': 'Exceeded max capacity'}), 507
-    
+    # 直接保存文件，不检查容量（磁盘一般够用）
     file.save(file_path)
     return jsonify({'message': 'File uploaded successfully'}), 200
 
-@app.route('/files/<path:filename>', methods=['GET'])
-@requires_api_auth
-def download_file(filename):
-    try:
-        # Ensure the filename is safe (no directory traversal)
-        safe_name = os.path.basename(filename)
-        file_path = os.path.join(CONFIG['folder'], safe_name)
-        
-        # Check if file exists
-        if not os.path.exists(file_path):
-            abort(404)
-            
-        # Send file with proper Chinese filename handling
-        response = send_from_directory(CONFIG['folder'], safe_name, as_attachment=True)
-        
-        # Set proper Content-Disposition header for Chinese filenames
-        # Use RFC 5987 encoding for UTF-8 filenames
-        encoded_filename = urllib.parse.quote(filename.encode('utf-8'))
-        response.headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_filename}"
-        
-        return response
-    except FileNotFoundError:
-        abort(404)
 
 @app.route('/list', methods=['GET'])
 @requires_api_auth
@@ -227,17 +214,14 @@ def list_files():
 @requires_api_auth
 def api_status():
     """Get server status and storage information."""
-    current_size_mb = get_folder_size_mb(CONFIG['folder'])
-    file_count = len(os.listdir(CONFIG['folder']))
+    # 不计算总存储空间，只返回文件数量
+    try:
+        file_count = len(os.listdir(CONFIG['folder']))
+    except:
+        file_count = 0
     
     return jsonify({
         'status': 'online',
-        'storage': {
-            'used_mb': round(current_size_mb, 2),
-            'max_mb': CONFIG['max_size_mb'],
-            'used_percentage': round((current_size_mb / CONFIG['max_size_mb']) * 100, 1),
-            'available_mb': round(CONFIG['max_size_mb'] - current_size_mb, 2)
-        },
         'file_count': file_count
     }), 200
 
@@ -282,19 +266,11 @@ def api_upload_file():
     if os.path.exists(file_path):
         return jsonify({'error': f'File {filename} already exists'}), 409
     
-    # Get exact file size
+    # Get exact file size (用于返回信息，不用于容量检查)
     file.seek(0, os.SEEK_END)
     file_size = file.tell()
     file.seek(0)
     file_size_mb = file_size / (1024 * 1024)
-    
-    # Check capacity
-    if not check_disk_usage(CONFIG['folder'], file_size_mb, CONFIG['max_size_mb']):
-        return jsonify({
-            'error': 'Upload would exceed maximum capacity',
-            'file_size_mb': round(file_size_mb, 2),
-            'available_mb': round(CONFIG['max_size_mb'] - get_folder_size_mb(CONFIG['folder']), 2)
-        }), 507
     
     try:
         file.save(file_path)
@@ -336,26 +312,31 @@ def init_chunked_upload():
     filename = data.get('filename', '')
     total_size = data.get('total_size', 0)
     chunk_size = data.get('chunk_size', 1024 * 1024)  # Default 1MB chunks
+    subpath = data.get('subpath', '')  # 支持子目录上传
     
     if not filename:
         return jsonify({'error': 'Filename is required'}), 400
     
     filename = safe_filename(filename)
-    file_path = os.path.join(CONFIG['folder'], filename)
+    
+    # 构建文件路径，支持子目录
+    if subpath:
+        # 安全检查：确保子路径在配置的文件夹内
+        subpath_norm = os.path.normpath(subpath)
+        base_dir = os.path.normpath(CONFIG['folder'])
+        target_dir = os.path.join(CONFIG['folder'], subpath_norm)
+        target_dir = os.path.normpath(target_dir)
+        if not target_dir.startswith(base_dir):
+            return jsonify({'error': 'Invalid subpath'}), 403
+        file_path = os.path.join(target_dir, filename)
+    else:
+        file_path = os.path.join(CONFIG['folder'], filename)
     
     # Check if file already exists
     if os.path.exists(file_path):
         return jsonify({'error': f'File {filename} already exists'}), 409
     
-    # Check capacity
-    total_size_mb = total_size / (1024 * 1024)
-    if not check_disk_usage(CONFIG['folder'], total_size_mb, CONFIG['max_size_mb']):
-        return jsonify({
-            'error': 'Upload would exceed maximum capacity',
-            'file_size_mb': round(total_size_mb, 2),
-            'available_mb': round(CONFIG['max_size_mb'] - get_folder_size_mb(CONFIG['folder']), 2)
-        }), 507
-    
+    # 不检查容量，直接创建上传会话（磁盘一般够用）
     # Create upload session
     upload_id = str(uuid.uuid4())
     total_chunks = (total_size + chunk_size - 1) // chunk_size
@@ -621,7 +602,7 @@ def login():
                 <input type="submit" value="登录">
             </form>
             <div style="text-align: center; margin-top: 30px; color: #888; font-size: 12px;">
-                © 2024 文件服务 | 作者: @Lvwan | 联系邮箱: 793145268@qq.com
+                © 2025 文件服务 | 作者: @BIM中心 | 联系邮箱: xxx@qq.com
             </div>
         </div>
     </body>
@@ -710,9 +691,35 @@ def do_login():
 
 # File list page with upload and download
 @app.route('/files', methods=['GET', 'POST'])
+@app.route('/files/<path:subpath>', methods=['GET', 'POST'])
 @requires_auth
-def file_list():
+def file_list(subpath=''):
     error = None
+    # 规范化基础目录路径（处理Windows根目录如X:的情况）
+    base_dir = os.path.normpath(CONFIG['folder'])
+    # 确保Windows根目录以反斜杠结尾（X: -> X:\）
+    if os.name == 'nt' and len(base_dir) == 2 and base_dir[1] == ':':
+        base_dir = base_dir + '\\'
+    
+    # 构建当前目录路径
+    if subpath:
+        current_dir = os.path.join(base_dir, subpath)
+        # 安全检查：确保路径在配置的文件夹内
+        current_dir = os.path.normpath(current_dir)
+        # 规范化比较路径（处理Windows路径大小写不敏感）
+        if os.name == 'nt':
+            if not os.path.normcase(current_dir).startswith(os.path.normcase(base_dir)):
+                abort(403)
+        else:
+            if not current_dir.startswith(base_dir):
+                abort(403)
+        
+        # 如果路径指向一个文件而不是文件夹，重定向到下载路由
+        if os.path.exists(current_dir) and os.path.isfile(current_dir):
+            return redirect(url_for('download_file', filepath=subpath))
+    else:
+        current_dir = base_dir
+    
     if request.method == 'POST':
         if 'file' not in request.files:
             error = '没有文件部分'
@@ -722,28 +729,69 @@ def file_list():
                 error = '没有选择文件'
             else:
                 filename = safe_filename(file.filename)
-                file_path = os.path.join(CONFIG['folder'], filename)
+                file_path = os.path.join(current_dir, filename)
                 
-                # Get exact file size
-                file.seek(0, os.SEEK_END)
-                file_size = file.tell()
-                file.seek(0)  # Reset position
-                file_size_mb = file_size / (1024 * 1024)
-                
-                # Check capacity
-                current_used_mb = get_folder_size_mb(CONFIG['folder'])
-                if current_used_mb + file_size_mb > CONFIG['max_size_mb']:
-                    error = '上传将超过最大容量'
-                else:
-                    file.save(file_path)
-                    return redirect(url_for('file_list'))
+                # 直接保存文件，不检查容量（磁盘一般够用）
+                file.save(file_path)
+                return redirect(url_for('file_list', subpath=subpath))
     
-    files = os.listdir(CONFIG['folder'])
-    file_list_html = '<ul>' + ''.join(f'<li><a href="/files/{f}" download>{f}</a></li>' for f in files) + '</ul>'
+    # 获取文件和文件夹列表
+    items = []
+    try:
+        # 确保目录存在且是目录
+        if not os.path.exists(current_dir):
+            error = '目录不存在'
+            items = []
+        elif not os.path.isdir(current_dir):
+            error = '路径不是目录'
+            items = []
+        else:
+            for item in os.listdir(current_dir):
+                try:
+                    item_path = os.path.join(current_dir, item)
+                    if os.path.isdir(item_path):
+                        items.append({
+                            'name': item,
+                            'type': 'folder',
+                            'size': '-',
+                            'modified': os.path.getmtime(item_path)
+                        })
+                    else:
+                        stat = os.stat(item_path)
+                        items.append({
+                            'name': item,
+                            'type': 'file',
+                            'size': stat.st_size,
+                            'size_mb': round(stat.st_size / (1024 * 1024), 2),
+                            'modified': stat.st_mtime
+                        })
+                except (OSError, PermissionError) as e:
+                    # 跳过无法访问的文件/文件夹
+                    continue
+    except PermissionError:
+        error = '没有权限访问此目录'
+        items = []
+    except Exception as e:
+        error = f'访问目录时出错: {str(e)}'
+        items = []
     
-    # Calculate storage info
-    current_size_mb = get_folder_size_mb(CONFIG['folder'])
-    used_percentage = (current_size_mb / CONFIG['max_size_mb']) * 100
+    # 不计算总存储空间，只显示单个文件大小
+    
+    # 构建面包屑导航
+    breadcrumbs = [{'name': '根目录', 'path': ''}]
+    if subpath:
+        parts = subpath.split('/')
+        for i, part in enumerate(parts):
+            if part:
+                breadcrumbs.append({
+                    'name': part,
+                    'path': '/'.join(parts[:i+1])
+                })
+    
+    # 格式化修改时间
+    from datetime import datetime
+    for item in items:
+        item['modified_str'] = datetime.fromtimestamp(item['modified']).strftime('%Y-%m-%d %H:%M:%S')
     
     return render_template_string('''
     <!doctype html>
@@ -970,57 +1018,235 @@ def file_list():
                 box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
             }
             
-            .files-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-                gap: 20px;
+            .files-list {
                 margin-top: 20px;
             }
             
-            .file-card {
+            .file-list-header {
+                display: grid;
+                grid-template-columns: 50px 2fr 1fr 1fr 120px;
+                gap: 15px;
+                padding: 15px 20px;
                 background: #f8f9fa;
-                border: 1px solid #e9ecef;
-                border-radius: 12px;
-                padding: 20px;
-                transition: all 0.3s ease;
-                text-align: center;
+                border-radius: 10px;
+                font-weight: 600;
+                color: #666;
+                font-size: 14px;
+                margin-bottom: 10px;
             }
             
-            .file-card:hover {
-                transform: translateY(-5px);
-                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            .file-list-item {
+                display: grid;
+                grid-template-columns: 50px 2fr 1fr 1fr 120px;
+                gap: 15px;
+                padding: 15px 20px;
                 background: white;
+                border: 1px solid #e9ecef;
+                border-radius: 8px;
+                margin-bottom: 8px;
+                transition: all 0.3s ease;
+                align-items: center;
+            }
+            
+            .file-list-item:hover {
+                background: #f8f9ff;
+                border-color: #667eea;
+                transform: translateX(5px);
+                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
             }
             
             .file-icon {
-                font-size: 40px;
-                margin-bottom: 15px;
+                font-size: 28px;
+                text-align: center;
+            }
+            
+            .file-icon.folder {
+                color: #f59e0b;
+            }
+            
+            .file-icon.file {
                 color: #667eea;
             }
             
             .file-name {
-                font-weight: 600;
-                margin-bottom: 15px;
-                word-break: break-word;
+                font-weight: 500;
                 color: #333;
+                word-break: break-word;
+            }
+            
+            .file-name a {
+                color: #667eea;
+                text-decoration: none;
+                transition: all 0.2s ease;
+            }
+            
+            .file-name a:hover {
+                color: #764ba2;
+                text-decoration: underline;
+            }
+            
+            .file-size {
+                color: #666;
+                font-size: 14px;
+            }
+            
+            .file-modified {
+                color: #666;
+                font-size: 14px;
+            }
+            
+            .file-actions {
+                display: flex;
+                gap: 8px;
+                justify-content: flex-end;
+            }
+            
+            .action-btn {
+                padding: 6px 12px;
+                border: none;
+                border-radius: 6px;
+                font-size: 12px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                text-decoration: none;
+                display: inline-block;
             }
             
             .download-btn {
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 color: white;
-                padding: 10px 20px;
-                text-decoration: none;
-                border-radius: 8px;
-                display: inline-block;
-                font-weight: 500;
-                transition: all 0.3s ease;
             }
             
             .download-btn:hover {
                 transform: translateY(-2px);
-                box-shadow: 0 8px 15px rgba(102, 126, 234, 0.3);
+                box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
                 color: white;
                 text-decoration: none;
+            }
+            
+            .breadcrumb {
+                background: white;
+                border-radius: 10px;
+                padding: 15px 20px;
+                margin-bottom: 20px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            }
+            
+            .breadcrumb-item {
+                display: inline-block;
+                color: #667eea;
+                text-decoration: none;
+                font-size: 14px;
+            }
+            
+            .breadcrumb-item:hover {
+                text-decoration: underline;
+            }
+            
+            .breadcrumb-separator {
+                margin: 0 8px;
+                color: #999;
+            }
+            
+            .new-folder-btn {
+                background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.3s ease;
+            }
+            
+            .new-folder-btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 15px rgba(72, 187, 120, 0.3);
+            }
+            
+            .modal-overlay {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 1000;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .modal-overlay.show {
+                display: flex;
+            }
+            
+            .modal-dialog {
+                background: white;
+                border-radius: 15px;
+                padding: 30px;
+                max-width: 400px;
+                width: 90%;
+                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            }
+            
+            .modal-title {
+                font-size: 20px;
+                font-weight: 600;
+                margin-bottom: 20px;
+                color: #333;
+            }
+            
+            .modal-input {
+                width: 100%;
+                padding: 12px;
+                border: 2px solid #e1e1e1;
+                border-radius: 8px;
+                font-size: 14px;
+                margin-bottom: 20px;
+                box-sizing: border-box;
+            }
+            
+            .modal-input:focus {
+                outline: none;
+                border-color: #667eea;
+            }
+            
+            .modal-buttons {
+                display: flex;
+                gap: 10px;
+                justify-content: flex-end;
+            }
+            
+            .modal-btn {
+                padding: 10px 20px;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.3s ease;
+            }
+            
+            .modal-btn-primary {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+            }
+            
+            .modal-btn-primary:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+            }
+            
+            .modal-btn-secondary {
+                background: #e1e5e9;
+                color: #333;
+            }
+            
+            .modal-btn-secondary:hover {
+                background: #d1d5d9;
             }
             
             .error {
@@ -1080,8 +1306,32 @@ def file_list():
             }
             
             @media (max-width: 768px) {
-                .files-grid {
-                    grid-template-columns: 1fr;
+                .file-list-header,
+                .file-list-item {
+                    grid-template-columns: 40px 1.5fr 0.8fr 0.8fr 80px;
+                    gap: 10px;
+                    padding: 12px 15px;
+                    font-size: 13px;
+                }
+                
+                .file-list-header {
+                    display: none;
+                }
+                
+                .file-list-item {
+                    grid-template-columns: 40px 1fr;
+                    grid-template-rows: auto auto;
+                }
+                
+                .file-size,
+                .file-modified {
+                    display: none;
+                }
+                
+                .file-actions {
+                    grid-column: 2;
+                    grid-row: 2;
+                    margin-top: 8px;
                 }
                 
                 .main-content {
@@ -1112,18 +1362,6 @@ def file_list():
             {% if error %}
                 <div class="error">❌ {{ error }}</div>
             {% endif %}
-            
-            <div class="storage-info">
-                <h2 class="section-title">💾 存储空间</h2>
-                <div class="stats">
-                    <span>已使用: {{ "%.2f"|format(current_size) }} MB</span>
-                    <span>总容量: {{ max_size }} MB</span>
-                    <span>使用率: {{ "%.1f"|format(used_percentage) }}%</span>
-                </div>
-                <div class="storage-bar">
-                    <div class="storage-used" style="width: {{ used_percentage }}%"></div>
-                </div>
-            </div>
             
             <div class="upload-section">
                 <h2 class="section-title">📤 上传文件</h2>
@@ -1163,35 +1401,107 @@ def file_list():
             </div>
             
             <div class="files-section">
-                <h2 class="section-title">📋 文件列表 ({{ file_count }} 个文件)</h2>
-                {% if files %}
-                    <div class="files-grid">
-                        {% for file in files %}
-                            <div class="file-card">
-                                <div class="file-icon">📄</div>
-                                <div class="file-name">{{ file }}</div>
-                                <a href="/files/{{ file }}" class="download-btn" download>⬇️ 下载</a>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 class="section-title" style="margin: 0;">📋 文件列表</h2>
+                    <button type="button" class="new-folder-btn" onclick="showCreateFolderDialog()">📁 新建文件夹</button>
+                </div>
+                
+                <!-- 面包屑导航 -->
+                <div class="breadcrumb">
+                    {% for crumb in breadcrumbs %}
+                        {% if not loop.last %}
+                            {% if crumb.path %}
+                                <a href="{{ url_for('file_list', subpath=crumb.path) }}" class="breadcrumb-item">{{ crumb.name }}</a>
+                            {% else %}
+                                <a href="{{ url_for('file_list') }}" class="breadcrumb-item">{{ crumb.name }}</a>
+                            {% endif %}
+                            <span class="breadcrumb-separator">/</span>
+                        {% else %}
+                            <span class="breadcrumb-item" style="color: #333;">{{ crumb.name }}</span>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                
+                {% if items %}
+                    <div class="files-list">
+                        <div class="file-list-header">
+                            <div></div>
+                            <div>名称</div>
+                            <div>大小</div>
+                            <div>修改时间</div>
+                            <div>操作</div>
+                        </div>
+                        {% for item in items %}
+                            <div class="file-list-item">
+                                <div class="file-icon {{ item.type }}">
+                                    {% if item.type == 'folder' %}
+                                        📁
+                                    {% else %}
+                                        📄
+                                    {% endif %}
+                                </div>
+                                <div class="file-name">
+                                    {% if item.type == 'folder' %}
+                                        {% set folder_path = (subpath + '/' + item.name) if subpath else item.name %}
+                                        <a href="{{ url_for('file_list', subpath=folder_path) }}">{{ item.name }}</a>
+                                    {% else %}
+                                        {{ item.name }}
+                                    {% endif %}
+                                </div>
+                                <div class="file-size">
+                                    {% if item.type == 'file' %}
+                                        {{ "%.2f"|format(item.size_mb) }} MB
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </div>
+                                <div class="file-modified">
+                                    {{ item.modified_str }}
+                                </div>
+                                <div class="file-actions">
+                                    {% if item.type == 'file' %}
+                                        {% set file_path = (subpath + '/' + item.name) if subpath else item.name %}
+                                        <a href="/download/{{ file_path }}" class="action-btn download-btn" download>⬇️ 下载</a>
+                                    {% else %}
+                                        {% set folder_path = (subpath + '/' + item.name) if subpath else item.name %}
+                                        <a href="{{ url_for('file_list', subpath=folder_path) }}" class="action-btn download-btn">📂 打开</a>
+                                    {% endif %}
+                                </div>
                             </div>
                         {% endfor %}
                     </div>
                 {% else %}
                     <div style="text-align: center; padding: 40px; color: #666;">
                         <div style="font-size: 48px; margin-bottom: 20px;">📂</div>
-                        <p>暂无文件，请上传第一个文件</p>
+                        <p>当前目录为空</p>
                     </div>
                 {% endif %}
             </div>
         </div>
         
         <footer style="text-align: center; padding: 20px; color: #666; background: #f8f9fa; margin-top: 40px; border-top: 1px solid #e9ecef;">
-            <p style="margin: 0; font-size: 14px;">© 2024 文件管理系统 | 作者: @Lvwan | 联系邮箱: 793145268@qq.com</p>
+            <p style="margin: 0; font-size: 14px;">© 2025 文件管理系统 | 作者: @BIM中心 | 联系邮箱: xxx@qq.com</p>
         </footer>
+        
+        <!-- 新建文件夹弹窗 -->
+        <div class="modal-overlay" id="createFolderModal" onclick="closeCreateFolderDialog(event)">
+            <div class="modal-dialog" onclick="event.stopPropagation()">
+                <div class="modal-title">📁 新建文件夹</div>
+                <input type="text" class="modal-input" id="folderNameInput" placeholder="请输入文件夹名称" autofocus>
+                <div class="modal-buttons">
+                    <button type="button" class="modal-btn modal-btn-secondary" onclick="closeCreateFolderDialog()">取消</button>
+                    <button type="button" class="modal-btn modal-btn-primary" onclick="createFolder()">创建</button>
+                </div>
+            </div>
+        </div>
         
         <script>
             let selectedFile = null;
             let uploadSession = null;
             let isUploading = false;
             let startTime = null;
+            // 当前子路径，用于上传文件到正确的目录
+            const currentSubpath = {{ subpath|tojson }};
             
             // File size formatting
             function formatFileSize(bytes) {
@@ -1323,6 +1633,13 @@ def file_list():
                     }
                 });
                 
+                // 构建上传URL，包含当前子路径
+                let uploadUrl = '/files';
+                if (currentSubpath) {
+                    // 直接拼接路径，Flask路由会自动处理
+                    uploadUrl = '/files/' + currentSubpath;
+                }
+                
                 return new Promise((resolve, reject) => {
                     xhr.onload = function() {
                         if (xhr.status === 200) {
@@ -1337,7 +1654,7 @@ def file_list():
                         reject(new Error('Network error'));
                     };
                     
-                    xhr.open('POST', '/files');
+                    xhr.open('POST', uploadUrl);
                     xhr.send(formData);
                 });
             }
@@ -1358,7 +1675,8 @@ def file_list():
                     body: JSON.stringify({
                         filename: selectedFile.name,
                         total_size: selectedFile.size,
-                        chunk_size: chunkSize
+                        chunk_size: chunkSize,
+                        subpath: currentSubpath || ''  // 传递当前子路径
                     })
                 });
                 
@@ -1512,12 +1830,158 @@ def file_list():
             
             // Initialize drag and drop when page loads
             window.addEventListener('DOMContentLoaded', setupDragAndDrop);
+            
+            // 显示新建文件夹对话框
+            function showCreateFolderDialog() {
+                const modal = document.getElementById('createFolderModal');
+                const input = document.getElementById('folderNameInput');
+                modal.classList.add('show');
+                input.value = '';
+                input.focus();
+            }
+            
+            // 关闭新建文件夹对话框
+            function closeCreateFolderDialog(event) {
+                if (event && event.target && event.target.id !== 'createFolderModal') {
+                    return;
+                }
+                const modal = document.getElementById('createFolderModal');
+                modal.classList.remove('show');
+            }
+            
+            // 创建文件夹
+            async function createFolder() {
+                const folderName = document.getElementById('folderNameInput').value.trim();
+                
+                if (!folderName) {
+                    alert('请输入文件夹名称');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/api/folder', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            folder_name: folderName,
+                            subpath: currentSubpath || ''
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (response.ok) {
+                        // 创建成功，关闭对话框并刷新页面
+                        closeCreateFolderDialog();
+                        window.location.reload();
+                    } else {
+                        alert(result.error || '创建文件夹失败');
+                    }
+                } catch (error) {
+                    console.error('创建文件夹失败:', error);
+                    alert('创建文件夹失败: ' + error.message);
+                }
+            }
+            
+            // 支持按Enter键创建文件夹
+            document.addEventListener('DOMContentLoaded', function() {
+                const folderNameInput = document.getElementById('folderNameInput');
+                if (folderNameInput) {
+                    folderNameInput.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            createFolder();
+                        }
+                    });
+                }
+            });
         </script>
     </body>
     </html>
-    ''', error=error, files=files, file_count=len(files), 
-        current_size=current_size_mb, max_size=CONFIG['max_size_mb'], 
-        used_percentage=used_percentage)
+    ''', error=error, items=items, subpath=subpath, breadcrumbs=breadcrumbs)
+
+@app.route('/api/folder', methods=['POST'])
+@requires_api_auth
+def create_folder():
+    """创建文件夹的API"""
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No JSON data provided'}), 400
+    
+    folder_name = data.get('folder_name', '').strip()
+    subpath = data.get('subpath', '').strip()
+    
+    if not folder_name:
+        return jsonify({'error': '文件夹名称不能为空'}), 400
+    
+    # 使用safe_filename处理文件夹名称
+    folder_name = safe_filename(folder_name)
+    
+    # 构建文件夹路径
+    if subpath:
+        # 安全检查：确保子路径在配置的文件夹内
+        subpath_norm = os.path.normpath(subpath)
+        base_dir = os.path.normpath(CONFIG['folder'])
+        target_dir = os.path.join(CONFIG['folder'], subpath_norm)
+        target_dir = os.path.normpath(target_dir)
+        if not target_dir.startswith(base_dir):
+            return jsonify({'error': 'Invalid subpath'}), 403
+        folder_path = os.path.join(target_dir, folder_name)
+    else:
+        folder_path = os.path.join(CONFIG['folder'], folder_name)
+    
+    # 检查文件夹是否已存在
+    if os.path.exists(folder_path):
+        return jsonify({'error': f'文件夹 {folder_name} 已存在'}), 409
+    
+    try:
+        # 创建文件夹
+        os.makedirs(folder_path, exist_ok=True)
+        return jsonify({
+            'message': '文件夹创建成功',
+            'folder_name': folder_name,
+            'folder_path': subpath + '/' + folder_name if subpath else folder_name
+        }), 201
+    except Exception as e:
+        return jsonify({'error': f'创建文件夹失败: {str(e)}'}), 500
+
+@app.route('/download/<path:filepath>', methods=['GET'])
+@requires_api_auth
+def download_file(filepath):
+    """下载文件的路由，使用 /download/ 前缀避免与文件列表路由冲突"""
+    try:
+        # 构建文件路径
+        file_path = os.path.join(CONFIG['folder'], filepath)
+        # 安全检查：确保路径在配置的文件夹内
+        file_path = os.path.normpath(file_path)
+        base_dir = os.path.normpath(CONFIG['folder'])
+        if not file_path.startswith(base_dir):
+            abort(403)
+        
+        # Check if path exists
+        if not os.path.exists(file_path):
+            abort(404)
+        
+        # 如果是文件夹，返回404（文件夹应该通过文件列表路由访问）
+        if os.path.isdir(file_path):
+            abort(404)
+        
+        # 获取目录和文件名
+        directory = os.path.dirname(file_path)
+        filename = os.path.basename(file_path)
+        
+        # Send file with proper Chinese filename handling
+        response = send_from_directory(directory, filename, as_attachment=True)
+        
+        # Set proper Content-Disposition header for Chinese filenames
+        # Use RFC 5987 encoding for UTF-8 filenames
+        encoded_filename = urllib.parse.quote(os.path.basename(filepath).encode('utf-8'))
+        response.headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_filename}"
+        
+        return response
+    except FileNotFoundError:
+        abort(404)
 
 @app.route('/logout')
 def logout():
@@ -1568,7 +2032,7 @@ if __name__ == '__main__':
     
     icon = pystray.Icon('file_service')
     icon.icon = create_image()
-    icon.title = "文件服务 - @Lvwan"  # 汉化标题并添加作者信息
+    icon.title = "文件服务 - @BIM中心"  # 汉化标题并添加作者信息
     icon.menu = pystray.Menu(
         pystray.MenuItem("停止服务", on_stop),  # 汉化菜单项
         

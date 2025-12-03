@@ -18,7 +18,7 @@ paths:
   /generate:
     get:
       tags:
-        - ID生成
+        - 雪花算法
       summary: 生成一个雪花算法ID
       description: 生成一个雪花算法ID，支持指定表名
       parameters:
@@ -75,7 +75,7 @@ paths:
   /batch:
     get:
       tags:
-        - ID生成
+      - 雪花算法
       summary: 批量生成雪花算法ID
       description: 批量生成多个雪花算法ID
       parameters:
@@ -137,7 +137,7 @@ paths:
     
     get:
       tags:
-        - ID解析
+        - 雪花算法
       summary: 获取雪花算法ID的信息
       description: 解析雪花算法ID，获取时间戳、数据中心ID、工作节点ID等信息
       responses:
@@ -198,7 +198,7 @@ paths:
   /example:
     post:
       tags:
-        - 示例记录
+        - 雪花算法
       summary: 创建一条示例记录
       description: 使用雪花算法ID创建一条示例记录
       requestBody:
@@ -354,9 +354,6 @@ components:
           example: "aaaaaaaaaaaaaaaa"
 
 tags:
-  - name: ID生成
+  - name: 雪花算法
     description: 雪花算法ID生成相关接口
-  - name: ID解析
-    description: 雪花算法ID解析相关接口
-  - name: 示例记录
-    description: 示例记录创建相关接口
+  

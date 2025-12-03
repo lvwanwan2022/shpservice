@@ -35,13 +35,13 @@
       </el-card>
 
       
-      <el-card class="home-card" @click="goToCacheManager">
+      <!-- <el-card class="home-card" @click="goToCacheManager">
         <div class="card-icon">
           <i class="el-icon-box"></i>
         </div>
         <div class="card-title">缓存管理</div>
         <div class="card-desc">管理地图瓦片缓存，查看和操作缓存数据</div>
-      </el-card>
+      </el-card> -->
      
 
       <el-card class="home-card" @click="goToFeedback">
@@ -69,9 +69,9 @@ export default {
     goToScene() {
       this.$router.push('/scene')
     },
-    goToCacheManager() {
+    /* goToCacheManager() {
       this.$router.push('/cache-manager')
-    },
+    }, */
     goToFeedback() {
       this.$router.push('/feedback')
     }

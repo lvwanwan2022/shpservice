@@ -12,16 +12,20 @@ Copyright (c) 2025 by VGE, All Rights Reserved.
 import os
 
 # 从环境变量获取Martin服务的基础URL，默认为http://localhost:3000
-MARTIN_BASE_URL = os.environ.get('VUE_APP_MARTIN_BASE_URL', 'http://localhost:3000')
+MARTIN_BASE_URL = os.environ.get('VUE_APP_MARTIN_BASE_URL', 'http://http://10.20.124.20/:3000')
 
 # 数据库配置
 DB_CONFIG = {
-    'host': 'localhost',
-    'port': 5432,
+    'host': '10.20.124.12',
+    'port': 5433,
     'database': 'Geometry',
     'user': 'postgres',
-    'password': '123456',
-    'schema': 'public'
+    'password': 'pbim@421',
+    'schema': 'public',
+    # 添加编码配置解决远程数据库编码问题
+    'client_encoding': 'utf8',
+    'connect_timeout': 30,
+    'options': '-c client_encoding=utf8'
 }
 
 # PostGIS专用配置
@@ -50,12 +54,12 @@ MARTIN_CONFIG = {
     'cache_size': 5120,  # MB
     'pool_size': 20,
     # Martin 可执行文件路径配置 - 修正路径中的特殊字符
-    'martin_executable': r'F:\code\martin\martin-x86_64-pc-windows-msvc\martin.exe',
+    'martin_executable': r'D:\simple_shpservice\martin-x86_64-pc-windows-msvc\martin.exe',
 }
 
 # GeoServer配置
 GEOSERVER_CONFIG = {
-    'url': 'http://localhost:8083/geoserver',
+    'url': 'http://10.20.124.20/:8083/geoserver',
     'workspace': 'shpservice',
     'datastore': 'test_geojson',
     'user': 'admin',
@@ -89,7 +93,7 @@ GEOSERVER_CONFIG = {
 
 # 文件存储配置
 FILE_STORAGE = {
-    'upload_folder': 'F:/PluginDevelopment/shpservice/FilesData',#os.path.join(os.path.dirname(os.path.dirname(__file__)), 'FilesData'),
+    'upload_folder': 'D:/simple_shpservice/FilesData',#os.path.join(os.path.dirname(os.path.dirname(__file__)), 'FilesData'),
     'temp_folder': os.path.join(os.path.dirname(os.path.dirname(__file__)), 'temp'),  # 临时文件目录
     'allowed_extensions': ['zip', 'shp', 'geojson', 'json', 'kml', 'gpkg', 'tif', 'tiff', 'dxf', 'mbtiles'],
     'max_content_length': 50 * 1024 * 1024 * 1024,  # 50GB

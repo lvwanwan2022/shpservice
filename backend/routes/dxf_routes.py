@@ -408,6 +408,17 @@ def publish_dxf_martin_service_ezdxf(file_id):
         if import_stats.get('skipped_features', 0) > 0:
             success_rate = import_stats.get('success_rate', 0)
             success_message += f"（成功导入 {import_stats.get('feature_count', 0)} 个要素，跳过 {import_stats.get('skipped_features', 0)} 个，成功率 {success_rate:.1f}%）"
+        # 发布成功后，调用Martin reload-postgres接口重新加载PostgreSQL数据源
+        try:
+            from services.martin_service import martin_service
+            #martin_service.get_config_info()
+            result_reload = martin_service.reload_postgres()
+            if result_reload['success']:
+                current_app.logger.info(f"✅ Martin reload-postgres成功: {result_reload.get('data', {})}")
+            else:
+                current_app.logger.warning(f"⚠️ Martin reload-postgres失败: {result_reload.get('error', '未知错误')}")
+        except Exception as reload_error:
+            current_app.logger.error(f"❌ Martin reload-postgres异常: {str(reload_error)}")
         
         return jsonify({
             'success': True,

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
-  title: 用户服务连接管理 API
-  description: 用户服务连接CRUD操作、连接测试、默认连接管理等功能的API接口
+  title: 用户服务连接管理-暂未使用 API
+  description: 用户服务连接CRUD操作、连接测试、默认连接管理-暂未使用等功能的API接口
   version: 1.0.0
   contact:
     name: SHP Service Team
@@ -9,7 +9,7 @@ info:
 
 servers:
   - url: /api/service-connections
-    description: 用户服务连接管理服务
+    description: 用户服务连接管理-暂未使用服务
 
 security:
   - BearerAuth: []
@@ -18,7 +18,7 @@ paths:
   /:
     get:
       tags:
-        - 连接管理
+        - 连接管理-暂未使用
       summary: 获取用户的服务连接列表
       description: 获取当前用户的服务连接列表，支持过滤和分页
       parameters:
@@ -134,7 +134,7 @@ paths:
     
     post:
       tags:
-        - 连接管理
+        - 连接管理-暂未使用
       summary: 创建新的服务连接
       description: 创建新的服务连接
       requestBody:
@@ -268,7 +268,7 @@ paths:
     
     put:
       tags:
-        - 连接管理
+        - 连接管理-暂未使用
       summary: 更新服务连接
       description: 更新指定的服务连接信息
       requestBody:
@@ -390,7 +390,7 @@ paths:
     
     delete:
       tags:
-        - 连接管理
+        - 连接管理-暂未使用
       summary: 删除服务连接
       description: 删除指定的服务连接
       responses:
@@ -453,7 +453,7 @@ paths:
   /test:
     post:
       tags:
-        - 连接测试
+        - 连接管理-暂未使用
       summary: 测试服务连接
       description: 测试服务连接是否可用
       requestBody:
@@ -561,7 +561,7 @@ paths:
     
     post:
       tags:
-        - 连接测试
+        - 连接管理-暂未使用
       summary: 测试指定的服务连接
       description: 测试指定的服务连接是否可用
       responses:
@@ -642,7 +642,7 @@ paths:
   /defaults:
     get:
       tags:
-        - 默认连接
+        - 连接管理-暂未使用
       summary: 获取默认服务连接
       description: 获取用户的默认服务连接
       responses:
@@ -728,7 +728,7 @@ paths:
   /file-service/download:
     get:
       tags:
-        - 文件服务
+        - 连接管理-暂未使用
       summary: 下载文件服务
       description: 下载文件服务相关资源
       parameters:
@@ -857,11 +857,6 @@ components:
           description: 更新时间
 
 tags:
-  - name: 连接管理
+  - name: 连接管理-暂未使用
     description: 服务连接CRUD操作相关接口
-  - name: 连接测试
-    description: 服务连接测试相关接口
-  - name: 默认连接
-    description: 默认服务连接管理相关接口
-  - name: 文件服务
-    description: 文件服务相关接口
+

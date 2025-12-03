@@ -1168,7 +1168,7 @@ export default {
         
         fileList.value = response.data.files
         //console.log('文件列表:', response)
-        total.value = response.total
+        total.value = response.data.total
       } catch (error) {
         ElMessage.error('获取文件列表失败')
       }

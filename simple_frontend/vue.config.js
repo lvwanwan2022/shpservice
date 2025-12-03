@@ -7,7 +7,7 @@
  * Copyright (c) 2025 by Lvwan, All Rights Reserved. 
  */
 const { defineConfig } = require('@vue/cli-service')
-const base_url='http://10.20.148.169'
+const base_url='http://10.20.124.20'
 //const base_url='http://10.20.186.58'
 // 从环境变量获取Martin服务的基础URL，默认为http://192.168.1.17:3000
 //const backend_url = 'http://192.168.1.17:5030'
@@ -21,11 +21,19 @@ const GEOSERVER_BASE_URL = base_url+':8083'
 
 module.exports = defineConfig({
   transpileDependencies: true,
+  
+  // 生产环境配置
+  publicPath: '/',
+  outputDir: 'dist',
+  assetsDir: 'static',
+  productionSourceMap: false,
+  
   // 添加开发服务器代理配置
   devServer: {
     host: '::',  // 启用IPv6监听，同时支持IPv4和IPv6
     port: 8080,
     allowedHosts: 'all',  // 允许所有主机访问
+    historyApiFallback: true,  // 🔥 添加：支持 SPA 路由
     proxy: {
       '/api': {
         target: backend_url,
@@ -67,6 +75,47 @@ module.exports = defineConfig({
     client: {
       overlay: false
     }
-
+  },
+  
+  // 🔥 添加：生产环境优化配置
+  chainWebpack: config => {
+    if (process.env.NODE_ENV === 'production') {
+      // 删除预加载和预获取，减少初始加载时间
+      config.plugins.delete('preload')
+      config.plugins.delete('prefetch')
+      
+      // 优化分包策略
+      config.optimization.splitChunks({
+        chunks: 'all',
+        cacheGroups: {
+          vendor: {
+            name: 'chunk-vendors',
+            test: /[\\/]node_modules[\\/]/,
+            priority: 10,
+            chunks: 'initial'
+          },
+          common: {
+            name: 'chunk-common',
+            minChunks: 2,
+            priority: 5,
+            chunks: 'initial',
+            reuseExistingChunk: true
+          }
+        }
+      })
+    }
+  },
+  
+  // 🔥 添加：PWA 配置（可选）
+  pwa: {
+    name: 'GIS Server Management System',
+    themeColor: '#4DBA87',
+    msTileColor: '#000000',
+    appleMobileWebAppCapable: 'yes',
+    appleMobileWebAppStatusBarStyle: 'black',
+    workboxPluginMode: 'InjectManifest',
+    workboxOptions: {
+      swSrc: 'src/service-worker.js'
+    }
   }
 })

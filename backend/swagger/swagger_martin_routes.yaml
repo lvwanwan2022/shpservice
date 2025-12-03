@@ -15,7 +15,7 @@ paths:
   /status:
     get:
       tags:
-        - 服务状态管理
+        - Martin程序管理
       summary: 获取Martin服务状态
       description: 获取Martin服务的运行状态、安装状态、配置信息等
       responses:
@@ -35,7 +35,7 @@ paths:
   /start:
     post:
       tags:
-        - 服务状态管理
+        - Martin程序管理
       summary: 启动Martin服务
       description: 启动Martin瓦片服务进程
       responses:
@@ -77,7 +77,7 @@ paths:
   /stop:
     post:
       tags:
-        - 服务状态管理
+        - Martin程序管理
       summary: 停止Martin服务
       description: 停止Martin瓦片服务进程
       responses:
@@ -118,7 +118,7 @@ paths:
   /restart:
     post:
       tags:
-        - 服务状态管理
+        - Martin程序管理
       summary: 重启Martin服务
       description: 重启Martin瓦片服务进程
       responses:
@@ -159,7 +159,7 @@ paths:
   /tables:
     get:
       tags:
-        - 表管理
+        - Martin程序管理
       summary: 获取PostGIS空间表列表
       description: 获取PostGIS数据库中所有可用的空间表信息
       responses:
@@ -181,7 +181,7 @@ paths:
   /catalog:
     get:
       tags:
-        - 服务目录
+        - Martin程序管理
       summary: 获取Martin服务目录
       description: 获取Martin服务的完整目录信息
       responses:
@@ -222,7 +222,7 @@ paths:
     
     get:
       tags:
-        - 表管理
+        - Martin程序管理
       summary: 获取特定表的TileJSON信息
       description: 获取指定表的TileJSON格式信息
       responses:
@@ -274,7 +274,7 @@ paths:
     
     get:
       tags:
-        - MVT瓦片服务
+        - Martin程序管理
       summary: 获取MVT瓦片URL信息
       description: 获取指定表的MVT瓦片服务URL信息
       responses:
@@ -316,7 +316,7 @@ paths:
   /refresh:
     post:
       tags:
-        - 配置管理
+        - Martin程序管理
       summary: 刷新表配置
       description: 重新扫描数据库并重启服务以刷新表配置
       responses:
@@ -361,7 +361,7 @@ paths:
   /reload-config:
     post:
       tags:
-        - 配置管理
+        - Martin程序管理
       summary: 重新加载配置文件
       description: 热重载配置文件，无需重启进程
       responses:
@@ -422,7 +422,7 @@ paths:
   /config:
     get:
       tags:
-        - 配置管理
+        - Martin程序管理
       summary: 获取Martin配置
       description: 获取当前Martin服务的配置信息
       responses:
@@ -459,7 +459,7 @@ paths:
   /logs:
     get:
       tags:
-        - 日志管理
+        - Martin程序管理
       summary: 获取Martin服务日志
       description: 获取Martin服务的运行日志、版本信息和状态
       responses:
@@ -583,15 +583,6 @@ components:
           example: "操作失败"
 
 tags:
-  - name: 服务状态管理
-    description: Martin服务的启动、停止、重启等状态管理操作
-  - name: 表管理
-    description: PostGIS空间表的查询和管理
-  - name: 服务目录
-    description: Martin服务目录信息查询
-  - name: MVT瓦片服务
-    description: MVT瓦片服务URL和配置信息
-  - name: 配置管理
-    description: Martin配置文件的管理和重载
-  - name: 日志管理
-    description: Martin服务日志查询
+  - name: Martin程序管理
+    description: Martin服务的启动、停止、重启等状态管理操作、PostGIS空间表的查询和管理
+  

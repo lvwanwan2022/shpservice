@@ -18,7 +18,7 @@ paths:
   /items:
     get:
       tags:
-        - 反馈管理
+        - 用户反馈管理
       summary: 获取反馈列表
       description: 获取反馈列表，支持分页、过滤和搜索
       parameters:
@@ -203,7 +203,7 @@ paths:
     
     post:
       tags:
-        - 反馈管理
+        - 用户反馈管理
       summary: 创建新反馈
       description: 创建新的用户反馈
       requestBody:
@@ -351,7 +351,7 @@ paths:
     
     get:
       tags:
-        - 反馈管理
+        - 用户反馈管理
       summary: 获取反馈详情
       description: 获取指定反馈的详细信息
       responses:
@@ -480,7 +480,7 @@ paths:
     
     delete:
       tags:
-        - 反馈管理
+        - 用户反馈管理
       summary: 删除反馈
       description: 删除指定的反馈（仅反馈创建者可删除）
       responses:
@@ -549,7 +549,7 @@ paths:
     
     post:
       tags:
-        - 附件管理
+        - 用户反馈管理
       summary: 上传反馈附件
       description: 为指定反馈上传附件文件
       requestBody:
@@ -660,7 +660,7 @@ paths:
     
     post:
       tags:
-        - 评论管理
+        - 用户反馈管理
       summary: 添加反馈评论
       description: 为指定反馈添加评论
       requestBody:
@@ -752,7 +752,7 @@ paths:
     
     post:
       tags:
-        - 投票管理
+        - 用户反馈管理
       summary: 为反馈投票
       description: 为指定反馈投票（点赞）
       responses:
@@ -808,7 +808,7 @@ paths:
     
     put:
       tags:
-        - 反馈管理
+        - 用户反馈管理
       summary: 更新反馈状态
       description: 更新指定反馈的状态（仅管理员或反馈创建者可操作）
       requestBody:
@@ -909,7 +909,7 @@ paths:
     
     get:
       tags:
-        - 附件管理
+        - 用户反馈管理
       summary: 下载附件
       description: 下载指定的附件文件
       responses:
@@ -944,7 +944,7 @@ paths:
   /stats:
     get:
       tags:
-        - 统计信息
+        - 用户反馈管理
       summary: 获取反馈统计信息
       description: 获取反馈系统的统计信息
       responses:
@@ -1160,13 +1160,5 @@ components:
           description: 上传时间
 
 tags:
-  - name: 反馈管理
+  - name: 用户反馈管理
     description: 反馈CRUD操作相关接口
-  - name: 附件管理
-    description: 反馈附件上传下载相关接口
-  - name: 评论管理
-    description: 反馈评论相关接口
-  - name: 投票管理
-    description: 反馈投票相关接口
-  - name: 统计信息
-    description: 反馈统计信息相关接口

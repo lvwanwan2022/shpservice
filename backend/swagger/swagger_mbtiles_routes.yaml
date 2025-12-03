@@ -18,7 +18,7 @@ paths:
   /services/list:
     get:
       tags:
-        - 服务管理
+        - MBTiles服务管理
       summary: 获取所有MBTiles服务列表
       description: 获取所有已发布的MBTiles服务列表，支持分页
       parameters:
@@ -137,7 +137,7 @@ paths:
     
     get:
       tags:
-        - 服务管理
+        - MBTiles服务管理
       summary: 获取指定的MBTiles服务信息
       description: 根据服务ID获取MBTiles服务的详细信息
       responses:
@@ -243,7 +243,7 @@ paths:
     
     delete:
       tags:
-        - 服务管理
+        - MBTiles服务管理
       summary: 删除MBTiles服务
       description: 删除指定的MBTiles服务
       responses:
@@ -293,7 +293,7 @@ paths:
     
     post:
       tags:
-        - 服务发布
+        - MBTiles服务管理
       summary: 发布MBTiles文件为Martin服务
       description: 将MBTiles文件发布为Martin瓦片服务
       responses:
@@ -403,7 +403,7 @@ paths:
     
     delete:
       tags:
-        - 服务发布
+        - MBTiles服务管理
       summary: 取消发布MBTiles服务
       description: 取消发布指定的MBTiles服务
       responses:
@@ -511,7 +511,6 @@ components:
           description: 创建时间
 
 tags:
-  - name: 服务管理
+  - name: MBTiles服务管理
     description: MBTiles服务管理相关接口
-  - name: 服务发布
-    description: MBTiles服务发布相关接口
+

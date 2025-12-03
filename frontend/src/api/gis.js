@@ -492,7 +492,7 @@ export default {
   // 获取场景列表
   getScenes(params = {}) {
     return authHttp({  // 🔥 使用带认证的请求
-      url: '/scenes',
+      url: '/scenes/list',
       method: 'get',
       params
     })
@@ -889,7 +889,7 @@ export default {
   // 获取所有Martin服务
   getAllMartinServices(params = {}) {
     return service({
-      url: '/martin-services/list',
+      url: '/martin_services/list',
       method: 'get',
       params
     })
@@ -898,7 +898,7 @@ export default {
   // 搜索Martin服务
   searchMartinServices(params = {}) {
     return authHttp({
-      url: '/martin-services/search',
+      url: '/martin_services/search',
       method: 'get',
       params
     })
@@ -907,7 +907,7 @@ export default {
   // 根据ID获取Martin服务
   getMartinServiceById(serviceId) {
     return service({
-      url: `/martin-services/${serviceId}`,
+      url: `/martin_services/${serviceId}`,
       method: 'get'
     })
   },
@@ -1124,7 +1124,7 @@ export default {
   // 更新Martin服务样式
   updateMartinServiceStyle(serviceId, styleConfig) {
     return service({
-      url: `/martin-services/${serviceId}/style`,
+      url: `/martin_services/${serviceId}/style`,
       method: 'post',
       data: {
         style_config: styleConfig
@@ -1135,7 +1135,7 @@ export default {
   // 应用Martin服务样式（保存并应用）
   applyMartinServiceStyle(serviceId, styleConfig) {
     return service({
-      url: `/martin-services/${serviceId}/apply-style`,
+      url: `/martin_services/${serviceId}/apply-style`,
       method: 'post',
       data: {
         style_config: styleConfig
@@ -1146,7 +1146,7 @@ export default {
   // 获取Martin服务样式
   getMartinServiceStyle(serviceId) {
     return service({
-      url: `/martin-services/${serviceId}/style`,
+      url: `/martin_services/${serviceId}/style`,
       method: 'get'
     })
   },
@@ -1162,7 +1162,7 @@ export default {
   // 获取Martin服务样式模板
   getMartinServiceStyleTemplates() {
     return service({
-      url: '/martin-services/style-templates',
+      url: '/martin_services/style-templates',
       method: 'get'
     })
   },

@@ -274,6 +274,86 @@ class TifMartinService:
                 except Exception as e:
                     print(f"⚠️ 清理临时目录失败: {e}")
     
+    def _validate_tif_file(self, tif_path):
+        """验证TIF文件完整性"""
+        try:
+            from osgeo import gdal, osr
+            import os
+            
+            # 检查文件是否存在
+            if not os.path.exists(tif_path):
+                print(f"❌ 文件不存在: {tif_path}")
+                return False
+            
+            # 检查文件大小
+            file_size = os.path.getsize(tif_path)
+            if file_size == 0:
+                print(f"❌ 文件大小为0: {tif_path}")
+                return False
+            
+            print(f"🔍 验证TIF文件: {tif_path} (大小: {file_size} 字节)")
+            
+            # 设置GDAL错误处理
+            gdal.UseExceptions()
+            gdal.PushErrorHandler('CPLQuietErrorHandler')
+            
+            try:
+                # 尝试打开文件
+                dataset = gdal.Open(tif_path, gdal.GA_ReadOnly)
+                if dataset is None:
+                    print(f"❌ GDAL无法打开文件: {tif_path}")
+                    return False
+                
+                # 检查基本属性
+                width = dataset.RasterXSize
+                height = dataset.RasterYSize
+                bands = dataset.RasterCount
+                projection = dataset.GetProjection()
+                geotransform = dataset.GetGeoTransform()
+                
+                print(f"✅ 文件基本信息验证通过:")
+                print(f"  - 尺寸: {width}x{height}")
+                print(f"  - 波段数: {bands}")
+                print(f"  - 有投影信息: {'是' if projection else '否'}")
+                print(f"  - 有地理变换: {'是' if geotransform else '否'}")
+                
+                # 验证地理信息
+                if not projection and not geotransform:
+                    print(f"⚠️ 警告: 文件缺少地理参考信息")
+                    return False
+                
+                # 尝试读取一小块数据验证数据完整性
+                if bands > 0:
+                    band = dataset.GetRasterBand(1)
+                    if band is None:
+                        print(f"❌ 无法读取第一个波段")
+                        return False
+                    
+                    # 读取一小块数据（10x10像素）
+                    try:
+                        test_size = min(10, width, height)
+                        data = band.ReadAsArray(0, 0, test_size, test_size)
+                        if data is None:
+                            print(f"❌ 无法读取栅格数据")
+                            return False
+                        print(f"✅ 数据读取验证通过")
+                    except Exception as e:
+                        print(f"❌ 数据读取测试失败: {str(e)}")
+                        return False
+                
+                dataset = None
+                return True
+                
+            except Exception as e:
+                print(f"❌ GDAL验证失败: {str(e)}")
+                return False
+            finally:
+                gdal.PopErrorHandler()
+                
+        except Exception as e:
+            print(f"❌ 文件验证异常: {str(e)}")
+            return False
+
     def _generate_tiles_with_gdal2tiles(self, tif_path, tiles_dir, min_zoom, max_zoom, coordinate_system, task_id):
         """使用GDAL Python API生成瓦片"""
         try:
@@ -286,8 +366,16 @@ class TifMartinService:
                 current_step='tiles_generation'
             )
             
-            # 设置GDAL配置
+            # 增强GDAL配置和错误处理
+            gdal.UseExceptions()
             gdal.SetConfigOption('GDAL_CACHEMAX', '500')
+            gdal.SetConfigOption('GDAL_NUM_THREADS', 'ALL_CPUS')
+            gdal.SetConfigOption('GDAL_DISABLE_READDIR_ON_OPEN', 'EMPTY_DIR')
+            gdal.SetConfigOption('CPL_DEBUG', 'OFF')  # 关闭调试信息
+            
+            # 验证文件完整性
+            if not self._validate_tif_file(tif_path):
+                raise Exception(f"TIF文件验证失败: {tif_path}")
             
             # 打开源数据集
             src_ds = gdal.Open(tif_path, gdal.GA_ReadOnly)
@@ -403,11 +491,18 @@ class TifMartinService:
             
         except Exception as e:
             print(f"❌ GDAL瓦片生成异常: {str(e)}")
-            self.progress_data[task_id].update({
-                'status': 'error',
-                'message': f'瓦片生成异常: {str(e)}'
-            })
-            return False
+            
+            # 尝试使用备用方法生成瓦片
+            print("🔄 尝试使用备用方法生成瓦片...")
+            try:
+                return self._generate_tiles_with_gdal2tiles_command(tif_path, tiles_dir, min_zoom, max_zoom, coordinate_system, task_id)
+            except Exception as backup_error:
+                print(f"❌ 备用方法也失败: {str(backup_error)}")
+                self.progress_data[task_id].update({
+                    'status': 'error',
+                    'message': f'瓦片生成异常: {str(e)}，备用方法失败: {str(backup_error)}'
+                })
+                return False
     
     def _get_tile_bounds(self, min_x, max_x, min_y, max_y, zoom):
         """计算指定缩放级别的瓦片边界"""
@@ -432,6 +527,7 @@ class TifMartinService:
         try:
             from osgeo import gdal
             import math
+            import os
             
             # Web Mercator 参数
             EARTH_RADIUS = 6378137
@@ -446,27 +542,44 @@ class TifMartinService:
             max_y = EARTH_CIRCUMFERENCE/2 - tile_y * tile_size_meters
             min_y = EARTH_CIRCUMFERENCE/2 - (tile_y + 1) * tile_size_meters
             
-            # 使用gdalwarp进行重投影和裁剪
-            warp_options = gdal.WarpOptions(
-                format='PNG',
-                outputBounds=[min_x, min_y, max_x, max_y],
-                width=TILE_SIZE,
-                height=TILE_SIZE,
-                dstSRS='EPSG:3857',
-                resampleAlg=gdal.GRA_Bilinear,
-                srcNodata=0,  # 设置源数据的nodata值为0（黑色）
-                dstNodata=0,  # 设置目标数据的nodata值为0
-                creationOptions=['WORLDFILE=NO']
-            )
-            
-            # 执行重投影
-            result_ds = gdal.Warp(tile_path, src_ds, options=warp_options)
-            
-            if result_ds is None:
+            # 检查源数据集是否有效
+            if src_ds is None:
+                print(f"❌ 源数据集无效")
                 return False
             
-            # 关闭数据集
-            result_ds = None
+            # 设置错误处理
+            gdal.PushErrorHandler('CPLQuietErrorHandler')
+            
+            try:
+                # 使用gdalwarp进行重投影和裁剪，增加错误处理选项
+                warp_options = gdal.WarpOptions(
+                    format='PNG',
+                    outputBounds=[min_x, min_y, max_x, max_y],
+                    width=TILE_SIZE,
+                    height=TILE_SIZE,
+                    dstSRS='EPSG:3857',
+                    resampleAlg=gdal.GRA_Bilinear,
+                    srcNodata=0,  # 设置源数据的nodata值为0（黑色）
+                    dstNodata=0,  # 设置目标数据的nodata值为0
+                    creationOptions=['WORLDFILE=NO'],
+                    errorThreshold=0.125,  # 错误阈值
+                    warpMemoryLimit=500,   # 内存限制(MB)
+                    multithread=True,      # 启用多线程
+                    options=['NUM_THREADS=ALL_CPUS']
+                )
+                
+                # 执行重投影
+                result_ds = gdal.Warp(tile_path, src_ds, options=warp_options)
+                
+                if result_ds is None:
+                    print(f"❌ gdalwarp 失败: {zoom}/{tile_x}/{tile_y}")
+                    return False
+                
+                # 关闭数据集
+                result_ds = None
+                
+            finally:
+                gdal.PopErrorHandler()
             
             # 检查文件是否生成
             if not os.path.exists(tile_path) or os.path.getsize(tile_path) == 0:
@@ -492,6 +605,67 @@ class TifMartinService:
                 
         except Exception as e:
             print(f"⚠️ 生成瓦片失败 {zoom}/{tile_x}/{tile_y}: {str(e)}")
+            return False
+    
+    def _generate_tiles_with_gdal2tiles_command(self, tif_path, tiles_dir, min_zoom, max_zoom, coordinate_system, task_id):
+        """使用gdal2tiles.py命令行工具生成瓦片（备用方法）"""
+        try:
+            import subprocess
+            import os
+            
+            self._update_progress_with_log(task_id, 
+                progress=15, 
+                message="🔄 使用gdal2tiles命令行工具生成瓦片...", 
+                current_step='tiles_generation'
+            )
+            
+            # 构建gdal2tiles命令
+            cmd = [
+                'gdal2tiles.py',
+                '--profile=mercator',  # 使用Web Mercator投影
+                '--resampling=bilinear',  # 双线性重采样
+                f'--zoom={min_zoom}-{max_zoom}',  # 缩放级别范围
+                '--processes=4',  # 使用4个进程
+                '--verbose',  # 详细输出
+                '--webviewer=none',  # 不生成Web查看器
+                tif_path,  # 源文件
+                tiles_dir  # 输出目录
+            ]
+            
+            print(f"执行命令: {' '.join(cmd)}")
+            
+            # 执行命令
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=1800,  # 30分钟超时
+                encoding='utf-8',
+                errors='ignore'  # 忽略编码错误
+            )
+            
+            if result.returncode != 0:
+                error_msg = result.stderr or result.stdout
+                print(f"❌ gdal2tiles命令执行失败: {error_msg}")
+                return False
+            
+            # 检查是否生成了瓦片
+            tile_count = 0
+            for root, dirs, files in os.walk(tiles_dir):
+                tile_count += len([f for f in files if f.endswith('.png')])
+            
+            if tile_count == 0:
+                print(f"❌ 未生成任何瓦片文件")
+                return False
+            
+            print(f"✅ gdal2tiles生成瓦片完成，共生成 {tile_count} 个瓦片")
+            return True
+            
+        except subprocess.TimeoutExpired:
+            print(f"❌ gdal2tiles命令超时")
+            return False
+        except Exception as e:
+            print(f"❌ gdal2tiles备用方法失败: {str(e)}")
             return False
     
     def _monitor_tiles_progress(self, tiles_dir, task_id, min_zoom, max_zoom):
@@ -666,6 +840,9 @@ class TifMartinService:
             conn.close()
             
             print(f"✅ MBTiles打包完成，包含 {tile_count} 个瓦片")
+            # 🆕 立即备份到D盘根目录
+            try: import shutil; shutil.copy2(mbtiles_path, f"D:/mbtiles_backup_{int(time.time())}.mbtiles"); print("💾 已备份到D盘根目录") 
+            except: pass
             return True
             
         except Exception as e:

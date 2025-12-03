@@ -8,14 +8,14 @@ info:
     email: support@shpservice.com
 
 servers:
-  - url: /api/martin-service
+  - url: /api/martin_services
     description: 统一Martin服务
 
 paths:
-  /martin-services/list:
+  /list:
     get:
       tags:
-        - 服务管理
+        - Martin服务管理
       summary: 获取所有Martin服务列表
       description: 获取所有Martin服务列表（包括GeoJSON和SHP），支持分页和筛选
       parameters:
@@ -80,10 +80,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /martin-services/search:
+  /search:
     get:
       tags:
-        - 服务管理
+        - Martin服务管理
       summary: 搜索Martin服务
       description: 根据文件ID或原始文件名搜索Martin服务
       parameters:
@@ -143,7 +143,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /martin-services/{service_id}:
+  /{service_id}:
     parameters:
       - name: service_id
         in: path
@@ -155,7 +155,7 @@ paths:
     
     get:
       tags:
-        - 服务管理
+        - Martin服务管理
       summary: 根据ID获取Martin服务详细信息
       description: 获取指定Martin服务的详细信息
       responses:
@@ -189,7 +189,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /martin-services/{service_id}/style:
+  /{service_id}/style:
     parameters:
       - name: service_id
         in: path
@@ -201,7 +201,7 @@ paths:
     
     get:
       tags:
-        - 样式管理
+        - Martin服务管理
       summary: 获取Martin服务样式
       description: 获取指定Martin服务的样式配置
       responses:
@@ -261,7 +261,7 @@ paths:
     
     post:
       tags:
-        - 样式管理
+        - Martin服务管理
       summary: 更新Martin服务样式
       description: 更新指定Martin服务的样式配置
       requestBody:
@@ -338,7 +338,7 @@ paths:
                     type: string
                     description: 错误信息
 
-  /martin-services/{service_id}/apply-style:
+  /{service_id}/apply-style:
     parameters:
       - name: service_id
         in: path
@@ -350,7 +350,7 @@ paths:
     
     post:
       tags:
-        - 样式管理
+        - Martin服务管理
       summary: 应用Martin服务样式
       description: 保存并应用Martin服务的样式配置
       requestBody:
@@ -427,10 +427,10 @@ paths:
                     type: string
                     description: 错误信息
 
-  /martin-services/style-templates:
+  /style-templates:
     get:
       tags:
-        - 样式管理
+        - Martin服务管理
       summary: 获取样式模板
       description: 获取预定义的Martin服务样式模板
       responses:
@@ -516,10 +516,10 @@ paths:
                     type: string
                     example: "internal_error"
 
-  /martin-services/test:
+  /test:
     get:
       tags:
-        - 系统测试
+        - Martin服务管理
       summary: 测试Martin服务查询
       description: 测试Martin服务数据库查询功能
       responses:
@@ -728,9 +728,5 @@ components:
           example: "操作失败"
 
 tags:
-  - name: 服务管理
+  - name: Martin服务管理
     description: Martin服务的查询、搜索、详情获取等管理操作
-  - name: 样式管理
-    description: Martin服务的样式配置、模板管理
-  - name: 系统测试
-    description: 系统功能和数据库连接测试

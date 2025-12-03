@@ -27,7 +27,7 @@ class DXFProcessor:
         gdal.UseExceptions()
         
         # 数据库连接
-        db_url = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
+        db_url = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password'].replace('@', '%40')}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
         self.engine = create_engine(db_url)
         
         logger.info("✅ DXF处理器初始化完成")
@@ -247,7 +247,7 @@ class DXFProcessor:
                 gdf = gdf.to_crs(coordinate_system)
             
             # 导入PostGIS
-            db_url = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
+            db_url = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password'].replace('@', '%40')}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
             
             gdf.to_postgis(
                 table_name,

@@ -19,7 +19,7 @@ class RasterMartinService:
     def __init__(self):
         """初始化服务"""
         # 构建PostgreSQL连接字符串
-        self.db_url = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
+        self.db_url = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password'].replace('@', '%40')}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
         self.engine = create_engine(self.db_url)
         
     def publish_mbtiles_martin(self, file_id, file_path, original_filename, user_id=None, mbtiles_type=None):

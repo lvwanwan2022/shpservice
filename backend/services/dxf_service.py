@@ -32,7 +32,7 @@ class DXFService:
         self.geoserver_service = GeoServerService()
         
         # 数据库连接
-        db_url = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
+        db_url = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password'].replace('@', '%40')}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
         self.engine = create_engine(db_url)
         
         # 确保上传目录存在
