@@ -517,10 +517,12 @@ def apply_sld_style_to_layer():
         }), 200
         
     except ValueError as e:
+        current_app.logger.error(f"应用SLD样式失败（参数错误）: {str(e)}")
         return jsonify({'error': str(e)}), 400
     except Exception as e:
-        current_app.logger.error(f"应用SLD样式失败: {str(e)}")
-        return jsonify({'error': '服务器内部错误'}), 500
+        error_msg = str(e)
+        current_app.logger.error(f"应用SLD样式失败: {error_msg}", exc_info=True)
+        return jsonify({'error': error_msg}), 500
 
 @sld_style_bp.route('/layer/<int:layer_id>', methods=['GET'])
 def get_layer_sld_style(layer_id):
