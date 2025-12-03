@@ -407,15 +407,15 @@
                 />
               </template>
             </el-table-column>
-            <el-table-column label="图层名称" min-width="200">
+            <el-table-column label="图层名称" width="250" show-overflow-tooltip>
               <template #default="scope">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <span style="font-size: 18px;">{{ getLayerIcon(scope.row) }}</span>
-                  <div>
-                    <div style="font-weight: 600; font-size: 14px;">
+                <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+                  <span style="font-size: 18px; flex-shrink: 0;">{{ getLayerIcon(scope.row) }}</span>
+                  <div style="min-width: 0; flex: 1; overflow: hidden;">
+                    <div style="font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" :title="scope.row.layer_name || scope.row.file_name || scope.row.original_name || '未命名图层'">
                       {{ scope.row.layer_name || scope.row.file_name || scope.row.original_name || '未命名图层' }}
                     </div>
-                    <div style="font-size: 12px; color: #909399; margin-top: 2px;">
+                    <div style="font-size: 12px; color: #909399; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" :title="scope.row.description || getLayerTypeText(scope.row)">
                       {{ scope.row.description || getLayerTypeText(scope.row) }}
                     </div>
                   </div>
@@ -432,7 +432,7 @@
                 <span style="font-size: 12px;">{{ scope.row.discipline || '未知' }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="服务状态" min-width="200">
+            <el-table-column label="服务状态" width="240">
               <template #default="scope">
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                   <!-- GeoServer服务 -->
