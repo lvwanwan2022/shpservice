@@ -375,6 +375,7 @@ import { register } from 'ol/proj/proj4'
 import gcj02Mecator, { gcj02 } from '@/utils/GCJ02'
 import { MARTIN_BASE_URL } from '@/config/index'
 import { Loading, ArrowDown } from '@element-plus/icons-vue'
+import { convertGeoServerUrlToProxy } from '@/utils/urlUtils'
 import { getRecommendedPreloadLevel, getRecommendedCacheSize, getDeviceType } from '@/utils/deviceUtils'
 import { 
   createWmtsTileLoadFunction, 
@@ -1670,10 +1671,10 @@ export default {
         return
       }
       
+      // 处理WMS URL - 将所有 GeoServer URL 转换为使用代理路径，避免 CORS 问题
       let wmsUrl = layer.wms_url.split('?')[0]
-      if (wmsUrl.includes('localhost:8083/geoserver') || wmsUrl.includes('localhost:8080/geoserver')) {
-        wmsUrl = '/geoserver/wms'
-      }
+      // 使用工具函数转换 GeoServer URL 为代理路径
+      wmsUrl = convertGeoServerUrlToProxy(wmsUrl)
       
       //console.log('创建WMS图层:', layer.layer_name, 'URL:', wmsUrl)
       
