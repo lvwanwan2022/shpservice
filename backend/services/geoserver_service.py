@@ -15,7 +15,7 @@ from config import GEOSERVER_CONFIG, DB_CONFIG
 import logging
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urljoin
+from urllib.parse import urljoin, quote
 from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
 import traceback
@@ -4889,23 +4889,70 @@ AbsolutePath=false
         try:
             print(f"创建或更新样式: {style_name}")
             
-            # 检查样式是否已存在
-            style_check_url = f"{self.rest_url}/styles/{style_name}.xml"
-            style_check_response = requests.get(style_check_url, auth=self.auth)
+            # 确保SLD内容是UTF-8编码的字符串
+            if isinstance(sld_content, bytes):
+                sld_content = sld_content.decode('utf-8')
             
-            headers_xml = {'Content-Type': 'application/vnd.ogc.sld+xml'}
+            # 验证SLD内容是否为有效的XML
+            try:
+                ET.fromstring(sld_content)
+            except ET.ParseError as e:
+                error_msg = f"SLD内容不是有效的XML: {str(e)}"
+                print(error_msg)
+                logger.error(error_msg)
+                return False
+            
+            # URL编码样式名称（处理中文等特殊字符）
+            # 使用quote进行URL编码，但保留一些字符不编码
+            encoded_style_name = quote(style_name, safe='')
+            
+            # 检查样式是否已存在
+            style_check_url = f"{self.rest_url}/styles/{encoded_style_name}.xml"
+            try:
+                style_check_response = requests.get(style_check_url, auth=self.auth, timeout=10)
+            except requests.exceptions.RequestException as e:
+                error_msg = f"检查样式是否存在时出错: {str(e)}"
+                print(error_msg)
+                logger.error(error_msg)
+                # 如果检查失败，假设样式不存在，继续创建流程
+                style_check_response = type('obj', (object,), {'status_code': 404})()
+            
+            # 设置正确的Content-Type，包含字符编码
+            headers_xml = {
+                'Content-Type': 'application/vnd.ogc.sld+xml; charset=utf-8'
+            }
             
             if style_check_response.status_code == 200:
                 print(f"样式 {style_name} 已存在，将更新")
                 # 更新现有样式
-                style_url = f"{self.rest_url}/styles/{style_name}"
+                # 尝试两种URL格式
+                style_urls = [
+                    f"{self.rest_url}/styles/{encoded_style_name}",
+                    f"{self.rest_url}/styles/{encoded_style_name}.xml"
+                ]
                 
-                style_response = requests.put(
-                    style_url,
-                    data=sld_content,
-                    headers=headers_xml,
-                    auth=self.auth
-                )
+                style_response = None
+                for style_url in style_urls:
+                    try:
+                        # 确保内容以UTF-8编码发送
+                        style_response = requests.put(
+                            style_url,
+                            data=sld_content.encode('utf-8'),
+                            headers=headers_xml,
+                            auth=self.auth,
+                            timeout=30
+                        )
+                        if style_response.status_code in [200, 201]:
+                            break
+                    except requests.exceptions.RequestException as e:
+                        logger.warning(f"尝试URL {style_url} 失败: {str(e)}")
+                        continue
+                
+                if not style_response:
+                    error_msg = "所有更新URL尝试都失败了"
+                    print(error_msg)
+                    logger.error(error_msg)
+                    return False
             else:
                 print(f"创建新样式: {style_name}")
                 # 创建新样式
@@ -4919,34 +4966,76 @@ AbsolutePath=false
                 }
                 
                 headers_json = {'Content-Type': 'application/json'}
-                create_response = requests.post(
-                    create_style_url,
-                    json=create_style_data,
-                    headers=headers_json,
-                    auth=self.auth
-                )
-                
-                if create_response.status_code not in [201, 200]:
-                    print(f"创建样式定义失败: {create_response.status_code} - {create_response.text}")
+                try:
+                    create_response = requests.post(
+                        create_style_url,
+                        json=create_style_data,
+                        headers=headers_json,
+                        auth=self.auth,
+                        timeout=10
+                    )
+                except requests.exceptions.RequestException as e:
+                    error_msg = f"创建样式定义请求失败: {str(e)}"
+                    print(error_msg)
+                    logger.error(error_msg)
                     return False
                 
-                # 2. 上传样式内容
-                style_content_url = f"{self.rest_url}/styles/{style_name}"
+                if create_response.status_code not in [201, 200]:
+                    error_msg = f"创建样式定义失败: {create_response.status_code} - {create_response.text}"
+                    print(error_msg)
+                    logger.error(error_msg)
+                    # 如果样式已存在（409），继续尝试上传内容
+                    if create_response.status_code == 409:
+                        print(f"样式 {style_name} 已存在（409），继续上传内容")
+                    else:
+                        return False
                 
-                style_response = requests.put(
-                    style_content_url,
-                    data=sld_content,
-                    headers=headers_xml,
-                    auth=self.auth
-                )
+                # 2. 上传样式内容
+                # 尝试两种URL格式
+                style_content_urls = [
+                    f"{self.rest_url}/styles/{encoded_style_name}",
+                    f"{self.rest_url}/styles/{encoded_style_name}.xml"
+                ]
+                
+                style_response = None
+                for style_content_url in style_content_urls:
+                    try:
+                        # 确保内容以UTF-8编码发送
+                        style_response = requests.put(
+                            style_content_url,
+                            data=sld_content.encode('utf-8'),
+                            headers=headers_xml,
+                            auth=self.auth,
+                            timeout=30
+                        )
+                        if style_response.status_code in [200, 201]:
+                            break
+                    except requests.exceptions.RequestException as e:
+                        logger.warning(f"尝试URL {style_content_url} 失败: {str(e)}")
+                        continue
+                
+                if not style_response:
+                    error_msg = "所有上传URL尝试都失败了"
+                    print(error_msg)
+                    logger.error(error_msg)
+                    return False
             
             if style_response.status_code not in [200, 201]:
-                print(f"上传样式内容失败: {style_response.status_code} - {style_response.text}")
+                error_msg = f"上传样式内容失败: {style_response.status_code} - {style_response.text}"
+                print(error_msg)
+                logger.error(error_msg)
+                # 尝试记录更多调试信息
+                logger.error(f"样式名称: {style_name}, 编码后: {encoded_style_name}")
+                logger.error(f"请求URL: {style_response.url if hasattr(style_response, 'url') else '未知'}")
+                logger.error(f"响应头: {style_response.headers if hasattr(style_response, 'headers') else '未知'}")
+                logger.debug(f"SLD内容前500字符: {sld_content[:500]}")
                 return False
             
             print(f"✅ 样式创建/更新成功: {style_name}")
             return True
             
         except Exception as e:
-            print(f"创建或更新样式失败: {str(e)}")
+            error_msg = f"创建或更新样式失败: {str(e)}"
+            print(error_msg)
+            logger.error(error_msg, exc_info=True)
             return False
