@@ -145,14 +145,46 @@ def layer_preview(layer_name):
     """
     try:
         # 获取查询参数
-        width = request.args.get('width', 800)
-        height = request.args.get('height', 600)
+        width = int(request.args.get('width', 800))
+        height = int(request.args.get('height', 600))
         
-        # 构建WMS请求URL
+        # 尝试从图层名称中提取store_name和featuretype_name
+        # layer_name格式可能是 "workspace:layer" 或 "layer"
+        layer_parts = layer_name.split(':')
+        if len(layer_parts) == 2:
+            workspace_name, actual_layer_name = layer_parts
+        else:
+            workspace_name = geoserver_service.workspace
+            actual_layer_name = layer_name
+        
+        # 尝试获取图层的featuretype信息以生成正确的预览URL
+        featuretype_info = None
+        try:
+            # 从数据库查询图层信息，获取store_name
+            from models.db import execute_query
+            layer_query = """
+                SELECT gl.name, gs.name as store_name
+                FROM geoserver_layers gl
+                LEFT JOIN geoserver_featuretypes gft ON gl.featuretype_id = gft.id
+                LEFT JOIN geoserver_stores gs ON gft.store_id = gs.id
+                WHERE gl.name = %s OR gl.name = %s
+            """
+            layer_results = execute_query(layer_query, (actual_layer_name, layer_name))
+            if layer_results and layer_results[0].get('store_name'):
+                store_name = layer_results[0]['store_name']
+                # 获取featuretype信息
+                featuretype_info = geoserver_service._get_featuretype_info(store_name, actual_layer_name)
+        except Exception as e:
+            current_app.logger.warning(f"获取图层featuretype信息失败: {str(e)}，使用默认预览URL")
+        
+        # 如果提供了bbox参数，使用它；否则使用_generate_preview_url方法
         bbox = request.args.get('bbox')
-        bbox_param = f"&bbox={bbox}" if bbox else ""
-        
-        preview_url = f"{geoserver_service.url}/wms?service=WMS&version=1.3.0&request=GetMap&layers={layer_name}&styles=&width={width}&height={height}&format=image/png{bbox_param}&transparent=true&CRS=EPSG:4326"
+        if bbox:
+            # 使用提供的bbox
+            preview_url = f"{geoserver_service.url}/wms?service=WMS&version=1.3.0&request=GetMap&layers={layer_name}&styles=&width={width}&height={height}&format=image/png&bbox={bbox}&transparent=true&CRS=EPSG:4326"
+        else:
+            # 使用_generate_preview_url方法生成预览URL
+            preview_url = geoserver_service._generate_preview_url(layer_name, featuretype_info, width, height)
         
         return jsonify({
             'preview_url': preview_url
