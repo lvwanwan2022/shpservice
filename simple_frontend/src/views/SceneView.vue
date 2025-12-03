@@ -85,7 +85,7 @@
               <el-button 
                 size="small" 
                 type="success" 
-                @click.stop="viewScene(scene)"
+                @click.stop="viewSceneInMap(scene)"
               >
                 查看
               </el-button>
@@ -208,6 +208,19 @@
             <el-table-column prop="layer_name" label="图层名称" />
             <el-table-column prop="file_type" label="数据类型" width="100" />
             <el-table-column prop="service_type" label="服务类型" width="120" />
+            <el-table-column label="显示顺序" width="120">
+              <template #default="scope">
+                <el-input-number
+                  v-model="scope.row.layer_order"
+                  :min="0"
+                  :max="9999"
+                  :disabled="!canEditScene(currentScene) || scope.row.updatingOrder"
+                  @change="updateLayerOrder(scope.row)"
+                  size="small"
+                  style="width: 100%"
+                />
+              </template>
+            </el-table-column>
             <el-table-column label="状态" width="120">
               <template #default="scope">
                 <el-switch
@@ -514,8 +527,11 @@ export default {
             ...layer,
             // 确保 visibility 是布尔值
             visibility: Boolean(layer.visibility || layer.visible),
+            // 确保 layer_order 有默认值
+            layer_order: layer.layer_order !== undefined ? layer.layer_order : 0,
             // 初始化updating状态
-            updating: false
+            updating: false,
+            updatingOrder: false
           }))
         } else {
           sceneLayers.value = []
@@ -604,11 +620,58 @@ export default {
       }
     }
     
+    const updateLayerOrder = async (layer) => {
+      // 权限检查
+      if (!canEditScene(currentScene.value)) {
+        ElMessage.warning('只有场景创建者可以修改图层顺序')
+        return
+      }
+      
+      const originalOrder = layer.layer_order
+      const newOrder = layer.layer_order
+      
+      // 设置loading状态
+      layer.updatingOrder = true
+      
+      try {
+        // 调用API更新图层顺序
+        await gisApi.updateLayerOrder(currentScene.value.id, layer.id, newOrder)
+        
+        ElMessage({
+          message: `图层 "${layer.layer_name}" 的顺序已更新为 ${newOrder}`,
+          type: 'success',
+          duration: 2000
+        })
+        
+      } catch (error) {
+        console.error('更新图层顺序失败:', error)
+        
+        // 如果更新失败，恢复原顺序
+        layer.layer_order = originalOrder
+        
+        ElMessage({
+          message: `更新图层顺序失败: ${error.response?.data?.error || error.message}`,
+          type: 'error',
+          duration: 3000
+        })
+      } finally {
+        // 清除loading状态
+        layer.updatingOrder = false
+      }
+    }
+    
     const openMapWithScene = () => {
       showDetailDialog.value = false
       router.push({
-        name: 'Map',
-        query: { sceneId: currentScene.value.id }
+        name: 'MapDeck',
+        query: { scene_id: currentScene.value.id }
+      })
+    }
+    
+    const viewSceneInMap = (scene) => {
+      router.push({
+        name: 'MapDeck',
+        query: { scene_id: scene.id }
       })
     }
     
@@ -718,7 +781,9 @@ export default {
       viewScene,
       removeLayerFromScene,
       toggleLayerVisibility,
+      updateLayerOrder,
       openMapWithScene,
+      viewSceneInMap,
       formatDate,
       formatDateShort,
       handleDetailDialogClose,
