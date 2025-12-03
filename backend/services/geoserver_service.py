@@ -303,26 +303,23 @@ class GeoServerService:
             elif 'name' in featuretype_info:
                 feature_name = featuretype_info['name']
             
-            # 12.1.1. 处理中文图层名称乱码问题
-            # 如果feature_name包含中文或乱码，保存原始名称用于GeoServer操作，但使用safe_shp_name作为图层名称
-            original_feature_name = feature_name  # 保存原始名称，用于后续的GeoServer API调用
-            if feature_name and self._contains_chinese_or_garbled(feature_name):
-                print(f"⚠️ 检测到feature type名称包含中文或乱码: {feature_name}")
-                print(f"   将使用安全名称作为图层名称: {safe_shp_name}")
-                print(f"   将使用原始名称作为图层标题: {original_shp_name}")
-                
-                # 更新featuretype_info中的名称和标题（用于数据库存储）
-                if 'featureType' in featuretype_info:
-                    featuretype_info['featureType']['name'] = safe_shp_name
-                    featuretype_info['featureType']['title'] = original_shp_name
-                else:
-                    featuretype_info['name'] = safe_shp_name
-                    featuretype_info['title'] = original_shp_name
-                
-                # 注意：feature_name保持为原始值（可能包含乱码），用于后续的GeoServer API调用
-                # 因为GeoServer中的实际feature type名称可能还是乱码的
+            # 12.1.1. 统一使用安全的英文名称作为图层名称，原始名称作为标题
+            # 无论原始文件名是中文还是英文，都使用safe_shp_name作为图层名称，original_shp_name作为标题
+            original_feature_name = feature_name  # 保存GeoServer返回的原始名称，用于后续的GeoServer API调用
+            print(f"GeoServer返回的feature type名称: {feature_name}")
+            print(f"将使用安全名称作为图层名称: {safe_shp_name}")
+            print(f"将使用原始名称作为图层标题: {original_shp_name}")
+            
+            # 更新featuretype_info中的名称和标题（用于数据库存储）
+            if 'featureType' in featuretype_info:
+                featuretype_info['featureType']['name'] = safe_shp_name
+                featuretype_info['featureType']['title'] = original_shp_name
             else:
-                original_feature_name = feature_name
+                featuretype_info['name'] = safe_shp_name
+                featuretype_info['title'] = original_shp_name
+            
+            # 注意：original_feature_name保持为GeoServer返回的原始值，用于后续的GeoServer API调用
+            # 因为GeoServer中的实际feature type名称可能还是原始文件名（可能包含中文或乱码）
             
             # 12.2. 如果读取到了属性字段，更新GeoServer feature type的属性定义
             # 使用original_feature_name（可能包含乱码）来调用GeoServer API
@@ -390,17 +387,18 @@ class GeoServerService:
             layer_info = self._create_layer_in_db(featuretype_info, workspace_id, featuretype_id, coverage_id=None, file_id=file_id,  store_type='datastore')
             print(f"✅ 图层记录创建成功，layer_id={layer_info['id']}")
             
-            # 15.0. 如果原始文件名包含中文，更新GeoServer中的图层标题
-            if original_shp_name and (self._contains_chinese_or_garbled(original_shp_name) or original_shp_name != safe_shp_name):
-                print(f"准备更新GeoServer中的图层标题，使用原始中文名称: {original_shp_name}")
+            # 15.0. 更新GeoServer中的图层标题，使用原始文件名作为标题
+            # 无论原始文件名是中文还是英文，都统一更新标题，确保显示正确
+            if original_shp_name and original_feature_name:
+                print(f"准备更新GeoServer中的图层标题，使用原始文件名: {original_shp_name}")
                 try:
-                    # 使用original_feature_name（可能包含乱码）来更新GeoServer
-                    # 因为GeoServer中的实际feature type名称可能还是乱码的
+                    # 使用original_feature_name（GeoServer返回的原始名称）来更新GeoServer
+                    # 因为GeoServer中的实际feature type名称可能还是原始文件名
                     self._update_featuretype_and_layer_title(
                         generated_store_name,
-                        original_feature_name,  # 使用原始名称（可能包含乱码）
+                        original_feature_name,  # 使用GeoServer返回的原始名称
                         safe_shp_name,  # 安全名称用于layer
-                        original_shp_name  # 原始中文名称作为标题
+                        original_shp_name  # 原始文件名作为标题（可能是中文或英文）
                     )
                     print(f"✅ GeoServer图层标题更新完成")
                 except Exception as e:
@@ -1545,7 +1543,8 @@ class GeoServerService:
     def _ensure_safe_shapefile_names(self, folder_path, original_name, safe_base_name):
         """确保Shapefile文件名是GeoServer友好的
         
-        如果原始文件名包含中文或特殊字符，就重命名为安全的英文名称
+        无论原始文件名是中文还是英文，都统一重命名为安全的英文名称
+        这样可以避免GeoServer中的图层名称出现乱码问题
         
         Args:
             folder_path: 解压后的文件夹路径
@@ -1555,19 +1554,15 @@ class GeoServerService:
         Returns:
             str: 最终的SHP文件名（不含扩展名）
         """
-        import re
         import os
         
-        # 检查原始文件名是否包含中文或特殊字符
-        has_chinese = re.search(r'[\u4e00-\u9fff]', original_name)
-        has_special_chars = any(char in original_name for char in ['(', ')', ' ', '（', '）', '-', '+', '=', '@', '#', '$', '%', '^', '&', '*'])
-        
-        if not (has_chinese or has_special_chars):
-            print(f"文件名安全，无需重命名: {original_name}")
+        # 如果原始名称已经是安全名称，则不需要重命名
+        if original_name == safe_base_name:
+            print(f"文件名已经是安全名称，无需重命名: {original_name}")
             return original_name
         
-        print(f"检测到不安全的文件名，需要重命名: {original_name}")
-        print(f"使用安全名称: {safe_base_name}")
+        print(f"统一重命名文件: {original_name} -> {safe_base_name}")
+        print(f"原始文件名将作为图层标题保留")
         
         # 需要重命名的文件扩展名
         extensions = ['.shp', '.shx', '.dbf', '.prj', '.cpg', '.sbn', '.sbx', '.qix']
@@ -2584,31 +2579,6 @@ class GeoServerService:
         
         print(f"成功获取要素类型信息: {featuretype_name}")
         return response.json()
-    
-    def _contains_chinese_or_garbled(self, text):
-        """检查字符串是否包含中文或乱码字符
-        
-        Args:
-            text: 要检查的字符串
-            
-        Returns:
-            bool: 如果包含中文或乱码字符返回True，否则返回False
-        """
-        if not text:
-            return False
-        
-        # 检查是否包含中文字符
-        has_chinese = bool(re.search(r'[\u4e00-\u9fff]', text))
-        
-        # 检查是否包含常见的乱码字符（这些字符通常表示编码错误）
-        garbled_patterns = [
-            r'[┤≤╙ó╧╪╓╪╜╗═¿╔Φ╩⌐╧▀╥¬╦╪╡τ┴ª▒ú╗ñ║∞╧▀╙└╛├╗∙▒╛┼⌐╠∩═╝░▀╣·═┴─┐▒Ω╦«┐Γ╧╡├µ╧╡╧▀╧τ╒≥╝╢╨╨╒■╟°╧ε─┐╟°╔µ╝░╥╤│╔╟■╡└╡╚╓╡╧▀╡╚╕▀╛α]',
-            r'[\x80-\xff]{2,}',  # 可能的乱码字节序列
-        ]
-        
-        has_garbled = any(re.search(pattern, text) for pattern in garbled_patterns)
-        
-        return has_chinese or has_garbled
     
     def _update_featuretype_and_layer_title(self, store_name, feature_name, safe_layer_name, original_title):
         """更新GeoServer中feature type和layer的标题，使用原始中文名称
