@@ -51,12 +51,28 @@ class SLDStyleService:
             if geometry_type not in valid_geometry_types:
                 raise ValueError(f"不支持的几何类型: {geometry_type}")
             
-            # 读取文件内容
-            content = file.read().decode('utf-8')
+            # 读取文件内容，尝试多种编码
+            file_bytes = file.read()
+            content = None
+            encodings = ['utf-8', 'utf-8-sig', 'gbk', 'gb2312', 'latin-1']
+            
+            for encoding in encodings:
+                try:
+                    content = file_bytes.decode(encoding)
+                    logger.info(f"成功使用 {encoding} 编码读取文件")
+                    break
+                except UnicodeDecodeError:
+                    continue
+            
+            if content is None:
+                raise ValueError("无法解码SLD文件，请确保文件使用UTF-8、GBK或GB2312编码")
             
             # 验证SLD文件格式
             if not self._validate_sld_content(content, geometry_type):
-                raise ValueError("SLD文件格式无效或与指定的几何类型不匹配")
+                # 提供更详细的错误信息
+                error_msg = f"SLD文件格式无效或与指定的几何类型({geometry_type})不匹配。请确保SLD文件包含正确的{geometry_type}符号化器。"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
             
             # 生成唯一文件名
             file_extension = os.path.splitext(file.filename)[1]
@@ -312,8 +328,32 @@ class SLDStyleService:
     def _validate_sld_content(self, content, geometry_type):
         """验证SLD文件内容"""
         try:
-            # 解析XML
-            root = ET.fromstring(content)
+            # 记录验证开始
+            logger.info(f"开始验证SLD内容，几何类型: {geometry_type}")
+            logger.debug(f"SLD内容前500字符: {content[:500]}")
+            
+            # 尝试解析XML，处理可能的编码问题
+            try:
+                root = ET.fromstring(content)
+            except ET.ParseError as parse_error:
+                # 尝试使用不同的编码
+                try:
+                    # 尝试UTF-8 with BOM
+                    if content.startswith('\ufeff'):
+                        content = content[1:]
+                    root = ET.fromstring(content)
+                except:
+                    # 尝试其他编码
+                    try:
+                        content_utf8 = content.encode('latin-1').decode('utf-8')
+                        root = ET.fromstring(content_utf8)
+                    except:
+                        logger.error(f"SLD XML解析失败: {str(parse_error)}")
+                        raise parse_error
+            
+            # 记录根标签信息
+            root_tag = root.tag
+            logger.info(f"SLD根标签: {root_tag}")
             
             # 检查基本结构 - 支持多种命名空间
             valid_root_tags = [
@@ -322,12 +362,12 @@ class SLDStyleService:
                 'StyledLayerDescriptor'  # 无命名空间的情况
             ]
             
-            root_tag = root.tag
+            # 更宽松的根标签检查
             if root_tag not in valid_root_tags:
                 # 检查是否包含StyledLayerDescriptor（忽略命名空间）
                 if 'StyledLayerDescriptor' not in root_tag:
-                    logger.warning(f"SLD根标签不匹配: {root_tag}")
-                    return False
+                    logger.warning(f"SLD根标签不匹配: {root_tag}，但继续验证符号化器")
+                    # 不直接返回False，继续验证符号化器
             
             # 定义多种命名空间变体的符号化器标签
             geometry_tag_variants = {
@@ -355,36 +395,66 @@ class SLDStyleService:
             
             # 尝试查找任意一种命名空间变体的符号化器
             for tag in tag_variants:
-                symbolizers = root.findall(f'.//{tag}')
-                if len(symbolizers) > 0:
-                    logger.info(f"找到{geometry_type}符号化器: {tag}")
-                    return True
+                try:
+                    symbolizers = root.findall(f'.//{tag}')
+                    if len(symbolizers) > 0:
+                        logger.info(f"找到{geometry_type}符号化器: {tag} (共{len(symbolizers)}个)")
+                        return True
+                except Exception as e:
+                    logger.debug(f"查找符号化器 {tag} 时出错: {str(e)}")
+                    continue
             
             # 如果精确匹配失败，尝试使用通配符查找（忽略命名空间）
             # 使用XPath查找所有可能的符号化器
-            all_symbolizers = root.findall('.//*[local-name()="PointSymbolizer" or local-name()="LineSymbolizer" or local-name()="PolygonSymbolizer"]')
-            
-            if len(all_symbolizers) > 0:
-                # 检查找到的符号化器是否匹配几何类型
-                expected_local_name = {
-                    'point': 'PointSymbolizer',
-                    'line': 'LineSymbolizer',
-                    'polygon': 'PolygonSymbolizer'
-                }.get(geometry_type)
+            try:
+                all_symbolizers = root.findall('.//*[local-name()="PointSymbolizer" or local-name()="LineSymbolizer" or local-name()="PolygonSymbolizer"]')
                 
-                for symbolizer in all_symbolizers:
-                    if symbolizer.tag.endswith(expected_local_name) or symbolizer.tag == expected_local_name:
-                        logger.info(f"通过本地名称找到{geometry_type}符号化器")
-                        return True
+                if len(all_symbolizers) > 0:
+                    logger.info(f"找到 {len(all_symbolizers)} 个符号化器（通过local-name）")
+                    # 检查找到的符号化器是否匹配几何类型
+                    expected_local_name = {
+                        'point': 'PointSymbolizer',
+                        'line': 'LineSymbolizer',
+                        'polygon': 'PolygonSymbolizer'
+                    }.get(geometry_type)
+                    
+                    for symbolizer in all_symbolizers:
+                        local_name = symbolizer.tag.split('}')[-1] if '}' in symbolizer.tag else symbolizer.tag
+                        logger.debug(f"检查符号化器: {symbolizer.tag} (本地名称: {local_name})")
+                        if local_name == expected_local_name:
+                            logger.info(f"通过本地名称找到{geometry_type}符号化器: {symbolizer.tag}")
+                            return True
+            except Exception as e:
+                logger.debug(f"使用local-name查找符号化器时出错: {str(e)}")
             
+            # 最后尝试：遍历所有元素查找符号化器
+            try:
+                for elem in root.iter():
+                    tag_name = elem.tag.split('}')[-1] if '}' in elem.tag else elem.tag
+                    expected_tag = {
+                        'point': 'PointSymbolizer',
+                        'line': 'LineSymbolizer',
+                        'polygon': 'PolygonSymbolizer'
+                    }.get(geometry_type)
+                    
+                    if tag_name == expected_tag:
+                        logger.info(f"通过遍历找到{geometry_type}符号化器: {elem.tag}")
+                        return True
+            except Exception as e:
+                logger.debug(f"遍历元素查找符号化器时出错: {str(e)}")
+            
+            # 如果所有方法都失败，记录详细信息
             logger.warning(f"未找到{geometry_type}类型的符号化器")
+            logger.debug(f"根标签: {root_tag}")
+            logger.debug(f"所有子元素标签: {[elem.tag for elem in root.iter()][:20]}")
             return False
             
         except ET.ParseError as e:
             logger.error(f"SLD XML解析失败: {str(e)}")
+            logger.error(f"错误位置: 行 {e.position[0] if hasattr(e, 'position') else '未知'}")
             return False
         except Exception as e:
-            logger.error(f"SLD内容验证失败: {str(e)}")
+            logger.error(f"SLD内容验证失败: {str(e)}", exc_info=True)
             return False
     
     def _get_layer_info(self, layer_id):
