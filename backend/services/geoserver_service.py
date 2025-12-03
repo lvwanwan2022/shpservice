@@ -211,8 +211,15 @@ class GeoServerService:
             
             # 3. 根据文件名生成store名称
             filename = os.path.splitext(os.path.basename(corrected_path))[0]
-            clean_filename = re.sub(r'[^a-zA-Z0-9_\-\u4e00-\u9fff]', '_', filename)
+            # 将文件名（可能包含中文）编码为纯英文数字字符串
+            # 这样可以保留原始信息，同时确保文件名安全
+            clean_filename = self._encode_chinese_to_alphanumeric(filename)
+            # 如果编码后的文件名太长（超过200字符），截断并使用文件ID
+            if len(clean_filename) > 200:
+                clean_filename = f"{clean_filename[:180]}_{file_id[:8]}"
             generated_store_name = f"{clean_filename}_store"
+            print(f"原始文件名: {filename}")
+            print(f"编码后的文件名: {clean_filename}")
             print(f"自动生成的存储名称: {generated_store_name}")
             
             # 4. 获取工作空间ID
@@ -251,9 +258,22 @@ class GeoServerService:
             original_shp_name = self._get_shp_name_from_folder(extracted_folder)
             print(f"解压文件夹中的原始SHP文件名: {original_shp_name}")
             
+            # 如果SHP文件名和ZIP文件名不同，使用SHP文件名重新编码
+            # 这样可以确保编码后的名称与实际的SHP文件名对应
+            if original_shp_name != filename:
+                print(f"SHP文件名与ZIP文件名不同，使用SHP文件名重新编码")
+                clean_filename = self._encode_chinese_to_alphanumeric(original_shp_name)
+                # 如果编码后的文件名太长，截断并使用文件ID
+                if len(clean_filename) > 200:
+                    clean_filename = f"{clean_filename[:180]}_{file_id[:8]}"
+                generated_store_name = f"{clean_filename}_store"
+                print(f"重新编码后的文件名: {clean_filename}")
+                print(f"重新生成的存储名称: {generated_store_name}")
+            
             # 检查并重命名包含中文或特殊字符的文件
+            # 使用编码后的clean_filename作为安全名称
             safe_shp_name = self._ensure_safe_shapefile_names(extracted_folder, original_shp_name, clean_filename)
-            print(f"处理后的SHP文件名: {safe_shp_name}")
+            print(f"处理后的SHP文件名（编码后的安全名称）: {safe_shp_name}")
             
             # 7. 预清理：删除可能存在的同名datastore（GeoServer中的残留）
             print(f"预清理：检查并删除可能存在的同名datastore")
@@ -303,11 +323,30 @@ class GeoServerService:
             elif 'name' in featuretype_info:
                 feature_name = featuretype_info['name']
             
+            # 12.1.1. 统一使用安全的英文名称作为图层名称，原始名称作为标题
+            # 无论原始文件名是中文还是英文，都使用safe_shp_name作为图层名称，original_shp_name作为标题
+            original_feature_name = feature_name  # 保存GeoServer返回的原始名称，用于后续的GeoServer API调用
+            print(f"GeoServer返回的feature type名称: {feature_name}")
+            print(f"将使用安全名称作为图层名称: {safe_shp_name}")
+            print(f"将使用原始名称作为图层标题: {original_shp_name}")
+            
+            # 更新featuretype_info中的名称和标题（用于数据库存储）
+            if 'featureType' in featuretype_info:
+                featuretype_info['featureType']['name'] = safe_shp_name
+                featuretype_info['featureType']['title'] = original_shp_name
+            else:
+                featuretype_info['name'] = safe_shp_name
+                featuretype_info['title'] = original_shp_name
+            
+            # 注意：original_feature_name保持为GeoServer返回的原始值，用于后续的GeoServer API调用
+            # 因为GeoServer中的实际feature type名称可能还是原始文件名（可能包含中文或乱码）
+            
             # 12.2. 如果读取到了属性字段，更新GeoServer feature type的属性定义
-            if attributes and feature_name:
+            # 使用original_feature_name（可能包含乱码）来调用GeoServer API
+            if attributes and original_feature_name:
                 try:
-                    print(f"准备更新GeoServer feature type属性字段: {feature_name}")
-                    self._update_featuretype_attributes(generated_store_name, feature_name, attributes)
+                    print(f"准备更新GeoServer feature type属性字段: {original_feature_name}")
+                    self._update_featuretype_attributes(generated_store_name, original_feature_name, attributes)
                     # 将属性字段信息添加到featuretype_info中，以便后续保存到数据库
                     if 'featureType' in featuretype_info:
                         featuretype_info['featureType']['attributes'] = attributes
@@ -339,9 +378,12 @@ class GeoServerService:
             print(f"✅ 要素类型记录创建成功，featuretype_id={featuretype_id}")
             
             # 14.1. 如果指定了坐标系，通过REST API更新GeoServer中的feature type
-            if coordinate_system and feature_name:
+            # 使用original_feature_name（可能包含乱码）来调用GeoServer API
+            if coordinate_system and original_feature_name:
                 try:
-                    update_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{generated_store_name}/featuretypes/{feature_name}"
+                    # URL编码feature_name，以防包含特殊字符
+                    encoded_feature_name = quote(original_feature_name, safe='')
+                    update_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{generated_store_name}/featuretypes/{encoded_feature_name}"
                     
                     update_data = {
                         "featureType": {
@@ -365,9 +407,29 @@ class GeoServerService:
             layer_info = self._create_layer_in_db(featuretype_info, workspace_id, featuretype_id, coverage_id=None, file_id=file_id,  store_type='datastore')
             print(f"✅ 图层记录创建成功，layer_id={layer_info['id']}")
             
+            # 15.0. 更新GeoServer中的图层标题，使用原始文件名作为标题
+            # 无论原始文件名是中文还是英文，都统一更新标题，确保显示正确
+            if original_shp_name and original_feature_name:
+                print(f"准备更新GeoServer中的图层标题，使用原始文件名: {original_shp_name}")
+                try:
+                    # 使用original_feature_name（GeoServer返回的原始名称）来更新GeoServer
+                    # 因为GeoServer中的实际feature type名称可能还是原始文件名
+                    self._update_featuretype_and_layer_title(
+                        generated_store_name,
+                        original_feature_name,  # 使用GeoServer返回的原始名称
+                        safe_shp_name,  # 安全名称用于layer
+                        original_shp_name  # 原始文件名作为标题（可能是中文或英文）
+                    )
+                    print(f"✅ GeoServer图层标题更新完成")
+                except Exception as e:
+                    print(f"⚠️ 更新GeoServer图层标题时出错: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+            
             # 15.1. 重新获取featuretype_info以获取完整的边界框信息（用于生成预览URL）
+            # 使用original_feature_name（可能包含乱码）来获取信息
             try:
-                updated_featuretype_info = self._get_featuretype_info(generated_store_name, feature_name)
+                updated_featuretype_info = self._get_featuretype_info(generated_store_name, original_feature_name)
                 print(f"✅ 重新获取featuretype_info成功，包含边界框信息")
             except Exception as e:
                 print(f"⚠️ 重新获取featuretype_info失败: {str(e)}，使用原始featuretype_info")
@@ -385,11 +447,15 @@ class GeoServerService:
                 "wfs_url": layer_info['wfs_url'],
                 "preview_url": preview_url,
                 "layer_info": layer_info,
-                "filename": filename,
+                "filename": filename,  # ZIP文件名
+                "original_shp_name": original_shp_name,  # 原始SHP文件名（可能包含中文）
+                "encoded_shp_name": safe_shp_name,  # 编码后的SHP文件名（纯英文数字）
                 "coordinate_system": coordinate_system  # 返回使用的坐标系
             }
             
             print(f"✅ Shapefile服务发布成功: {result['layer_name']}")
+            print(f"   原始文件名: {original_shp_name}")
+            print(f"   编码后文件名: {safe_shp_name}")
             return result
             
         except Exception as e:
@@ -1482,6 +1548,72 @@ class GeoServerService:
                 shutil.rmtree(extracted_folder)
             raise Exception(f"Shapefile文件解压或验证失败: {str(e)}")
     
+    def _encode_chinese_to_alphanumeric(self, text):
+        """将中文字符串编码为纯英文数字字符串（双向可逆）
+        
+        使用UTF-8编码转十六进制的方式，可以将任何字符串（包括中文）
+        转换为纯英文数字字符串，并且可以完全还原。
+        
+        Args:
+            text: 原始字符串（可能包含中文）
+            
+        Returns:
+            str: 编码后的纯英文数字字符串
+        """
+        if not text:
+            return text
+        
+        # 将字符串编码为UTF-8字节，然后转为十六进制字符串
+        # 使用小写字母，确保是纯英文数字
+        encoded = text.encode('utf-8').hex()
+        return encoded
+    
+    def _decode_alphanumeric_to_chinese(self, encoded_text):
+        """将编码后的英文数字字符串解码回原始字符串（双向可逆）
+        
+        这个方法可以将之前通过_encode_chinese_to_alphanumeric编码的字符串
+        完全还原回原始的中文字符串。
+        
+        Args:
+            encoded_text: 编码后的纯英文数字字符串（十六进制格式）
+            
+        Returns:
+            str: 解码后的原始字符串
+            
+        Example:
+            >>> encoded = service._encode_chinese_to_alphanumeric("大英县")
+            >>> decoded = service._decode_alphanumeric_to_chinese(encoded)
+            >>> print(decoded)  # 输出: "大英县"
+        """
+        if not encoded_text:
+            return encoded_text
+        
+        try:
+            # 将十六进制字符串转为字节，然后解码为UTF-8字符串
+            decoded = bytes.fromhex(encoded_text).decode('utf-8')
+            return decoded
+        except (ValueError, UnicodeDecodeError) as e:
+            # 如果解码失败，可能是：
+            # 1. 不是编码后的字符串（本身就是普通字符串）
+            # 2. 编码格式不正确
+            # 返回原始字符串，不抛出异常
+            print(f"⚠️ 解码失败，返回原始字符串: {str(e)}")
+            return encoded_text
+    
+    def decode_layer_name_to_original(self, encoded_layer_name):
+        """从编码后的图层名称还原原始文件名
+        
+        这是一个便捷方法，用于从编码后的图层名称（如从数据库读取）
+        还原回原始的中文文件名。
+        
+        Args:
+            encoded_layer_name: 编码后的图层名称（纯英文数字字符串）
+            
+        Returns:
+            str: 原始文件名（可能包含中文）
+        """
+        return self._decode_alphanumeric_to_chinese(encoded_layer_name)
+    
     def _get_shp_name_from_folder(self, folder_path):
         """从解压的文件夹中获取SHP文件名
         
@@ -1501,7 +1633,8 @@ class GeoServerService:
     def _ensure_safe_shapefile_names(self, folder_path, original_name, safe_base_name):
         """确保Shapefile文件名是GeoServer友好的
         
-        如果原始文件名包含中文或特殊字符，就重命名为安全的英文名称
+        无论原始文件名是中文还是英文，都统一重命名为安全的英文名称
+        这样可以避免GeoServer中的图层名称出现乱码问题
         
         Args:
             folder_path: 解压后的文件夹路径
@@ -1511,19 +1644,15 @@ class GeoServerService:
         Returns:
             str: 最终的SHP文件名（不含扩展名）
         """
-        import re
         import os
         
-        # 检查原始文件名是否包含中文或特殊字符
-        has_chinese = re.search(r'[\u4e00-\u9fff]', original_name)
-        has_special_chars = any(char in original_name for char in ['(', ')', ' ', '（', '）', '-', '+', '=', '@', '#', '$', '%', '^', '&', '*'])
-        
-        if not (has_chinese or has_special_chars):
-            print(f"文件名安全，无需重命名: {original_name}")
+        # 如果原始名称已经是安全名称，则不需要重命名
+        if original_name == safe_base_name:
+            print(f"文件名已经是安全名称，无需重命名: {original_name}")
             return original_name
         
-        print(f"检测到不安全的文件名，需要重命名: {original_name}")
-        print(f"使用安全名称: {safe_base_name}")
+        print(f"统一重命名文件: {original_name} -> {safe_base_name}")
+        print(f"原始文件名将作为图层标题保留")
         
         # 需要重命名的文件扩展名
         extensions = ['.shp', '.shx', '.dbf', '.prj', '.cpg', '.sbn', '.sbx', '.qix']
@@ -2540,6 +2669,168 @@ class GeoServerService:
         
         print(f"成功获取要素类型信息: {featuretype_name}")
         return response.json()
+    
+    def _update_featuretype_and_layer_title(self, store_name, feature_name, safe_layer_name, original_title):
+        """更新GeoServer中feature type和layer的标题，使用原始中文名称
+        
+        Args:
+            store_name: 数据存储名称
+            feature_name: 当前feature type名称（可能包含乱码）
+            safe_layer_name: 安全的图层名称（英文）
+            original_title: 原始的中文标题
+            
+        Returns:
+            bool: 更新是否成功
+        """
+        try:
+            # 确保original_title是UTF-8编码的字符串
+            if isinstance(original_title, bytes):
+                try:
+                    original_title = original_title.decode('utf-8')
+                except:
+                    try:
+                        original_title = original_title.decode('gbk')
+                    except:
+                        original_title = original_title.decode('utf-8', errors='ignore')
+            
+            print(f"准备更新feature type和layer标题: feature_name={feature_name}, safe_layer_name={safe_layer_name}, original_title={original_title}")
+            
+            # 使用实际的feature_name来更新标题（即使它包含中文，我们也只更新标题，不重命名）
+            # 因为重命名feature type可能会很复杂，而且图层名称在GeoServer中显示时主要看title
+            
+            # 1. 更新feature type的标题
+            update_ft_success = self._update_featuretype_title_only(store_name, feature_name, original_title)
+            
+            # 2. 更新layer的标题（使用实际的feature_name，因为layer名称通常与feature type名称相同）
+            # 先尝试使用feature_name，如果失败则使用safe_layer_name
+            full_layer_name = f"{self.workspace}:{feature_name}"
+            update_layer_success = self._update_layer_title_only(full_layer_name, original_title)
+            
+            # 如果使用feature_name失败，尝试使用safe_layer_name
+            if not update_layer_success:
+                print(f"使用feature_name更新layer标题失败，尝试使用safe_layer_name")
+                full_layer_name = f"{self.workspace}:{safe_layer_name}"
+                update_layer_success = self._update_layer_title_only(full_layer_name, original_title)
+            
+            return update_ft_success and update_layer_success
+            
+        except Exception as e:
+            print(f"⚠️ 更新feature type和layer标题时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    def _update_featuretype_title_only(self, store_name, feature_name, title):
+        """仅更新feature type的标题
+        
+        Args:
+            store_name: 数据存储名称
+            feature_name: feature type名称
+            title: 新的标题
+            
+        Returns:
+            bool: 更新是否成功
+        """
+        try:
+            # 获取当前的feature type信息
+            current_ft_info = self._get_featuretype_info(store_name, feature_name)
+            ft_data = current_ft_info.get('featureType', current_ft_info)
+            
+            # 准备更新数据
+            update_data = {
+                "featureType": {
+                    "name": feature_name,
+                    "nativeName": ft_data.get('nativeName', feature_name),
+                    "title": title,  # 使用UTF-8编码的中文标题
+                    "abstract": ft_data.get('abstract', ''),
+                    "enabled": ft_data.get('enabled', True),
+                    "srs": ft_data.get('srs', 'EPSG:4326'),
+                    "nativeCRS": ft_data.get('nativeCRS', ft_data.get('srs', 'EPSG:4326')),
+                    "projectionPolicy": ft_data.get('projectionPolicy', 'REPROJECT_TO_DECLARED')
+                }
+            }
+            
+            # 更新feature type
+            update_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}/featuretypes/{feature_name}"
+            response = requests.put(
+                update_url,
+                json=update_data,
+                auth=self.auth,
+                headers={'Content-Type': 'application/json; charset=utf-8'},
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                print(f"✅ 成功更新feature type标题: {title}")
+                return True
+            else:
+                print(f"⚠️ 更新feature type标题失败: {response.status_code} - {response.text}")
+                return False
+                
+        except Exception as e:
+            print(f"⚠️ 更新feature type标题时出错: {str(e)}")
+            return False
+    
+    def _update_layer_title_only(self, full_layer_name, title):
+        """仅更新layer的标题
+        
+        Args:
+            full_layer_name: 完整的图层名称（workspace:layer）
+            title: 新的标题
+            
+        Returns:
+            bool: 更新是否成功
+        """
+        try:
+            # 获取当前的layer信息
+            layer_url = f"{self.rest_url}/layers/{full_layer_name}.json"
+            response = requests.get(layer_url, auth=self.auth)
+            
+            if response.status_code != 200:
+                print(f"⚠️ 获取layer信息失败: {response.status_code}")
+                return False
+            
+            layer_data = response.json()
+            layer_info = layer_data.get('layer', layer_data)
+            
+            # 准备更新数据
+            update_data = {
+                "layer": {
+                    "name": layer_info.get('name'),
+                    "path": layer_info.get('path', ''),
+                    "type": layer_info.get('type', 'VECTOR'),
+                    "defaultStyle": layer_info.get('defaultStyle', {}),
+                    "styles": layer_info.get('styles', {}),
+                    "resource": layer_info.get('resource', {}),
+                    "title": title,  # 使用UTF-8编码的中文标题
+                    "abstract": layer_info.get('abstract', ''),
+                    "enabled": layer_info.get('enabled', True),
+                    "queryable": layer_info.get('queryable', True),
+                    "opaque": layer_info.get('opaque', False),
+                    "attribution": layer_info.get('attribution', {})
+                }
+            }
+            
+            # 更新layer
+            update_url = f"{self.rest_url}/layers/{full_layer_name}"
+            response = requests.put(
+                update_url,
+                json=update_data,
+                auth=self.auth,
+                headers={'Content-Type': 'application/json; charset=utf-8'},
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                print(f"✅ 成功更新layer标题: {title}")
+                return True
+            else:
+                print(f"⚠️ 更新layer标题失败: {response.status_code} - {response.text}")
+                return False
+                
+        except Exception as e:
+            print(f"⚠️ 更新layer标题时出错: {str(e)}")
+            return False
     
     def _generate_preview_url(self, layer_name, featuretype_info=None, width=768, height=384):
         """生成图层预览URL
