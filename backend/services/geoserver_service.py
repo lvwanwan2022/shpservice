@@ -258,9 +258,22 @@ class GeoServerService:
             original_shp_name = self._get_shp_name_from_folder(extracted_folder)
             print(f"解压文件夹中的原始SHP文件名: {original_shp_name}")
             
+            # 如果SHP文件名和ZIP文件名不同，使用SHP文件名重新编码
+            # 这样可以确保编码后的名称与实际的SHP文件名对应
+            if original_shp_name != filename:
+                print(f"SHP文件名与ZIP文件名不同，使用SHP文件名重新编码")
+                clean_filename = self._encode_chinese_to_alphanumeric(original_shp_name)
+                # 如果编码后的文件名太长，截断并使用文件ID
+                if len(clean_filename) > 200:
+                    clean_filename = f"{clean_filename[:180]}_{file_id[:8]}"
+                generated_store_name = f"{clean_filename}_store"
+                print(f"重新编码后的文件名: {clean_filename}")
+                print(f"重新生成的存储名称: {generated_store_name}")
+            
             # 检查并重命名包含中文或特殊字符的文件
+            # 使用编码后的clean_filename作为安全名称
             safe_shp_name = self._ensure_safe_shapefile_names(extracted_folder, original_shp_name, clean_filename)
-            print(f"处理后的SHP文件名: {safe_shp_name}")
+            print(f"处理后的SHP文件名（编码后的安全名称）: {safe_shp_name}")
             
             # 7. 预清理：删除可能存在的同名datastore（GeoServer中的残留）
             print(f"预清理：检查并删除可能存在的同名datastore")
@@ -434,11 +447,15 @@ class GeoServerService:
                 "wfs_url": layer_info['wfs_url'],
                 "preview_url": preview_url,
                 "layer_info": layer_info,
-                "filename": filename,
+                "filename": filename,  # ZIP文件名
+                "original_shp_name": original_shp_name,  # 原始SHP文件名（可能包含中文）
+                "encoded_shp_name": safe_shp_name,  # 编码后的SHP文件名（纯英文数字）
                 "coordinate_system": coordinate_system  # 返回使用的坐标系
             }
             
             print(f"✅ Shapefile服务发布成功: {result['layer_name']}")
+            print(f"   原始文件名: {original_shp_name}")
+            print(f"   编码后文件名: {safe_shp_name}")
             return result
             
         except Exception as e:
@@ -1554,11 +1571,19 @@ class GeoServerService:
     def _decode_alphanumeric_to_chinese(self, encoded_text):
         """将编码后的英文数字字符串解码回原始字符串（双向可逆）
         
+        这个方法可以将之前通过_encode_chinese_to_alphanumeric编码的字符串
+        完全还原回原始的中文字符串。
+        
         Args:
-            encoded_text: 编码后的纯英文数字字符串
+            encoded_text: 编码后的纯英文数字字符串（十六进制格式）
             
         Returns:
             str: 解码后的原始字符串
+            
+        Example:
+            >>> encoded = service._encode_chinese_to_alphanumeric("大英县")
+            >>> decoded = service._decode_alphanumeric_to_chinese(encoded)
+            >>> print(decoded)  # 输出: "大英县"
         """
         if not encoded_text:
             return encoded_text
@@ -1568,9 +1593,26 @@ class GeoServerService:
             decoded = bytes.fromhex(encoded_text).decode('utf-8')
             return decoded
         except (ValueError, UnicodeDecodeError) as e:
-            # 如果解码失败，返回原始字符串（可能不是编码后的字符串）
+            # 如果解码失败，可能是：
+            # 1. 不是编码后的字符串（本身就是普通字符串）
+            # 2. 编码格式不正确
+            # 返回原始字符串，不抛出异常
             print(f"⚠️ 解码失败，返回原始字符串: {str(e)}")
             return encoded_text
+    
+    def decode_layer_name_to_original(self, encoded_layer_name):
+        """从编码后的图层名称还原原始文件名
+        
+        这是一个便捷方法，用于从编码后的图层名称（如从数据库读取）
+        还原回原始的中文文件名。
+        
+        Args:
+            encoded_layer_name: 编码后的图层名称（纯英文数字字符串）
+            
+        Returns:
+            str: 原始文件名（可能包含中文）
+        """
+        return self._decode_alphanumeric_to_chinese(encoded_layer_name)
     
     def _get_shp_name_from_folder(self, folder_path):
         """从解压的文件夹中获取SHP文件名
