@@ -1481,22 +1481,29 @@ class GeoServerService:
     def _upload_extracted_shapefile_to_geoserver(self, folder_path, store_name):
         """上传解压后的Shapefile文件到GeoServer
         
-        直接上传.shp文件，GeoServer会自动找到同目录下的配套文件
+        将所有Shapefile配套文件打包成ZIP后上传，确保GeoServer能读取所有属性字段。
+        这是关键修复：之前只上传.shp文件导致属性字段丢失。
         
         Args:
             folder_path: 解压后的文件夹路径
             store_name: 数据存储名称
         """
         import os
+        import zipfile
+        import tempfile
         
         print(f"准备上传解压后的Shapefile到GeoServer: {folder_path}")
         
-        # 找到.shp文件
+        # 找到.shp文件及其所在目录
         shp_file_path = None
+        shp_dir = None
+        shp_base_name = None
         for root, dirs, files in os.walk(folder_path):
             for file in files:
                 if file.lower().endswith('.shp'):
                     shp_file_path = os.path.join(root, file)
+                    shp_dir = root
+                    shp_base_name = os.path.splitext(file)[0]
                     break
             if shp_file_path:
                 break
@@ -1505,17 +1512,51 @@ class GeoServerService:
             raise Exception(f"在文件夹中未找到.shp文件: {folder_path}")
         
         print(f"找到SHP文件: {shp_file_path}")
-        print(f"文件大小: {os.path.getsize(shp_file_path)} 字节")
+        print(f"SHP文件所在目录: {shp_dir}")
+        print(f"SHP文件基础名称: {shp_base_name}")
         
-        # 上传.shp文件到GeoServer
-        # GeoServer会自动查找同目录下的.dbf, .shx, .prj等配套文件
-        datastore_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}/file.shp"
-        headers = {'Content-Type': 'application/octet-stream'}
+        # 收集所有Shapefile配套文件（.shp, .dbf, .shx, .prj, .cpg等）
+        shapefile_extensions = ['.shp', '.dbf', '.shx', '.prj', '.cpg', '.sbn', '.sbx', '.fbn', '.fbx', '.ain', '.aih', '.ixs', '.mxs', '.atx', '.shp.xml']
+        shapefile_files = []
         
-        print(f"上传URL: {datastore_url}")
+        for ext in shapefile_extensions:
+            file_path = os.path.join(shp_dir, f"{shp_base_name}{ext}")
+            if os.path.exists(file_path):
+                shapefile_files.append((file_path, f"{shp_base_name}{ext}"))
+                print(f"找到配套文件: {shp_base_name}{ext}")
         
+        if not shapefile_files:
+            raise Exception(f"未找到Shapefile配套文件: {shp_dir}")
+        
+        print(f"共找到 {len(shapefile_files)} 个Shapefile文件")
+        
+        # 将所有配套文件打包成临时ZIP文件
+        temp_zip = None
         try:
-            with open(shp_file_path, 'rb') as f:
+            # 创建临时ZIP文件
+            temp_zip_fd, temp_zip_path = tempfile.mkstemp(suffix='.zip', prefix='shp_upload_')
+            temp_zip = temp_zip_path
+            os.close(temp_zip_fd)
+            
+            print(f"创建临时ZIP文件: {temp_zip_path}")
+            
+            # 将所有文件添加到ZIP中
+            with zipfile.ZipFile(temp_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for file_path, file_name in shapefile_files:
+                    zipf.write(file_path, file_name)
+                    print(f"添加到ZIP: {file_name} ({os.path.getsize(file_path)} 字节)")
+            
+            zip_size = os.path.getsize(temp_zip_path)
+            print(f"临时ZIP文件大小: {zip_size} 字节")
+            
+            # 上传ZIP文件到GeoServer
+            # 使用file.shp端点，但上传ZIP格式，GeoServer会自动识别并解压
+            datastore_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}/file.shp"
+            headers = {'Content-Type': 'application/zip'}
+            
+            print(f"上传ZIP到GeoServer URL: {datastore_url}")
+            
+            with open(temp_zip_path, 'rb') as f:
                 response = requests.put(
                     datastore_url,
                     data=f,
@@ -1524,22 +1565,30 @@ class GeoServerService:
                     timeout=300  # 5分钟超时
                 )
             
-            print(f"Shapefile上传响应状态码: {response.status_code}")
+            print(f"Shapefile ZIP上传响应状态码: {response.status_code}")
             if response.text:
                 print(f"响应内容: {response.text[:500]}...")
             
             if response.status_code not in [201, 200]:
-                raise Exception(f"上传Shapefile失败: HTTP {response.status_code} - {response.text}")
+                raise Exception(f"上传Shapefile ZIP失败: HTTP {response.status_code} - {response.text}")
             
-            print("✅ Shapefile上传成功")
+            print("✅ Shapefile ZIP上传成功，GeoServer已自动解压并识别所有属性字段")
             
         except requests.exceptions.Timeout:
-            raise Exception("上传Shapefile超时，请检查文件大小和网络连接")
+            raise Exception("上传Shapefile ZIP超时，请检查文件大小和网络连接")
         except requests.exceptions.RequestException as e:
-            raise Exception(f"上传Shapefile网络错误: {str(e)}")
+            raise Exception(f"上传Shapefile ZIP网络错误: {str(e)}")
         except Exception as e:
-            print(f"❌ Shapefile上传失败: {str(e)}")
+            print(f"❌ Shapefile ZIP上传失败: {str(e)}")
             raise e
+        finally:
+            # 清理临时ZIP文件
+            if temp_zip and os.path.exists(temp_zip):
+                try:
+                    os.remove(temp_zip)
+                    print(f"✅ 清理临时ZIP文件: {temp_zip}")
+                except Exception as cleanup_error:
+                    print(f"⚠️ 清理临时ZIP文件失败: {str(cleanup_error)}")
     
     def _upload_geotiff_to_geoserver(self, tif_path, store_name):
         """上传GeoTIFF到GeoServer，根据REST API文档优化
