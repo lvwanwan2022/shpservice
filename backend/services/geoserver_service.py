@@ -365,25 +365,13 @@ class GeoServerService:
             layer_info = self._create_layer_in_db(featuretype_info, workspace_id, featuretype_id, coverage_id=None, file_id=file_id,  store_type='datastore')
             print(f"✅ 图层记录创建成功，layer_id={layer_info['id']}")
             
-            # 15.1. 重新获取featuretype_info以获取完整的边界框信息（用于生成预览URL）
-            try:
-                updated_featuretype_info = self._get_featuretype_info(generated_store_name, feature_name)
-                print(f"✅ 重新获取featuretype_info成功，包含边界框信息")
-            except Exception as e:
-                print(f"⚠️ 重新获取featuretype_info失败: {str(e)}，使用原始featuretype_info")
-                updated_featuretype_info = featuretype_info
-            
-            # 16. 生成预览URL（使用实际的坐标系和边界框）
-            preview_url = self._generate_preview_url(layer_info['full_name'], updated_featuretype_info)
-            
-            # 17. 返回服务信息
+            # 16. 返回服务信息
             result = {
                 "success": True,
                 "store_name": generated_store_name,
                 "layer_name": layer_info['full_name'],
                 "wms_url": layer_info['wms_url'],
                 "wfs_url": layer_info['wfs_url'],
-                "preview_url": preview_url,
                 "layer_info": layer_info,
                 "filename": filename,
                 "coordinate_system": coordinate_system  # 返回使用的坐标系
@@ -865,14 +853,6 @@ class GeoServerService:
         layer_info = self._create_layer_in_db(featuretype_info, workspace_id, featuretype_id,coverage_id=None, file_id=file_id, store_type='datastore')
         print(f"✅ 图层记录创建成功，layer_id={layer_info['id']}")
         
-        # 4.1. 重新获取featuretype_info以获取完整的边界框信息（用于生成预览URL）
-        try:
-            updated_featuretype_info = self._get_featuretype_info(store_name, table_name)
-            print(f"✅ 重新获取featuretype_info成功，包含边界框信息")
-        except Exception as e:
-            print(f"⚠️ 重新获取featuretype_info失败: {str(e)}，使用原始featuretype_info")
-            updated_featuretype_info = featuretype_info
-        
         # 5. 验证发布结果
         print("--- 验证发布结果 ---")
         full_layer_name = layer_info['full_name']
@@ -881,10 +861,7 @@ class GeoServerService:
         else:
             print(f"⚠️ 图层验证失败，但将继续: {full_layer_name}")
         
-        # 6. 生成预览URL（使用实际的坐标系和边界框）
-        preview_url = self._generate_preview_url(full_layer_name, updated_featuretype_info)
-        
-        # 7. 构建返回结果
+        # 6. 构建返回结果
         result = {
             "success": True,
             "is_mixed": False,
@@ -892,12 +869,12 @@ class GeoServerService:
             "layer_name": full_layer_name,
             "wms_url": layer_info['wms_url'],
             "wfs_url": layer_info['wfs_url'],
-            "preview_url": preview_url,
             "layer_info": layer_info,
             "postgis_table": table_name,
             "filename": filename,
             "geometry_type": postgis_result['feature_info']['geometry_type'],
-            "feature_count": postgis_result['feature_info']['feature_count']
+            "feature_count": postgis_result['feature_info']['feature_count'],
+            "preview_url": f"{self.url}/wms?service=WMS&version=1.1.0&request=GetMap&layers={full_layer_name}&styles=&bbox=-180,-90,180,90&width=768&height=384&srs=EPSG:4326&format=image/png"
         }
         
         print(f"   - 存储名称: {result['store_name']}")
@@ -2540,120 +2517,6 @@ class GeoServerService:
         
         print(f"成功获取要素类型信息: {featuretype_name}")
         return response.json()
-    
-    def _generate_preview_url(self, layer_name, featuretype_info=None, width=768, height=384):
-        """生成图层预览URL
-        
-        根据图层的实际坐标系和边界框生成正确的预览URL，避免渲染错误。
-        
-        Args:
-            layer_name: 图层完整名称（workspace:layer）
-            featuretype_info: 要素类型信息（可选，如果不提供则使用默认值）
-            width: 预览图片宽度，默认768
-            height: 预览图片高度，默认384
-            
-        Returns:
-            预览URL字符串
-        """
-        try:
-            # 提取坐标系和边界框信息
-            srs = 'EPSG:4326'  # 默认坐标系
-            bbox = '-180,-90,180,90'  # 默认全球范围
-            use_latlon_bbox = False
-            
-            if featuretype_info:
-                # 从featuretype_info中提取信息
-                if 'featureType' in featuretype_info:
-                    ft_data = featuretype_info['featureType']
-                else:
-                    ft_data = featuretype_info
-                
-                # 获取坐标系
-                srs = ft_data.get('srs') or ft_data.get('nativeCRS') or 'EPSG:4326'
-                
-                # 优先使用latLonBoundingBox（WGS84坐标系），因为它更适合预览
-                bbox_data = None
-                if 'latLonBoundingBox' in ft_data:
-                    bbox_data = ft_data['latLonBoundingBox']
-                    use_latlon_bbox = True
-                    srs = 'EPSG:4326'  # 使用WGS84用于预览
-                elif 'nativeBoundingBox' in ft_data:
-                    bbox_data = ft_data['nativeBoundingBox']
-                    # 如果native坐标系是4326，也可以使用
-                    if srs == 'EPSG:4326':
-                        use_latlon_bbox = True
-                
-                if bbox_data:
-                    if isinstance(bbox_data, dict):
-                        minx = bbox_data.get('minx')
-                        miny = bbox_data.get('miny')
-                        maxx = bbox_data.get('maxx')
-                        maxy = bbox_data.get('maxy')
-                        
-                        # 验证边界框值是否有效
-                        if (minx is not None and miny is not None and 
-                            maxx is not None and maxy is not None and
-                            minx != maxx and miny != maxy and
-                            -180 <= minx <= 180 and -90 <= miny <= 90 and
-                            -180 <= maxx <= 180 and -90 <= maxy <= 90 and
-                            minx < maxx and miny < maxy):
-                            # 扩展边界框10%以提供更好的预览效果
-                            width_bbox = maxx - minx
-                            height_bbox = maxy - miny
-                            padding_x = width_bbox * 0.1
-                            padding_y = height_bbox * 0.1
-                            minx = max(-180, minx - padding_x)
-                            miny = max(-90, miny - padding_y)
-                            maxx = min(180, maxx + padding_x)
-                            maxy = min(90, maxy + padding_y)
-                            bbox = f"{minx},{miny},{maxx},{maxy}"
-                            print(f"使用有效的边界框: bbox={bbox}, srs={srs}")
-                        else:
-                            print(f"⚠️ 边界框值无效，使用默认边界框: minx={minx}, miny={miny}, maxx={maxx}, maxy={maxy}")
-                    elif isinstance(bbox_data, list) and len(bbox_data) >= 4:
-                        minx, miny, maxx, maxy = bbox_data[0], bbox_data[1], bbox_data[2], bbox_data[3]
-                        # 验证边界框值
-                        if (minx != maxx and miny != maxy and
-                            -180 <= minx <= 180 and -90 <= miny <= 90 and
-                            -180 <= maxx <= 180 and -90 <= maxy <= 90 and
-                            minx < maxx and miny < maxy):
-                            # 扩展边界框10%
-                            width_bbox = maxx - minx
-                            height_bbox = maxy - miny
-                            padding_x = width_bbox * 0.1
-                            padding_y = height_bbox * 0.1
-                            minx = max(-180, minx - padding_x)
-                            miny = max(-90, miny - padding_y)
-                            maxx = min(180, maxx + padding_x)
-                            maxy = min(90, maxy + padding_y)
-                            bbox = f"{minx},{miny},{maxx},{maxy}"
-                            if not use_latlon_bbox:
-                                srs = 'EPSG:4326'  # 如果使用nativeBoundingBox但坐标系是4326，使用4326
-                            print(f"使用有效的边界框: bbox={bbox}, srs={srs}")
-                        else:
-                            print(f"⚠️ 边界框值无效，使用默认边界框")
-            
-            # 生成预览URL（使用WMS 1.3.0，支持CRS参数）
-            # 注意：WMS 1.3.0中bbox的顺序是minx,miny,maxx,maxy，CRS参数用于指定坐标系
-            preview_url = (
-                f"{self.url}/wms?service=WMS&version=1.3.0&request=GetMap&"
-                f"layers={layer_name}&styles=&bbox={bbox}&"
-                f"width={width}&height={height}&CRS={srs}&format=image/png&transparent=true"
-            )
-            
-            print(f"生成的预览URL: {preview_url}")
-            return preview_url
-            
-        except Exception as e:
-            print(f"⚠️ 生成预览URL时出错: {str(e)}，使用默认预览URL")
-            import traceback
-            traceback.print_exc()
-            # 如果出错，返回默认预览URL
-            return (
-                f"{self.url}/wms?service=WMS&version=1.3.0&request=GetMap&"
-                f"layers={layer_name}&styles=&bbox=-180,-90,180,90&"
-                f"width={width}&height={height}&CRS=EPSG:4326&format=image/png&transparent=true"
-            )
     
     def _get_coverage_info(self, store_name):
         """获取覆盖信息"""
