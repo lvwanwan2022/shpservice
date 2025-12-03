@@ -211,13 +211,15 @@ class GeoServerService:
             
             # 3. 根据文件名生成store名称
             filename = os.path.splitext(os.path.basename(corrected_path))[0]
-            # 移除所有非ASCII字符（包括中文），只保留字母、数字、下划线和连字符
-            # 这样确保生成的是纯英文的安全文件名
-            clean_filename = re.sub(r'[^a-zA-Z0-9_\-]', '_', filename)
-            # 如果清理后的文件名为空或只包含特殊字符，使用默认名称
-            if not clean_filename or clean_filename.strip('_') == '':
-                clean_filename = f"shapefile_{file_id[:8]}"
+            # 将文件名（可能包含中文）编码为纯英文数字字符串
+            # 这样可以保留原始信息，同时确保文件名安全
+            clean_filename = self._encode_chinese_to_alphanumeric(filename)
+            # 如果编码后的文件名太长（超过200字符），截断并使用文件ID
+            if len(clean_filename) > 200:
+                clean_filename = f"{clean_filename[:180]}_{file_id[:8]}"
             generated_store_name = f"{clean_filename}_store"
+            print(f"原始文件名: {filename}")
+            print(f"编码后的文件名: {clean_filename}")
             print(f"自动生成的存储名称: {generated_store_name}")
             
             # 4. 获取工作空间ID
@@ -1528,6 +1530,47 @@ class GeoServerService:
                 import shutil
                 shutil.rmtree(extracted_folder)
             raise Exception(f"Shapefile文件解压或验证失败: {str(e)}")
+    
+    def _encode_chinese_to_alphanumeric(self, text):
+        """将中文字符串编码为纯英文数字字符串（双向可逆）
+        
+        使用UTF-8编码转十六进制的方式，可以将任何字符串（包括中文）
+        转换为纯英文数字字符串，并且可以完全还原。
+        
+        Args:
+            text: 原始字符串（可能包含中文）
+            
+        Returns:
+            str: 编码后的纯英文数字字符串
+        """
+        if not text:
+            return text
+        
+        # 将字符串编码为UTF-8字节，然后转为十六进制字符串
+        # 使用小写字母，确保是纯英文数字
+        encoded = text.encode('utf-8').hex()
+        return encoded
+    
+    def _decode_alphanumeric_to_chinese(self, encoded_text):
+        """将编码后的英文数字字符串解码回原始字符串（双向可逆）
+        
+        Args:
+            encoded_text: 编码后的纯英文数字字符串
+            
+        Returns:
+            str: 解码后的原始字符串
+        """
+        if not encoded_text:
+            return encoded_text
+        
+        try:
+            # 将十六进制字符串转为字节，然后解码为UTF-8字符串
+            decoded = bytes.fromhex(encoded_text).decode('utf-8')
+            return decoded
+        except (ValueError, UnicodeDecodeError) as e:
+            # 如果解码失败，返回原始字符串（可能不是编码后的字符串）
+            print(f"⚠️ 解码失败，返回原始字符串: {str(e)}")
+            return encoded_text
     
     def _get_shp_name_from_folder(self, folder_path):
         """从解压的文件夹中获取SHP文件名
