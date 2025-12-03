@@ -271,12 +271,60 @@ class GeoServerService:
             self._upload_extracted_shapefile_to_geoserver(extracted_folder, generated_store_name)
             print(f"✅ Shapefile文件已上传到GeoServer")
             
+            # 10.1. 从Shapefile中读取属性字段信息
+            shp_file_path = None
+            for root, dirs, files in os.walk(extracted_folder):
+                for file in files:
+                    if file.lower().endswith('.shp'):
+                        shp_file_path = os.path.join(root, file)
+                        break
+                if shp_file_path:
+                    break
+            
+            attributes = []
+            if shp_file_path:
+                attributes = self._read_shapefile_attributes(shp_file_path)
+                if attributes:
+                    print(f"✅ 成功读取 {len(attributes)} 个属性字段")
+                else:
+                    print(f"⚠️ 未能读取属性字段，但继续发布流程")
+            
             # 11. 等待GeoServer处理
             time.sleep(3)
             
             # 12. 获取要素类型信息（让GeoServer自动确定要素类型名称）
             featuretype_info = self._get_featuretype_info(generated_store_name)
             print(f"✅ 获取要素类型信息成功")
+            
+            # 12.1. 提取feature type名称
+            feature_name = None
+            if 'featureType' in featuretype_info:
+                feature_name = featuretype_info['featureType'].get('name') or featuretype_info['featureType'].get('nativeName')
+            elif 'name' in featuretype_info:
+                feature_name = featuretype_info['name']
+            
+            # 12.2. 如果读取到了属性字段，更新GeoServer feature type的属性定义
+            if attributes and feature_name:
+                try:
+                    print(f"准备更新GeoServer feature type属性字段: {feature_name}")
+                    self._update_featuretype_attributes(generated_store_name, feature_name, attributes)
+                    # 将属性字段信息添加到featuretype_info中，以便后续保存到数据库
+                    if 'featureType' in featuretype_info:
+                        featuretype_info['featureType']['attributes'] = attributes
+                    else:
+                        featuretype_info['attributes'] = attributes
+                    print(f"✅ 属性字段已更新到GeoServer和featuretype_info")
+                except Exception as e:
+                    print(f"⚠️ 更新GeoServer feature type属性字段时出错: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+            elif attributes and not feature_name:
+                print(f"⚠️ 无法确定feature type名称，跳过属性字段更新到GeoServer，但会保存到数据库")
+                # 仍然将属性字段信息添加到featuretype_info中，以便保存到数据库
+                if 'featureType' in featuretype_info:
+                    featuretype_info['featureType']['attributes'] = attributes
+                else:
+                    featuretype_info['attributes'] = attributes
             
             # 🔥 13. 如果指定了坐标系，覆盖要素类型的坐标系信息
             if coordinate_system:
@@ -286,14 +334,13 @@ class GeoServerService:
                     featuretype_info['srs'] = coordinate_system
                 print(f"✅ 应用指定坐标系: {coordinate_system}")
             
-            # 14. 在数据库中创建要素类型记录
-            featuretype_id = self._create_featuretype_in_db(featuretype_info, store_id)
+            # 14. 在数据库中创建要素类型记录（包含属性字段信息）
+            featuretype_id = self._create_featuretype_in_db(featuretype_info, store_id, attributes)
             print(f"✅ 要素类型记录创建成功，featuretype_id={featuretype_id}")
             
             # 14.1. 如果指定了坐标系，通过REST API更新GeoServer中的feature type
-            if coordinate_system:
+            if coordinate_system and feature_name:
                 try:
-                    feature_name = featuretype_info['featureType']['name']
                     update_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{generated_store_name}/featuretypes/{feature_name}"
                     
                     update_data = {
@@ -1478,6 +1525,205 @@ class GeoServerService:
             print(f"⚠️ 没有文件被重命名，使用原始名称")
             return original_name
     
+    def _read_shapefile_attributes(self, shp_file_path):
+        """从Shapefile中读取属性字段信息
+        
+        Args:
+            shp_file_path: Shapefile文件路径（.shp文件）
+            
+        Returns:
+            list: 属性字段列表，每个字段包含 name, type, nillable 等信息
+        """
+        try:
+            import geopandas as gpd
+            
+            print(f"开始读取Shapefile属性字段: {shp_file_path}")
+            
+            # 使用geopandas读取shapefile
+            gdf = gpd.read_file(shp_file_path)
+            
+            # 获取属性字段信息
+            attributes = []
+            
+            # 遍历所有列（除了geometry列）
+            for col in gdf.columns:
+                if col == 'geometry':
+                    continue
+                    
+                # 获取字段类型
+                dtype = str(gdf[col].dtype)
+                
+                # 将pandas数据类型映射到GeoServer属性类型
+                if dtype.startswith('int'):
+                    attr_type = 'Integer'
+                elif dtype.startswith('float'):
+                    attr_type = 'Double'
+                elif dtype.startswith('bool'):
+                    attr_type = 'Boolean'
+                elif dtype.startswith('datetime'):
+                    attr_type = 'Date'
+                else:
+                    # 字符串类型，需要确定最大长度
+                    max_length = gdf[col].astype(str).str.len().max() if len(gdf) > 0 else 255
+                    attr_type = f'String'
+                
+                # 检查是否可为空
+                nillable = gdf[col].isna().any()
+                
+                attribute = {
+                    'name': col,
+                    'type': attr_type,
+                    'nillable': bool(nillable),
+                    'minOccurs': 0 if nillable else 1,
+                    'maxOccurs': 1
+                }
+                
+                # 如果是字符串类型，添加最大长度
+                if attr_type == 'String':
+                    attribute['length'] = int(max_length) if max_length > 0 else 255
+                
+                attributes.append(attribute)
+                print(f"  属性字段: {col} ({attr_type})")
+            
+            print(f"✅ 成功读取 {len(attributes)} 个属性字段")
+            return attributes
+            
+        except ImportError:
+            print("⚠️ geopandas不可用，尝试使用fiona读取属性字段")
+            try:
+                import fiona
+                
+                with fiona.open(shp_file_path, 'r') as src:
+                    # 获取schema信息
+                    schema = src.schema
+                    properties = schema.get('properties', {})
+                    
+                    attributes = []
+                    for field_name, field_type in properties.items():
+                        # 映射fiona类型到GeoServer类型
+                        type_mapping = {
+                            'str': 'String',
+                            'int': 'Integer',
+                            'float': 'Double',
+                            'bool': 'Boolean',
+                            'date': 'Date',
+                            'datetime': 'Date'
+                        }
+                        
+                        attr_type = type_mapping.get(field_type, 'String')
+                        
+                        attribute = {
+                            'name': field_name,
+                            'type': attr_type,
+                            'nillable': True,
+                            'minOccurs': 0,
+                            'maxOccurs': 1
+                        }
+                        
+                        if attr_type == 'String':
+                            attribute['length'] = 255
+                        
+                        attributes.append(attribute)
+                        print(f"  属性字段: {field_name} ({attr_type})")
+                    
+                    print(f"✅ 成功读取 {len(attributes)} 个属性字段（使用fiona）")
+                    return attributes
+                    
+            except Exception as e:
+                print(f"⚠️ 使用fiona读取属性字段失败: {str(e)}")
+                return []
+        except Exception as e:
+            print(f"⚠️ 读取Shapefile属性字段失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return []
+    
+    def _update_featuretype_attributes(self, store_name, featuretype_name, attributes):
+        """更新GeoServer feature type的属性字段
+        
+        Args:
+            store_name: 数据存储名称
+            featuretype_name: 要素类型名称
+            attributes: 属性字段列表
+        """
+        try:
+            if not attributes:
+                print("⚠️ 没有属性字段需要更新")
+                return
+            
+            print(f"开始更新GeoServer feature type属性字段: {featuretype_name}")
+            
+            # 获取当前的feature type信息
+            featuretype_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}/featuretypes/{featuretype_name}.json"
+            response = requests.get(featuretype_url, auth=self.auth)
+            
+            if response.status_code != 200:
+                print(f"⚠️ 获取feature type信息失败: {response.text}")
+                return
+            
+            featuretype_data = response.json()
+            
+            # 构建属性字段定义
+            attribute_list = []
+            for attr in attributes:
+                attribute_def = {
+                    'name': attr['name'],
+                    'minOccurs': attr.get('minOccurs', 0),
+                    'maxOccurs': attr.get('maxOccurs', 1),
+                    'nillable': attr.get('nillable', True),
+                    'binding': self._get_java_binding(attr['type'])
+                }
+                attribute_list.append(attribute_def)
+            
+            # 更新feature type的attributes字段
+            if 'featureType' in featuretype_data:
+                featuretype_data['featureType']['attributes'] = {
+                    'attribute': attribute_list
+                }
+            else:
+                featuretype_data['attributes'] = {
+                    'attribute': attribute_list
+                }
+            
+            # 发送更新请求
+            update_response = requests.put(
+                featuretype_url,
+                json=featuretype_data,
+                auth=self.auth,
+                headers={'Content-Type': 'application/json'}
+            )
+            
+            if update_response.status_code == 200:
+                print(f"✅ GeoServer feature type属性字段更新成功")
+            else:
+                print(f"⚠️ GeoServer feature type属性字段更新失败: {update_response.text}")
+                
+        except Exception as e:
+            print(f"⚠️ 更新GeoServer feature type属性字段时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
+    
+    def _get_java_binding(self, attr_type):
+        """将GeoServer属性类型映射到Java绑定类型
+        
+        Args:
+            attr_type: 属性类型（String, Integer, Double等）
+            
+        Returns:
+            str: Java绑定类型
+        """
+        binding_mapping = {
+            'String': 'java.lang.String',
+            'Integer': 'java.lang.Integer',
+            'Long': 'java.lang.Long',
+            'Double': 'java.lang.Double',
+            'Float': 'java.lang.Float',
+            'Boolean': 'java.lang.Boolean',
+            'Date': 'java.util.Date',
+            'Timestamp': 'java.sql.Timestamp'
+        }
+        return binding_mapping.get(attr_type, 'java.lang.String')
+    
     def _upload_extracted_shapefile_to_geoserver(self, folder_path, store_name):
         """上传解压后的Shapefile文件到GeoServer
         
@@ -2258,12 +2504,13 @@ class GeoServerService:
         else:
             return coverage_info
     
-    def _create_featuretype_in_db(self, featuretype_info, store_id):
+    def _create_featuretype_in_db(self, featuretype_info, store_id, attributes=None):
         """在数据库中创建要素类型记录
         
         Args:
             featuretype_info: 要素类型信息
             store_id: 存储ID
+            attributes: 属性字段列表（可选）
             
         Returns:
             要素类型ID
@@ -2301,6 +2548,38 @@ class GeoServerService:
                 name = f"feature_{store_id}"
                 print(f"警告: 要素类型名称为空，使用默认名称: {name}")
             
+            # 处理属性字段信息
+            # 如果attributes参数为空，尝试从featuretype_info中获取
+            if attributes is None:
+                attributes = feature_data.get('attributes', [])
+                # 如果attributes是字典格式（GeoServer REST API返回的格式），需要转换
+                if isinstance(attributes, dict) and 'attribute' in attributes:
+                    attr_list = attributes['attribute']
+                    if isinstance(attr_list, list):
+                        # 转换GeoServer格式到我们的格式
+                        attributes = []
+                        for attr in attr_list:
+                            attr_info = {
+                                'name': attr.get('name', ''),
+                                'type': self._get_attr_type_from_binding(attr.get('binding', '')),
+                                'nillable': attr.get('nillable', True),
+                                'minOccurs': attr.get('minOccurs', 0),
+                                'maxOccurs': attr.get('maxOccurs', 1)
+                            }
+                            attributes.append(attr_info)
+                    elif isinstance(attr_list, dict):
+                        attr_info = {
+                            'name': attr_list.get('name', ''),
+                            'type': self._get_attr_type_from_binding(attr_list.get('binding', '')),
+                            'nillable': attr_list.get('nillable', True),
+                            'minOccurs': attr_list.get('minOccurs', 0),
+                            'maxOccurs': attr_list.get('maxOccurs', 1)
+                        }
+                        attributes = [attr_info]
+            
+            # 将属性字段信息转换为JSON格式存储
+            attributes_json = json.dumps(attributes, ensure_ascii=False) if attributes else None
+            
             featuretype_params = {
                 'name': name,
                 'native_name': native_name,
@@ -2309,16 +2588,46 @@ class GeoServerService:
                 'abstract': abstract,
                 'keywords': keywords,
                 'srs': srs,
-                'enabled': True
+                'enabled': True,
+                'attributes': attributes_json
             }
             
             print(f"准备插入的要素类型参数: {featuretype_params}")
+            if attributes:
+                print(f"属性字段数量: {len(attributes)}")
             
             featuretype_id = insert_with_snowflake_id('geoserver_featuretypes', featuretype_params)
             return featuretype_id
         except Exception as e:
             print(f"在数据库中创建要素类型记录失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
             raise
+    
+    def _get_attr_type_from_binding(self, binding):
+        """从Java绑定类型获取属性类型
+        
+        Args:
+            binding: Java绑定类型（如java.lang.String）
+            
+        Returns:
+            str: 属性类型（String, Integer等）
+        """
+        if not binding:
+            return 'String'
+        
+        binding_mapping = {
+            'java.lang.String': 'String',
+            'java.lang.Integer': 'Integer',
+            'java.lang.Long': 'Long',
+            'java.lang.Double': 'Double',
+            'java.lang.Float': 'Float',
+            'java.lang.Boolean': 'Boolean',
+            'java.util.Date': 'Date',
+            'java.sql.Timestamp': 'Timestamp'
+        }
+        
+        return binding_mapping.get(binding, 'String')
     
     def _create_layer_in_db(self, layer_info, workspace_id, featuretype_id=None, coverage_id=None, file_id=None, store_type='datastore'):
         """在数据库中创建图层记录
