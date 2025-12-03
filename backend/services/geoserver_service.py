@@ -5223,9 +5223,10 @@ AbsolutePath=false
             if isinstance(sld_content, bytes):
                 sld_content = sld_content.decode('utf-8')
             
-            # 记录SLD内容的前1000个字符用于调试
-            logger.debug(f"SLD内容前1000字符: {sld_content[:1000]}")
-            logger.debug(f"SLD内容长度: {len(sld_content)} 字符")
+            # 记录原始SLD内容用于调试和对比
+            original_sld_content = sld_content
+            logger.info(f"原始SLD内容长度: {len(original_sld_content)} 字符")
+            logger.debug(f"原始SLD内容前500字符: {original_sld_content[:500]}")
             
             # 验证SLD内容是否为有效的XML（只验证，不修改内容）
             try:
@@ -5239,21 +5240,23 @@ AbsolutePath=false
                 logger.error(f"XML解析错误位置: {getattr(e, 'position', '未知')}")
                 return False
             
-            # 确保XML声明包含UTF-8编码
+            # 保存原始内容，尽量不修改SLD内容
+            # 只有在确实缺少XML声明时才添加，且不修改已有的XML声明
+            sld_content_to_upload = original_sld_content
             if not sld_content.strip().startswith('<?xml'):
-                # 如果没有XML声明，添加一个
-                sld_content = '<?xml version="1.0" encoding="UTF-8"?>\n' + sld_content
-                logger.debug("添加了XML声明")
-            elif 'encoding=' in sld_content[:100] and 'UTF-8' not in sld_content[:100].upper():
-                # 如果XML声明中没有UTF-8，确保添加
-                import re
-                sld_content = re.sub(
-                    r'<\?xml[^>]*encoding=["\']([^"\']*)["\']',
-                    r'<?xml version="1.0" encoding="UTF-8"',
-                    sld_content,
-                    count=1
-                )
-                logger.debug("确保XML声明使用UTF-8编码")
+                # 只有在完全没有XML声明时才添加
+                sld_content_to_upload = '<?xml version="1.0" encoding="UTF-8"?>\n' + sld_content
+                logger.info("⚠️ 添加了XML声明（原文件缺少XML声明）")
+            else:
+                # 如果已有XML声明，保持原样，不修改
+                logger.debug("保持原始XML声明不变")
+            
+            # 记录将要上传的内容
+            logger.info(f"准备上传的SLD内容长度: {len(sld_content_to_upload)} 字符")
+            logger.debug(f"准备上传的SLD内容前500字符: {sld_content_to_upload[:500]}")
+            
+            # 使用准备上传的内容
+            sld_content = sld_content_to_upload
             
             # URL编码样式名称（处理中文等特殊字符）
             # 使用quote进行URL编码，但保留一些字符不编码
@@ -5303,14 +5306,23 @@ AbsolutePath=false
                         logger.debug(f"响应状态码: {style_response.status_code}")
                         if style_response.status_code in [200, 201]:
                             logger.info(f"样式更新成功，使用URL: {style_url}")
-                            # 验证上传后的内容
+                            # 验证上传后的内容，对比原始内容
                             verify_response = requests.get(
                                 f"{style_url}.xml" if not style_url.endswith('.xml') else style_url,
                                 auth=self.auth,
                                 timeout=10
                             )
                             if verify_response.status_code == 200:
-                                logger.debug(f"验证上传内容，响应长度: {len(verify_response.text)} 字符")
+                                saved_content = verify_response.text
+                                logger.info(f"验证上传内容，GeoServer保存的内容长度: {len(saved_content)} 字符")
+                                logger.debug(f"GeoServer保存的内容前500字符: {saved_content[:500]}")
+                                
+                                # 对比原始内容和保存的内容
+                                if original_sld_content.strip() != saved_content.strip():
+                                    logger.warning("⚠️ 警告：GeoServer保存的内容与原始上传内容不完全一致（可能是GeoServer进行了格式化）")
+                                    logger.debug(f"原始内容长度: {len(original_sld_content)}，保存内容长度: {len(saved_content)}")
+                                else:
+                                    logger.info("✅ 验证通过：GeoServer保存的内容与原始上传内容一致")
                             break
                     except requests.exceptions.RequestException as e:
                         logger.warning(f"尝试URL {style_url} 失败: {str(e)}")
@@ -5381,19 +5393,35 @@ AbsolutePath=false
                         logger.debug(f"响应状态码: {style_response.status_code}")
                         if style_response.status_code in [200, 201]:
                             logger.info(f"样式内容上传成功，使用URL: {style_content_url}")
-                            # 验证上传后的内容
+                            # 验证上传后的内容，对比原始内容
                             verify_response = requests.get(
                                 f"{style_content_url}.xml" if not style_content_url.endswith('.xml') else style_content_url,
                                 auth=self.auth,
                                 timeout=10
                             )
                             if verify_response.status_code == 200:
-                                logger.debug(f"验证上传内容，响应长度: {len(verify_response.text)} 字符")
-                                # 检查内容是否完整
-                                if 'Fill' in verify_response.text and 'Stroke' in verify_response.text:
-                                    logger.info("✅ 验证通过：上传的SLD内容包含Fill和Stroke元素")
+                                saved_content = verify_response.text
+                                logger.info(f"验证上传内容，GeoServer保存的内容长度: {len(saved_content)} 字符")
+                                logger.debug(f"GeoServer保存的内容前500字符: {saved_content[:500]}")
+                                
+                                # 对比原始内容和保存的内容
+                                if original_sld_content.strip() != saved_content.strip():
+                                    logger.warning("⚠️ 警告：GeoServer保存的内容与原始上传内容不完全一致（可能是GeoServer进行了格式化）")
+                                    logger.debug(f"原始内容长度: {len(original_sld_content)}，保存内容长度: {len(saved_content)}")
+                                    # 记录差异的详细信息（仅记录前1000字符的差异）
+                                    if len(original_sld_content) > 1000:
+                                        logger.debug(f"原始内容前1000字符: {original_sld_content[:1000]}")
+                                    if len(saved_content) > 1000:
+                                        logger.debug(f"保存内容前1000字符: {saved_content[:1000]}")
                                 else:
-                                    logger.warning("⚠️ 警告：上传的SLD内容可能不完整，缺少Fill或Stroke元素")
+                                    logger.info("✅ 验证通过：GeoServer保存的内容与原始上传内容一致")
+                                
+                                # 检查内容是否完整（针对面图层）
+                                if 'PolygonSymbolizer' in original_sld_content or 'PolygonSymbolizer' in saved_content:
+                                    if 'Fill' in saved_content and 'Stroke' in saved_content:
+                                        logger.info("✅ 验证通过：上传的SLD内容包含Fill和Stroke元素")
+                                    else:
+                                        logger.warning("⚠️ 警告：上传的SLD内容可能不完整，缺少Fill或Stroke元素")
                             break
                     except requests.exceptions.RequestException as e:
                         logger.warning(f"尝试URL {style_content_url} 失败: {str(e)}")
