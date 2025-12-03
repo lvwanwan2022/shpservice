@@ -87,10 +87,40 @@ export function isValidUrl(url) {
   }
 }
 
+/**
+ * 将 GeoServer URL 转换为使用代理路径，避免 CORS 问题
+ * 例如：http://10.20.124.20:8083/geoserver/wms -> /geoserver/wms
+ * @param {string} url 原始 GeoServer URL
+ * @returns {string} 转换后的代理路径
+ */
+export function convertGeoServerUrlToProxy(url) {
+  if (!url) return url
+  
+  // 提取 URL 的路径部分（去除查询参数）
+  const urlWithoutParams = url.split('?')[0]
+  
+  // 检测是否包含 geoserver
+  if (urlWithoutParams.includes('/geoserver') || urlWithoutParams.includes('geoserver')) {
+    // 提取 geoserver 后的路径部分
+    const geoserverMatch = urlWithoutParams.match(/\/geoserver(\/.*)?$/i)
+    if (geoserverMatch && geoserverMatch[1]) {
+      // 保留 geoserver 后的路径（如 /wms, /wfs 等）
+      return `/geoserver${geoserverMatch[1]}`
+    } else {
+      // 默认使用 /wms
+      return '/geoserver/wms'
+    }
+  }
+  
+  // 如果不是 GeoServer URL，返回原 URL
+  return url
+}
+
 export default {
   getConfiguredHost,
   processServiceUrl,
   processMultipleUrls,
   needsUrlProcessing,
-  isValidUrl
+  isValidUrl,
+  convertGeoServerUrlToProxy
 } 

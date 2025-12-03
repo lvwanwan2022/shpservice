@@ -108,6 +108,8 @@ import BaseMapSwitcherDeckGL from './BaseMapSwitcherDeckGL.vue'
 import { MARTIN_BASE_URL } from '@/config/index'
 // 导入DXF样式配置 - 参考OpenLayers的DXF样式实现
 import defaultDxfStylesConfig from '@/config/defaultDxfStyles.json'
+// 导入URL工具函数 - 用于处理GeoServer URL代理转换
+import { convertGeoServerUrlToProxy } from '@/utils/urlUtils'
 
 export default {
   name: 'MapViewerDeckGL',
@@ -1480,11 +1482,10 @@ export default {
         return null
       }
       
-      // 处理WMS URL - 参考OpenLayers的URL处理
+      // 处理WMS URL - 将所有 GeoServer URL 转换为使用代理路径，避免 CORS 问题
       let wmsUrl = layer.wms_url.split('?')[0]
-      if (wmsUrl.includes('localhost:8083/geoserver') || wmsUrl.includes('localhost:8080/geoserver')) {
-        wmsUrl = '/geoserver/wms'
-      }
+      // 使用工具函数转换 GeoServer URL 为代理路径
+      wmsUrl = convertGeoServerUrlToProxy(wmsUrl)
       
       //console.log('创建WMS图层:', layer.layer_name, 'URL:', wmsUrl)
       
