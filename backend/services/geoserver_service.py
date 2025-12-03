@@ -303,11 +303,33 @@ class GeoServerService:
             elif 'name' in featuretype_info:
                 feature_name = featuretype_info['name']
             
+            # 12.1.1. 处理中文图层名称乱码问题
+            # 如果feature_name包含中文或乱码，保存原始名称用于GeoServer操作，但使用safe_shp_name作为图层名称
+            original_feature_name = feature_name  # 保存原始名称，用于后续的GeoServer API调用
+            if feature_name and self._contains_chinese_or_garbled(feature_name):
+                print(f"⚠️ 检测到feature type名称包含中文或乱码: {feature_name}")
+                print(f"   将使用安全名称作为图层名称: {safe_shp_name}")
+                print(f"   将使用原始名称作为图层标题: {original_shp_name}")
+                
+                # 更新featuretype_info中的名称和标题（用于数据库存储）
+                if 'featureType' in featuretype_info:
+                    featuretype_info['featureType']['name'] = safe_shp_name
+                    featuretype_info['featureType']['title'] = original_shp_name
+                else:
+                    featuretype_info['name'] = safe_shp_name
+                    featuretype_info['title'] = original_shp_name
+                
+                # 注意：feature_name保持为原始值（可能包含乱码），用于后续的GeoServer API调用
+                # 因为GeoServer中的实际feature type名称可能还是乱码的
+            else:
+                original_feature_name = feature_name
+            
             # 12.2. 如果读取到了属性字段，更新GeoServer feature type的属性定义
-            if attributes and feature_name:
+            # 使用original_feature_name（可能包含乱码）来调用GeoServer API
+            if attributes and original_feature_name:
                 try:
-                    print(f"准备更新GeoServer feature type属性字段: {feature_name}")
-                    self._update_featuretype_attributes(generated_store_name, feature_name, attributes)
+                    print(f"准备更新GeoServer feature type属性字段: {original_feature_name}")
+                    self._update_featuretype_attributes(generated_store_name, original_feature_name, attributes)
                     # 将属性字段信息添加到featuretype_info中，以便后续保存到数据库
                     if 'featureType' in featuretype_info:
                         featuretype_info['featureType']['attributes'] = attributes
@@ -339,9 +361,12 @@ class GeoServerService:
             print(f"✅ 要素类型记录创建成功，featuretype_id={featuretype_id}")
             
             # 14.1. 如果指定了坐标系，通过REST API更新GeoServer中的feature type
-            if coordinate_system and feature_name:
+            # 使用original_feature_name（可能包含乱码）来调用GeoServer API
+            if coordinate_system and original_feature_name:
                 try:
-                    update_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{generated_store_name}/featuretypes/{feature_name}"
+                    # URL编码feature_name，以防包含特殊字符
+                    encoded_feature_name = quote(original_feature_name, safe='')
+                    update_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{generated_store_name}/featuretypes/{encoded_feature_name}"
                     
                     update_data = {
                         "featureType": {
@@ -365,9 +390,28 @@ class GeoServerService:
             layer_info = self._create_layer_in_db(featuretype_info, workspace_id, featuretype_id, coverage_id=None, file_id=file_id,  store_type='datastore')
             print(f"✅ 图层记录创建成功，layer_id={layer_info['id']}")
             
+            # 15.0. 如果原始文件名包含中文，更新GeoServer中的图层标题
+            if original_shp_name and (self._contains_chinese_or_garbled(original_shp_name) or original_shp_name != safe_shp_name):
+                print(f"准备更新GeoServer中的图层标题，使用原始中文名称: {original_shp_name}")
+                try:
+                    # 使用original_feature_name（可能包含乱码）来更新GeoServer
+                    # 因为GeoServer中的实际feature type名称可能还是乱码的
+                    self._update_featuretype_and_layer_title(
+                        generated_store_name,
+                        original_feature_name,  # 使用原始名称（可能包含乱码）
+                        safe_shp_name,  # 安全名称用于layer
+                        original_shp_name  # 原始中文名称作为标题
+                    )
+                    print(f"✅ GeoServer图层标题更新完成")
+                except Exception as e:
+                    print(f"⚠️ 更新GeoServer图层标题时出错: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+            
             # 15.1. 重新获取featuretype_info以获取完整的边界框信息（用于生成预览URL）
+            # 使用original_feature_name（可能包含乱码）来获取信息
             try:
-                updated_featuretype_info = self._get_featuretype_info(generated_store_name, feature_name)
+                updated_featuretype_info = self._get_featuretype_info(generated_store_name, original_feature_name)
                 print(f"✅ 重新获取featuretype_info成功，包含边界框信息")
             except Exception as e:
                 print(f"⚠️ 重新获取featuretype_info失败: {str(e)}，使用原始featuretype_info")
@@ -2540,6 +2584,193 @@ class GeoServerService:
         
         print(f"成功获取要素类型信息: {featuretype_name}")
         return response.json()
+    
+    def _contains_chinese_or_garbled(self, text):
+        """检查字符串是否包含中文或乱码字符
+        
+        Args:
+            text: 要检查的字符串
+            
+        Returns:
+            bool: 如果包含中文或乱码字符返回True，否则返回False
+        """
+        if not text:
+            return False
+        
+        # 检查是否包含中文字符
+        has_chinese = bool(re.search(r'[\u4e00-\u9fff]', text))
+        
+        # 检查是否包含常见的乱码字符（这些字符通常表示编码错误）
+        garbled_patterns = [
+            r'[┤≤╙ó╧╪╓╪╜╗═¿╔Φ╩⌐╧▀╥¬╦╪╡τ┴ª▒ú╗ñ║∞╧▀╙└╛├╗∙▒╛┼⌐╠∩═╝░▀╣·═┴─┐▒Ω╦«┐Γ╧╡├µ╧╡╧▀╧τ╒≥╝╢╨╨╒■╟°╧ε─┐╟°╔µ╝░╥╤│╔╟■╡└╡╚╓╡╧▀╡╚╕▀╛α]',
+            r'[\x80-\xff]{2,}',  # 可能的乱码字节序列
+        ]
+        
+        has_garbled = any(re.search(pattern, text) for pattern in garbled_patterns)
+        
+        return has_chinese or has_garbled
+    
+    def _update_featuretype_and_layer_title(self, store_name, feature_name, safe_layer_name, original_title):
+        """更新GeoServer中feature type和layer的标题，使用原始中文名称
+        
+        Args:
+            store_name: 数据存储名称
+            feature_name: 当前feature type名称（可能包含乱码）
+            safe_layer_name: 安全的图层名称（英文）
+            original_title: 原始的中文标题
+            
+        Returns:
+            bool: 更新是否成功
+        """
+        try:
+            # 确保original_title是UTF-8编码的字符串
+            if isinstance(original_title, bytes):
+                try:
+                    original_title = original_title.decode('utf-8')
+                except:
+                    try:
+                        original_title = original_title.decode('gbk')
+                    except:
+                        original_title = original_title.decode('utf-8', errors='ignore')
+            
+            print(f"准备更新feature type和layer标题: feature_name={feature_name}, safe_layer_name={safe_layer_name}, original_title={original_title}")
+            
+            # 使用实际的feature_name来更新标题（即使它包含中文，我们也只更新标题，不重命名）
+            # 因为重命名feature type可能会很复杂，而且图层名称在GeoServer中显示时主要看title
+            
+            # 1. 更新feature type的标题
+            update_ft_success = self._update_featuretype_title_only(store_name, feature_name, original_title)
+            
+            # 2. 更新layer的标题（使用实际的feature_name，因为layer名称通常与feature type名称相同）
+            # 先尝试使用feature_name，如果失败则使用safe_layer_name
+            full_layer_name = f"{self.workspace}:{feature_name}"
+            update_layer_success = self._update_layer_title_only(full_layer_name, original_title)
+            
+            # 如果使用feature_name失败，尝试使用safe_layer_name
+            if not update_layer_success:
+                print(f"使用feature_name更新layer标题失败，尝试使用safe_layer_name")
+                full_layer_name = f"{self.workspace}:{safe_layer_name}"
+                update_layer_success = self._update_layer_title_only(full_layer_name, original_title)
+            
+            return update_ft_success and update_layer_success
+            
+        except Exception as e:
+            print(f"⚠️ 更新feature type和layer标题时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    def _update_featuretype_title_only(self, store_name, feature_name, title):
+        """仅更新feature type的标题
+        
+        Args:
+            store_name: 数据存储名称
+            feature_name: feature type名称
+            title: 新的标题
+            
+        Returns:
+            bool: 更新是否成功
+        """
+        try:
+            # 获取当前的feature type信息
+            current_ft_info = self._get_featuretype_info(store_name, feature_name)
+            ft_data = current_ft_info.get('featureType', current_ft_info)
+            
+            # 准备更新数据
+            update_data = {
+                "featureType": {
+                    "name": feature_name,
+                    "nativeName": ft_data.get('nativeName', feature_name),
+                    "title": title,  # 使用UTF-8编码的中文标题
+                    "abstract": ft_data.get('abstract', ''),
+                    "enabled": ft_data.get('enabled', True),
+                    "srs": ft_data.get('srs', 'EPSG:4326'),
+                    "nativeCRS": ft_data.get('nativeCRS', ft_data.get('srs', 'EPSG:4326')),
+                    "projectionPolicy": ft_data.get('projectionPolicy', 'REPROJECT_TO_DECLARED')
+                }
+            }
+            
+            # 更新feature type
+            update_url = f"{self.rest_url}/workspaces/{self.workspace}/datastores/{store_name}/featuretypes/{feature_name}"
+            response = requests.put(
+                update_url,
+                json=update_data,
+                auth=self.auth,
+                headers={'Content-Type': 'application/json; charset=utf-8'},
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                print(f"✅ 成功更新feature type标题: {title}")
+                return True
+            else:
+                print(f"⚠️ 更新feature type标题失败: {response.status_code} - {response.text}")
+                return False
+                
+        except Exception as e:
+            print(f"⚠️ 更新feature type标题时出错: {str(e)}")
+            return False
+    
+    def _update_layer_title_only(self, full_layer_name, title):
+        """仅更新layer的标题
+        
+        Args:
+            full_layer_name: 完整的图层名称（workspace:layer）
+            title: 新的标题
+            
+        Returns:
+            bool: 更新是否成功
+        """
+        try:
+            # 获取当前的layer信息
+            layer_url = f"{self.rest_url}/layers/{full_layer_name}.json"
+            response = requests.get(layer_url, auth=self.auth)
+            
+            if response.status_code != 200:
+                print(f"⚠️ 获取layer信息失败: {response.status_code}")
+                return False
+            
+            layer_data = response.json()
+            layer_info = layer_data.get('layer', layer_data)
+            
+            # 准备更新数据
+            update_data = {
+                "layer": {
+                    "name": layer_info.get('name'),
+                    "path": layer_info.get('path', ''),
+                    "type": layer_info.get('type', 'VECTOR'),
+                    "defaultStyle": layer_info.get('defaultStyle', {}),
+                    "styles": layer_info.get('styles', {}),
+                    "resource": layer_info.get('resource', {}),
+                    "title": title,  # 使用UTF-8编码的中文标题
+                    "abstract": layer_info.get('abstract', ''),
+                    "enabled": layer_info.get('enabled', True),
+                    "queryable": layer_info.get('queryable', True),
+                    "opaque": layer_info.get('opaque', False),
+                    "attribution": layer_info.get('attribution', {})
+                }
+            }
+            
+            # 更新layer
+            update_url = f"{self.rest_url}/layers/{full_layer_name}"
+            response = requests.put(
+                update_url,
+                json=update_data,
+                auth=self.auth,
+                headers={'Content-Type': 'application/json; charset=utf-8'},
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                print(f"✅ 成功更新layer标题: {title}")
+                return True
+            else:
+                print(f"⚠️ 更新layer标题失败: {response.status_code} - {response.text}")
+                return False
+                
+        except Exception as e:
+            print(f"⚠️ 更新layer标题时出错: {str(e)}")
+            return False
     
     def _generate_preview_url(self, layer_name, featuretype_info=None, width=768, height=384):
         """生成图层预览URL
