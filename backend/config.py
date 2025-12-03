@@ -12,7 +12,7 @@ Copyright (c) 2025 by VGE, All Rights Reserved.
 import os
 
 # 从环境变量获取Martin服务的基础URL，默认为http://localhost:3000
-MARTIN_BASE_URL = os.environ.get('VUE_APP_MARTIN_BASE_URL', 'http://http://10.20.124.20/:3000')
+MARTIN_BASE_URL = os.environ.get('VUE_APP_MARTIN_BASE_URL', 'http://10.20.124.20:3000')
 
 # 数据库配置
 DB_CONFIG = {
@@ -59,7 +59,7 @@ MARTIN_CONFIG = {
 
 # GeoServer配置
 GEOSERVER_CONFIG = {
-    'url': 'http://10.20.124.20/:8083/geoserver',
+    'url': 'http://10.20.124.20:8083/geoserver',
     'workspace': 'shpservice',
     'datastore': 'test_geojson',
     'user': 'admin',
