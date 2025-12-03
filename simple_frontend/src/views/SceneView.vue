@@ -569,8 +569,28 @@ export default {
         await gisApi.removeLayerFromScene(currentScene.value.id, layer.layer_id)
         ElMessage.success('图层移除成功')
         
-        // 重新加载场景详情，使用现有的viewScene方法
-        await viewScene(currentScene.value)
+        // 只刷新图层列表，不关闭对话框
+        try {
+          const response = await gisApi.getScene(currentScene.value.id)
+          
+          if (response && response.data && response.data.layers) {
+            sceneLayers.value = response.data.layers.map(layer => ({
+              ...layer,
+              // 确保 visibility 是布尔值
+              visibility: Boolean(layer.visibility || layer.visible),
+              // 确保 layer_order 有默认值
+              layer_order: layer.layer_order !== undefined ? layer.layer_order : 0,
+              // 初始化updating状态
+              updating: false,
+              updatingOrder: false
+            }))
+          } else {
+            sceneLayers.value = []
+          }
+        } catch (error) {
+          console.error('刷新图层列表失败:', error)
+          // 即使刷新失败也不关闭对话框
+        }
         
       } catch (error) {
         if (error !== 'cancel') {

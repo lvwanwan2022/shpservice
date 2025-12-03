@@ -389,56 +389,139 @@
         
         <!-- 可用图层列表 -->
         <div class="available-layers" v-loading="loadingLayers">
-          <div 
-            v-for="layer in availableLayers" 
-            :key="layer.id"
-            class="available-layer-item"
-            :class="{ 'selected': selectedLayers.includes(layer.id) }"
+          <!-- 电脑端：列表式显示 -->
+          <el-table 
+            v-if="!isMobile"
+            :data="availableLayers" 
+            style="width: 100%"
+            :row-class-name="getRowClassName"
+            @row-click="toggleLayerSelectionByRow"
           >
-            <div class="layer-preview">
-              <div class="preview-placeholder">
-                {{ getLayerIcon(layer) }}
+            <el-table-column width="50" align="center">
+              <template #default="scope">
+                <el-checkbox 
+                  :model-value="selectedLayers.includes(scope.row.id)"
+                  @change="toggleLayerSelection(scope.row.id)"
+                  @click.stop
+                />
+              </template>
+            </el-table-column>
+            <el-table-column label="图层名称" min-width="200">
+              <template #default="scope">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 18px;">{{ getLayerIcon(scope.row) }}</span>
+                  <div>
+                    <div style="font-weight: 600; font-size: 14px;">
+                      {{ scope.row.layer_name || scope.row.file_name || scope.row.original_name || '未命名图层' }}
+                    </div>
+                    <div style="font-size: 12px; color: #909399; margin-top: 2px;">
+                      {{ scope.row.description || getLayerTypeText(scope.row) }}
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="数据类型" width="100" align="center">
+              <template #default="scope">
+                <el-tag size="small">{{ scope.row.file_type?.toUpperCase() || '-' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="专业" width="120" align="center">
+              <template #default="scope">
+                <span style="font-size: 12px;">{{ scope.row.discipline || '未知' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="服务状态" min-width="200">
+              <template #default="scope">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <!-- GeoServer服务 -->
+                  <div v-if="scope.row.geoserver_service?.is_published" style="display: flex; align-items: center; gap: 8px;">
+                    <el-tag type="success" size="small">GeoServer已发布</el-tag>
+                    <el-button 
+                      size="small" 
+                      type="primary" 
+                      @click.stop="addLayerToScene(scope.row, 'geoserver')"
+                      :disabled="isLayerInScene(scope.row.id, 'geoserver')"
+                    >
+                      {{ isLayerInScene(scope.row.id, 'geoserver') ? '已添加' : '添加' }}
+                    </el-button>
+                  </div>
+                  
+                  <!-- Martin服务 -->
+                  <div v-if="scope.row.martin_service?.is_published" style="display: flex; align-items: center; gap: 8px;">
+                    <el-tag type="primary" size="small">Martin已发布</el-tag>
+                    <el-button 
+                      size="small" 
+                      type="success" 
+                      @click.stop="addLayerToScene(scope.row, 'martin')"
+                      :disabled="isLayerInScene(scope.row.id, 'martin')"
+                    >
+                      {{ isLayerInScene(scope.row.id, 'martin') ? '已添加' : '添加' }}
+                    </el-button>
+                  </div>
+                  
+                  <!-- 未发布状态 -->
+                  <div v-if="!hasAnyPublishedService(scope.row)">
+                    <el-tag type="warning" size="small">服务未发布</el-tag>
+                  </div>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+          
+          <!-- 移动端：卡片式显示 -->
+          <div v-else class="available-layers-mobile">
+            <div 
+              v-for="layer in availableLayers" 
+              :key="layer.id"
+              class="available-layer-item"
+              :class="{ 'selected': selectedLayers.includes(layer.id) }"
+            >
+              <div class="layer-preview">
+                <div class="preview-placeholder">
+                  {{ getLayerIcon(layer) }}
+                </div>
               </div>
-            </div>
-            <div class="layer-details">
-              <div class="layer-name">{{ layer.layer_name || layer.file_name || layer.original_name || '未命名图层' }}</div>
-              <div class="layer-description">{{ layer.description || getLayerTypeText(layer) }}</div>
-              <div class="layer-meta">
-                <span class="meta-item">{{ layer.file_type?.toUpperCase() }}</span>
-                <span class="meta-item">专业: {{ layer.discipline || '未知' }}</span>
-              </div>
-              
-              <!-- 服务状态和操作按钮 -->
-              <div class="layer-services">
-                <!-- GeoServer服务 -->
-                <div v-if="layer.geoserver_service?.is_published" class="service-item">
-                  <el-tag type="success" size="small">GeoServer已发布</el-tag>
-                  <el-button 
-                    size="small" 
-                    type="primary" 
-                    @click="addLayerToScene(layer, 'geoserver')"
-                    :disabled="isLayerInScene(layer.id, 'geoserver')"
-                  >
-                    {{ isLayerInScene(layer.id, 'geoserver') ? '已添加' : '添加GeoServer' }}
-                  </el-button>
+              <div class="layer-details">
+                <div class="layer-name">{{ layer.layer_name || layer.file_name || layer.original_name || '未命名图层' }}</div>
+                <div class="layer-description">{{ layer.description || getLayerTypeText(layer) }}</div>
+                <div class="layer-meta">
+                  <span class="meta-item">{{ layer.file_type?.toUpperCase() }}</span>
+                  <span class="meta-item">专业: {{ layer.discipline || '未知' }}</span>
                 </div>
                 
-                <!-- Martin服务 -->
-                <div v-if="layer.martin_service?.is_published" class="service-item">
-                  <el-tag type="primary" size="small">Martin已发布</el-tag>
-                  <el-button 
-                    size="small" 
-                    type="success" 
-                    @click="addLayerToScene(layer, 'martin')"
-                    :disabled="isLayerInScene(layer.id, 'martin')"
-                  >
-                    {{ isLayerInScene(layer.id, 'martin') ? '已添加' : '添加Martin' }}
-                  </el-button>
-                </div>
-                
-                <!-- 未发布状态 -->
-                <div v-if="!hasAnyPublishedService(layer)" class="service-item">
-                  <el-tag type="warning" size="small">服务未发布</el-tag>
+                <!-- 服务状态和操作按钮 -->
+                <div class="layer-services">
+                  <!-- GeoServer服务 -->
+                  <div v-if="layer.geoserver_service?.is_published" class="service-item">
+                    <el-tag type="success" size="small">GeoServer已发布</el-tag>
+                    <el-button 
+                      size="small" 
+                      type="primary" 
+                      @click="addLayerToScene(layer, 'geoserver')"
+                      :disabled="isLayerInScene(layer.id, 'geoserver')"
+                    >
+                      {{ isLayerInScene(layer.id, 'geoserver') ? '已添加' : '添加GeoServer' }}
+                    </el-button>
+                  </div>
+                  
+                  <!-- Martin服务 -->
+                  <div v-if="layer.martin_service?.is_published" class="service-item">
+                    <el-tag type="primary" size="small">Martin已发布</el-tag>
+                    <el-button 
+                      size="small" 
+                      type="success" 
+                      @click="addLayerToScene(layer, 'martin')"
+                      :disabled="isLayerInScene(layer.id, 'martin')"
+                    >
+                      {{ isLayerInScene(layer.id, 'martin') ? '已添加' : '添加Martin' }}
+                    </el-button>
+                  </div>
+                  
+                  <!-- 未发布状态 -->
+                  <div v-if="!hasAnyPublishedService(layer)" class="service-item">
+                    <el-tag type="warning" size="small">服务未发布</el-tag>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1601,13 +1684,23 @@ export default {
     }
     
     // 切换图层选择
-    const toggleLayerSelection = (layer) => {
-      const index = selectedLayers.value.indexOf(layer.id)
+    const toggleLayerSelection = (layerId) => {
+      const index = selectedLayers.value.indexOf(layerId)
       if (index > -1) {
         selectedLayers.value.splice(index, 1)
       } else {
-        selectedLayers.value.push(layer.id)
+        selectedLayers.value.push(layerId)
       }
+    }
+    
+    // 表格行点击切换选择
+    const toggleLayerSelectionByRow = (row) => {
+      toggleLayerSelection(row.id)
+    }
+    
+    // 获取表格行类名（用于选中状态样式）
+    const getRowClassName = ({ row }) => {
+      return selectedLayers.value.includes(row.id) ? 'selected-row' : ''
     }
 
     // 检查图层是否已在场景中
@@ -1982,6 +2075,8 @@ export default {
       moveLayerDown,
       
       toggleLayerSelection,
+      toggleLayerSelectionByRow,
+      getRowClassName,
       addSelectedLayers,
       addLayerToScene,
       isLayerInScene,
@@ -3361,10 +3456,36 @@ export default {
 .available-layers {
   flex: 1;
   overflow-y: auto;
+  padding: 10px 0;
+}
+
+/* 电脑端：列表式（表格） */
+.available-layers :deep(.el-table) {
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+}
+
+.available-layers :deep(.el-table__row) {
+  cursor: pointer;
+}
+
+.available-layers :deep(.el-table__row:hover) {
+  background-color: #f5f7fa;
+}
+
+.available-layers :deep(.el-table__row.selected-row) {
+  background-color: #f0f9ff;
+}
+
+.available-layers :deep(.el-table__row.selected-row:hover) {
+  background-color: #e0f2fe;
+}
+
+/* 移动端：卡片式 */
+.available-layers-mobile {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 15px;
-  padding: 10px 0;
 }
 
 .available-layer-item {
