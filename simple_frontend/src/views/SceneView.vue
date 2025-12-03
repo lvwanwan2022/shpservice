@@ -215,7 +215,7 @@
                   :min="0"
                   :max="9999"
                   :disabled="!canEditScene(currentScene) || scope.row.updatingOrder"
-                  @change="updateLayerOrder(scope.row)"
+                  @change="handleLayerOrderChange(scope.row)"
                   size="small"
                   style="width: 100%"
                 />
@@ -288,6 +288,9 @@ export default {
     
     // 获取当前用户信息
     const currentUser = ref(null)
+    
+    // 图层顺序修改防抖定时器
+    const layerOrderDebounceTimer = ref(null)
     
     // 移动端搜索相关
     const mobileSearchExpanded = ref(false)
@@ -523,7 +526,8 @@ export default {
         const response = await gisApi.getScene(scene.id)
         
         if (response && response.data && response.data.layers) {
-          sceneLayers.value = response.data.layers.map(layer => ({
+          // 获取图层数据并按 layer_order 排序
+          const layers = response.data.layers.map(layer => ({
             ...layer,
             // 确保 visibility 是布尔值
             visibility: Boolean(layer.visibility || layer.visible),
@@ -533,6 +537,15 @@ export default {
             updating: false,
             updatingOrder: false
           }))
+          
+          // 按 layer_order 升序排序
+          layers.sort((a, b) => {
+            const orderA = a.layer_order !== undefined ? a.layer_order : 0
+            const orderB = b.layer_order !== undefined ? b.layer_order : 0
+            return orderA - orderB
+          })
+          
+          sceneLayers.value = layers
         } else {
           sceneLayers.value = []
         }
@@ -570,27 +583,7 @@ export default {
         ElMessage.success('图层移除成功')
         
         // 只刷新图层列表，不关闭对话框
-        try {
-          const response = await gisApi.getScene(currentScene.value.id)
-          
-          if (response && response.data && response.data.layers) {
-            sceneLayers.value = response.data.layers.map(layer => ({
-              ...layer,
-              // 确保 visibility 是布尔值
-              visibility: Boolean(layer.visibility || layer.visible),
-              // 确保 layer_order 有默认值
-              layer_order: layer.layer_order !== undefined ? layer.layer_order : 0,
-              // 初始化updating状态
-              updating: false,
-              updatingOrder: false
-            }))
-          } else {
-            sceneLayers.value = []
-          }
-        } catch (error) {
-          console.error('刷新图层列表失败:', error)
-          // 即使刷新失败也不关闭对话框
-        }
+        await refreshSceneLayers()
         
       } catch (error) {
         if (error !== 'cancel') {
@@ -640,6 +633,25 @@ export default {
       }
     }
     
+    // 防抖处理图层顺序修改
+    const handleLayerOrderChange = (layer) => {
+      // 权限检查
+      if (!canEditScene(currentScene.value)) {
+        ElMessage.warning('只有场景创建者可以修改图层顺序')
+        return
+      }
+      
+      // 清除之前的定时器
+      if (layerOrderDebounceTimer.value) {
+        clearTimeout(layerOrderDebounceTimer.value)
+      }
+      
+      // 设置新的防抖定时器，500ms后执行
+      layerOrderDebounceTimer.value = setTimeout(() => {
+        updateLayerOrder(layer)
+      }, 500)
+    }
+    
     const updateLayerOrder = async (layer) => {
       // 权限检查
       if (!canEditScene(currentScene.value)) {
@@ -663,6 +675,9 @@ export default {
           duration: 2000
         })
         
+        // 重新获取图层列表并排序
+        await refreshSceneLayers()
+        
       } catch (error) {
         console.error('更新图层顺序失败:', error)
         
@@ -677,6 +692,39 @@ export default {
       } finally {
         // 清除loading状态
         layer.updatingOrder = false
+      }
+    }
+    
+    // 刷新场景图层列表并排序
+    const refreshSceneLayers = async () => {
+      if (!currentScene.value) return
+      
+      try {
+        const response = await gisApi.getScene(currentScene.value.id)
+        
+        if (response && response.data && response.data.layers) {
+          // 获取图层数据并按 layer_order 排序
+          const layers = response.data.layers.map(layer => ({
+            ...layer,
+            visibility: Boolean(layer.visibility || layer.visible),
+            layer_order: layer.layer_order !== undefined ? layer.layer_order : 0,
+            updating: false,
+            updatingOrder: false
+          }))
+          
+          // 按 layer_order 升序排序
+          layers.sort((a, b) => {
+            const orderA = a.layer_order !== undefined ? a.layer_order : 0
+            const orderB = b.layer_order !== undefined ? b.layer_order : 0
+            return orderA - orderB
+          })
+          
+          sceneLayers.value = layers
+        } else {
+          sceneLayers.value = []
+        }
+      } catch (error) {
+        console.error('刷新图层列表失败:', error)
       }
     }
     
@@ -772,6 +820,11 @@ export default {
         window.removeEventListener('error', window.resizeObserverErrorHandler)
         delete window.resizeObserverErrorHandler
       }
+      
+      // 清理防抖定时器
+      if (layerOrderDebounceTimer.value) {
+        clearTimeout(layerOrderDebounceTimer.value)
+      }
     })
     
     return {
@@ -801,6 +854,7 @@ export default {
       viewScene,
       removeLayerFromScene,
       toggleLayerVisibility,
+      handleLayerOrderChange,
       updateLayerOrder,
       openMapWithScene,
       viewSceneInMap,
