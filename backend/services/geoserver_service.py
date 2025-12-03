@@ -5276,16 +5276,21 @@ AbsolutePath=false
             
             # 设置正确的Content-Type，包含字符编码
             # 使用 application/vnd.ogc.sld+xml 或 application/xml
+            # 注意：使用 ?raw=true 参数可以避免GeoServer解析和转换SLD，保持原始格式（包括SLD 1.1.0）
             headers_xml = {
                 'Content-Type': 'application/vnd.ogc.sld+xml; charset=utf-8',
                 'Accept': 'application/xml'
             }
+            logger.info("使用 ?raw=true 参数上传SLD，以保持原始格式（支持SLD 1.1.0）")
             
             if style_check_response.status_code == 200:
                 print(f"样式 {style_name} 在工作空间 {workspace} 下已存在，将更新")
                 # 更新现有样式
-                # 尝试两种URL格式
+                # 使用 ?raw=true 参数避免GeoServer解析和转换SLD，保持原始格式
+                # 尝试多种URL格式，优先使用带raw参数的URL
                 style_urls = [
+                    f"{self.rest_url}/workspaces/{encoded_workspace}/styles/{encoded_style_name}?raw=true",
+                    f"{self.rest_url}/workspaces/{encoded_workspace}/styles/{encoded_style_name}.xml?raw=true",
                     f"{self.rest_url}/workspaces/{encoded_workspace}/styles/{encoded_style_name}",
                     f"{self.rest_url}/workspaces/{encoded_workspace}/styles/{encoded_style_name}.xml"
                 ]
@@ -5307,8 +5312,12 @@ AbsolutePath=false
                         if style_response.status_code in [200, 201]:
                             logger.info(f"样式更新成功，使用URL: {style_url}")
                             # 验证上传后的内容，对比原始内容
+                            # 构建验证URL，移除raw参数（如果存在）并确保有.xml后缀
+                            verify_url = style_url.split('?')[0]  # 移除查询参数
+                            if not verify_url.endswith('.xml'):
+                                verify_url = f"{verify_url}.xml"
                             verify_response = requests.get(
-                                f"{style_url}.xml" if not style_url.endswith('.xml') else style_url,
+                                verify_url,
                                 auth=self.auth,
                                 timeout=10
                             )
@@ -5371,8 +5380,11 @@ AbsolutePath=false
                         return False
                 
                 # 2. 上传样式内容（在工作空间下）
-                # 尝试两种URL格式
+                # 使用 ?raw=true 参数避免GeoServer解析和转换SLD，保持原始格式
+                # 尝试多种URL格式，优先使用带raw参数的URL
                 style_content_urls = [
+                    f"{self.rest_url}/workspaces/{encoded_workspace}/styles/{encoded_style_name}?raw=true",
+                    f"{self.rest_url}/workspaces/{encoded_workspace}/styles/{encoded_style_name}.xml?raw=true",
                     f"{self.rest_url}/workspaces/{encoded_workspace}/styles/{encoded_style_name}",
                     f"{self.rest_url}/workspaces/{encoded_workspace}/styles/{encoded_style_name}.xml"
                 ]
@@ -5394,8 +5406,12 @@ AbsolutePath=false
                         if style_response.status_code in [200, 201]:
                             logger.info(f"样式内容上传成功，使用URL: {style_content_url}")
                             # 验证上传后的内容，对比原始内容
+                            # 构建验证URL，移除raw参数（如果存在）并确保有.xml后缀
+                            verify_url = style_content_url.split('?')[0]  # 移除查询参数
+                            if not verify_url.endswith('.xml'):
+                                verify_url = f"{verify_url}.xml"
                             verify_response = requests.get(
-                                f"{style_content_url}.xml" if not style_content_url.endswith('.xml') else style_content_url,
+                                verify_url,
                                 auth=self.auth,
                                 timeout=10
                             )
