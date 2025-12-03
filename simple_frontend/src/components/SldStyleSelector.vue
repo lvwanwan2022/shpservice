@@ -128,12 +128,27 @@
             placeholder="请输入样式描述"
           />
         </el-form-item>
-        <el-form-item label="几何类型" prop="geometry_type">
-          <el-select v-model="uploadForm.geometry_type" placeholder="请选择几何类型" style="width: 100%">
-            <el-option label="点图层" value="point" />
-            <el-option label="线图层" value="line" />
-            <el-option label="面图层" value="polygon" />
-          </el-select>
+        <el-form-item v-if="!selectedGeometryType" label="几何类型">
+          <el-alert
+            type="warning"
+            :closable="false"
+            show-icon
+          >
+            <template #default>
+              请先在主界面选择图层几何类型
+            </template>
+          </el-alert>
+        </el-form-item>
+        <el-form-item v-else label="几何类型">
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+          >
+            <template #default>
+              {{ getGeometryTypeLabel(selectedGeometryType) }}（将使用主界面选择的几何类型）
+            </template>
+          </el-alert>
         </el-form-item>
         <el-form-item label="SLD文件" prop="file">
           <el-upload
@@ -158,7 +173,12 @@
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="showUploadDialog = false">取消</el-button>
-          <el-button type="primary" @click="uploadSldFile" :loading="uploading">
+          <el-button 
+            type="primary" 
+            @click="uploadSldFile" 
+            :loading="uploading"
+            :disabled="!selectedGeometryType"
+          >
             上传
           </el-button>
         </span>
@@ -302,9 +322,6 @@ export default {
       name: [
         { required: true, message: '请输入样式名称', trigger: 'blur' }
       ],
-      geometry_type: [
-        { required: true, message: '请选择几何类型', trigger: 'change' }
-      ],
       file: [
         { required: true, message: '请选择SLD文件', trigger: 'change' }
       ]
@@ -446,6 +463,12 @@ export default {
     // 上传SLD文件
     const uploadSldFile = async () => {
       try {
+        // 检查是否选择了几何类型
+        if (!selectedGeometryType.value) {
+          ElMessage.error('请先在主界面选择图层几何类型')
+          return
+        }
+        
         await uploadFormRef.value.validate()
         
         if (!uploadForm.file) {
@@ -453,20 +476,9 @@ export default {
           return
         }
 
-        // 添加调试日志
-        console.log('准备上传SLD文件:')
-        console.log('- name:', uploadForm.name)
-        console.log('- description:', uploadForm.description)
-        console.log('- geometry_type:', uploadForm.geometry_type)
-        console.log('- file:', uploadForm.file)
-
         // 验证必填字段
         if (!uploadForm.name) {
           ElMessage.error('样式名称不能为空')
-          return
-        }
-        if (!uploadForm.geometry_type) {
-          ElMessage.error('几何类型不能为空')
           return
         }
 
@@ -475,7 +487,8 @@ export default {
         const formData = new FormData()
         formData.append('name', uploadForm.name)
         formData.append('description', uploadForm.description || '')
-        formData.append('geometry_type', uploadForm.geometry_type)
+        // 使用主界面选择的几何类型
+        formData.append('geometry_type', selectedGeometryType.value)
         formData.append('file', uploadForm.file)
 
         // 打印 FormData 内容用于调试
@@ -508,7 +521,6 @@ export default {
     const resetUploadForm = () => {
       uploadForm.name = ''
       uploadForm.description = ''
-      uploadForm.geometry_type = ''
       uploadForm.file = null
       fileList.value = []
       uploadFormRef.value?.resetFields()
