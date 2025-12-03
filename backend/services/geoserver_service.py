@@ -1559,6 +1559,7 @@ class GeoServerService:
         """
         try:
             import geopandas as gpd
+            from shapely.geometry import Point, LineString, Polygon, MultiPoint, MultiLineString, MultiPolygon
             
             print(f"开始读取Shapefile属性字段: {shp_file_path}")
             
@@ -1567,6 +1568,40 @@ class GeoServerService:
             
             # 获取属性字段信息
             attributes = []
+            
+            # 🔥 首先添加the_geom几何字段（GeoServer必需）
+            if 'geometry' in gdf.columns and len(gdf) > 0:
+                # 检测几何类型
+                geom_types = gdf.geometry.geom_type.unique()
+                # 获取主要的几何类型（如果有多重类型，选择第一个）
+                main_geom_type = geom_types[0] if len(geom_types) > 0 else 'Unknown'
+                
+                # 将Shapely几何类型映射到GeoServer几何类型
+                geom_type_mapping = {
+                    'Point': 'Point',
+                    'MultiPoint': 'MultiPoint',
+                    'LineString': 'LineString',
+                    'MultiLineString': 'MultiLineString',
+                    'Polygon': 'Polygon',
+                    'MultiPolygon': 'MultiPolygon',
+                    'GeometryCollection': 'Geometry'
+                }
+                
+                geoserver_geom_type = geom_type_mapping.get(main_geom_type, 'Geometry')
+                
+                # 检查是否有空几何
+                has_null_geom = gdf.geometry.isna().any()
+                
+                # 添加the_geom字段到属性列表的开头
+                the_geom_attribute = {
+                    'name': 'the_geom',
+                    'type': geoserver_geom_type,
+                    'nillable': bool(has_null_geom),
+                    'minOccurs': 0 if has_null_geom else 1,
+                    'maxOccurs': 1
+                }
+                attributes.append(the_geom_attribute)
+                print(f"  几何字段: the_geom ({geoserver_geom_type})")
             
             # 遍历所有列（除了geometry列）
             for col in gdf.columns:
@@ -1608,20 +1643,57 @@ class GeoServerService:
                 attributes.append(attribute)
                 print(f"  属性字段: {col} ({attr_type})")
             
-            print(f"✅ 成功读取 {len(attributes)} 个属性字段")
+            print(f"✅ 成功读取 {len(attributes)} 个属性字段（包含the_geom）")
             return attributes
             
         except ImportError:
             print("⚠️ geopandas不可用，尝试使用fiona读取属性字段")
             try:
                 import fiona
+                from shapely.geometry import shape
                 
                 with fiona.open(shp_file_path, 'r') as src:
                     # 获取schema信息
                     schema = src.schema
                     properties = schema.get('properties', {})
+                    geometry_type = schema.get('geometry', 'Unknown')
                     
                     attributes = []
+                    
+                    # 🔥 首先添加the_geom几何字段（GeoServer必需）
+                    if geometry_type and geometry_type != 'Unknown':
+                        # 将Fiona几何类型映射到GeoServer几何类型
+                        fiona_to_geoserver_mapping = {
+                            'Point': 'Point',
+                            'MultiPoint': 'MultiPoint',
+                            'LineString': 'LineString',
+                            'MultiLineString': 'MultiLineString',
+                            'Polygon': 'Polygon',
+                            'MultiPolygon': 'MultiPolygon',
+                            'GeometryCollection': 'Geometry'
+                        }
+                        
+                        geoserver_geom_type = fiona_to_geoserver_mapping.get(geometry_type, 'Geometry')
+                        
+                        # 检查是否有空几何（读取第一个要素检查）
+                        has_null_geom = False
+                        try:
+                            first_feature = next(iter(src))
+                            if first_feature.get('geometry') is None:
+                                has_null_geom = True
+                        except:
+                            has_null_geom = True
+                        
+                        the_geom_attribute = {
+                            'name': 'the_geom',
+                            'type': geoserver_geom_type,
+                            'nillable': has_null_geom,
+                            'minOccurs': 0 if has_null_geom else 1,
+                            'maxOccurs': 1
+                        }
+                        attributes.append(the_geom_attribute)
+                        print(f"  几何字段: the_geom ({geoserver_geom_type})")
+                    
                     for field_name, field_type in properties.items():
                         # 映射fiona类型到GeoServer类型
                         type_mapping = {
@@ -1649,7 +1721,7 @@ class GeoServerService:
                         attributes.append(attribute)
                         print(f"  属性字段: {field_name} ({attr_type})")
                     
-                    print(f"✅ 成功读取 {len(attributes)} 个属性字段（使用fiona）")
+                    print(f"✅ 成功读取 {len(attributes)} 个属性字段（使用fiona，包含the_geom）")
                     return attributes
                     
             except Exception as e:
@@ -1730,11 +1802,28 @@ class GeoServerService:
         """将GeoServer属性类型映射到Java绑定类型
         
         Args:
-            attr_type: 属性类型（String, Integer, Double等）
+            attr_type: 属性类型（String, Integer, Double等，或几何类型如Point, Polygon等）
             
         Returns:
             str: Java绑定类型
         """
+        # 几何类型的Java绑定（使用org.locationtech.jts，GeoServer 2.13+使用此版本）
+        geometry_binding_mapping = {
+            'Point': 'org.locationtech.jts.geom.Point',
+            'MultiPoint': 'org.locationtech.jts.geom.MultiPoint',
+            'LineString': 'org.locationtech.jts.geom.LineString',
+            'MultiLineString': 'org.locationtech.jts.geom.MultiLineString',
+            'Polygon': 'org.locationtech.jts.geom.Polygon',
+            'MultiPolygon': 'org.locationtech.jts.geom.MultiPolygon',
+            'Geometry': 'org.locationtech.jts.geom.Geometry',
+            'GeometryCollection': 'org.locationtech.jts.geom.GeometryCollection'
+        }
+        
+        # 如果是指定的几何类型，返回对应的JTS几何类型
+        if attr_type in geometry_binding_mapping:
+            return geometry_binding_mapping[attr_type]
+        
+        # 普通属性类型的Java绑定
         binding_mapping = {
             'String': 'java.lang.String',
             'Integer': 'java.lang.Integer',
