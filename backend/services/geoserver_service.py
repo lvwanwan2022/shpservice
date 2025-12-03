@@ -211,7 +211,12 @@ class GeoServerService:
             
             # 3. 根据文件名生成store名称
             filename = os.path.splitext(os.path.basename(corrected_path))[0]
-            clean_filename = re.sub(r'[^a-zA-Z0-9_\-\u4e00-\u9fff]', '_', filename)
+            # 移除所有非ASCII字符（包括中文），只保留字母、数字、下划线和连字符
+            # 这样确保生成的是纯英文的安全文件名
+            clean_filename = re.sub(r'[^a-zA-Z0-9_\-]', '_', filename)
+            # 如果清理后的文件名为空或只包含特殊字符，使用默认名称
+            if not clean_filename or clean_filename.strip('_') == '':
+                clean_filename = f"shapefile_{file_id[:8]}"
             generated_store_name = f"{clean_filename}_store"
             print(f"自动生成的存储名称: {generated_store_name}")
             
