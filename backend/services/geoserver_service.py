@@ -5328,12 +5328,15 @@ AbsolutePath=false
                         logger.debug(f"发送SLD内容到 {style_url}，内容长度: {len(sld_content)} 字符")
                         logger.debug(f"SLD内容前200字符（用于验证编码）: {sld_content[:200]}")
                         
-                        # 关键修复：直接传递字符串，让requests库根据Content-Type中的charset自动编码
-                        # 这样可以确保UTF-8编码被正确识别和处理
-                        # 当传递字符串时，requests会根据Content-Type中的charset=utf-8自动进行UTF-8编码
+                        # 关键修复：显式将字符串编码为UTF-8字节
+                        # requests库在传递字符串给data参数时，默认使用latin-1编码，而不是UTF-8
+                        # 即使Content-Type中指定了charset=utf-8，requests也不会自动使用UTF-8编码字符串
+                        # 因此必须显式地将字符串编码为UTF-8字节，确保中文字符正确传输
+                        sld_bytes = sld_content.encode('utf-8')
+                        logger.debug(f"SLD内容编码为UTF-8字节，字节长度: {len(sld_bytes)}")
                         style_response = requests.put(
                             style_url,
-                            data=sld_content,  # 传递字符串，让requests自动处理编码
+                            data=sld_bytes,  # 传递UTF-8编码的字节，确保中文字符正确传输
                             headers=headers_xml,
                             auth=self.auth,
                             timeout=30
@@ -5352,6 +5355,8 @@ AbsolutePath=false
                                 timeout=10
                             )
                             if verify_response.status_code == 200:
+                                # 显式指定UTF-8编码读取响应内容，确保中文字符正确解码
+                                verify_response.encoding = 'utf-8'
                                 saved_content = verify_response.text
                                 logger.info(f"验证上传内容，GeoServer保存的内容长度: {len(saved_content)} 字符")
                                 logger.debug(f"GeoServer保存的内容前500字符: {saved_content[:500]}")
@@ -5429,12 +5434,15 @@ AbsolutePath=false
                         logger.debug(f"发送SLD内容到 {style_content_url}，内容长度: {len(sld_content)} 字符")
                         logger.debug(f"SLD内容前200字符（用于验证编码）: {sld_content[:200]}")
                         
-                        # 关键修复：直接传递字符串，让requests库根据Content-Type中的charset自动编码
-                        # 这样可以确保UTF-8编码被正确识别和处理
-                        # 当传递字符串时，requests会根据Content-Type中的charset=utf-8自动进行UTF-8编码
+                        # 关键修复：显式将字符串编码为UTF-8字节
+                        # requests库在传递字符串给data参数时，默认使用latin-1编码，而不是UTF-8
+                        # 即使Content-Type中指定了charset=utf-8，requests也不会自动使用UTF-8编码字符串
+                        # 因此必须显式地将字符串编码为UTF-8字节，确保中文字符正确传输
+                        sld_bytes = sld_content.encode('utf-8')
+                        logger.debug(f"SLD内容编码为UTF-8字节，字节长度: {len(sld_bytes)}")
                         style_response = requests.put(
                             style_content_url,
-                            data=sld_content,  # 传递字符串，让requests自动处理编码
+                            data=sld_bytes,  # 传递UTF-8编码的字节，确保中文字符正确传输
                             headers=headers_xml,
                             auth=self.auth,
                             timeout=30
@@ -5453,6 +5461,8 @@ AbsolutePath=false
                                 timeout=10
                             )
                             if verify_response.status_code == 200:
+                                # 显式指定UTF-8编码读取响应内容，确保中文字符正确解码
+                                verify_response.encoding = 'utf-8'
                                 saved_content = verify_response.text
                                 logger.info(f"验证上传内容，GeoServer保存的内容长度: {len(saved_content)} 字符")
                                 logger.debug(f"GeoServer保存的内容前500字符: {saved_content[:500]}")
