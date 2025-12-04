@@ -27,21 +27,6 @@
         </el-button>
       </el-tooltip>
       
-      <!-- 缓存控制按钮 - 参考OpenLayers的缓存按钮 -->
-      <el-tooltip :content="layersCacheEnabled ? '关闭缓存' : '开启缓存'" placement="left" :show-after="500" :hide-after="1000">
-        <el-button 
-          :type="layersCacheEnabled ? 'warning' : 'info'" 
-          circle 
-          size="small" 
-          @click="toggleLayersCache"
-          class="cache-toggle-button"
-        >
-          <svg :class="layersCacheEnabled ? 'el-icon-folder-opened' : 'el-icon-folder'" t="1752031063403" class="icon" viewBox="0 0 1026 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="7600" width="16" height="16">
-            <path d="M767.66305 531.384715l-236.251012 236.251011h-36.395426l-236.251012-236.251011L340.176422 449.973893 449.107294 559.47943V257.780503h127.703249v301.698927l109.505537-109.505537z m159.629062 279.542413l-92.137895-92.137894a395.880074 395.880074 0 1 0-204.325199 157.011145l99.161573 99.161573a511.834624 511.834624 0 1 1 197.429224-164.034824z" p-id="7601"></path>
-          </svg>
-        </el-button>
-      </el-tooltip>
-      
       <!-- 用户定位按钮 - 参考OpenLayers的定位按钮 -->
       <el-tooltip :content="userLocationVisible ? '关闭定位' : '我的位置'" placement="left" :show-after="500" :hide-after="1000">
         <el-button 
@@ -139,7 +124,6 @@ export default {
     const locating = ref(false)
     
     // 新增响应式变量 - 参考OpenLayers的实现
-    const layersCacheEnabled = ref(false) // 缓存状态
     const locationLoading = ref(false) // 定位加载状态
     const userLocationVisible = ref(false) // 用户位置可见状态
     const currentBaseMapAttribution = ref('') // 底图版权信息
@@ -365,7 +349,10 @@ export default {
               }
             }
           },
-          layers: [createBaseMapLayer()],
+          layers: (() => {
+            const baseLayer = createBaseMapLayer()
+            return baseLayer ? [baseLayer] : []
+          })(),
           onViewStateChange: ({ viewState }) => {
             emit('view-change', viewState)
           },
@@ -543,6 +530,11 @@ export default {
 
     // 创建底图图层
     const createBaseMapLayer = () => {
+      // 无底图模式：返回null
+      if (!currentBaseMap.value.url || currentBaseMap.value.isNone) {
+        return null
+      }
+      
       return new TileLayer({
         id: 'base-map',
         data: currentBaseMap.value.url,
@@ -905,8 +897,8 @@ export default {
         }
       }
       
-      // 更新版权信息
-      updateBaseMapAttribution(baseMap.key)
+      // 更新版权信息（无底图时不显示版权信息）
+      updateBaseMapAttribution(baseMap.isNone ? null : baseMap.key)
     }
 
     // 更新底图图层
@@ -917,8 +909,11 @@ export default {
       const otherLayers = currentLayers.filter(layer => layer.id !== 'base-map')
       const newBaseLayer = createBaseMapLayer()
       
+      // 如果无底图，newBaseLayer为null，只显示其他图层
+      const layersToSet = newBaseLayer ? [newBaseLayer, ...otherLayers] : otherLayers
+      
       deckgl.value.setProps({
-        layers: [newBaseLayer, ...otherLayers]
+        layers: layersToSet
       })
     }
 
@@ -946,10 +941,15 @@ export default {
           layersToShow = [...terrainLayers]
           //console.log('三维模式无数据：显示地形（含底图纹理）')
         } else {
-          // 二维模式：只显示底图
+          // 二维模式：只显示底图（如果有）
           const baseLayer = createBaseMapLayer()
-          layersToShow = [baseLayer]
-          //console.log('二维模式无数据：只显示底图')
+          if (baseLayer) {
+            layersToShow = [baseLayer]
+            //console.log('二维模式无数据：只显示底图')
+          } else {
+            layersToShow = []
+            //console.log('二维模式无数据：无底图')
+          }
         }
         
         // 添加用户位置图层（如果存在）
@@ -982,11 +982,11 @@ export default {
           allLayers = [...terrainLayers, ...dataLayers]
           //console.log('三维模式图层结构: 地形（含纹理）(1) + 数据(' + dataLayers.length + ') = ' + allLayers.length)
         } else {
-          // 二维模式：底图 + 数据图层
+          // 二维模式：底图（如果有）+ 数据图层
           //console.log('🗺️ 二维模式下更新图层')
           const baseLayer = createBaseMapLayer()
-          allLayers = [baseLayer, ...dataLayers]
-          //console.log('二维模式图层结构: 底图(1) + 数据(' + dataLayers.length + ') = ' + allLayers.length)
+          allLayers = baseLayer ? [baseLayer, ...dataLayers] : dataLayers
+          //console.log('二维模式图层结构: 底图(' + (baseLayer ? 1 : 0) + ') + 数据(' + dataLayers.length + ') = ' + allLayers.length)
         }
         
         // 添加用户位置图层（如果存在）
@@ -1776,15 +1776,13 @@ export default {
       }
     }
     
-    // 切换图层缓存 - 参考OpenLayers的实现
-    const toggleLayersCache = () => {
-      layersCacheEnabled.value = !layersCacheEnabled.value
-      ElMessage.info(`图层缓存已${layersCacheEnabled.value ? '开启' : '关闭'}`)
-      //console.log('图层缓存状态已切换:', layersCacheEnabled.value ? '开启' : '关闭')
-    }
-    
     // 更新底图版权信息 - 参考OpenLayers的实现
     const updateBaseMapAttribution = (baseMapType) => {
+      if (!baseMapType) {
+        currentBaseMapAttribution.value = ''
+        return
+      }
+      
       const attributions = {
         'gaode': '© 高德地图',
         'gaodeSatellite': '© 高德地图',
@@ -1912,8 +1910,8 @@ export default {
       // 创建普通底图图层
       const baseLayer = createBaseMapLayer()
       
-      // 图层顺序：底图 + 数据图层 + 用户位置
-      let allLayers = [baseLayer, ...dataLayers]
+      // 图层顺序：底图（如果有）+ 数据图层 + 用户位置
+      let allLayers = baseLayer ? [baseLayer, ...dataLayers] : dataLayers
       
       // 添加用户位置图层（如果存在）
       const userLocationLayer = createUserLocationLayer()
@@ -2054,7 +2052,6 @@ export default {
       locating,
       deckgl,
       // 新增返回值 - 参考OpenLayers的实现
-      layersCacheEnabled,
       locationLoading,
       userLocationVisible,
       currentBaseMapAttribution,
@@ -2068,7 +2065,6 @@ export default {
       onBaseMapChange,
       refreshMap,
       toggleUserLocation,
-      toggleLayersCache,
       updateBaseMapAttribution,
       // 🔥 样式更新相关方法
       updateMartinLayerStyle,
@@ -2207,10 +2203,11 @@ export default {
 
 /* 按钮样式 - 参考OpenLayers的按钮样式 */
 .refresh-button,
-.cache-toggle-button,
 .location-button {
   width: 36px;
   height: 36px;
+  min-width: 36px;
+  min-height: 36px;
   border-radius: 50%;
   border: none;
   background: white;
@@ -2221,20 +2218,26 @@ export default {
   cursor: pointer;
   transition: all 0.2s ease;
   color: #333;
+  padding: 0;
 }
 
 .refresh-button:hover,
-.cache-toggle-button:hover,
 .location-button:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .refresh-button:active,
-.cache-toggle-button:active,
 .location-button:active {
   transform: translateY(0);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* 统一按钮图标大小 */
+.refresh-button svg,
+.location-button svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* 🔥 新增：要素选择弹窗样式 */
@@ -2361,13 +2364,19 @@ export default {
   
   /* 针对具体按钮的额外修复 */
   .map-controls .refresh-button,
-  .map-controls .cache-toggle-button,
   .map-controls .location-button,
   .map-controls .base-map-switcher {
     width: 32px !important;
     height: 32px !important;
     min-width: 32px !important;
     min-height: 32px !important;
+  }
+  
+  .map-controls .refresh-button svg,
+  .map-controls .location-button svg,
+  .map-controls .base-map-switcher svg {
+    width: 16px !important;
+    height: 16px !important;
   }
   
   /* 确保所有按钮容器对齐 */
