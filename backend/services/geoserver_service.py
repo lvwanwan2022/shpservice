@@ -5219,9 +5219,19 @@ AbsolutePath=false
             print(f"在工作空间 {workspace} 下创建或更新样式: {style_name}")
             logger.info(f"开始创建/更新样式: {workspace}:{style_name}")
             
-            # 确保SLD内容是UTF-8编码的字符串
+            # 确保SLD内容是字符串（可能是UTF-8或GBK编码）
             if isinstance(sld_content, bytes):
-                sld_content = sld_content.decode('utf-8')
+                # 先尝试GBK解码，如果失败再尝试UTF-8
+                try:
+                    sld_content = sld_content.decode('gbk')
+                    logger.info("使用GBK编码解码SLD内容")
+                except UnicodeDecodeError:
+                    try:
+                        sld_content = sld_content.decode('utf-8')
+                        logger.info("使用UTF-8编码解码SLD内容")
+                    except UnicodeDecodeError:
+                        sld_content = sld_content.decode('utf-8', errors='ignore')
+                        logger.warning("使用UTF-8编码解码SLD内容（忽略错误）")
             
             # 记录原始SLD内容用于调试和对比
             original_sld_content = sld_content
@@ -5241,35 +5251,35 @@ AbsolutePath=false
                 return False
             
             # 保存原始内容，尽量不修改SLD内容
-            # 确保XML声明中包含正确的UTF-8编码声明
+            # 确保XML声明中包含正确的GBK编码声明（按照用户要求使用GBK）
             sld_content_to_upload = original_sld_content
             if not sld_content.strip().startswith('<?xml'):
                 # 只有在完全没有XML声明时才添加
-                sld_content_to_upload = '<?xml version="1.0" encoding="UTF-8"?>\n' + sld_content
-                logger.info("⚠️ 添加了XML声明（原文件缺少XML声明）")
+                sld_content_to_upload = '<?xml version="1.0" encoding="GBK"?>\n' + sld_content
+                logger.info("⚠️ 添加了XML声明（原文件缺少XML声明），使用GBK编码")
             else:
-                # 如果已有XML声明，检查并确保编码声明为UTF-8
+                # 如果已有XML声明，检查并确保编码声明为GBK
                 import re
                 # 检查XML声明中的编码
                 xml_declaration_match = re.match(r'<\?xml\s+[^>]*\?>', sld_content.strip())
                 if xml_declaration_match:
                     xml_declaration = xml_declaration_match.group(0)
-                    # 如果编码声明不是UTF-8，替换为UTF-8
+                    # 如果编码声明不是GBK，替换为GBK
                     if 'encoding=' in xml_declaration:
-                        # 替换任何编码声明为UTF-8
+                        # 替换任何编码声明为GBK
                         xml_declaration_fixed = re.sub(
                             r'encoding\s*=\s*["\']?[^"\']+["\']?',
-                            'encoding="UTF-8"',
+                            'encoding="GBK"',
                             xml_declaration
                         )
                         sld_content_to_upload = sld_content.replace(xml_declaration, xml_declaration_fixed)
                         if xml_declaration != xml_declaration_fixed:
-                            logger.info(f"✅ 已修正XML声明中的编码为UTF-8: {xml_declaration} -> {xml_declaration_fixed}")
+                            logger.info(f"✅ 已修正XML声明中的编码为GBK: {xml_declaration} -> {xml_declaration_fixed}")
                     else:
-                        # 如果没有编码声明，添加UTF-8编码声明
-                        xml_declaration_fixed = xml_declaration.replace('?>', ' encoding="UTF-8"?>')
+                        # 如果没有编码声明，添加GBK编码声明
+                        xml_declaration_fixed = xml_declaration.replace('?>', ' encoding="GBK"?>')
                         sld_content_to_upload = sld_content.replace(xml_declaration, xml_declaration_fixed)
-                        logger.info(f"✅ 已添加UTF-8编码声明到XML声明中")
+                        logger.info(f"✅ 已添加GBK编码声明到XML声明中")
                 else:
                     logger.debug("保持原始XML声明不变")
             
@@ -5299,15 +5309,15 @@ AbsolutePath=false
             # 设置正确的Content-Type，包含字符编码
             # 使用 application/vnd.ogc.se+xml（GeoServer文档要求的正确MIME类型）
             # 注意：使用 ?raw=true 参数可以避免GeoServer解析和转换SLD，保持原始格式（包括SLD 1.1.0）
-            # 重要修复：使用data参数传递UTF-8编码的字节，并设置正确的Content-Type
-            # Content-Type必须明确指定charset=utf-8，这样GeoServer才能正确识别编码
+            # 重要修复：使用data参数传递GBK编码的字节，并设置正确的Content-Type
+            # Content-Type必须明确指定charset=gbk，这样GeoServer才能正确识别编码
             # 即使传递的是字节数据，也需要在Content-Type中指定charset，告诉GeoServer如何解码
             headers_xml = {
-                'Content-Type': 'application/vnd.ogc.se+xml; charset=utf-8',
+                'Content-Type': 'application/vnd.ogc.se+xml; charset=gbk',
                 'Accept': 'application/xml'
             }
             logger.info("使用 ?raw=true 参数上传SLD，以保持原始格式（支持SLD 1.1.0）")
-            logger.info("使用data参数传递UTF-8编码的字节，Content-Type指定charset=utf-8，确保中文字符正确传输")
+            logger.info("使用data参数传递GBK编码的字节，Content-Type指定charset=gbk，确保中文字符正确传输")
             
             if style_check_response.status_code == 200:
                 print(f"样式 {style_name} 在工作空间 {workspace} 下已存在，将更新")
@@ -5324,34 +5334,37 @@ AbsolutePath=false
                 style_response = None
                 for style_url in style_urls:
                     try:
-                        # 确保内容是UTF-8编码的字符串（不是bytes）
+                        # 确保内容是字符串（不是bytes）
                         if isinstance(sld_content, bytes):
-                            sld_content = sld_content.decode('utf-8')
+                            try:
+                                sld_content = sld_content.decode('gbk')
+                            except UnicodeDecodeError:
+                                sld_content = sld_content.decode('utf-8')
                         
                         logger.debug(f"发送SLD内容到 {style_url}，内容长度: {len(sld_content)} 字符")
                         logger.debug(f"SLD内容前200字符（用于验证编码）: {sld_content[:200]}")
                         
-                        # 关键修复：显式将字符串编码为UTF-8字节
-                        # 使用data参数传递字节数据，Content-Type设置为application/vnd.ogc.se+xml; charset=utf-8
-                        # Content-Type中必须明确指定charset=utf-8，这样GeoServer才能正确识别编码
+                        # 关键修复：显式将字符串编码为GBK字节（按照用户要求使用GBK编码）
+                        # 使用data参数传递字节数据，Content-Type设置为application/vnd.ogc.se+xml; charset=gbk
+                        # Content-Type中必须明确指定charset=gbk，这样GeoServer才能正确识别编码
                         # 即使传递的是字节数据，也需要在Content-Type中指定charset，告诉GeoServer如何解码
-                        sld_bytes = sld_content.encode('utf-8')
-                        logger.debug(f"SLD内容编码为UTF-8字节，字节长度: {len(sld_bytes)}")
+                        sld_bytes = sld_content.encode('gbk')
+                        logger.debug(f"SLD内容编码为GBK字节，字节长度: {len(sld_bytes)}")
                         logger.debug(f"SLD内容前200字节（十六进制）: {sld_bytes[:200].hex()}")
                         
                         # 验证编码：检查中文字符是否正确编码
                         if '灌区' in sld_content or '旱地' in sld_content or '水田' in sld_content:
                             test_chinese = '灌区' if '灌区' in sld_content else ('旱地' if '旱地' in sld_content else '水田')
-                            test_bytes = test_chinese.encode('utf-8')
+                            test_bytes = test_chinese.encode('gbk')
                             logger.debug(f"验证中文字符编码: '{test_chinese}' -> {test_bytes.hex()}")
                             if test_bytes in sld_bytes:
-                                logger.info(f"✅ 验证通过：中文字符 '{test_chinese}' 已正确编码为UTF-8")
+                                logger.info(f"✅ 验证通过：中文字符 '{test_chinese}' 已正确编码为GBK")
                             else:
                                 logger.warning(f"⚠️ 警告：中文字符 '{test_chinese}' 可能未正确编码")
                         
                         style_response = requests.put(
                             style_url,
-                            data=sld_bytes,  # 传递UTF-8编码的字节，确保中文字符正确传输
+                            data=sld_bytes,  # 传递GBK编码的字节，确保中文字符正确传输
                             headers=headers_xml,
                             auth=self.auth,
                             timeout=30
@@ -5370,8 +5383,8 @@ AbsolutePath=false
                                 timeout=10
                             )
                             if verify_response.status_code == 200:
-                                # 显式指定UTF-8编码读取响应内容，确保中文字符正确解码
-                                verify_response.encoding = 'utf-8'
+                                # 显式指定GBK编码读取响应内容，确保中文字符正确解码
+                                verify_response.encoding = 'gbk'
                                 saved_content = verify_response.text
                                 logger.info(f"验证上传内容，GeoServer保存的内容长度: {len(saved_content)} 字符")
                                 logger.debug(f"GeoServer保存的内容前500字符: {saved_content[:500]}")
@@ -5442,34 +5455,37 @@ AbsolutePath=false
                 style_response = None
                 for style_content_url in style_content_urls:
                     try:
-                        # 确保内容是UTF-8编码的字符串（不是bytes）
+                        # 确保内容是字符串（不是bytes）
                         if isinstance(sld_content, bytes):
-                            sld_content = sld_content.decode('utf-8')
+                            try:
+                                sld_content = sld_content.decode('gbk')
+                            except UnicodeDecodeError:
+                                sld_content = sld_content.decode('utf-8')
                         
                         logger.debug(f"发送SLD内容到 {style_content_url}，内容长度: {len(sld_content)} 字符")
                         logger.debug(f"SLD内容前200字符（用于验证编码）: {sld_content[:200]}")
                         
-                        # 关键修复：显式将字符串编码为UTF-8字节
-                        # 使用data参数传递字节数据，Content-Type设置为application/vnd.ogc.se+xml; charset=utf-8
-                        # Content-Type中必须明确指定charset=utf-8，这样GeoServer才能正确识别编码
+                        # 关键修复：显式将字符串编码为GBK字节（按照用户要求使用GBK编码）
+                        # 使用data参数传递字节数据，Content-Type设置为application/vnd.ogc.se+xml; charset=gbk
+                        # Content-Type中必须明确指定charset=gbk，这样GeoServer才能正确识别编码
                         # 即使传递的是字节数据，也需要在Content-Type中指定charset，告诉GeoServer如何解码
-                        sld_bytes = sld_content.encode('utf-8')
-                        logger.debug(f"SLD内容编码为UTF-8字节，字节长度: {len(sld_bytes)}")
+                        sld_bytes = sld_content.encode('gbk')
+                        logger.debug(f"SLD内容编码为GBK字节，字节长度: {len(sld_bytes)}")
                         logger.debug(f"SLD内容前200字节（十六进制）: {sld_bytes[:200].hex()}")
                         
                         # 验证编码：检查中文字符是否正确编码
                         if '灌区' in sld_content or '旱地' in sld_content or '水田' in sld_content:
                             test_chinese = '灌区' if '灌区' in sld_content else ('旱地' if '旱地' in sld_content else '水田')
-                            test_bytes = test_chinese.encode('utf-8')
+                            test_bytes = test_chinese.encode('gbk')
                             logger.debug(f"验证中文字符编码: '{test_chinese}' -> {test_bytes.hex()}")
                             if test_bytes in sld_bytes:
-                                logger.info(f"✅ 验证通过：中文字符 '{test_chinese}' 已正确编码为UTF-8")
+                                logger.info(f"✅ 验证通过：中文字符 '{test_chinese}' 已正确编码为GBK")
                             else:
                                 logger.warning(f"⚠️ 警告：中文字符 '{test_chinese}' 可能未正确编码")
                         
                         style_response = requests.put(
                             style_content_url,
-                            data=sld_bytes,  # 传递UTF-8编码的字节，确保中文字符正确传输
+                            data=sld_bytes,  # 传递GBK编码的字节，确保中文字符正确传输
                             headers=headers_xml,
                             auth=self.auth,
                             timeout=30
@@ -5488,8 +5504,8 @@ AbsolutePath=false
                                 timeout=10
                             )
                             if verify_response.status_code == 200:
-                                # 显式指定UTF-8编码读取响应内容，确保中文字符正确解码
-                                verify_response.encoding = 'utf-8'
+                                # 显式指定GBK编码读取响应内容，确保中文字符正确解码
+                                verify_response.encoding = 'gbk'
                                 saved_content = verify_response.text
                                 logger.info(f"验证上传内容，GeoServer保存的内容长度: {len(saved_content)} 字符")
                                 logger.debug(f"GeoServer保存的内容前500字符: {saved_content[:500]}")
