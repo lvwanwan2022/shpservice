@@ -5352,16 +5352,6 @@ AbsolutePath=false
                         logger.debug(f"SLD内容编码为GBK字节，字节长度: {len(sld_bytes)}")
                         logger.debug(f"SLD内容前200字节（十六进制）: {sld_bytes[:200].hex()}")
                         
-                        # 验证编码：检查中文字符是否正确编码
-                        if '灌区' in sld_content or '旱地' in sld_content or '水田' in sld_content:
-                            test_chinese = '灌区' if '灌区' in sld_content else ('旱地' if '旱地' in sld_content else '水田')
-                            test_bytes = test_chinese.encode('gbk')
-                            logger.debug(f"验证中文字符编码: '{test_chinese}' -> {test_bytes.hex()}")
-                            if test_bytes in sld_bytes:
-                                logger.info(f"✅ 验证通过：中文字符 '{test_chinese}' 已正确编码为GBK")
-                            else:
-                                logger.warning(f"⚠️ 警告：中文字符 '{test_chinese}' 可能未正确编码")
-                        
                         style_response = requests.put(
                             style_url,
                             data=sld_bytes,  # 传递GBK编码的字节，确保中文字符正确传输
@@ -5472,16 +5462,6 @@ AbsolutePath=false
                         sld_bytes = sld_content.encode('gbk')
                         logger.debug(f"SLD内容编码为GBK字节，字节长度: {len(sld_bytes)}")
                         logger.debug(f"SLD内容前200字节（十六进制）: {sld_bytes[:200].hex()}")
-                        
-                        # 验证编码：检查中文字符是否正确编码
-                        if '灌区' in sld_content or '旱地' in sld_content or '水田' in sld_content:
-                            test_chinese = '灌区' if '灌区' in sld_content else ('旱地' if '旱地' in sld_content else '水田')
-                            test_bytes = test_chinese.encode('gbk')
-                            logger.debug(f"验证中文字符编码: '{test_chinese}' -> {test_bytes.hex()}")
-                            if test_bytes in sld_bytes:
-                                logger.info(f"✅ 验证通过：中文字符 '{test_chinese}' 已正确编码为GBK")
-                            else:
-                                logger.warning(f"⚠️ 警告：中文字符 '{test_chinese}' 可能未正确编码")
                         
                         style_response = requests.put(
                             style_content_url,
