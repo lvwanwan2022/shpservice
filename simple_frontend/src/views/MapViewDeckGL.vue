@@ -1572,12 +1572,28 @@ export default {
       // 因为拖拽是基于显示顺序进行的
       const sortedLayers = [...sortedLayersList.value]
       
+      // 检查索引有效性
+      if (fromIndex < 0 || fromIndex >= sortedLayers.length ||
+          toIndex < 0 || toIndex >= sortedLayers.length) {
+        console.warn('索引超出范围:', { fromIndex, toIndex, length: sortedLayers.length })
+        return {}
+      }
+      
       const movedLayer = sortedLayers[fromIndex]
+      
+      if (!movedLayer) {
+        console.warn('无法找到要移动的图层:', { fromIndex, sortedLayers })
+        return {}
+      }
       
       // 移除被移动的图层
       sortedLayers.splice(fromIndex, 1)
+      
+      // 调整目标索引：如果向下移动（toIndex > fromIndex），需要减1
+      const adjustedToIndex = toIndex > fromIndex ? toIndex - 1 : toIndex
+      
       // 插入到新位置
-      sortedLayers.splice(toIndex, 0, movedLayer)
+      sortedLayers.splice(adjustedToIndex, 0, movedLayer)
       
       // 重新分配layer_order值
       const newOrders = {}
@@ -1588,7 +1604,11 @@ export default {
         const newOrder = totalLayers - index
         // 使用 scene_layer_id 或 id 作为键
         const layerId = layer.scene_layer_id || layer.id
-        newOrders[layerId] = newOrder
+        if (layerId) {
+          newOrders[layerId] = newOrder
+        } else {
+          console.warn('图层缺少ID:', layer)
+        }
       })
       
       return newOrders
@@ -1931,21 +1951,59 @@ export default {
         dragClass: 'sortable-drag', // 拖拽时的样式
         onEnd: async (evt) => {
           const { oldIndex, newIndex } = evt
+          
+          // 检查索引是否有效
+          if (oldIndex === null || oldIndex === undefined || 
+              newIndex === null || newIndex === undefined) {
+            console.warn('拖拽排序索引无效:', { oldIndex, newIndex })
+            return
+          }
+          
           if (oldIndex === newIndex) return
           
+          // 检查场景ID是否存在
+          if (!selectedSceneId.value) {
+            console.warn('场景ID不存在，无法更新图层顺序')
+            ElMessage.warning('请先选择场景')
+            return
+          }
+          
+          // 检查图层列表是否存在
+          if (!sortedLayersList.value || sortedLayersList.value.length === 0) {
+            console.warn('图层列表为空，无法更新图层顺序')
+            return
+          }
+          
           try {
+            console.log('开始更新图层顺序:', { oldIndex, newIndex, sceneId: selectedSceneId.value })
+            
             // 计算新的图层顺序
             const newOrders = calculateNewLayersOrder(oldIndex, newIndex)
+            console.log('计算得到的新顺序:', newOrders)
+            
+            // 检查新顺序是否有效
+            if (!newOrders || Object.keys(newOrders).length === 0) {
+              console.warn('计算得到的新顺序为空')
+              ElMessage.warning('无法计算新的图层顺序')
+              return
+            }
+            
             // 更新到后端
             await updateLayersOrder(newOrders)
+            console.log('后端接口调用成功')
+            
             // 重新获取图层列表
             await fetchSceneLayers(selectedSceneId.value)
             ElMessage.success('图层顺序已更新')
           } catch (error) {
             console.error('更新图层顺序失败:', error)
-            ElMessage.error('更新图层顺序失败')
+            ElMessage.error('更新图层顺序失败: ' + (error.message || '未知错误'))
             // 如果失败，重新获取图层列表恢复原状
-            await fetchSceneLayers(selectedSceneId.value)
+            try {
+              await fetchSceneLayers(selectedSceneId.value)
+            } catch (fetchError) {
+              console.error('重新获取图层列表失败:', fetchError)
+            }
           }
         }
       })
@@ -2472,13 +2530,13 @@ export default {
 .layer-cards {
   display: flex;
   flex-direction: column;
-  gap: 6px; /* 减小间距 */
-  padding: 4px 0; /* 减小内边距 */
+  gap: 0; /* 无间距，紧凑排列 */
+  padding: 0; /* 无内边距 */
 }
 
 .layer-card {
   /* CSS变量定义 - 紧凑样式 */
-  --layer-card-spacing: 2px;
+  --layer-card-spacing: 0px;
   --layer-card-padding: 4px 8px; /* 减小内边距 */
   --layer-card-border-radius: 4px;
   --layer-info-spacing: 2px;
@@ -2486,11 +2544,25 @@ export default {
 
   background: white;
   border: 1px solid #e4e7ed;
-  border-radius: var(--layer-card-border-radius);
-  margin-bottom: var(--layer-card-spacing);
+  border-top: none; /* 移除上边框，避免重叠 */
+  border-radius: 0; /* 移除圆角，紧凑排列 */
+  margin-bottom: 0; /* 无间距，紧凑排列 */
   cursor: pointer;
   transition: all 0.25s ease;
   position: relative;
+}
+
+/* 第一个卡片保留上边框和上圆角 */
+.layer-card:first-child {
+  border-top: 1px solid #e4e7ed;
+  border-top-left-radius: var(--layer-card-border-radius);
+  border-top-right-radius: var(--layer-card-border-radius);
+}
+
+/* 最后一个卡片添加下圆角 */
+.layer-card:last-child {
+  border-bottom-left-radius: var(--layer-card-border-radius);
+  border-bottom-right-radius: var(--layer-card-border-radius);
 }
 
 /* 🔥 拖拽相关样式 */
