@@ -53,9 +53,12 @@ class SLDStyleService:
                 raise ValueError(f"不支持的几何类型: {geometry_type}")
             
             # 读取文件内容，尝试多种编码
+            # 优先尝试GBK/GB2312编码，因为很多中文SLD文件使用这些编码
             file_bytes = file.read()
             content = None
-            encodings = ['utf-8', 'utf-8-sig', 'gbk', 'gb2312', 'latin-1']
+            
+            # 编码尝试顺序：优先GBK/GB2312，因为用户反馈的乱码问题通常是因为GBK文件被UTF-8误读
+            encodings = ['gbk', 'gb2312', 'utf-8', 'utf-8-sig', 'latin-1']
             
             for encoding in encodings:
                 try:
@@ -298,8 +301,8 @@ class SLDStyleService:
             if file_path and os.path.exists(file_path):
                 try:
                     logger.info(f"尝试从文件系统读取SLD文件: {file_path}")
-                    # 尝试多种编码读取文件
-                    encodings = ['utf-8', 'utf-8-sig', 'gbk', 'gb2312']
+                    # 优先尝试GBK/GB2312编码，因为很多中文SLD文件使用这些编码
+                    encodings = ['gbk', 'gb2312', 'utf-8', 'utf-8-sig']
                     for encoding in encodings:
                         try:
                             with open(file_path, 'r', encoding=encoding) as f:
@@ -646,3 +649,4 @@ class SLDStyleService:
         except Exception as e:
             logger.error(f"几何类型验证失败: {str(e)}")
             return False
+    
