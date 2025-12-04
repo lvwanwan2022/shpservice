@@ -5240,12 +5240,6 @@ AbsolutePath=false
                 logger.error(f"XML解析错误位置: {getattr(e, 'position', '未知')}")
                 return False
             
-            # 检测是否包含乱码字符（GBK被UTF-8误读的特征）
-            if self._contains_garbled_text_in_sld(sld_content):
-                logger.warning("⚠️ 警告：检测到SLD内容中可能包含乱码字符，这可能导致GeoServer中显示乱码")
-                logger.warning("建议：请确保SLD文件使用正确的编码（GBK/GB2312或UTF-8）")
-                # 不阻止上传，但记录警告
-            
             # 保存原始内容，尽量不修改SLD内容
             # 确保XML声明中包含正确的UTF-8编码声明
             sld_content_to_upload = original_sld_content
@@ -5547,33 +5541,4 @@ AbsolutePath=false
             error_msg = f"创建或更新样式失败: {str(e)}"
             print(error_msg)
             logger.error(error_msg, exc_info=True)
-            return False
-    
-    def _contains_garbled_text_in_sld(self, text):
-        """检测SLD文本是否包含典型的乱码字符（GBK被UTF-8误读的特征）
-        
-        当GBK编码的中文被UTF-8误读时，会产生特定的乱码字符模式。
-        例如："灌区"在GBK编码下被UTF-8误读会变成"鐏屽尯"
-        """
-        try:
-            import re
-            # 检测典型的乱码字符模式
-            # 这些字符通常是GBK编码的中文被UTF-8误读后产生的
-            garbled_patterns = [
-                r'鐏',  # 灌的乱码
-                r'鑼',  # 范的乱码
-                r'洿',  # 围的乱码
-                r'涔',  # 永的乱码
-                r'啘',  # 农的乱码
-                r'鐢',  # 田的乱码
-            ]
-            
-            # 如果包含这些典型的乱码字符，很可能是编码问题
-            for pattern in garbled_patterns:
-                if re.search(pattern, text):
-                    logger.debug(f"检测到乱码模式: {pattern}")
-                    return True
-            
-            return False
-        except Exception:
             return False

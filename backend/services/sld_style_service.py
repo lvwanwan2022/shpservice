@@ -56,21 +56,13 @@ class SLDStyleService:
             # 优先尝试GBK/GB2312编码，因为很多中文SLD文件使用这些编码
             file_bytes = file.read()
             content = None
-            used_encoding = None
             
             # 编码尝试顺序：优先GBK/GB2312，因为用户反馈的乱码问题通常是因为GBK文件被UTF-8误读
             encodings = ['gbk', 'gb2312', 'utf-8', 'utf-8-sig', 'latin-1']
             
             for encoding in encodings:
                 try:
-                    decoded_content = file_bytes.decode(encoding)
-                    # 检测是否包含典型的乱码字符（GBK被UTF-8误读的特征）
-                    # 如果包含乱码特征，继续尝试其他编码
-                    if encoding == 'utf-8' and self._contains_garbled_text(decoded_content):
-                        logger.warning(f"使用 {encoding} 解码后检测到可能的乱码，继续尝试其他编码")
-                        continue
-                    content = decoded_content
-                    used_encoding = encoding
+                    content = file_bytes.decode(encoding)
                     logger.info(f"成功使用 {encoding} 编码读取文件")
                     break
                 except UnicodeDecodeError:
@@ -78,19 +70,6 @@ class SLDStyleService:
             
             if content is None:
                 raise ValueError("无法解码SLD文件，请确保文件使用UTF-8、GBK或GB2312编码")
-            
-            # 验证中文字符是否正确解码（如果文件包含中文）
-            if self._contains_chinese(content):
-                # 检查是否包含乱码特征
-                if self._contains_garbled_text(content):
-                    logger.warning("检测到可能的乱码字符，尝试使用GBK重新解码")
-                    # 尝试使用GBK重新解码
-                    try:
-                        content = file_bytes.decode('gbk')
-                        used_encoding = 'gbk'
-                        logger.info("使用GBK重新解码成功，中文字符已正确还原")
-                    except UnicodeDecodeError:
-                        logger.warning("GBK重新解码失败，保持原解码结果")
             
             # 验证SLD文件格式
             if not self._validate_sld_content(content, geometry_type):
@@ -327,12 +306,7 @@ class SLDStyleService:
                     for encoding in encodings:
                         try:
                             with open(file_path, 'r', encoding=encoding) as f:
-                                decoded_content = f.read()
-                            # 检测是否包含乱码
-                            if encoding == 'utf-8' and self._contains_garbled_text(decoded_content):
-                                logger.warning(f"使用 {encoding} 解码后检测到可能的乱码，继续尝试其他编码")
-                                continue
-                            sld_content = decoded_content
+                                sld_content = f.read()
                             logger.info(f"✅ 成功从文件系统读取SLD文件，使用编码: {encoding}, 内容长度: {len(sld_content)} 字符")
                             content_source = f"文件系统({encoding})"
                             break
@@ -346,31 +320,12 @@ class SLDStyleService:
                             file_bytes = f.read()
                         for encoding in encodings:
                             try:
-                                decoded_content = file_bytes.decode(encoding)
-                                # 检测是否包含乱码
-                                if encoding == 'utf-8' and self._contains_garbled_text(decoded_content):
-                                    logger.warning(f"使用 {encoding} 解码后检测到可能的乱码，继续尝试其他编码")
-                                    continue
-                                sld_content = decoded_content
+                                sld_content = file_bytes.decode(encoding)
                                 logger.info(f"✅ 成功从二进制读取SLD文件，使用编码: {encoding}, 内容长度: {len(sld_content)} 字符")
                                 content_source = f"文件系统(二进制,{encoding})"
                                 break
                             except UnicodeDecodeError:
                                 continue
-                    
-                    # 如果读取成功但包含中文，验证是否包含乱码
-                    if sld_content and self._contains_chinese(sld_content):
-                        if self._contains_garbled_text(sld_content):
-                            logger.warning("检测到可能的乱码字符，尝试使用GBK重新解码")
-                            # 尝试使用GBK重新解码
-                            try:
-                                with open(file_path, 'rb') as f:
-                                    file_bytes = f.read()
-                                sld_content = file_bytes.decode('gbk')
-                                logger.info("使用GBK重新解码成功，中文字符已正确还原")
-                                content_source = f"文件系统(GBK重新解码)"
-                            except (UnicodeDecodeError, FileNotFoundError):
-                                logger.warning("GBK重新解码失败，保持原解码结果")
                 except Exception as e:
                     logger.warning(f"从文件系统读取SLD文件失败: {str(e)}，将使用数据库中的内容")
             
@@ -695,45 +650,3 @@ class SLDStyleService:
             logger.error(f"几何类型验证失败: {str(e)}")
             return False
     
-    def _contains_chinese(self, text):
-        """检测文本是否包含中文字符"""
-        try:
-            import re
-            # 匹配中文字符的Unicode范围
-            chinese_pattern = re.compile(r'[\u4e00-\u9fff]+')
-            return bool(chinese_pattern.search(text))
-        except Exception:
-            return False
-    
-    def _contains_garbled_text(self, text):
-        """检测文本是否包含典型的乱码字符（GBK被UTF-8误读的特征）
-        
-        当GBK编码的中文被UTF-8误读时，会产生特定的乱码字符模式。
-        例如："灌区"在GBK编码下被UTF-8误读会变成"鐏屽尯"
-        """
-        try:
-            import re
-            # 检测典型的乱码字符模式
-            # 这些字符通常是GBK编码的中文被UTF-8误读后产生的
-            garbled_patterns = [
-                r'鐏',  # 灌的乱码
-                r'鑼',  # 范的乱码
-                r'洿',  # 围的乱码
-                r'涔',  # 永的乱码
-                r'啘',  # 农的乱码
-                r'鐢',  # 田的乱码
-            ]
-            
-            # 如果包含这些典型的乱码字符，很可能是编码问题
-            for pattern in garbled_patterns:
-                if re.search(pattern, text):
-                    logger.debug(f"检测到乱码模式: {pattern}")
-                    return True
-            
-            # 更通用的检测：如果包含大量非常用Unicode字符（可能是乱码）
-            # 检查是否包含大量不在常见中文字符范围内的字符
-            # 但这个方法可能误判，所以只作为辅助检测
-            
-            return False
-        except Exception:
-            return False
