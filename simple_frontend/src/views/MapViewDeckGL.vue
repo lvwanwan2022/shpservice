@@ -45,7 +45,7 @@
           
           <div class="panel-body">
             <!-- 图层卡片列表 -->
-            <div class="layer-cards" v-if="layersList && layersList.length > 0">
+            <div class="layer-cards" ref="layerCardsContainer" v-if="layersList && layersList.length > 0">
               <div 
                 v-for="layer in sortedLayersList" 
                 :key="layer.scene_layer_id || layer.id" 
@@ -54,9 +54,16 @@
                   'active': currentActiveLayer && currentActiveLayer.scene_layer_id === layer.scene_layer_id,
                   'invisible': !layer.visibility
                 }"
+                :data-layer-id="layer.scene_layer_id || layer.id"
                 @click="selectLayer(layer)"
               >
                 <div class="layer-card-header" :class="{ 'invisible': !layer.visibility }">
+                  <!-- 拖拽手柄 -->
+                  <div class="drag-handle" @mousedown.stop>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                      <path d="M9 5h2v2H9V5zm0 6h2v2H9v-2zm0 6h2v2H9v-2zm4-12h2v2h-2V5zm0 6h2v2h-2v-2zm0 6h2v2h-2v-2z"/>
+                    </svg>
+                  </div>
                   <div class="layer-title">
                     <!-- 可见性控制checkbox -->
                     <el-checkbox 
@@ -799,7 +806,7 @@
 
 <script>
 /* eslint-disable */
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import MapViewerDeckGL from '@/components/MapViewerDeckGL.vue'
@@ -809,6 +816,8 @@ import gisApi from '@/api/gis'
 import DxfStyleEditor from '@/components/DxfStyleEditor.vue'
 import SldStyleSelector from '@/components/SldStyleSelector.vue'
 import { Loading } from '@element-plus/icons-vue'
+// 🔥 添加拖拽排序库
+import Sortable from 'sortablejs'
 
 export default {
   name: 'MapViewDeckGL',
@@ -835,6 +844,10 @@ export default {
     const isDragging = ref(false)
     const dragStartY = ref(0)
     const drawerStartY = ref(0)
+    
+    // 🔥 图层卡片容器引用（用于拖拽排序）
+    const layerCardsContainer = ref(null)
+    let sortableInstance = null
     const addLayerDialogVisible = ref(false)
     const loadingLayers = ref(false)
     const layersCacheEnabled = ref(true)
@@ -1555,11 +1568,9 @@ export default {
     
     // 计算新的图层顺序
     const calculateNewLayersOrder = (fromIndex, toIndex) => {
-      // 使用原始图层列表而不是排序后的列表来进行顺序调整
-      const originalLayers = [...layersList.value]
-      
-      // 首先按layer_order降序排序，确保顺序一致
-      const sortedLayers = [...originalLayers].sort((a, b) => (b.layer_order || 0) - (a.layer_order || 0))
+      // 使用排序后的图层列表（sortedLayersList）来进行顺序调整
+      // 因为拖拽是基于显示顺序进行的
+      const sortedLayers = [...sortedLayersList.value]
       
       const movedLayer = sortedLayers[fromIndex]
       
@@ -1572,10 +1583,12 @@ export default {
       const newOrders = {}
       const totalLayers = sortedLayers.length
       
-      // 从1开始分配，值越大越在上面
+      // 从1开始分配，值越大越在上面（与sortedLayersList的排序逻辑一致）
       sortedLayers.forEach((layer, index) => {
         const newOrder = totalLayers - index
-        newOrders[layer.id] = newOrder
+        // 使用 scene_layer_id 或 id 作为键
+        const layerId = layer.scene_layer_id || layer.id
+        newOrders[layerId] = newOrder
       })
       
       return newOrders
@@ -1899,9 +1912,76 @@ export default {
       }
     })
 
+    // 🔥 初始化拖拽排序
+    const initSortable = () => {
+      if (!layerCardsContainer.value) return
+      
+      // 如果已存在实例，先销毁
+      if (sortableInstance) {
+        sortableInstance.destroy()
+        sortableInstance = null
+      }
+      
+      // 创建新的 sortable 实例
+      sortableInstance = Sortable.create(layerCardsContainer.value, {
+        handle: '.drag-handle', // 指定拖拽手柄
+        animation: 150, // 动画时长
+        ghostClass: 'sortable-ghost', // 拖拽时的占位符样式
+        chosenClass: 'sortable-chosen', // 选中时的样式
+        dragClass: 'sortable-drag', // 拖拽时的样式
+        onEnd: async (evt) => {
+          const { oldIndex, newIndex } = evt
+          if (oldIndex === newIndex) return
+          
+          try {
+            // 计算新的图层顺序
+            const newOrders = calculateNewLayersOrder(oldIndex, newIndex)
+            // 更新到后端
+            await updateLayersOrder(newOrders)
+            // 重新获取图层列表
+            await fetchSceneLayers(selectedSceneId.value)
+            ElMessage.success('图层顺序已更新')
+          } catch (error) {
+            console.error('更新图层顺序失败:', error)
+            ElMessage.error('更新图层顺序失败')
+            // 如果失败，重新获取图层列表恢复原状
+            await fetchSceneLayers(selectedSceneId.value)
+          }
+        }
+      })
+    }
+    
     // 组件挂载时获取数据
     onMounted(() => {
       fetchSceneList()
+      // 延迟初始化拖拽，确保 DOM 已渲染
+      nextTick(() => {
+        initSortable()
+      })
+    })
+    
+    // 组件卸载时清理
+    onUnmounted(() => {
+      if (sortableInstance) {
+        sortableInstance.destroy()
+        sortableInstance = null
+      }
+    })
+    
+    // 监听图层列表变化，重新初始化拖拽
+    watch(() => layersList.value.length, () => {
+      nextTick(() => {
+        initSortable()
+      })
+    })
+    
+    // 监听面板展开/收起状态，重新初始化拖拽
+    watch(() => layerPanelCollapsed.value, () => {
+      if (!layerPanelCollapsed.value) {
+        nextTick(() => {
+          initSortable()
+        })
+      }
     })
     
     // 🔥 应用样式
@@ -2001,6 +2081,7 @@ export default {
     return {
       // 组件引用
       mapViewer,
+      layerCardsContainer, // 🔥 图层卡片容器引用
       
       // 响应式数据
       layerPanelCollapsed,
@@ -2391,15 +2472,15 @@ export default {
 .layer-cards {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 8px 0;
+  gap: 6px; /* 减小间距 */
+  padding: 4px 0; /* 减小内边距 */
 }
 
 .layer-card {
-  /* CSS变量定义 - 与OpenLayers保持一致 */
-  --layer-card-spacing: 4px;
-  --layer-card-padding: 6px 10px;
-  --layer-card-border-radius: 6px;
+  /* CSS变量定义 - 紧凑样式 */
+  --layer-card-spacing: 2px;
+  --layer-card-padding: 4px 8px; /* 减小内边距 */
+  --layer-card-border-radius: 4px;
   --layer-info-spacing: 2px;
   --tag-padding: 0px 4px;
 
@@ -2410,6 +2491,22 @@ export default {
   cursor: pointer;
   transition: all 0.25s ease;
   position: relative;
+}
+
+/* 🔥 拖拽相关样式 */
+.layer-card.sortable-ghost {
+  opacity: 0.4;
+  background: #f0f9ff;
+  border-color: #409eff;
+}
+
+.layer-card.sortable-chosen {
+  box-shadow: 0 2px 12px rgba(64, 158, 255, 0.2);
+}
+
+.layer-card.sortable-drag {
+  opacity: 0.8;
+  transform: rotate(2deg);
 }
 
 
@@ -2432,15 +2529,35 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #f5f7fa;
   background: white;
-  border-radius: var(--layer-card-border-radius) var(--layer-card-border-radius) 0 0;
+  border-radius: var(--layer-card-border-radius);
+  gap: 6px; /* 减小元素间距 */
+}
+
+/* 🔥 拖拽手柄样式 */
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #909399;
+  cursor: grab;
+  padding: 2px;
+  flex-shrink: 0;
+  transition: color 0.2s;
+}
+
+.drag-handle:hover {
+  color: #409eff;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
 }
 
 .layer-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px; /* 减小间距 */
   font-weight: 500;
   flex: 1;
   min-width: 0; /* 允许flex子项收缩 */
@@ -2453,7 +2570,7 @@ export default {
 }
 
 .layer-name {
-  font-size: 14px;
+  font-size: 13px; /* 减小字体 */
   color: #303133;
   white-space: nowrap;
   overflow: hidden;
@@ -2476,9 +2593,10 @@ export default {
 }
 
 .zoom-btn, .remove-btn, .settings-btn {
-  padding: 4px;
+  padding: 2px 4px; /* 减小按钮内边距 */
   color: #666;
   transition: color 0.2s;
+  min-width: auto; /* 移除最小宽度限制 */
 }
 
 .zoom-btn:hover {
