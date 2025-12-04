@@ -16,7 +16,6 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
-import { ElMessage } from 'element-plus'
 // 只引入我们需要的图标
 import { 
   Search, Refresh, User, Clock, Paperclip, 
