@@ -4981,7 +4981,7 @@ AbsolutePath=false
                 print(f"样式 {style_name} 已存在，将更新")
                 # 更新样式
                 style_url = f"{self.rest_url}/styles/{style_name}"
-                headers = {'Content-Type': 'application/vnd.ogc.sld+xml'}
+                headers = {'Content-Type': 'application/vnd.ogc.se+xml; charset=utf-8'}
                 style_response = requests.put(
                     style_url, 
                     data=style_xml, 
@@ -5013,7 +5013,7 @@ AbsolutePath=false
                     return False
                 
                 # 2. 上传样式内容
-                headers_xml = {'Content-Type': 'application/vnd.ogc.sld+xml'}
+                headers_xml = {'Content-Type': 'application/vnd.ogc.se+xml; charset=utf-8'}
                 style_content_url = f"{self.rest_url}/styles/{style_name}"
                 
                 style_response = requests.put(
@@ -5297,13 +5297,13 @@ AbsolutePath=false
                 style_check_response = type('obj', (object,), {'status_code': 404})()
             
             # 设置正确的Content-Type，包含字符编码
-            # 使用 application/vnd.ogc.sld+xml 或 application/xml
+            # 使用 application/vnd.ogc.se+xml（GeoServer文档要求的正确MIME类型）
             # 注意：使用 ?raw=true 参数可以避免GeoServer解析和转换SLD，保持原始格式（包括SLD 1.1.0）
             # 重要修复：使用data参数传递UTF-8编码的字节，并设置正确的Content-Type
             # Content-Type必须明确指定charset=utf-8，这样GeoServer才能正确识别编码
             # 即使传递的是字节数据，也需要在Content-Type中指定charset，告诉GeoServer如何解码
             headers_xml = {
-                'Content-Type': 'application/vnd.ogc.sld+xml; charset=utf-8',
+                'Content-Type': 'application/vnd.ogc.se+xml; charset=utf-8',
                 'Accept': 'application/xml'
             }
             logger.info("使用 ?raw=true 参数上传SLD，以保持原始格式（支持SLD 1.1.0）")
@@ -5332,7 +5332,7 @@ AbsolutePath=false
                         logger.debug(f"SLD内容前200字符（用于验证编码）: {sld_content[:200]}")
                         
                         # 关键修复：显式将字符串编码为UTF-8字节
-                        # 使用data参数传递字节数据，Content-Type设置为application/vnd.ogc.sld+xml; charset=utf-8
+                        # 使用data参数传递字节数据，Content-Type设置为application/vnd.ogc.se+xml; charset=utf-8
                         # Content-Type中必须明确指定charset=utf-8，这样GeoServer才能正确识别编码
                         # 即使传递的是字节数据，也需要在Content-Type中指定charset，告诉GeoServer如何解码
                         sld_bytes = sld_content.encode('utf-8')
@@ -5450,7 +5450,7 @@ AbsolutePath=false
                         logger.debug(f"SLD内容前200字符（用于验证编码）: {sld_content[:200]}")
                         
                         # 关键修复：显式将字符串编码为UTF-8字节
-                        # 使用data参数传递字节数据，Content-Type设置为application/vnd.ogc.sld+xml; charset=utf-8
+                        # 使用data参数传递字节数据，Content-Type设置为application/vnd.ogc.se+xml; charset=utf-8
                         # Content-Type中必须明确指定charset=utf-8，这样GeoServer才能正确识别编码
                         # 即使传递的是字节数据，也需要在Content-Type中指定charset，告诉GeoServer如何解码
                         sld_bytes = sld_content.encode('utf-8')

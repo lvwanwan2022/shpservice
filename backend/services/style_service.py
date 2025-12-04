@@ -39,7 +39,7 @@ class StyleService:
             
             auth = HTTPBasicAuth(username, password)
             headers = {
-                'Content-Type': 'application/vnd.ogc.sld+xml; charset=utf-8'
+                'Content-Type': 'application/vnd.ogc.se+xml; charset=utf-8'
             }
             
             print(f"准备创建/更新GeoServer样式: {workspace_name}:{style_name}")
