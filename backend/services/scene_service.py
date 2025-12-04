@@ -607,32 +607,63 @@ class SceneService:
         
         Args:
             scene_id: 场景ID
-            layer_order_map: 图层ID到顺序的映射，例如：{"326586450273505300": 2, "326656740819079200": 1}
+            layer_order_map: 场景图层ID到顺序的映射，例如：{"326586450273505300": 2, "326656740819079200": 1}
+                注意：这里的key是scene_layer_id（scene_layers表的id），不是layer_id
             
         Returns:
             True 如果更新成功
         """
-        for layer_id, order in layer_order_map.items():
-            # 🔥 确保layer_id转换为整数类型（对于数据库查询）
+        # 🔥 确保scene_id转换为整数类型
+        try:
+            scene_id_int = int(scene_id)
+        except (ValueError, TypeError):
+            print(f"错误：无效的scene_id格式: {scene_id}")
+            raise ValueError(f"无效的scene_id格式: {scene_id}")
+        
+        updated_count = 0
+        failed_count = 0
+        
+        for scene_layer_id_str, order in layer_order_map.items():
+            # 🔥 确保scene_layer_id转换为整数类型（scene_layers表的id）
             try:
-                layer_id_int = int(layer_id)
+                scene_layer_id_int = int(scene_layer_id_str)
             except ValueError:
-                print(f"警告：无效的layer_id格式: {layer_id}")
+                print(f"警告：无效的scene_layer_id格式: {scene_layer_id_str}")
+                failed_count += 1
                 continue
-                
+            
+            # 🔥 使用scene_layers表的id（主键）来更新，而不是layer_id
             sql = """
             UPDATE scene_layers
             SET layer_order = %(order)s
-            WHERE scene_id = %(scene_id)s AND layer_id = %(layer_id)s
+            WHERE id = %(scene_layer_id)s AND scene_id = %(scene_id)s
             """
             
             params = {
-                'scene_id': scene_id,
-                'layer_id': layer_id_int,  # 数据库中layer_id是BIGINT类型
-                'order': order
+                'scene_id': scene_id_int,
+                'scene_layer_id': scene_layer_id_int,  # 使用scene_layers表的id（主键）
+                'order': int(order)
             }
             
-            print(f"更新图层顺序: scene_id={scene_id}, layer_id={layer_id_int}, order={order}")
-            execute_query(sql, params)
+            print(f"更新图层顺序: scene_id={scene_id_int}, scene_layer_id={scene_layer_id_int}, order={order}")
+            
+            try:
+                # execute_query对于UPDATE操作返回受影响的行数
+                rowcount = execute_query(sql, params)
+                if rowcount > 0:
+                    updated_count += 1
+                    print(f"✅ 成功更新图层顺序: scene_layer_id={scene_layer_id_int}, 受影响行数={rowcount}")
+                else:
+                    failed_count += 1
+                    print(f"⚠️ 警告：未找到匹配的记录: scene_id={scene_id_int}, scene_layer_id={scene_layer_id_int}")
+            except Exception as e:
+                failed_count += 1
+                print(f"❌ 更新图层顺序失败: scene_layer_id={scene_layer_id_int}, 错误={str(e)}")
+                # 继续处理其他图层，不中断整个流程
+        
+        print(f"图层顺序更新完成: 成功={updated_count}, 失败={failed_count}, 总计={len(layer_order_map)}")
+        
+        if failed_count > 0:
+            print(f"警告：有 {failed_count} 个图层更新失败")
         
         return True
