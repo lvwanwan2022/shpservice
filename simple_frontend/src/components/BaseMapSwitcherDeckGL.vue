@@ -149,6 +149,21 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
+  background: white !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  border: none;
+  color: #333;
+  transition: all 0.2s ease;
+}
+
+.base-map-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.base-map-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
 .base-map-button svg {
