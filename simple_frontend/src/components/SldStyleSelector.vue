@@ -65,6 +65,68 @@
         </el-empty>
       </div>
 
+      <!-- 电脑端：使用表格列表展示 -->
+      <div v-else-if="isDesktop" class="style-table-container">
+        <el-table 
+          :data="filteredStyles" 
+          v-loading="loading"
+          style="width: 100%"
+          :row-class-name="getRowClassName"
+          @row-click="handleRowClick"
+          highlight-current-row
+        >
+          <el-table-column prop="name" label="样式名称" min-width="150" />
+          <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
+          <el-table-column prop="geometry_type" label="几何类型" width="100">
+            <template #default="{ row }">
+              <el-tag size="small" :type="getGeometryTypeTagType(row.geometry_type)">
+                {{ getGeometryTypeLabel(row.geometry_type) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="file_size" label="文件大小" width="100">
+            <template #default="{ row }">
+              {{ formatFileSize(row.file_size) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="created_at" label="创建时间" width="180">
+            <template #default="{ row }">
+              {{ formatDate(row.created_at) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="280" fixed="right">
+            <template #default="{ row }">
+              <el-button size="small" @click.stop="editStyle(row)">
+                <el-icon><Edit /></el-icon>
+                编辑
+              </el-button>
+              <el-button size="small" @click.stop="downloadStyle(row.id)">
+                <el-icon><Download /></el-icon>
+                下载
+              </el-button>
+              <el-button
+                size="small"
+                type="primary"
+                @click.stop="applyStyle(row)"
+                :loading="applyingStyleId === row.id"
+              >
+                应用
+              </el-button>
+              <el-button
+                size="small"
+                type="danger"
+                @click.stop="deleteStyle(row.id)"
+                :loading="deletingStyleId === row.id"
+              >
+                <el-icon><Delete /></el-icon>
+                删除
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <!-- 移动端：使用卡片网格展示 -->
       <div v-else class="style-grid">
         <div
           v-for="style in filteredStyles"
@@ -103,6 +165,15 @@
               :loading="applyingStyleId === style.id"
             >
               应用
+            </el-button>
+            <el-button
+              size="small"
+              type="danger"
+              @click.stop="deleteStyle(style.id)"
+              :loading="deletingStyleId === style.id"
+            >
+              <el-icon><Delete /></el-icon>
+              删除
             </el-button>
           </div>
         </div>
@@ -244,10 +315,11 @@
 </template>
 
 <script>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, Upload, Download, Loading, Edit } from '@element-plus/icons-vue'
+import { Refresh, Upload, Download, Loading, Edit, Delete } from '@element-plus/icons-vue'
 import { sldStyleApi } from '@/api/sldStyle'
+import { getDeviceType } from '@/utils/deviceUtils'
 
 export default {
   name: 'SldStyleSelector',
@@ -256,7 +328,8 @@ export default {
     Upload,
     Download,
     Loading,
-    Edit
+    Edit,
+    Delete
   },
   props: {
     layerId: {
@@ -279,7 +352,16 @@ export default {
     const selectedGeometryType = ref('')
     const selectedStyleId = ref(null)
     const applyingStyleId = ref(null)
+    const deletingStyleId = ref(null)
     const fileList = ref([])
+    
+    // 设备类型检测
+    const isDesktop = ref(getDeviceType() === 'desktop')
+    
+    // 监听窗口大小变化，更新设备类型
+    const handleResize = () => {
+      isDesktop.value = getDeviceType() === 'desktop'
+    }
     
     // 编辑相关状态
     const showEditDialog = ref(false)
@@ -460,6 +542,52 @@ export default {
       }
     }
 
+    // 删除样式
+    const deleteStyle = async (styleId) => {
+      try {
+        await ElMessageBox.confirm('确定要删除这个SLD样式吗？删除后无法恢复。', '确认删除', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+
+        deletingStyleId.value = styleId
+        await sldStyleApi.deleteSldStyle(styleId)
+        
+        ElMessage.success('SLD样式删除成功')
+        
+        // 如果删除的是当前选中的样式，清除选中状态
+        if (selectedStyleId.value === styleId) {
+          selectedStyleId.value = null
+        }
+        
+        // 如果删除的是当前应用的样式，清除当前样式
+        if (currentStyle.value && currentStyle.value.sld_style_id === styleId) {
+          currentStyle.value = null
+        }
+        
+        // 刷新样式列表
+        await loadSldStyles()
+      } catch (error) {
+        if (error !== 'cancel') {
+          console.error('删除SLD样式失败:', error)
+          ElMessage.error('删除SLD样式失败')
+        }
+      } finally {
+        deletingStyleId.value = null
+      }
+    }
+
+    // 表格行点击处理
+    const handleRowClick = (row) => {
+      selectStyle(row)
+    }
+
+    // 获取表格行类名
+    const getRowClassName = ({ row }) => {
+      return selectedStyleId.value === row.id ? 'selected-row' : ''
+    }
+
     // 上传SLD文件
     const uploadSldFile = async () => {
       try {
@@ -635,6 +763,13 @@ export default {
     // 初始化
     onMounted(() => {
       refreshStyles()
+      // 监听窗口大小变化
+      window.addEventListener('resize', handleResize)
+    })
+
+    // 组件卸载时移除事件监听
+    onUnmounted(() => {
+      window.removeEventListener('resize', handleResize)
     })
 
     return {
@@ -646,6 +781,8 @@ export default {
       selectedGeometryType,
       selectedStyleId,
       applyingStyleId,
+      deletingStyleId,
+      isDesktop,
       fileList,
       uploadForm,
       uploadRules,
@@ -660,6 +797,9 @@ export default {
       applyStyle,
       removeCurrentStyle,
       downloadStyle,
+      deleteStyle,
+      handleRowClick,
+      getRowClassName,
       uploadSldFile,
       handleFileChange,
       getGeometryTypeLabel,
@@ -895,5 +1035,54 @@ export default {
 .editor-tips p:first-child {
   color: #409eff;
   font-weight: bold;
+}
+
+/* 表格样式 */
+.style-table-container {
+  background: #fff;
+  border-radius: 4px;
+  padding: 0;
+}
+
+.style-table-container :deep(.el-table) {
+  border-radius: 4px;
+}
+
+.style-table-container :deep(.el-table__row) {
+  cursor: pointer;
+}
+
+.style-table-container :deep(.el-table__row:hover) {
+  background-color: #f5f7fa;
+}
+
+.style-table-container :deep(.el-table__row.selected-row) {
+  background-color: #f0f9ff;
+}
+
+.style-table-container :deep(.el-table__row.selected-row:hover) {
+  background-color: #e0f2fe;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .style-table-container {
+    display: none;
+  }
+  
+  .style-grid {
+    display: block;
+  }
+  
+  .style-card {
+    margin-bottom: 15px;
+  }
+}
+
+/* 电脑端隐藏卡片网格 */
+@media (min-width: 769px) {
+  .style-grid {
+    display: none;
+  }
 }
 </style>
