@@ -5299,12 +5299,15 @@ AbsolutePath=false
             # 设置正确的Content-Type，包含字符编码
             # 使用 application/vnd.ogc.sld+xml 或 application/xml
             # 注意：使用 ?raw=true 参数可以避免GeoServer解析和转换SLD，保持原始格式（包括SLD 1.1.0）
-            # 重要：确保Content-Type明确指定charset=utf-8，这样requests库和GeoServer都能正确识别编码
+            # 重要修复：使用data参数传递UTF-8编码的字节，并设置正确的Content-Type
+            # Content-Type必须明确指定charset=utf-8，这样GeoServer才能正确识别编码
+            # 即使传递的是字节数据，也需要在Content-Type中指定charset，告诉GeoServer如何解码
             headers_xml = {
                 'Content-Type': 'application/vnd.ogc.sld+xml; charset=utf-8',
                 'Accept': 'application/xml'
             }
             logger.info("使用 ?raw=true 参数上传SLD，以保持原始格式（支持SLD 1.1.0）")
+            logger.info("使用data参数传递UTF-8编码的字节，Content-Type指定charset=utf-8，确保中文字符正确传输")
             
             if style_check_response.status_code == 200:
                 print(f"样式 {style_name} 在工作空间 {workspace} 下已存在，将更新")
@@ -5329,11 +5332,23 @@ AbsolutePath=false
                         logger.debug(f"SLD内容前200字符（用于验证编码）: {sld_content[:200]}")
                         
                         # 关键修复：显式将字符串编码为UTF-8字节
-                        # requests库在传递字符串给data参数时，默认使用latin-1编码，而不是UTF-8
-                        # 即使Content-Type中指定了charset=utf-8，requests也不会自动使用UTF-8编码字符串
-                        # 因此必须显式地将字符串编码为UTF-8字节，确保中文字符正确传输
+                        # 使用data参数传递字节数据，Content-Type设置为application/vnd.ogc.sld+xml; charset=utf-8
+                        # Content-Type中必须明确指定charset=utf-8，这样GeoServer才能正确识别编码
+                        # 即使传递的是字节数据，也需要在Content-Type中指定charset，告诉GeoServer如何解码
                         sld_bytes = sld_content.encode('utf-8')
                         logger.debug(f"SLD内容编码为UTF-8字节，字节长度: {len(sld_bytes)}")
+                        logger.debug(f"SLD内容前200字节（十六进制）: {sld_bytes[:200].hex()}")
+                        
+                        # 验证编码：检查中文字符是否正确编码
+                        if '灌区' in sld_content or '旱地' in sld_content or '水田' in sld_content:
+                            test_chinese = '灌区' if '灌区' in sld_content else ('旱地' if '旱地' in sld_content else '水田')
+                            test_bytes = test_chinese.encode('utf-8')
+                            logger.debug(f"验证中文字符编码: '{test_chinese}' -> {test_bytes.hex()}")
+                            if test_bytes in sld_bytes:
+                                logger.info(f"✅ 验证通过：中文字符 '{test_chinese}' 已正确编码为UTF-8")
+                            else:
+                                logger.warning(f"⚠️ 警告：中文字符 '{test_chinese}' 可能未正确编码")
+                        
                         style_response = requests.put(
                             style_url,
                             data=sld_bytes,  # 传递UTF-8编码的字节，确保中文字符正确传输
@@ -5435,11 +5450,23 @@ AbsolutePath=false
                         logger.debug(f"SLD内容前200字符（用于验证编码）: {sld_content[:200]}")
                         
                         # 关键修复：显式将字符串编码为UTF-8字节
-                        # requests库在传递字符串给data参数时，默认使用latin-1编码，而不是UTF-8
-                        # 即使Content-Type中指定了charset=utf-8，requests也不会自动使用UTF-8编码字符串
-                        # 因此必须显式地将字符串编码为UTF-8字节，确保中文字符正确传输
+                        # 使用data参数传递字节数据，Content-Type设置为application/vnd.ogc.sld+xml; charset=utf-8
+                        # Content-Type中必须明确指定charset=utf-8，这样GeoServer才能正确识别编码
+                        # 即使传递的是字节数据，也需要在Content-Type中指定charset，告诉GeoServer如何解码
                         sld_bytes = sld_content.encode('utf-8')
                         logger.debug(f"SLD内容编码为UTF-8字节，字节长度: {len(sld_bytes)}")
+                        logger.debug(f"SLD内容前200字节（十六进制）: {sld_bytes[:200].hex()}")
+                        
+                        # 验证编码：检查中文字符是否正确编码
+                        if '灌区' in sld_content or '旱地' in sld_content or '水田' in sld_content:
+                            test_chinese = '灌区' if '灌区' in sld_content else ('旱地' if '旱地' in sld_content else '水田')
+                            test_bytes = test_chinese.encode('utf-8')
+                            logger.debug(f"验证中文字符编码: '{test_chinese}' -> {test_bytes.hex()}")
+                            if test_bytes in sld_bytes:
+                                logger.info(f"✅ 验证通过：中文字符 '{test_chinese}' 已正确编码为UTF-8")
+                            else:
+                                logger.warning(f"⚠️ 警告：中文字符 '{test_chinese}' 可能未正确编码")
+                        
                         style_response = requests.put(
                             style_content_url,
                             data=sld_bytes,  # 传递UTF-8编码的字节，确保中文字符正确传输
