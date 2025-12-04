@@ -101,12 +101,9 @@ const app = createApp(App)
 
 app.use(ElementPlus)
 
-// 配置 ElMessage 弹窗位置为右上角
-ElMessage.config({
-  offset: 80, // 距离顶部80px，避免覆盖导航栏
-  top: true,  // 从顶部开始
-  duration: 3000 // 默认显示时长3秒
-})
+// 注意：ElMessage 的样式配置已在 App.vue 中通过 CSS 完成
+// Element Plus 2.7+ 版本不支持 ElMessage.config() API
+// 如需配置消息默认行为，请使用 ConfigProvider 组件或在调用时传递选项
 
 // 注册Element Plus图标（使用符合命名规范的名称）
 app.component('ElSearch', Search)
