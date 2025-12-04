@@ -16,6 +16,7 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
+import { ElMessage } from 'element-plus'
 // 只引入我们需要的图标
 import { 
   Search, Refresh, User, Clock, Paperclip, 
@@ -99,6 +100,13 @@ const app = createApp(App)
 
 
 app.use(ElementPlus)
+
+// 配置 ElMessage 弹窗位置为右上角
+ElMessage.config({
+  offset: 80, // 距离顶部80px，避免覆盖导航栏
+  top: true,  // 从顶部开始
+  duration: 3000 // 默认显示时长3秒
+})
 
 // 注册Element Plus图标（使用符合命名规范的名称）
 app.component('ElSearch', Search)

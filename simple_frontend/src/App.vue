@@ -249,4 +249,40 @@ div[data-v-inspector] {
 .mobile-menu-btn {
   display: none;
 }
+
+/* 配置消息弹窗位置为右上角，避免覆盖导航栏 */
+/* 使用全局样式覆盖 Element Plus 默认的居中样式 */
+.el-message {
+  top: 80px !important;
+  left: auto !important;
+  right: 20px !important;
+  transform: none !important;
+  min-width: 300px;
+  position: fixed !important;
+  margin-left: 0 !important;
+}
+
+/* 消息容器定位到右上角 */
+.el-message-container {
+  top: 80px !important;
+  left: auto !important;
+  right: 20px !important;
+  transform: none !important;
+  position: fixed !important;
+}
+
+/* 确保所有消息弹窗都从右侧对齐（包括动态创建的） */
+body > .el-message,
+body > div[id*="el-message"],
+.el-message--success,
+.el-message--error,
+.el-message--warning,
+.el-message--info {
+  top: 80px !important;
+  right: 20px !important;
+  left: auto !important;
+  transform: none !important;
+  position: fixed !important;
+  margin-left: 0 !important;
+}
 </style>
