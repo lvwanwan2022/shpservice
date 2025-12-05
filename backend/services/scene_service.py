@@ -28,20 +28,79 @@ class SceneService:
         Returns:
             True 如果更新成功
         """
+        # 构建动态更新字段
+        update_fields = []
+        params = {'scene_id': scene_id}
+        
+        if 'name' in scene_data:
+            update_fields.append('name = %(name)s')
+            params['name'] = scene_data.get('name')
+        if 'description' in scene_data:
+            update_fields.append('description = %(description)s')
+            params['description'] = scene_data.get('description')
+        if 'is_public' in scene_data:
+            update_fields.append('is_public = %(is_public)s')
+            params['is_public'] = scene_data.get('is_public')
+        if 'bbox' in scene_data:
+            update_fields.append('bbox = %(bbox)s::jsonb')
+            bbox = scene_data.get('bbox')
+            if bbox:
+                params['bbox'] = json.dumps(bbox) if isinstance(bbox, (dict, list)) else bbox
+            else:
+                params['bbox'] = None
+        
+        if not update_fields:
+            return True
+        
+        update_fields.append('updated_at = CURRENT_TIMESTAMP')
+        
+        sql = f"""
+        UPDATE scenes
+        SET {', '.join(update_fields)}
+        WHERE id = %(scene_id)s
+        """
+        
+        execute_query(sql, params)
+        return True
+    
+    def update_scene_bbox(self, scene_id, bbox):
+        """更新场景范围
+        
+        Args:
+            scene_id: 场景ID
+            bbox: 边界框，格式为 [minx, miny, maxx, maxy] 或 {minx, miny, maxx, maxy}
+            
+        Returns:
+            True 如果更新成功
+        """
+        # 统一转换为JSON格式
+        if isinstance(bbox, list) and len(bbox) == 4:
+            bbox_dict = {
+                'minx': float(bbox[0]),
+                'miny': float(bbox[1]),
+                'maxx': float(bbox[2]),
+                'maxy': float(bbox[3])
+            }
+        elif isinstance(bbox, dict):
+            bbox_dict = {
+                'minx': float(bbox.get('minx', bbox.get('west', 0))),
+                'miny': float(bbox.get('miny', bbox.get('south', 0))),
+                'maxx': float(bbox.get('maxx', bbox.get('east', 0))),
+                'maxy': float(bbox.get('maxy', bbox.get('north', 0)))
+            }
+        else:
+            raise ValueError('bbox格式不正确，应为 [minx, miny, maxx, maxy] 或 {minx, miny, maxx, maxy}')
+        
         sql = """
         UPDATE scenes
-        SET name = %(name)s,
-            description = %(description)s,
-            is_public = %(is_public)s,
+        SET bbox = %(bbox)s::jsonb,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = %(scene_id)s
         """
         
         params = {
             'scene_id': scene_id,
-            'name': scene_data.get('name'),
-            'description': scene_data.get('description'),
-            'is_public': scene_data.get('is_public')
+            'bbox': json.dumps(bbox_dict)
         }
         
         execute_query(sql, params)

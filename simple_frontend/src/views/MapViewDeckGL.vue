@@ -122,6 +122,19 @@
               <div class="empty-description">点击"添加图层"开始使用</div>
             </div>
           </div>
+          
+          <!-- 场景范围设置 -->
+          <div class="scene-bbox-control" v-if="selectedSceneId">
+            <el-button 
+              type="primary" 
+              size="small" 
+              @click="setSceneBbox"
+              :loading="settingBbox"
+              style="width: 100%"
+            >
+              <i class="el-icon-location"></i> 设置场景范围
+            </el-button>
+          </div>
         </div>
         
         <!-- 收起状态下的内容 -->
@@ -884,6 +897,7 @@ export default {
     // 场景管理
     const sceneList = ref([])
     const selectedSceneId = ref(null)
+    const settingBbox = ref(false) // 设置场景范围加载状态
     
     // 搜索表单
     const layerSearchForm = reactive({
@@ -1891,6 +1905,7 @@ export default {
         loading.value = true
         const response = await gisApi.getScene(sceneId)
         layersList.value = response.data.layers || []
+        const scene = response.data.scene
         
         // 🔥 初始化图层不透明度和可见性
         layersList.value.forEach(layer => {
@@ -1919,6 +1934,16 @@ export default {
           }
         })
         
+        // 🔥 如果场景有bbox，缩放到场景范围
+        if (scene && scene.bbox) {
+          // 等待地图初始化完成
+          await nextTick()
+          // 延迟一下确保地图已经渲染
+          setTimeout(() => {
+            zoomToSceneBbox(scene.bbox)
+          }, 500)
+        }
+        
         // 清除选中状态
         currentActiveLayer.value = null
       } catch (error) {
@@ -1927,6 +1952,80 @@ export default {
         layersList.value = []
       } finally {
         loading.value = false
+      }
+    }
+    
+    // 🔥 根据场景bbox缩放地图
+    const zoomToSceneBbox = (bbox) => {
+      if (!mapViewer.value || !mapViewer.value.deckgl) {
+        console.warn('地图未初始化，无法缩放到场景范围')
+        return
+      }
+      
+      try {
+        // 解析bbox
+        let bounds = null
+        if (Array.isArray(bbox) && bbox.length === 4) {
+          // [minx, miny, maxx, maxy] 格式
+          bounds = {
+            minx: parseFloat(bbox[0]),
+            miny: parseFloat(bbox[1]),
+            maxx: parseFloat(bbox[2]),
+            maxy: parseFloat(bbox[3])
+          }
+        } else if (bbox && typeof bbox === 'object') {
+          // {minx, miny, maxx, maxy} 格式
+          bounds = {
+            minx: parseFloat(bbox.minx || bbox.west || 0),
+            miny: parseFloat(bbox.miny || bbox.south || 0),
+            maxx: parseFloat(bbox.maxx || bbox.east || 0),
+            maxy: parseFloat(bbox.maxy || bbox.north || 0)
+          }
+        } else {
+          console.warn('场景bbox格式不正确:', bbox)
+          return
+        }
+        
+        // 验证数值有效性
+        if (isNaN(bounds.minx) || isNaN(bounds.miny) || isNaN(bounds.maxx) || isNaN(bounds.maxy)) {
+          console.warn('场景bbox数值无效:', bounds)
+          return
+        }
+        
+        // 计算中心点和缩放级别
+        const centerLon = (bounds.minx + bounds.maxx) / 2
+        const centerLat = (bounds.miny + bounds.maxy) / 2
+        
+        // 计算合适的缩放级别（基于边界框大小）
+        const lonDiff = Math.abs(bounds.maxx - bounds.minx)
+        const latDiff = Math.abs(bounds.maxy - bounds.miny)
+        const maxDiff = Math.max(lonDiff, latDiff)
+        
+        let zoom = 10
+        if (maxDiff < 0.001) zoom = 16
+        else if (maxDiff < 0.01) zoom = 14
+        else if (maxDiff < 0.1) zoom = 12
+        else if (maxDiff < 1) zoom = 10
+        else if (maxDiff < 10) zoom = 8
+        else zoom = 6
+        
+        // 使用Deck.gl进行视图动画
+        const deckglInstance = mapViewer.value.deckgl
+        if (deckglInstance) {
+          deckglInstance.setProps({
+            initialViewState: {
+              longitude: centerLon,
+              latitude: centerLat,
+              zoom: zoom,
+              pitch: 0,
+              bearing: 0,
+              transitionDuration: 1000,
+              transitionInterpolator: null
+            }
+          })
+        }
+      } catch (error) {
+        console.error('缩放到场景范围失败:', error)
       }
     }
 
@@ -2141,6 +2240,75 @@ export default {
       return layer.geometry_type || layer.dimension || 'unknown'
     }
     
+    // 🔥 设置场景范围
+    const setSceneBbox = async () => {
+      if (!selectedSceneId.value) {
+        ElMessage.warning('请先选择场景')
+        return
+      }
+      
+      if (!mapViewer.value || !mapViewer.value.deckgl) {
+        ElMessage.warning('地图未初始化')
+        return
+      }
+      
+      try {
+        settingBbox.value = true
+        
+        // 获取当前地图视口状态
+        const viewState = mapViewer.value.deckgl.viewState
+        if (!viewState) {
+          ElMessage.warning('无法获取地图视口状态')
+          return
+        }
+        
+        // 获取地图容器尺寸
+        const mapContainer = mapViewer.value.$el?.querySelector('.deckgl-map')
+        if (!mapContainer) {
+          ElMessage.warning('无法获取地图容器信息')
+          return
+        }
+        
+        const containerWidth = mapContainer.clientWidth || 800
+        const containerHeight = mapContainer.clientHeight || 600
+        
+        // 使用deck.gl的WebMercatorViewport来计算边界框
+        // 这是一个更准确的方法
+        const { WebMercatorViewport } = await import('@deck.gl/core')
+        const viewport = new WebMercatorViewport({
+          width: containerWidth,
+          height: containerHeight,
+          longitude: viewState.longitude,
+          latitude: viewState.latitude,
+          zoom: viewState.zoom,
+          pitch: viewState.pitch || 0,
+          bearing: viewState.bearing || 0
+        })
+        
+        // 获取视口的四个角的经纬度坐标
+        const bounds = viewport.getBounds()
+        
+        // 构建bbox数组 [minx, miny, maxx, maxy]
+        const bbox = [bounds[0], bounds[1], bounds[2], bounds[3]]
+        
+        // 调用API设置场景范围
+        await gisApi.updateSceneBbox(selectedSceneId.value, bbox)
+        
+        ElMessage.success('场景范围设置成功')
+        
+        // 更新场景列表中的bbox信息
+        const scene = sceneList.value.find(s => s.id === selectedSceneId.value)
+        if (scene) {
+          scene.bbox = bbox
+        }
+      } catch (error) {
+        console.error('设置场景范围失败:', error)
+        ElMessage.error('设置场景范围失败: ' + (error.message || '未知错误'))
+      } finally {
+        settingBbox.value = false
+      }
+    }
+    
     return {
       // 组件引用
       mapViewer,
@@ -2171,6 +2339,8 @@ export default {
       totalLayers,
       sceneList,
       selectedSceneId,
+      settingBbox,
+      setSceneBbox,
       layerSearchForm,
       currentActiveLayer,
       // 🔥 图层设置对话框相关
@@ -2239,6 +2409,7 @@ export default {
       toggleLayersCache,
       fetchSceneList,
       fetchSceneLayers,
+      zoomToSceneBbox,
       selectLayer,
       
       applyStyle,
@@ -2523,6 +2694,12 @@ export default {
 .scene-selector {
   padding: 12px 16px;
   border-bottom: 1px solid #f0f0f0;
+}
+
+.scene-bbox-control {
+  padding: 12px;
+  border-top: 1px solid #e4e7ed;
+  background-color: #fafafa;
 }
 
 .panel-body {
