@@ -867,21 +867,9 @@ def get_scene_layer_bounds(scene_layer_id):
                 file_id = martin_record['file_id']
                 coordinate_system = martin_record['coordinate_system'] or 'EPSG:4326'
                 
-                # 优先从文件bbox获取（更快），避免扫描整个PostGIS表
-                bbox = None
-                if martin_record.get('bbox'):
-                    if isinstance(martin_record['bbox'], str):
-                        try:
-                            bbox = json.loads(martin_record['bbox'])
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-                    elif isinstance(martin_record['bbox'], dict):
-                        bbox = martin_record['bbox']
-                
-                # 如果文件bbox不存在或无效，才从Martin服务获取边界（较慢）
-                if not bbox:
-                    current_app.logger.info(f"文件bbox不存在，从Martin服务计算边界: layer_id={layer_id}")
-                    bbox = get_martin_service_bounds(layer_id)
+                # 从Martin服务获取边界（scene_layers.boundingbox已在开头优先检查，这里直接计算）
+                current_app.logger.info(f"从Martin服务计算边界: layer_id={layer_id}")
+                bbox = get_martin_service_bounds(layer_id)
                 
                 if not bbox:
                     return jsonify({
