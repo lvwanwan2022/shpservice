@@ -524,6 +524,15 @@ export default {
     })
   },
   
+  // 设置场景范围
+  updateSceneBbox(sceneId, bbox) {
+    return authHttp({  // 🔥 使用带认证的请求
+      url: `/scenes/${sceneId}/bbox`,
+      method: 'put',
+      data: { bbox }
+    })
+  },
+  
   // 删除场景
   deleteScene(sceneId) {
     return authHttp({  // 🔥 使用带认证的请求

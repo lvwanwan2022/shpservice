@@ -170,6 +170,10 @@ def update_scene(scene_id):
             'is_public': data.get('is_public', scene['is_public'])
         }
         
+        # 如果提供了bbox，也更新bbox
+        if 'bbox' in data:
+            scene_data['bbox'] = data.get('bbox')
+        
         # 更新场景
         scene_service.update_scene(scene_id, scene_data)
         
@@ -883,4 +887,70 @@ def update_layer_order(scene_id, layer_id):
     
     except Exception as e:
         current_app.logger.error(f"更新图层顺序错误: {str(e)}")
+        return jsonify({'error': '服务器内部错误'}), 500
+
+@scene_bp.route('/<int:scene_id>/bbox', methods=['PUT'])
+@require_auth  # 🔥 添加认证装饰器
+def update_scene_bbox(scene_id):
+    """设置场景范围
+    ---
+    tags:
+      - 场景管理
+    parameters:
+      - name: scene_id
+        in: path
+        type: integer
+        required: true
+        description: 场景ID
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - bbox
+          properties:
+            bbox:
+              type: array
+              items:
+                type: number
+              minItems: 4
+              maxItems: 4
+              description: 边界框，格式为 [minx, miny, maxx, maxy] 或 {minx, miny, maxx, maxy}
+    responses:
+      200:
+        description: 场景范围设置成功
+      400:
+        description: 参数错误
+      403:
+        description: 权限不足
+      404:
+        description: 场景不存在
+    """
+    try:
+        data = request.json
+        
+        # 验证必填字段
+        if 'bbox' not in data:
+            return jsonify({'error': '缺少必填字段: bbox'}), 400
+        
+        bbox = data.get('bbox')
+        
+        # 🔥 使用统一权限验证函数
+        has_permission, scene, error_response = verify_scene_permission(scene_id, "设置场景范围")
+        if not has_permission:
+            return error_response
+        
+        # 更新场景范围
+        scene_service.update_scene_bbox(scene_id, bbox)
+        
+        return jsonify({
+            'message': '场景范围设置成功'
+        }), 200
+    
+    except ValueError as e:
+        current_app.logger.error(f"设置场景范围错误: {str(e)}")
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        current_app.logger.error(f"设置场景范围错误: {str(e)}")
         return jsonify({'error': '服务器内部错误'}), 500 

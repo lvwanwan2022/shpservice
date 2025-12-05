@@ -564,6 +564,7 @@ def init_database():
             description TEXT,
             is_public BOOLEAN DEFAULT TRUE,
             user_id BIGINT REFERENCES users(id),
+            bbox JSONB,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
