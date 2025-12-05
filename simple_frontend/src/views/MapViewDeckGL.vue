@@ -1903,9 +1903,20 @@ export default {
           // 🔥 关键修复：将layer_order映射到zIndex，确保排序正确
           layer.zIndex = layer.layer_order || 0
           
-          // 🔥 前端显隐控制：忽略后端visibility状态，统一初始化为true，前端可以自由控制
-          // 这样无论后端是显示还是隐藏，前端都可以显示和隐藏所有图层
-          layer.visibility = true
+          // 🔥 使用数据库中保存的显隐状态
+          // 如果数据库中有 visibility 字段，使用数据库中的值；否则默认为 true（向后兼容）
+          if (layer.visibility === undefined || layer.visibility === null) {
+            // 如果 visibility 字段不存在，检查 visible 字段（兼容不同的字段名）
+            if (layer.visible !== undefined && layer.visible !== null) {
+              layer.visibility = Boolean(layer.visible)
+            } else {
+              // 如果都不存在，默认为 true
+              layer.visibility = true
+            }
+          } else {
+            // 确保 visibility 是布尔值（处理可能是 1/0 的情况）
+            layer.visibility = Boolean(layer.visibility)
+          }
         })
         
         // 清除选中状态
