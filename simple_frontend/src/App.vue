@@ -18,6 +18,7 @@
               <router-link to="/upload">数据上传</router-link>
               <router-link to="/scene">场景管理</router-link>
               <router-link to="/map-deck">地图浏览</router-link>
+              <router-link to="/map-ol">OpenLayers地图</router-link>
               <!-- <router-link to="/cache-manager">缓存管理</router-link> -->
             </div>
           </div>
@@ -92,6 +93,7 @@ export default {
         { path: '/upload', name: '数据上传', icon: 'Upload' },
         { path: '/scene', name: '场景管理', icon: 'Film' },
         { path: '/map-deck', name: '地图浏览', icon: 'MapLocation' },
+        { path: '/map-ol', name: 'OpenLayers地图', icon: 'View' },
         // { path: '/cache-manager', name: '缓存管理', icon: 'Setting' }
       ]
     }
