@@ -275,6 +275,15 @@ class GeoServerService:
                 print(f"重新编码后的文件名（用于文件重命名）: {clean_filename}")
                 print(f"存储名称保持不变（使用唯一ID）: {generated_store_name}")
             
+            # 🔥 检查编码后的文件名长度，如果超过100字符（数据库字段限制），使用唯一ID生成简短名称
+            # 数据库字段 name 和 native_name 都是 VARCHAR(100)，必须确保不超过100字符
+            if len(clean_filename) > 100:
+                print(f"⚠️ 编码后的文件名超过100字符（{len(clean_filename)}字符），使用唯一ID生成简短名称")
+                # 使用唯一ID生成简短名称，格式: ft_{唯一ID}，确保长度不超过100字符
+                unique_ft_id = get_snowflake_id()
+                clean_filename = f"ft_{unique_ft_id}"
+                print(f"使用唯一ID生成的简短名称: {clean_filename}")
+            
             # 检查并重命名包含中文或特殊字符的文件
             # 使用编码后的clean_filename作为安全名称
             safe_shp_name = self._ensure_safe_shapefile_names(extracted_folder, original_shp_name, clean_filename)
@@ -3052,6 +3061,23 @@ class GeoServerService:
             native_name = feature_data.get('nativeName') or name
             title = feature_data.get('title') or name
             abstract = feature_data.get('abstract') or ''
+            
+            # 🔥 确保name和native_name不超过100字符（数据库字段限制）
+            # 如果超过，使用唯一ID生成简短名称
+            if len(name) > 100:
+                print(f"⚠️ 要素类型名称超过100字符（{len(name)}字符），使用唯一ID生成简短名称")
+                unique_ft_id = get_snowflake_id()
+                name = f"ft_{unique_ft_id}"
+                print(f"使用唯一ID生成的简短名称: {name}")
+            
+            if len(native_name) > 100:
+                print(f"⚠️ 要素类型原生名称超过100字符（{len(native_name)}字符），使用唯一ID生成简短名称")
+                if len(name) <= 100:
+                    native_name = name
+                else:
+                    unique_ft_id = get_snowflake_id()
+                    native_name = f"ft_{unique_ft_id}"
+                print(f"使用唯一ID生成的简短原生名称: {native_name}")
             
             # 处理keywords字段，确保是列表类型
             keywords_raw = feature_data.get('keywords') or []
