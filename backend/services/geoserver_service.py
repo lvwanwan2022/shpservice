@@ -12,6 +12,7 @@ import shutil
 import stat
 from models.db import execute_query, insert_with_snowflake_id
 from config import GEOSERVER_CONFIG, DB_CONFIG
+from utils.snowflake import get_snowflake_id
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -212,15 +213,18 @@ class GeoServerService:
             # 3. 根据文件名生成store名称
             filename = os.path.splitext(os.path.basename(corrected_path))[0]
             # 将文件名（可能包含中文）编码为纯英文数字字符串
-            # 这样可以保留原始信息，同时确保文件名安全
+            # 这样可以保留原始信息，同时确保文件名安全（用于文件重命名）
             clean_filename = self._encode_chinese_to_alphanumeric(filename)
             # 如果编码后的文件名太长（超过200字符），截断并使用文件ID
             if len(clean_filename) > 200:
                 clean_filename = f"{clean_filename[:180]}_{file_id[:8]}"
-            generated_store_name = f"{clean_filename}_store"
+            # 使用唯一ID生成store_name，避免中文编码后字符串过长的问题
+            # 格式: shp_{唯一ID}，确保长度不超过100字符
+            unique_id = get_snowflake_id()
+            generated_store_name = f"shp_{unique_id}"
             print(f"原始文件名: {filename}")
-            print(f"编码后的文件名: {clean_filename}")
-            print(f"自动生成的存储名称: {generated_store_name}")
+            print(f"编码后的文件名（用于文件重命名）: {clean_filename}")
+            print(f"自动生成的存储名称（使用唯一ID）: {generated_store_name}")
             
             # 4. 获取工作空间ID
             workspace_id = self._get_workspace_id()
@@ -258,17 +262,18 @@ class GeoServerService:
             original_shp_name = self._get_shp_name_from_folder(extracted_folder)
             print(f"解压文件夹中的原始SHP文件名: {original_shp_name}")
             
-            # 如果SHP文件名和ZIP文件名不同，使用SHP文件名重新编码
+            # 如果SHP文件名和ZIP文件名不同，使用SHP文件名重新编码（用于文件重命名）
             # 这样可以确保编码后的名称与实际的SHP文件名对应
+            # 注意：store_name已经使用唯一ID生成，不需要重新生成
             if original_shp_name != filename:
-                print(f"SHP文件名与ZIP文件名不同，使用SHP文件名重新编码")
+                print(f"SHP文件名与ZIP文件名不同，使用SHP文件名重新编码（用于文件重命名）")
                 clean_filename = self._encode_chinese_to_alphanumeric(original_shp_name)
                 # 如果编码后的文件名太长，截断并使用文件ID
                 if len(clean_filename) > 200:
                     clean_filename = f"{clean_filename[:180]}_{file_id[:8]}"
-                generated_store_name = f"{clean_filename}_store"
-                print(f"重新编码后的文件名: {clean_filename}")
-                print(f"重新生成的存储名称: {generated_store_name}")
+                # store_name已经使用唯一ID生成，保持不变
+                print(f"重新编码后的文件名（用于文件重命名）: {clean_filename}")
+                print(f"存储名称保持不变（使用唯一ID）: {generated_store_name}")
             
             # 检查并重命名包含中文或特殊字符的文件
             # 使用编码后的clean_filename作为安全名称
