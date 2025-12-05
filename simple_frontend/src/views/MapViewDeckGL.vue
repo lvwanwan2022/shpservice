@@ -1108,34 +1108,24 @@ export default {
       drawerStartY.value = 0
     }
     
-    // 切换图层可见性
-    const toggleLayerVisibility = async (layer) => {
-      try {
-        // 先更新数据库中的可见性状态
-        await gisApi.updateSceneLayer(selectedSceneId.value, layer.id, {
-          visible: layer.visibility
+    // 切换图层可见性（仅前端控制，不修改后端）
+    const toggleLayerVisibility = (layer) => {
+      // 只更新前端图层的显隐状态，不调用后端API
+      console.log(`切换图层 ${layer.layer_name} 可见性: ${layer.visibility}`)
+      
+      // 通知MapViewerDeckGL组件更新地图显示
+      if (mapViewer.value && mapViewer.value.toggleLayerVisibility) {
+        mapViewer.value.toggleLayerVisibility(layer)
+      } else {
+        // 如果直接调用方法不可用，则发送自定义事件
+        const event = new CustomEvent('layerVisibilityChanged', {
+          detail: {
+            layerId: layer.id,
+            layer: layer,
+            visibility: layer.visibility
+          }
         })
-        
-        // 通知MapViewerDeckGL组件更新地图显示
-        if (mapViewer.value && mapViewer.value.toggleLayerVisibility) {
-          mapViewer.value.toggleLayerVisibility(layer)
-        } else {
-          // 如果直接调用方法不可用，则发送自定义事件
-          const event = new CustomEvent('layerVisibilityChanged', {
-            detail: {
-              layerId: layer.id,
-              layer: layer,
-              visibility: layer.visibility
-            }
-          })
-          window.dispatchEvent(event)
-        }
-        
-      } catch (error) {
-        console.error('更新图层可见性失败', error)
-        ElMessage.error('更新图层可见性失败')
-        // 回滚状态
-        layer.visibility = !layer.visibility
+        window.dispatchEvent(event)
       }
     }
     
@@ -1902,7 +1892,7 @@ export default {
         const response = await gisApi.getScene(sceneId)
         layersList.value = response.data.layers || []
         
-        // 🔥 初始化图层不透明度（如果没有设置或为0则默认为1）
+        // 🔥 初始化图层不透明度和可见性
         layersList.value.forEach(layer => {
           if (layer.opacity === undefined || layer.opacity === null || layer.opacity === 0) {
             layer.opacity = 1.0  // 默认100%不透明度
@@ -1912,6 +1902,10 @@ export default {
           
           // 🔥 关键修复：将layer_order映射到zIndex，确保排序正确
           layer.zIndex = layer.layer_order || 0
+          
+          // 🔥 前端显隐控制：忽略后端visibility状态，统一初始化为true，前端可以自由控制
+          // 这样无论后端是显示还是隐藏，前端都可以显示和隐藏所有图层
+          layer.visibility = true
         })
         
         // 清除选中状态
