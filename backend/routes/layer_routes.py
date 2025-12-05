@@ -746,17 +746,30 @@ def get_scene_layer_bounds(scene_layer_id):
             cached_bbox = scene_layer_record['boundingbox']
             
             # 如果有缓存的边界框，直接返回
+            # 处理JSONB类型（返回dict）和JSON/TEXT类型（返回str）的情况
             if cached_bbox:
-                current_app.logger.info(f"从缓存返回图层边界框: scene_layer_id={scene_layer_id}")
-                return jsonify({
-                    'success': True,
-                    'data': {
-                        'bbox': cached_bbox,
-                        'layer_id': layer_id,
-                        'service_type': layer_type,
-                        'from_cache': True
-                    }
-                })
+                # 如果是字符串，尝试解析为JSON
+                if isinstance(cached_bbox, str):
+                    try:
+                        cached_bbox = json.loads(cached_bbox)
+                    except (json.JSONDecodeError, TypeError):
+                        # 如果解析失败，可能是空字符串或无效格式，继续执行计算逻辑
+                        cached_bbox = None
+                
+                # 如果解析成功或已经是字典，且包含有效的边界框数据
+                if cached_bbox and isinstance(cached_bbox, dict):
+                    # 检查是否包含必要的边界框字段
+                    if any(key in cached_bbox for key in ['minx', 'miny', 'maxx', 'maxy']):
+                        current_app.logger.info(f"从缓存返回图层边界框: scene_layer_id={scene_layer_id}")
+                        return jsonify({
+                            'success': True,
+                            'data': {
+                                'bbox': cached_bbox,
+                                'layer_id': layer_id,
+                                'service_type': layer_type,
+                                'from_cache': True
+                            }
+                        })
             
             # 没有缓存，按原逻辑计算边界框
             current_app.logger.info(f"计算图层边界框: scene_layer_id={scene_layer_id}, layer_type={layer_type}")
@@ -854,18 +867,21 @@ def get_scene_layer_bounds(scene_layer_id):
                 file_id = martin_record['file_id']
                 coordinate_system = martin_record['coordinate_system'] or 'EPSG:4326'
                 
-                # 从Martin服务获取边界
-                bbox = get_martin_service_bounds(layer_id)
-                
-                if not bbox and martin_record.get('bbox'):
-                    # 如果Martin服务获取失败，尝试从文件bbox获取
+                # 优先从文件bbox获取（更快），避免扫描整个PostGIS表
+                bbox = None
+                if martin_record.get('bbox'):
                     if isinstance(martin_record['bbox'], str):
                         try:
                             bbox = json.loads(martin_record['bbox'])
-                        except:
+                        except (json.JSONDecodeError, TypeError):
                             pass
-                    else:
+                    elif isinstance(martin_record['bbox'], dict):
                         bbox = martin_record['bbox']
+                
+                # 如果文件bbox不存在或无效，才从Martin服务获取边界（较慢）
+                if not bbox:
+                    current_app.logger.info(f"文件bbox不存在，从Martin服务计算边界: layer_id={layer_id}")
+                    bbox = get_martin_service_bounds(layer_id)
                 
                 if not bbox:
                     return jsonify({
@@ -1087,23 +1103,44 @@ def get_martin_service_bounds(martin_service_id):
             geom_column = geom_column_result['column_name']
             logger.info(f"表 {table_name} 中找到几何字段: {geom_column}")
             
-            # 获取几何字段的SRID和边界
-            cursor.execute(f"""
-            SELECT 
-                ST_SRID((SELECT "{geom_column}" FROM "{table_name}" WHERE "{geom_column}" IS NOT NULL LIMIT 1)) as srid,
-                ST_XMin(extent) as minx, 
-                ST_YMin(extent) as miny,
-                ST_XMax(extent) as maxx, 
-                ST_YMax(extent) as maxy
-            FROM (
-                SELECT ST_Extent("{geom_column}") as extent
-                FROM "{table_name}"
-                WHERE "{geom_column}" IS NOT NULL
-            ) t
-            """)
+            # 首先尝试使用ST_EstimatedExtent（基于统计信息，非常快但不精确）
+            # 如果失败，再使用ST_Extent（精确但较慢）
+            result = None
+            try:
+                cursor.execute(f"""
+                SELECT 
+                    ST_SRID((SELECT "{geom_column}" FROM "{table_name}" WHERE "{geom_column}" IS NOT NULL LIMIT 1)) as srid,
+                    ST_XMin(ST_EstimatedExtent('{table_name}', '{geom_column}')) as minx,
+                    ST_YMin(ST_EstimatedExtent('{table_name}', '{geom_column}')) as miny,
+                    ST_XMax(ST_EstimatedExtent('{table_name}', '{geom_column}')) as maxx,
+                    ST_YMax(ST_EstimatedExtent('{table_name}', '{geom_column}')) as maxy
+                """)
+                result = cursor.fetchone()
+                if result and all(v is not None for v in [result['minx'], result['miny'], result['maxx'], result['maxy']]):
+                    logger.info(f"使用ST_EstimatedExtent快速获取边界框: {table_name}")
+            except Exception as e:
+                logger.warning(f"ST_EstimatedExtent失败，使用ST_Extent: {str(e)}")
+                result = None
             
-            result = cursor.fetchone()
-            if not result or not all(v is not None for v in [result['minx'], result['miny'], result['maxx'], result['maxy']]):
+            # 如果ST_EstimatedExtent失败，使用ST_Extent（较慢但精确）
+            if not result or not all(v is not None for v in [result.get('minx'), result.get('miny'), result.get('maxx'), result.get('maxy')]):
+                logger.info(f"使用ST_Extent计算精确边界框: {table_name}")
+                cursor.execute(f"""
+                SELECT 
+                    ST_SRID((SELECT "{geom_column}" FROM "{table_name}" WHERE "{geom_column}" IS NOT NULL LIMIT 1)) as srid,
+                    ST_XMin(extent) as minx, 
+                    ST_YMin(extent) as miny,
+                    ST_XMax(extent) as maxx, 
+                    ST_YMax(extent) as maxy
+                FROM (
+                    SELECT ST_Extent("{geom_column}") as extent
+                    FROM "{table_name}"
+                    WHERE "{geom_column}" IS NOT NULL
+                ) t
+                """)
+                result = cursor.fetchone()
+            
+            if not result or not all(v is not None for v in [result.get('minx'), result.get('miny'), result.get('maxx'), result.get('maxy')]):
                 logger.error(f"表 {table_name} 中无法计算有效的边界框")
                 return None
             
