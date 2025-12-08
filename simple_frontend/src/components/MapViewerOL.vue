@@ -560,8 +560,54 @@ export default {
     // 图层样式缓存
     const layerStyleCache = reactive({})
     
+    // 🔥 根据bbox计算中心点
+    const calculateCenterFromBbox = (bbox) => {
+      if (!bbox) return null
+      
+      let minx, miny, maxx, maxy
+      
+      // 处理不同的bbox格式
+      if (Array.isArray(bbox) && bbox.length === 4) {
+        [minx, miny, maxx, maxy] = bbox
+      } else if (typeof bbox === 'object' && bbox !== null) {
+        minx = bbox.minx
+        miny = bbox.miny
+        maxx = bbox.maxx
+        maxy = bbox.maxy
+      } else if (typeof bbox === 'string') {
+        try {
+          const parsed = JSON.parse(bbox)
+          if (Array.isArray(parsed) && parsed.length === 4) {
+            [minx, miny, maxx, maxy] = parsed
+          } else if (typeof parsed === 'object' && parsed !== null) {
+            minx = parsed.minx
+            miny = parsed.miny
+            maxx = parsed.maxx
+            maxy = parsed.maxy
+          } else {
+            return null
+          }
+        } catch (e) {
+          return null
+        }
+      } else {
+        return null
+      }
+      
+      // 验证数值
+      if (isNaN(minx) || isNaN(miny) || isNaN(maxx) || isNaN(maxy)) {
+        return null
+      }
+      
+      // 计算中心点（EPSG:4326坐标系）
+      const centerLon = (minx + maxx) / 2
+      const centerLat = (miny + maxy) / 2
+      
+      return [centerLon, centerLat]
+    }
+    
     // 初始化地图
-    const initMap = () => {
+    const initMap = (initialCenter = null) => {
       //console.log('=== 开始地图初始化 ===')
       
       // 1. 清理现有地图
@@ -705,12 +751,18 @@ export default {
         
         // 5. 创建地图实例
         //console.log('创建地图实例...')
-        // 🔥 初始化时使用默认中心点，场景加载时会根据场景bbox自动缩放
+        // 🔥 根据传入的中心点或默认中心点初始化地图
+        let mapCenter = [104.0667, 30.6667] // 默认中心点（成都）
+        if (initialCenter && Array.isArray(initialCenter) && initialCenter.length === 2) {
+          mapCenter = initialCenter
+          console.log('✅ 使用场景bbox计算的中心点:', mapCenter)
+        }
+        
         map.value = new Map({
           target: mapContainer.value,
           layers: [gaodeLayer, gaodeSatelliteLayer, osmLayer, esriSatelliteLayer],
           view: new View({
-            center: fromLonLat([104.0667, 30.6667]), // 默认中心点（场景加载时会根据场景bbox自动调整）
+            center: fromLonLat(mapCenter), // 使用计算的中心点或默认中心点
             zoom: 10,
             maxZoom: 23,  // 全局最大缩放级别（适配所有底图）
             minZoom: 1    // 全局最小缩放级别
@@ -2923,8 +2975,28 @@ export default {
             // 首先初始化坐标系
             await initializeProjections()
             
-            // 然后初始化地图
-            initMap()
+            // 🔥 如果有场景ID，先获取场景信息，根据bbox计算中心点
+            const sceneId = props.sceneId || route.query.scene_id
+            let initialCenter = null
+            
+            if (sceneId) {
+              try {
+                const response = await gisApi.getScene(sceneId)
+                const scene = response.scene || response.data?.scene
+                if (scene && scene.bbox) {
+                  const center = calculateCenterFromBbox(scene.bbox)
+                  if (center) {
+                    initialCenter = center
+                    console.log('✅ 根据场景bbox计算中心点:', initialCenter)
+                  }
+                }
+              } catch (error) {
+                console.warn('获取场景信息失败，使用默认中心点:', error)
+              }
+            }
+            
+            // 然后初始化地图（传入计算的中心点）
+            initMap(initialCenter)
             
             // 强制更新地图尺寸
             if (map.value) {
@@ -2939,7 +3011,7 @@ export default {
               })
             }
             
-            const sceneId = props.sceneId || route.query.scene_id
+            // 加载场景（会进一步根据bbox缩放地图）
             if (sceneId) {
               setTimeout(() => loadScene(sceneId), 300)
             }
