@@ -663,6 +663,17 @@ export default {
           }
           // 确保数值在有效范围内
           layer.opacity = Math.max(0, Math.min(1, parseFloat(layer.opacity) || 1.0))
+          
+          // 🔥 初始化图层可见性：从数据库加载显示和隐藏状态
+          // 兼容 visibility 和 visible 字段
+          if (layer.visibility === undefined && layer.visible !== undefined) {
+            layer.visibility = layer.visible
+          } else if (layer.visibility === undefined) {
+            // 如果都没有，默认为可见
+            layer.visibility = true
+          }
+          // 确保 visibility 是布尔值
+          layer.visibility = Boolean(layer.visibility)
         })
         
         // 清除选中状态
@@ -723,34 +734,22 @@ export default {
       router.push({ name: 'Scene' })
     }
     
-    // 切换图层可见性
-    const toggleLayerVisibility = async (layer) => {
-      try {
-        // 先更新数据库中的可见性状态
-        await gisApi.updateSceneLayer(selectedSceneId.value, layer.id, {
-          visible: layer.visibility
+    // 切换图层可见性 - 只改变前端显隐，不改变数据库
+    const toggleLayerVisibility = (layer) => {
+      // 只更新前端图层显隐状态，不更新数据库
+      // 通知MapViewerOL组件更新地图显示
+      if (mapViewerRef.value && mapViewerRef.value.toggleLayerVisibility) {
+        mapViewerRef.value.toggleLayerVisibility(layer)
+      } else {
+        // 如果直接调用方法不可用，则发送自定义事件
+        const event = new CustomEvent('layerVisibilityChanged', {
+          detail: {
+            layerId: layer.id,
+            layer: layer,
+            visibility: layer.visibility
+          }
         })
-        
-        // 通知MapViewerOL组件更新地图显示
-        if (mapViewerRef.value && mapViewerRef.value.toggleLayerVisibility) {
-          mapViewerRef.value.toggleLayerVisibility(layer)
-        } else {
-          // 如果直接调用方法不可用，则发送自定义事件
-          const event = new CustomEvent('layerVisibilityChanged', {
-            detail: {
-              layerId: layer.id,
-              layer: layer,
-              visibility: layer.visibility
-            }
-          })
-          window.dispatchEvent(event)
-        }
-        
-      } catch (error) {
-        console.error('更新图层可见性失败', error)
-        ElMessage.error('更新图层可见性失败')
-        // 回滚状态
-        layer.visibility = !layer.visibility
+        window.dispatchEvent(event)
       }
     }
 
