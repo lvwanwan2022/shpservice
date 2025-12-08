@@ -19,6 +19,9 @@
             <el-dropdown-item command="esriSatellite" :class="{ active: currentBaseMap === 'esriSatellite' }">
               Esri 世界影像
             </el-dropdown-item>
+            <el-dropdown-item command="none" :class="{ active: currentBaseMap === 'none' }">
+              无底图
+            </el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
@@ -66,6 +69,10 @@ export default {
         case 'esriSatellite':
           esriSatellite.setVisible(true)
           currentBaseMap.value = 'esriSatellite'
+          break
+        case 'none':
+          // 无底图：所有底图都隐藏
+          currentBaseMap.value = 'none'
           break
         default:
           gaode.setVisible(true)
