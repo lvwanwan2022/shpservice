@@ -658,9 +658,10 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
+  max-width: 220px;
 }
 
 .layer-name {
@@ -671,7 +672,7 @@
   text-overflow: ellipsis;
   font-size: 13px;
   line-height: 1.4;
-  max-width: 150px;
+  max-width: 220px;
 }
 
 .active-indicator {
@@ -703,6 +704,8 @@
   transition: opacity 0.2s;
   align-items: center;
   justify-content: flex-end;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 /* 🔥 保留hover效果用于强调，但不影响基础显示 */

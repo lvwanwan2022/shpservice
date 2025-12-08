@@ -17,19 +17,6 @@
         <svg t="1752031016790" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="5670" width="16" height="16"><path d="M1023.99872 479.424681V25.601248l-133.119834 129.919838A520.639349 520.639349 0 0 0 518.591352 0.00128C232.12771 0.00128 0 229.312993 0 512.00064s232.12771 511.99936 518.655352 511.99936c198.783752 0 371.199536-110.399862 458.367427-272.25566h-193.791758a359.87155 359.87155 0 0 1-264.575669 114.687857c-198.271752 0-359.039551-158.719802-359.039552-354.431557 0-195.775755 160.767799-354.431557 359.039552-354.431557 101.567873 0 193.279758 41.727948 258.559676 108.607864L558.655302 479.424681H1023.99872z" fill="#2c2c2c" p-id="5671"></path></svg>
         </el-button>
       </el-tooltip>
-      <el-tooltip v-if="map" :content="layersCacheEnabled ? '关闭缓存' : '开启缓存'" placement="left" :show-after="500" :hide-after="1000">
-        <el-button 
-          :type="layersCacheEnabled ? 'warning' : 'info'" 
-          circle 
-          size="small" 
-          @click="toggleLayersCache"
-          class="cache-toggle-button"
-        >
-          
-            <svg :class="layersCacheEnabled ? 'el-icon-folder-opened' : 'el-icon-folder'" t="1752031063403" class="icon" viewBox="0 0 1026 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="7600" width="16" height="16"><path d="M767.66305 531.384715l-236.251012 236.251011h-36.395426l-236.251012-236.251011L340.176422 449.973893 449.107294 559.47943V257.780503h127.703249v301.698927l109.505537-109.505537z m159.629062 279.542413l-92.137895-92.137894a395.880074 395.880074 0 1 0-204.325199 157.011145l99.161573 99.161573a511.834624 511.834624 0 1 1 197.429224-164.034824z" p-id="7601"></path></svg>
-        
-        </el-button>
-      </el-tooltip>
       <el-tooltip v-if="map" :content="userLocationVisible ? '关闭定位' : '我的位置'" placement="left" :show-after="500" :hide-after="1000">
         <el-button 
           :type="userLocationVisible ? 'primary' : 'info'" 
@@ -403,7 +390,6 @@ export default {
     const popup = ref(null)
     // 缓存服务实例
     let tileCacheService = null;
-    const layersCacheEnabled = ref(false); // 当前图层的缓存状态
     // 坐标系初始化状态
     const projectionsInitialized = ref(false)
     
@@ -627,9 +613,8 @@ export default {
         const wmtsTileLoadFunction_gaode = createWmtsTileLoadFunction({
           layerId: 'gaode',
           tileCacheService: tileCacheService,
-          enableCacheStorage: layersCacheEnabled.value
+          enableCacheStorage: false
         });
-        console.log('gaodeTileLoadFunction',layersCacheEnabled.value)
         const gaodeSource =new XYZ({
             url: 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
             crossOrigin: 'anonymous',
@@ -652,7 +637,7 @@ export default {
         const wmtsTileLoadFunction_gaodeSatellite = createWmtsTileLoadFunction({
           layerId: 'gaodeSatellite',
           tileCacheService: tileCacheService,
-          enableCacheStorage: layersCacheEnabled.value
+          enableCacheStorage: false
         });
         const gaodeSatelliteSource =new XYZ({
             url: 'https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
@@ -674,7 +659,7 @@ export default {
         const wmtsTileLoadFunction_osm = createWmtsTileLoadFunction({
           layerId: 'osm',
           tileCacheService: tileCacheService,
-          enableCacheStorage: layersCacheEnabled.value
+          enableCacheStorage: false
         });
         const osmSource =new XYZ({
           url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -696,7 +681,7 @@ export default {
         const wmtsTileLoadFunction_esriSatellite = createWmtsTileLoadFunction({
           layerId: 'esriSatellite',
           tileCacheService: tileCacheService,
-          enableCacheStorage: layersCacheEnabled.value
+          enableCacheStorage: false
         });
         const esriSatelliteSource =new XYZ({
           url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -1117,6 +1102,94 @@ export default {
         }
         
         //console.log('✅ 场景加载完成:', response.scene?.name)
+        
+        // 🔥 场景加载完成后，如果有场景范围（bbox），将地图缩放至场景范围
+        const scene = currentScene.value
+        if (scene && scene.bbox) {
+          try {
+            // 确保地图尺寸已更新
+            if (map.value) {
+              map.value.updateSize()
+            }
+            
+            // 等待下一个tick，确保地图尺寸更新完成
+            await nextTick()
+            
+            let bbox = scene.bbox
+            
+            // 处理 bbox 格式：可能是数组 [minx, miny, maxx, maxy] 或对象 {minx, miny, maxx, maxy}
+            let minx, miny, maxx, maxy
+            
+            if (Array.isArray(bbox)) {
+              // 数组格式 [minx, miny, maxx, maxy]
+              if (bbox.length === 4) {
+                [minx, miny, maxx, maxy] = bbox
+              } else {
+                console.warn('场景bbox数组格式不正确，应为4个元素:', bbox)
+                return
+              }
+            } else if (typeof bbox === 'object' && bbox !== null) {
+              // 对象格式 {minx, miny, maxx, maxy}
+              minx = bbox.minx
+              miny = bbox.miny
+              maxx = bbox.maxx
+              maxy = bbox.maxy
+            } else if (typeof bbox === 'string') {
+              // 字符串格式，尝试解析JSON
+              try {
+                bbox = JSON.parse(bbox)
+                if (Array.isArray(bbox) && bbox.length === 4) {
+                  [minx, miny, maxx, maxy] = bbox
+                } else if (typeof bbox === 'object' && bbox !== null) {
+                  minx = bbox.minx
+                  miny = bbox.miny
+                  maxx = bbox.maxx
+                  maxy = bbox.maxy
+                } else {
+                  console.warn('场景bbox字符串解析后格式不正确:', bbox)
+                  return
+                }
+              } catch (parseError) {
+                console.warn('解析场景bbox字符串失败:', parseError)
+                return
+              }
+            } else {
+              console.warn('场景bbox格式不支持:', typeof bbox, bbox)
+              return
+            }
+            
+            // 验证 bbox 值
+            if (isNaN(minx) || isNaN(miny) || isNaN(maxx) || isNaN(maxy)) {
+              console.warn('场景bbox包含无效数值:', { minx, miny, maxx, maxy })
+              return
+            }
+            
+            // 构建范围（假设bbox是EPSG:4326坐标系）
+            const extent = [minx, miny, maxx, maxy]
+            
+            // 转换为地图使用的坐标系（EPSG:3857）
+            let transformedExtent
+            try {
+              transformedExtent = transformExtent(extent, 'EPSG:4326', 'EPSG:3857')
+            } catch (transformError) {
+              console.error('坐标转换失败:', transformError)
+              return
+            }
+            
+            // 获取地图视图并缩放到场景范围
+            const view = map.value.getView()
+            view.fit(transformedExtent, {
+              padding: [50, 50, 50, 50], // 边距
+              maxZoom: 18, // 最大缩放级别限制
+              duration: 1000 // 动画持续时间
+            })
+            
+            console.log('✅ 地图已缩放至场景范围:', scene.name)
+          } catch (error) {
+            console.error('缩放至场景范围失败:', error)
+            // 不显示错误消息，避免干扰用户体验
+          }
+        }
         
       } catch (error) {
         console.error('加载场景失败:', error)
@@ -1559,7 +1632,7 @@ export default {
           const mvtTileLoadFunction = createMvtTileLoadFunction({
             layerId: layer.id.toString(),
             tileCacheService: tileCacheService,
-            enableCacheStorage: layersCacheEnabled.value
+            enableCacheStorage: false
           })
           
           olLayer = new VectorTileLayer({
@@ -1592,7 +1665,6 @@ export default {
             }
           });
           
-          console.log('创建矢量MBTiles图层 (带缓存):', layer.layer_name, '缓存状态:', layersCacheEnabled.value ? '开启' : '关闭');
         }
         
         // 使用统一变量名
@@ -2591,94 +2663,6 @@ export default {
       currentBaseMapAttribution.value = attributions[baseMapType] || ''
     }
     
-    // 切换底图缓存开关
-    const toggleLayersCache = () => {
-      layersCacheEnabled.value = !layersCacheEnabled.value
-      
-      // 重新设置所有底图的 tileLoadFunction
-      if (map.value && map.value.baseLayers) {
-        const baseLayers = map.value.baseLayers
-        
-        // 高德地图
-        if (baseLayers.gaode) {
-          const gaodeSource = baseLayers.gaode.getSource()
-          if (gaodeSource && gaodeSource.setTileLoadFunction) {
-            const wmtsTileLoadFunction_gaode = createWmtsTileLoadFunction({
-              layerId: 'gaode',
-              tileCacheService: tileCacheService,
-              enableCacheStorage: layersCacheEnabled.value
-            })
-            gaodeSource.setTileLoadFunction(wmtsTileLoadFunction_gaode)
-          }
-        }
-        
-        // 高德卫星图
-        if (baseLayers.gaodeSatellite) {
-          const gaodeSatelliteSource = baseLayers.gaodeSatellite.getSource()
-          if (gaodeSatelliteSource && gaodeSatelliteSource.setTileLoadFunction) {
-            const wmtsTileLoadFunction_gaodeSatellite = createWmtsTileLoadFunction({
-              layerId: 'gaodeSatellite',
-              tileCacheService: tileCacheService,
-              enableCacheStorage: layersCacheEnabled.value
-            })
-            gaodeSatelliteSource.setTileLoadFunction(wmtsTileLoadFunction_gaodeSatellite)
-          }
-        }
-        
-        // OSM
-        if (baseLayers.osm) {
-          const osmSource = baseLayers.osm.getSource()
-          if (osmSource && osmSource.setTileLoadFunction) {
-            const wmtsTileLoadFunction_osm = createWmtsTileLoadFunction({
-              layerId: 'osm',
-              tileCacheService: tileCacheService,
-              enableCacheStorage: layersCacheEnabled.value
-            })
-            osmSource.setTileLoadFunction(wmtsTileLoadFunction_osm)
-          }
-        }
-        
-        // Esri卫星图
-        if (baseLayers.esriSatellite) {
-          const esriSatelliteSource = baseLayers.esriSatellite.getSource()
-          if (esriSatelliteSource && esriSatelliteSource.setTileLoadFunction) {
-            const wmtsTileLoadFunction_esriSatellite = createWmtsTileLoadFunction({
-              layerId: 'esriSatellite',
-              tileCacheService: tileCacheService,
-              enableCacheStorage: layersCacheEnabled.value
-            })
-            esriSatelliteSource.setTileLoadFunction(wmtsTileLoadFunction_esriSatellite)
-          }
-        }
-      }
-      
-      // 重新设置所有MVT图层的 tileLoadFunction
-      if (mvtLayers.value && Object.keys(mvtLayers.value).length > 0) {
-        Object.entries(mvtLayers.value).forEach(([layerId, mvtLayer]) => {
-          try {
-            if (mvtLayer && mvtLayer.getSource) {
-              const source = mvtLayer.getSource()
-              if (source && source.setTileLoadFunction) {
-                // 为MVT图层创建新的瓦片加载函数
-                const mvtTileLoadFunction = createMvtTileLoadFunction({
-                  layerId: layerId,
-                  tileCacheService: tileCacheService,
-                  enableCacheStorage: layersCacheEnabled.value
-                })
-                source.setTileLoadFunction(mvtTileLoadFunction)
-                console.log(`MVT图层 ${layerId} 缓存状态已更新:`, layersCacheEnabled.value ? '开启' : '关闭')
-              }
-            }
-          } catch (error) {
-            console.error(`更新MVT图层 ${layerId} 缓存状态失败:`, error)
-          }
-        })
-      }
-      
-      console.log('图层缓存状态已切换:', layersCacheEnabled.value ? '开启' : '关闭')
-      console.log('已更新底图缓存:', Object.keys(map.value?.baseLayers || {}).length, '个')
-      console.log('已更新MVT图层缓存:', Object.keys(mvtLayers.value || {}).length, '个')
-    }
     
     // 创建用户位置图层
     const createUserLocationLayer = () => {
@@ -2924,8 +2908,6 @@ export default {
       currentBaseMapAttribution,
       initializeCoordinateTracking,
       updateBaseMapAttribution,
-      layersCacheEnabled,
-      toggleLayersCache,
       // 用户定位相关
       userLocationVisible,
       locationLoading,
@@ -3170,14 +3152,6 @@ export default {
     height: 32px !important;
     min-width: 32px !important;
     min-height: 32px !important;
-  }
-  
-  .map-controls .cache-toggle-button {
-    width: 32px !important;
-    height: 32px !important;
-    min-width: 32px !important;
-    min-height: 32px !important;
-    
   }
   
   .map-controls .location-button {
@@ -3598,28 +3572,4 @@ export default {
   }
 }
 
-.cache-toggle-button {
-  /*box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);*/
-  /*transition: all 0.3s ease;*/
-}
-
-.cache-toggle-button.el-button--warning {
-  background-color: #e6a23c;
-  border-color: #e6a23c;
-}
-
-.cache-toggle-button.el-button--warning:hover {
-  background-color: #ebb563;
-  border-color: #ebb563;
-}
-
-.cache-toggle-button.el-button--info {
-  background-color: #909399;
-  border-color: #909399;
-}
-
-.cache-toggle-button.el-button--info:hover {
-  background-color: #a6a9ad;
-  border-color: #a6a9ad;
-}
 </style> 
