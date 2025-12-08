@@ -1118,6 +1118,94 @@ export default {
         
         //console.log('✅ 场景加载完成:', response.scene?.name)
         
+        // 🔥 场景加载完成后，如果有场景范围（bbox），将地图缩放至场景范围
+        const scene = currentScene.value
+        if (scene && scene.bbox) {
+          try {
+            // 确保地图尺寸已更新
+            if (map.value) {
+              map.value.updateSize()
+            }
+            
+            // 等待下一个tick，确保地图尺寸更新完成
+            await nextTick()
+            
+            let bbox = scene.bbox
+            
+            // 处理 bbox 格式：可能是数组 [minx, miny, maxx, maxy] 或对象 {minx, miny, maxx, maxy}
+            let minx, miny, maxx, maxy
+            
+            if (Array.isArray(bbox)) {
+              // 数组格式 [minx, miny, maxx, maxy]
+              if (bbox.length === 4) {
+                [minx, miny, maxx, maxy] = bbox
+              } else {
+                console.warn('场景bbox数组格式不正确，应为4个元素:', bbox)
+                return
+              }
+            } else if (typeof bbox === 'object' && bbox !== null) {
+              // 对象格式 {minx, miny, maxx, maxy}
+              minx = bbox.minx
+              miny = bbox.miny
+              maxx = bbox.maxx
+              maxy = bbox.maxy
+            } else if (typeof bbox === 'string') {
+              // 字符串格式，尝试解析JSON
+              try {
+                bbox = JSON.parse(bbox)
+                if (Array.isArray(bbox) && bbox.length === 4) {
+                  [minx, miny, maxx, maxy] = bbox
+                } else if (typeof bbox === 'object' && bbox !== null) {
+                  minx = bbox.minx
+                  miny = bbox.miny
+                  maxx = bbox.maxx
+                  maxy = bbox.maxy
+                } else {
+                  console.warn('场景bbox字符串解析后格式不正确:', bbox)
+                  return
+                }
+              } catch (parseError) {
+                console.warn('解析场景bbox字符串失败:', parseError)
+                return
+              }
+            } else {
+              console.warn('场景bbox格式不支持:', typeof bbox, bbox)
+              return
+            }
+            
+            // 验证 bbox 值
+            if (isNaN(minx) || isNaN(miny) || isNaN(maxx) || isNaN(maxy)) {
+              console.warn('场景bbox包含无效数值:', { minx, miny, maxx, maxy })
+              return
+            }
+            
+            // 构建范围（假设bbox是EPSG:4326坐标系）
+            const extent = [minx, miny, maxx, maxy]
+            
+            // 转换为地图使用的坐标系（EPSG:3857）
+            let transformedExtent
+            try {
+              transformedExtent = transformExtent(extent, 'EPSG:4326', 'EPSG:3857')
+            } catch (transformError) {
+              console.error('坐标转换失败:', transformError)
+              return
+            }
+            
+            // 获取地图视图并缩放到场景范围
+            const view = map.value.getView()
+            view.fit(transformedExtent, {
+              padding: [50, 50, 50, 50], // 边距
+              maxZoom: 18, // 最大缩放级别限制
+              duration: 1000 // 动画持续时间
+            })
+            
+            console.log('✅ 地图已缩放至场景范围:', scene.name)
+          } catch (error) {
+            console.error('缩放至场景范围失败:', error)
+            // 不显示错误消息，避免干扰用户体验
+          }
+        }
+        
       } catch (error) {
         console.error('加载场景失败:', error)
         ElMessage.error(`加载场景失败: ${error.message}`)
