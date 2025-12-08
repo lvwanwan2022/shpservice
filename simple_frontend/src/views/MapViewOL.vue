@@ -668,7 +668,7 @@ export default {
           scene.bbox = bbox
         }
       } catch (error) {
-        console.error('设置场景范围失败:', error)
+        // console.error('设置场景范围失败:', error)
         ElMessage.error('设置场景范围失败: ' + (error.message || '未知错误'))
       } finally {
         settingBbox.value = false
@@ -691,7 +691,7 @@ export default {
           selectedSceneId.value = sceneList.value[0].id
         }
       } catch (error) {
-        console.error('获取场景列表失败', error)
+        // console.error('获取场景列表失败', error)
         ElMessage.error('获取场景列表失败')
       }
     }
@@ -707,7 +707,7 @@ export default {
         layersList.value = response.data.layers || []
         //console.log('lv-response22:', layersList)
       } catch (error) {
-        console.error('加载场景详情失败:', error)
+        // console.error('加载场景详情失败:', error)
         ElMessage.error('加载场景详情失败')
       }
     } 
@@ -751,7 +751,7 @@ export default {
         sceneDialogVisible.value = false
         await fetchSceneList()
       } catch (error) {
-        console.error('保存场景失败:', error)
+        // console.error('保存场景失败:', error)
         ElMessage.error('保存场景失败')
       }
     }
@@ -796,7 +796,7 @@ export default {
         // 清除选中状态
         currentActiveLayer.value = null
       } catch (error) {
-        console.error('获取场景图层失败', error)
+        // console.error('获取场景图层失败', error)
         ElMessage.error('获取场景图层失败')
         layersList.value = []
       } finally {
@@ -827,19 +827,19 @@ export default {
     // 切换图层面板显示
     const toggleLayerPanel = () => {
       layerPanelCollapsed.value = !layerPanelCollapsed.value
-      console.log('🔄 面板状态切换:', layerPanelCollapsed.value ? '收起' : '展开')
+      // console.log('🔄 面板状态切换:', layerPanelCollapsed.value ? '收起' : '展开')
       
       // 强制DOM更新并检查样式
       nextTick(() => {
-        console.log('✅ DOM已更新，当前面板状态:', layerPanelCollapsed.value)
+        // console.log('✅ DOM已更新，当前面板状态:', layerPanelCollapsed.value)
         
         // 调试：检查DOM元素和样式
         const panelElement = document.querySelector('.layer-panel')
         if (panelElement) {
           const computedStyle = window.getComputedStyle(panelElement)
-          console.log('📐 面板当前宽度:', computedStyle.width)
-          console.log('🎯 面板类名:', panelElement.className)
-          console.log('🔄 面板collapsed状态:', panelElement.classList.contains('collapsed'))
+          // console.log('📐 面板当前宽度:', computedStyle.width)
+          // console.log('🎯 面板类名:', panelElement.className)
+          // console.log('🔄 面板collapsed状态:', panelElement.classList.contains('collapsed'))
         }
       })
     }
@@ -854,7 +854,7 @@ export default {
     // 切换图层可见性（仅前端控制，不修改后端）
     const toggleLayerVisibility = (layer) => {
       // 只更新前端图层的显隐状态，不调用后端API
-      console.log(`切换图层 ${layer.layer_name} 可见性: ${layer.visibility}`)
+      // console.log(`切换图层 ${layer.layer_name} 可见性: ${layer.visibility}`)
       
       // 通知MapViewerOL组件更新地图显示
       if (mapViewerRef.value && mapViewerRef.value.toggleLayerVisibility) {
@@ -878,21 +878,21 @@ export default {
       if (layer.opacity < 0) layer.opacity = 0
       if (layer.opacity > 1) layer.opacity = 1
       
-      console.log('🔄 updateLayerOpacityInMap 被调用:', {
-        layer_id: layer.id,
-        scene_layer_id: layer.scene_layer_id,
-        layer_name: layer.layer_name,
-        service_type: layer.service_type,
-        opacity: layer.opacity,
-        mapViewerRef_exists: !!mapViewerRef.value,
-        updateLayerOpacity_exists: !!(mapViewerRef.value && mapViewerRef.value.updateLayerOpacity)
-      })
+      // console.log('🔄 updateLayerOpacityInMap 被调用:', {
+      //   layer_id: layer.id,
+      //   scene_layer_id: layer.scene_layer_id,
+      //   layer_name: layer.layer_name,
+      //   service_type: layer.service_type,
+      //   opacity: layer.opacity,
+      //   mapViewerRef_exists: !!mapViewerRef.value,
+      //   updateLayerOpacity_exists: !!(mapViewerRef.value && mapViewerRef.value.updateLayerOpacity)
+      // })
       
       // 立即更新地图中的图层透明度
       if (mapViewerRef.value && mapViewerRef.value.updateLayerOpacity) {
         mapViewerRef.value.updateLayerOpacity(layer, layer.opacity)
       } else {
-        console.warn('❌ mapViewerRef 或 updateLayerOpacity 方法不存在')
+        // console.warn('❌ mapViewerRef 或 updateLayerOpacity 方法不存在')
       }
     }
     
@@ -908,7 +908,7 @@ export default {
     // 🔥 更新数据库中的图层透明度（防抖）
     const updateLayerOpacityInDatabase = async (layer) => {
       if (!selectedSceneId.value || !layer.scene_layer_id) {
-        console.warn('缺少场景ID或图层ID，跳过数据库更新')
+        // console.warn('缺少场景ID或图层ID，跳过数据库更新')
         return
       }
       
@@ -937,7 +937,7 @@ export default {
           // 清除定时器
           opacityUpdateTimers.value.delete(layer.id)
         } catch (error) {
-          console.error('保存透明度失败:', error)
+          // console.error('保存透明度失败:', error)
           ElMessage.error('透明度设置保存失败')
         }
       }, 500)
@@ -955,7 +955,7 @@ export default {
         ElMessage.success('图层上移成功')
         await refreshLayersAfterReorder()
       } catch (error) {
-        console.error('图层上移失败', error)
+        // console.error('图层上移失败', error)
         ElMessage.error('图层上移失败')
       }
     }
@@ -970,7 +970,7 @@ export default {
         ElMessage.success('图层下移成功')
         await refreshLayersAfterReorder()
       } catch (error) {
-        console.error('图层下移失败', error)
+        // console.error('图层下移失败', error)
         ElMessage.error('图层下移失败')
       }
     }
@@ -986,7 +986,7 @@ export default {
       try {
         await gisApi.reorderSceneLayers(selectedSceneId.value, orderMap)
       } catch (error) {
-        console.error('更新图层顺序失败', error)
+        // console.error('更新图层顺序失败', error)
         ElMessage.error('更新图层顺序失败')
         // 重新获取图层列表
         fetchSceneLayers(selectedSceneId.value)
@@ -1050,7 +1050,7 @@ export default {
             //console.log('从图层边界API获取到边界:', bbox, '(已转换为EPSG:4326), 原始坐标系:', originalCRS)
           }
         } catch (apiError) {
-          console.warn('图层边界API调用失败，尝试其他方式:', apiError)
+          // console.warn('图层边界API调用失败，尝试其他方式:', apiError)
         }
         
         // 2. 如果边界API调用失败，尝试从图层属性获取
@@ -1059,7 +1059,7 @@ export default {
             try {
               bbox = JSON.parse(layer.bbox)
             } catch (e) {
-              console.error('解析图层边界框失败:', e)
+              // console.error('解析图层边界框失败:', e)
             }
           } else {
             bbox = layer.bbox
@@ -1077,7 +1077,7 @@ export default {
               }
             }
           } catch (fileError) {
-            console.warn('获取文件边界失败:', fileError)
+            // console.warn('获取文件边界失败:', fileError)
           }
         }
         
@@ -1120,7 +1120,7 @@ export default {
           }
           //console.log(`转换后边界 (EPSG:3857):`, transformedExtent)
         } catch (transformError) {
-          console.error('坐标转换失败:', transformError)
+          // console.error('坐标转换失败:', transformError)
           ElMessage.error(`坐标转换失败: ${transformError.message}`)
           return
         }
@@ -1144,7 +1144,7 @@ export default {
         ElMessage.success(`已缩放到图层"${layer.layer_name}"范围 (${originalCRS})`)
         
       } catch (error) {
-        console.error('缩放到图层失败:', error)
+        // console.error('缩放到图层失败:', error)
         ElMessage.error(`缩放到图层失败: ${error.message}`)
       }
     }
@@ -1187,7 +1187,7 @@ export default {
           // 刷新图层列表
           fetchSceneLayers(selectedSceneId.value)
         } catch (error) {
-          console.error('移除图层失败', error)
+          // console.error('移除图层失败', error)
           ElMessage.error('移除图层失败')
         }
       }).catch(() => {})
@@ -1203,13 +1203,13 @@ export default {
       }
       
       if (!mapViewerRef.value) {
-        console.error('mapViewerRef.value is null or undefined')
+        // console.error('mapViewerRef.value is null or undefined')
         ElMessage.error('地图组件未准备就绪，请稍后再试')
         return
       }
       
       if (typeof mapViewerRef.value.showAddLayerDialog !== 'function') {
-        console.error('showAddLayerDialog method not found on mapViewerRef')
+        // console.error('showAddLayerDialog method not found on mapViewerRef')
         ElMessage.error('添加图层功能暂不可用')
         return
       }
@@ -1217,7 +1217,7 @@ export default {
       try {
         mapViewerRef.value.showAddLayerDialog()
       } catch (error) {
-        console.error('Error calling showAddLayerDialog:', error)
+        // console.error('Error calling showAddLayerDialog:', error)
         ElMessage.error('显示添加图层对话框失败')
       }
     }
@@ -1355,7 +1355,7 @@ export default {
         const layerInfo = mapViewerRef.value.getCurrentLayerInfo()
         return layerInfo.canInteract
       } catch (error) {
-        console.warn('获取图层交互状态失败:', error)
+        // console.warn('获取图层交互状态失败:', error)
         return false
       }
     })
@@ -1388,7 +1388,7 @@ export default {
         }
       } catch (error) {
         if (error !== 'cancel') {
-          console.error('删除场景失败:', error)
+          // console.error('删除场景失败:', error)
           ElMessage.error('删除场景失败')
         }
       }
@@ -1522,7 +1522,7 @@ export default {
         await refreshLayersAfterReorder()
         
       } catch (error) {
-        console.error('更新图层顺序失败:', error)
+        // console.error('更新图层顺序失败:', error)
         ElMessage.error('更新图层顺序失败')
       }
     }
@@ -1595,19 +1595,19 @@ export default {
             //console.log('✅ 地图场景已重新加载(loadScene)')
           }
         } else {
-          console.warn('mapViewerRef不可用，无法刷新地图')
+          // console.warn('mapViewerRef不可用，无法刷新地图')
         }
         
         //console.log('✅ 图层顺序刷新完成')
         
       } catch (error) {
-        console.error('❌ 刷新图层顺序失败:', error)
+        // console.error('❌ 刷新图层顺序失败:', error)
         // 如果刷新失败，至少要重新获取数据
         try {
           await fetchSceneLayers(selectedSceneId.value)
           //console.log('备用方案：重新获取图层数据成功')
         } catch (fallbackError) {
-          console.error('备用方案也失败了:', fallbackError)
+          // console.error('备用方案也失败了:', fallbackError)
         }
       }
     }
@@ -1754,6 +1754,7 @@ export default {
       toggleLayerPanel,
       goToSceneManage,
       toggleLayerVisibility,
+      updateLayerOpacityInMap,
       onLayerOpacityChange,
       moveLayerUp,
       moveLayerDown,
