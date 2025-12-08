@@ -175,7 +175,6 @@
                           :show-tooltip="false"
                           size="small"
                           @input="updateLayerOpacityInMap(layer)"
-                          @change="updateLayerOpacityInDatabase(layer)"
                           class="opacity-slider"
                         />
                       <span class="opacity-value">{{ Math.round((layer.opacity || 1) * 100) }}%</span>
@@ -446,7 +445,6 @@
                         :show-tooltip="false"
                         size="small"
                         @input="updateLayerOpacityInMap(layer)"
-                        @change="updateLayerOpacityInDatabase(layer)"
                         class="mobile-opacity-slider"
                       />
                     <span class="opacity-value">{{ Math.round((layer.opacity || 1) * 100) }}%</span>
