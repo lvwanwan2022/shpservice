@@ -1754,6 +1754,7 @@ export default {
       toggleLayerPanel,
       goToSceneManage,
       toggleLayerVisibility,
+      updateLayerOpacityInMap,
       onLayerOpacityChange,
       moveLayerUp,
       moveLayerDown,
