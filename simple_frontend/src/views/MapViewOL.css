@@ -585,7 +585,7 @@
   overflow-y: auto;
   max-height: 100%;
   /* CSS变量定义 - 紧凑模式 */
-  --layer-card-spacing: 4px;
+  --layer-card-spacing: 0px;
   --layer-card-padding: 6px 10px;
   --layer-card-border-radius: 6px;
   --layer-info-spacing: 2px;
@@ -697,10 +697,12 @@
 
 .layer-actions {
   display: flex;
-  gap: 2px;
+  gap: 0px;
   opacity: 1;
   /* 🔥 修复：默认显示，不需要hover才显示 */
   transition: opacity 0.2s;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 /* 🔥 保留hover效果用于强调，但不影响基础显示 */
@@ -709,19 +711,19 @@
 }
 
 .layer-actions .el-button {
-  padding: 4px;
+  padding: 0px;
   width: 22px;
   height: 22px;
   min-width: 22px;
   min-height: 22px;
-  border: 1px solid #e4e7ed;
-  /* 🔥 添加边框让按钮更明显 */
-  background: rgba(255, 255, 255, 0.8);
-  /* 🔥 添加半透明背景 */
+  border: none;
+  /* 🔥 移除边框，更紧凑 */
+  background: transparent;
+  /* 🔥 透明背景 */
   color: #606266;
   transition: all 0.2s;
-  border-radius: 4px;
-  /* 🔥 添加圆角 */
+  border-radius: 0px;
+  /* 🔥 移除圆角，更紧凑 */
   opacity: 1 !important;
   /* 🔥 确保始终可见 */
   visibility: visible !important;
@@ -729,6 +731,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  margin: 0px;
 }
 
 .layer-actions .zoom-btn:hover {
@@ -813,6 +816,14 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* 场景范围设置按钮 */
+.scene-bbox-control {
+  padding: 10px 15px;
+  border-top: 1px solid #dee2e6;
+  background: #fff;
+  flex-shrink: 0;
 }
 
 /* 🔥 透明度控制样式 - 紧凑型 */

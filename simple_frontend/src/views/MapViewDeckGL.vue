@@ -2273,7 +2273,7 @@ export default {
         const containerHeight = mapContainer.clientHeight || 600
         
         // 使用deck.gl的WebMercatorViewport来计算边界框
-        // 这是一个更准确的方法
+        // 使用无pitch和bearing的视口来获取准确的2D边界框
         const { WebMercatorViewport } = await import('@deck.gl/core')
         const viewport = new WebMercatorViewport({
           width: containerWidth,
@@ -2281,15 +2281,24 @@ export default {
           longitude: viewState.longitude,
           latitude: viewState.latitude,
           zoom: viewState.zoom,
-          pitch: viewState.pitch || 0,
-          bearing: viewState.bearing || 0
+          pitch: 0, // 使用0度pitch来获取准确的2D边界
+          bearing: 0 // 使用0度bearing来获取准确的2D边界
         })
         
-        // 获取视口的四个角的经纬度坐标
-        const bounds = viewport.getBounds()
+        // 获取视口四个角的经纬度坐标（不使用pitch和bearing）
+        const topLeft = viewport.unproject([0, 0])
+        const topRight = viewport.unproject([containerWidth, 0])
+        const bottomLeft = viewport.unproject([0, containerHeight])
+        const bottomRight = viewport.unproject([containerWidth, containerHeight])
+        
+        // 计算边界框
+        const minLng = Math.min(topLeft[0], topRight[0], bottomLeft[0], bottomRight[0])
+        const maxLng = Math.max(topLeft[0], topRight[0], bottomLeft[0], bottomRight[0])
+        const minLat = Math.min(topLeft[1], topRight[1], bottomLeft[1], bottomRight[1])
+        const maxLat = Math.max(topLeft[1], topRight[1], bottomLeft[1], bottomRight[1])
         
         // 构建bbox数组 [minx, miny, maxx, maxy]
-        const bbox = [bounds[0], bounds[1], bounds[2], bounds[3]]
+        const bbox = [minLng, minLat, maxLng, maxLat]
         
         // 调用API设置场景范围
         await gisApi.updateSceneBbox(selectedSceneId.value, bbox)
