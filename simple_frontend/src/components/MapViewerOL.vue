@@ -705,11 +705,12 @@ export default {
         
         // 5. 创建地图实例
         //console.log('创建地图实例...')
+        // 🔥 初始化时使用默认中心点，场景加载时会根据场景bbox自动缩放
         map.value = new Map({
           target: mapContainer.value,
           layers: [gaodeLayer, gaodeSatelliteLayer, osmLayer, esriSatelliteLayer],
           view: new View({
-            center: fromLonLat([104.0667, 30.6667]), // 成都坐标
+            center: fromLonLat([104.0667, 30.6667]), // 默认中心点（场景加载时会根据场景bbox自动调整）
             zoom: 10,
             maxZoom: 23,  // 全局最大缩放级别（适配所有底图）
             minZoom: 1    // 全局最小缩放级别
