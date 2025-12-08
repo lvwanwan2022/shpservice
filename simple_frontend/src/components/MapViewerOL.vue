@@ -2089,7 +2089,7 @@ export default {
       }
     }
     
-    // 切换图层可见性
+    // 切换图层可见性（仅前端控制，不修改后端）
     const toggleLayerVisibility = (layer) => {
       const targetLayer = layer.service_type === 'martin' ? mvtLayers.value[layer.id] : mapLayers.value[layer.id]
       if (!targetLayer) return
@@ -2100,13 +2100,8 @@ export default {
         map.value.removeLayer(targetLayer)
       }
       
-      updateLayerVisibility(layer.id, layer.visibility)
-    }
-    
-    // 更新图层可见性到服务器
-    const updateLayerVisibility = async (layerId, visibility) => {
-      if (props.readonly) return
-      await gisApi.updateSceneLayer(props.sceneId, layerId, { visibility })
+      // 🔥 不再调用后端API更新可见性，只更新前端显示
+      // updateLayerVisibility(layer.id, layer.visibility)
     }
 
     // 🔥 更新图层透明度
