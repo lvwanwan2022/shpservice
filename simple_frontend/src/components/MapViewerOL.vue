@@ -1843,10 +1843,13 @@ export default {
         // 存储图层引用
         mvtLayers.value[layer.id] = mvtLayer
         
-        // 添加到地图（如果图层可见）
-        if (layer.visibility !== false && map.value) {
+        // 🔥 无论 visibility 如何，都添加到地图，但根据 visibility 设置 visible 属性
+        // 这样即使图层初始不可见，数据也已经加载，勾选时可以直接显示
+        if (map.value) {
           map.value.addLayer(mvtLayer)
-          //console.log('✅ MVT图层添加成功:', layer.layer_name)
+          // 根据数据库中的 visibility 状态设置图层可见性
+          mvtLayer.setVisible(layer.visibility !== false)
+          //console.log('✅ MVT图层添加成功:', layer.layer_name, 'visible:', layer.visibility !== false)
         }
         
         // 添加图层事件监听 - 改进版本
@@ -1996,11 +1999,12 @@ export default {
         // 存储图层引用
         mapLayers.value[layer.id] = wmsLayer
         
-        // 添加到地图（如果图层可见）
-        if (layer.visibility !== false) {
-          map.value.addLayer(wmsLayer)
-          //console.log(`✅ WMS图层添加成功: ${layer.layer_name} (坐标系: ${layerCRS})`)
-        }
+        // 🔥 无论 visibility 如何，都添加到地图，但根据 visibility 设置 visible 属性
+        // 这样即使图层初始不可见，数据也已经加载，勾选时可以直接显示
+        map.value.addLayer(wmsLayer)
+        // 根据数据库中的 visibility 状态设置图层可见性
+        wmsLayer.setVisible(layer.visibility !== false)
+        //console.log(`✅ WMS图层添加成功: ${layer.layer_name} (坐标系: ${layerCRS}), visible: ${layer.visibility !== false}`)
         
       } catch (error) {
         console.error('创建WMS图层失败:', error)
@@ -2092,13 +2096,14 @@ export default {
     // 切换图层可见性（仅前端控制，不修改后端）
     const toggleLayerVisibility = (layer) => {
       const targetLayer = layer.service_type === 'martin' ? mvtLayers.value[layer.id] : mapLayers.value[layer.id]
-      if (!targetLayer) return
-      
-      if (layer.visibility) {
-        map.value.addLayer(targetLayer)
-      } else {
-        map.value.removeLayer(targetLayer)
+      if (!targetLayer) {
+        console.warn('图层对象不存在，无法切换可见性:', layer.layer_name)
+        return
       }
+      
+      // 🔥 只改变图层的 visible 属性，不添加/移除图层
+      // 因为所有图层在初始化时都已经加载并添加到地图了
+      targetLayer.setVisible(layer.visibility !== false)
       
       // 🔥 不再调用后端API更新可见性，只更新前端显示
       // updateLayerVisibility(layer.id, layer.visibility)
