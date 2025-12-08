@@ -2111,27 +2111,81 @@ export default {
 
     // 🔥 更新图层透明度
     const updateLayerOpacity = (layer, opacity) => {
-      console.log('🎯 更新图层透明度:', layer.layer_name, '透明度:', opacity)
+      console.log('🎯 更新图层透明度:', {
+        layer_name: layer.layer_name,
+        layer_id: layer.id,
+        scene_layer_id: layer.scene_layer_id,
+        service_type: layer.service_type,
+        opacity: opacity,
+        mapLayers_keys: Object.keys(mapLayers.value),
+        mvtLayers_keys: Object.keys(mvtLayers.value)
+      })
       
       // 确保透明度在有效范围内
       const normalizedOpacity = Math.max(0, Math.min(1, opacity))
       
-      // 根据服务类型获取对应的图层对象
-      const targetLayer = layer.service_type === 'martin' 
-        ? mvtLayers.value[layer.id] 
-        : mapLayers.value[layer.id]
+      // 尝试多种方式查找图层对象
+      let targetLayer = null
+      
+      // 方式1: 使用 layer.id 查找
+      if (layer.service_type === 'martin') {
+        targetLayer = mvtLayers.value[layer.id]
+      } else {
+        targetLayer = mapLayers.value[layer.id]
+      }
+      
+      // 方式2: 如果方式1失败，尝试使用 scene_layer_id
+      if (!targetLayer && layer.scene_layer_id) {
+        if (layer.service_type === 'martin') {
+          targetLayer = Object.values(mvtLayers.value).find(l => 
+            l._layerInfo && (l._layerInfo.scene_layer_id === layer.scene_layer_id || l._layerInfo.id === layer.id)
+          )
+        } else {
+          targetLayer = Object.values(mapLayers.value).find(l => 
+            l.getProperties && (
+              l.getProperties().layerId === layer.id || 
+              l.getProperties().layerId === layer.scene_layer_id
+            )
+          )
+        }
+      }
+      
+      // 方式3: 如果还是找不到，遍历所有图层查找匹配的
+      if (!targetLayer) {
+        // 尝试通过图层名称匹配
+        const allLayers = [...Object.values(mapLayers.value), ...Object.values(mvtLayers.value)]
+        targetLayer = allLayers.find(l => {
+          if (l._layerInfo && l._layerInfo.id === layer.id) return true
+          if (l.getProperties) {
+            const props = l.getProperties()
+            if (props.layerId === layer.id || props.layerName === layer.layer_name) return true
+          }
+          return false
+        })
+      }
       
       if (!targetLayer) {
-        console.warn('❌ 未找到图层对象:', layer.id, layer.service_type)
+        console.warn('❌ 未找到图层对象:', {
+          layer_id: layer.id,
+          scene_layer_id: layer.scene_layer_id,
+          service_type: layer.service_type,
+          layer_name: layer.layer_name,
+          available_mapLayers: Object.keys(mapLayers.value),
+          available_mvtLayers: Object.keys(mvtLayers.value)
+        })
         return
       }
       
       // 设置图层透明度
-      if (targetLayer.setOpacity) {
+      if (typeof targetLayer.setOpacity === 'function') {
         targetLayer.setOpacity(normalizedOpacity)
         console.log('✅ 图层透明度已更新:', layer.layer_name, normalizedOpacity)
       } else {
-        console.warn('❌ 图层对象不支持setOpacity方法:', layer.id)
+        console.warn('❌ 图层对象不支持setOpacity方法:', {
+          layer_id: layer.id,
+          layer_type: targetLayer.constructor.name,
+          available_methods: Object.getOwnPropertyNames(Object.getPrototypeOf(targetLayer))
+        })
       }
     }
     

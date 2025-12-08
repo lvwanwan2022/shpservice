@@ -175,7 +175,6 @@
                           :show-tooltip="false"
                           size="small"
                           @input="updateLayerOpacityInMap(layer)"
-                          @change="updateLayerOpacityInDatabase(layer)"
                           class="opacity-slider"
                         />
                       <span class="opacity-value">{{ Math.round((layer.opacity || 1) * 100) }}%</span>
@@ -446,7 +445,6 @@
                         :show-tooltip="false"
                         size="small"
                         @input="updateLayerOpacityInMap(layer)"
-                        @change="updateLayerOpacityInDatabase(layer)"
                         class="mobile-opacity-slider"
                       />
                     <span class="opacity-value">{{ Math.round((layer.opacity || 1) * 100) }}%</span>
@@ -880,9 +878,21 @@ export default {
       if (layer.opacity < 0) layer.opacity = 0
       if (layer.opacity > 1) layer.opacity = 1
       
+      console.log('🔄 updateLayerOpacityInMap 被调用:', {
+        layer_id: layer.id,
+        scene_layer_id: layer.scene_layer_id,
+        layer_name: layer.layer_name,
+        service_type: layer.service_type,
+        opacity: layer.opacity,
+        mapViewerRef_exists: !!mapViewerRef.value,
+        updateLayerOpacity_exists: !!(mapViewerRef.value && mapViewerRef.value.updateLayerOpacity)
+      })
+      
       // 立即更新地图中的图层透明度
       if (mapViewerRef.value && mapViewerRef.value.updateLayerOpacity) {
         mapViewerRef.value.updateLayerOpacity(layer, layer.opacity)
+      } else {
+        console.warn('❌ mapViewerRef 或 updateLayerOpacity 方法不存在')
       }
     }
     
