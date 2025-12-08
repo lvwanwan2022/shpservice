@@ -1112,8 +1112,33 @@ export default {
               map.value.updateSize()
             }
             
-            // 等待下一个tick，确保地图尺寸更新完成
-            await nextTick()
+            // 等待地图渲染完成，确保所有图层都已加载
+            await new Promise((resolve) => {
+              if (map.value) {
+                // 等待地图渲染完成事件
+                const onRenderComplete = () => {
+                  map.value.un('rendercomplete', onRenderComplete)
+                  // 再等待一小段时间，确保所有图层都完全加载
+                  setTimeout(resolve, 300)
+                }
+                map.value.once('rendercomplete', onRenderComplete)
+                // 如果地图已经渲染完成，直接触发
+                setTimeout(() => {
+                  if (map.value) {
+                    map.value.un('rendercomplete', onRenderComplete)
+                    resolve()
+                  }
+                }, 1000)
+              } else {
+                resolve()
+              }
+            })
+            
+            // 再次确保地图尺寸已更新
+            if (map.value) {
+              map.value.updateSize()
+              await nextTick()
+            }
             
             let bbox = scene.bbox
             
@@ -1187,6 +1212,94 @@ export default {
             console.log('✅ 地图已缩放至场景范围:', scene.name)
           } catch (error) {
             console.error('缩放至场景范围失败:', error)
+            // 不显示错误消息，避免干扰用户体验
+          }
+        } else if (scene && layersList.value.length > 0) {
+          // 🔥 如果场景没有bbox，尝试使用所有图层的范围来缩放
+          try {
+            // 确保地图尺寸已更新
+            if (map.value) {
+              map.value.updateSize()
+            }
+            
+            // 等待地图渲染完成
+            await new Promise((resolve) => {
+              if (map.value) {
+                const onRenderComplete = () => {
+                  map.value.un('rendercomplete', onRenderComplete)
+                  setTimeout(resolve, 300)
+                }
+                map.value.once('rendercomplete', onRenderComplete)
+                setTimeout(() => {
+                  if (map.value) {
+                    map.value.un('rendercomplete', onRenderComplete)
+                    resolve()
+                  }
+                }, 1000)
+              } else {
+                resolve()
+              }
+            })
+            
+            // 再次确保地图尺寸已更新
+            if (map.value) {
+              map.value.updateSize()
+              await nextTick()
+            }
+            
+            // 获取所有图层的范围
+            const view = map.value.getView()
+            let allExtents = []
+            
+            // 遍历所有图层，获取它们的范围
+            for (const layer of layersList.value) {
+              try {
+                const olLayer = layer.service_type === 'martin' 
+                  ? mvtLayers.value[layer.id] 
+                  : mapLayers.value[layer.id]
+                
+                if (olLayer) {
+                  const source = olLayer.getSource()
+                  if (source) {
+                    const extent = source.getExtent()
+                    if (extent && extent.length === 4 && 
+                        !isNaN(extent[0]) && !isNaN(extent[1]) && 
+                        !isNaN(extent[2]) && !isNaN(extent[3])) {
+                      allExtents.push(extent)
+                    }
+                  }
+                }
+              } catch (layerError) {
+                // 忽略单个图层的错误，继续处理其他图层
+                console.warn('获取图层范围失败:', layer.layer_name, layerError)
+              }
+            }
+            
+            // 如果有有效的范围，计算合并后的范围并缩放
+            if (allExtents.length > 0) {
+              let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+              
+              for (const extent of allExtents) {
+                minX = Math.min(minX, extent[0])
+                minY = Math.min(minY, extent[1])
+                maxX = Math.max(maxX, extent[2])
+                maxY = Math.max(maxY, extent[3])
+              }
+              
+              // 验证范围是否有效
+              if (isFinite(minX) && isFinite(minY) && isFinite(maxX) && isFinite(maxY) &&
+                  minX < maxX && minY < maxY) {
+                const combinedExtent = [minX, minY, maxX, maxY]
+                view.fit(combinedExtent, {
+                  padding: [50, 50, 50, 50],
+                  maxZoom: 18,
+                  duration: 1000
+                })
+                console.log('✅ 地图已缩放至图层范围:', scene.name)
+              }
+            }
+          } catch (error) {
+            console.error('缩放至图层范围失败:', error)
             // 不显示错误消息，避免干扰用户体验
           }
         }
