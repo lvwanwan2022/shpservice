@@ -248,8 +248,6 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
   let handleMapPointerMoveRef = null
   
   // 用于跟踪是否刚刚点击了控制点，用于防止 Modify 交互立即开始修改
-  let justClickedPoint = false
-  let clickTimeout = null
   let pointerDownPixel = null
   let isDragging = false
 
@@ -257,36 +255,9 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
   const handleMapPointerDown = (e) => {
     if (mode.value !== 'EDIT') return
     
-    // 清除之前的定时器
-    if (clickTimeout) {
-      clearTimeout(clickTimeout)
-      clickTimeout = null
-    }
-    
     // 记录按下时的像素位置
     pointerDownPixel = e.pixel
     isDragging = false
-    
-    // 检查是否点击了控制点
-    const feature = map.value.forEachFeatureAtPixel(e.pixel, (feat) => feat, {
-      layerFilter: (layer) => {
-        const source = layer.getSource()
-        return source === pointSource.value
-      },
-      hitTolerance: 15
-    })
-    
-    if (feature) {
-      // 标记刚刚点击了控制点
-      justClickedPoint = true
-      // 短暂延迟后重置标志，允许后续的拖拽操作
-      clickTimeout = setTimeout(() => {
-        justClickedPoint = false
-        clickTimeout = null
-      }, 200) // 延迟时间，确保点击选择功能优先
-    } else {
-      justClickedPoint = false
-    }
   }
   
   // pointermove 事件处理 - 用于检测拖拽操作
@@ -301,18 +272,15 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
     // 如果移动距离超过5像素，认为是拖拽操作
     if (distance > 5) {
       isDragging = true
-      // 如果是拖拽，清除点击标志，允许Modify交互
-      if (clickTimeout) {
-        clearTimeout(clickTimeout)
-        clickTimeout = null
-      }
-      justClickedPoint = false
     }
   }
   
   // 点击选择节点
   const handleMapClick = (e) => {
     if (mode.value !== 'EDIT') return
+
+    // 如果发生了拖拽，不进行选择
+    if (isDragging) return
     
     const pixel = e.pixel
     // 优先检查是否点击了控制点
@@ -586,38 +554,24 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
       drawInteraction.value = draw
     } else if (mode.value === 'EDIT') {
       // 配置 Modify 交互
-      // 使用 condition 函数，在刚刚点击控制点时阻止立即开始修改
-      // 这样可以让点击选择功能正常工作，同时仍然允许拖拽移动控制点
       const modify = new Modify({
         source: pointSource.value,
-        condition: () => {
-          // 如果正在拖拽，允许修改
-          if (isDragging) {
-            return true
-          }
-          // 如果刚刚点击了控制点且没有拖拽，不立即开始修改（允许点击选择）
-          if (justClickedPoint && !isDragging) {
-            return false
-          }
-          // 默认行为：允许修改（拖拽）
-          return true
-        }
+        // 移除 condition，允许 Modify 交互始终响应，解决拖拽不动的问题
+        pixelTolerance: 10
       })
       
-      // 监听修改开始，清除点击标志
+      // 监听修改开始
       modify.on('modifystart', () => {
-        justClickedPoint = false
         isDragging = true
-        if (clickTimeout) {
-          clearTimeout(clickTimeout)
-          clickTimeout = null
-        }
       })
       
       // 监听修改结束，重置状态
       modify.on('modifyend', () => {
-        pointerDownPixel = null
-        isDragging = false
+        // 使用 setTimeout 确保 click 事件处理完成后再重置
+        setTimeout(() => {
+          pointerDownPixel = null
+          isDragging = false
+        }, 0)
       })
       
       // 在修改开始前，确保节点有radius属性
@@ -717,10 +671,6 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
   
   // 清理
   const cleanup = () => {
-    if (clickTimeout) {
-      clearTimeout(clickTimeout)
-      clickTimeout = null
-    }
     if (tooltipElement.value && tooltipElement.value.parentNode) {
       tooltipElement.value.parentNode.removeChild(tooltipElement.value)
     }

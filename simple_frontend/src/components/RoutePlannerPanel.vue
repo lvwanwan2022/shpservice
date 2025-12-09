@@ -14,25 +14,29 @@
     <div class="panel-body">
       <!-- 行业模式选择 -->
       <section class="section">
-        <label class="section-label">行业模式</label>
-        <div class="industry-mode-buttons">
-          <el-button 
-            :type="industryMode === 'WATER' ? 'primary' : 'default'"
-            @click="setIndustryMode('WATER')"
-            class="industry-mode-btn"
-          >
-            <el-icon><Water /></el-icon>
-            <span>水利行业</span>
-          </el-button>
-          <el-button 
-            :type="industryMode === 'HIGHWAY' ? 'primary' : 'default'"
-            @click="setIndustryMode('HIGHWAY')"
-            class="industry-mode-btn"
-          >
-            <el-icon><Van /></el-icon>
-            <span>公路行业</span>
-          </el-button>
-        </div>
+        <el-tabs 
+          :model-value="industryMode" 
+          @update:model-value="setIndustryMode"
+          class="industry-tabs"
+        >
+          <el-tab-pane label="水利行业" name="WATER">
+            <template #label>
+              <span class="custom-tab-label">
+                <el-icon><Water /></el-icon>
+                <span>水利行业</span>
+              </span>
+            </template>
+          </el-tab-pane>
+          <el-tab-pane label="公路行业" name="HIGHWAY">
+            <template #label>
+              <span class="custom-tab-label">
+                <el-icon><Van /></el-icon>
+                <span>公路行业</span>
+              </span>
+            </template>
+          </el-tab-pane>
+        </el-tabs>
+
         <div v-if="industryMode === 'HIGHWAY'" class="highway-hint">
           公路模式启用缓和曲线（回旋线）。<br/>连接方式: 直线-回旋线-圆-回旋线-直线。
         </div>
@@ -388,6 +392,16 @@ export default {
   border-radius: 4px;
   border: 1px solid #e4e7ed;
   line-height: 1.5;
+}
+
+.industry-tabs {
+  margin-bottom: 8px;
+}
+
+.custom-tab-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .industry-mode-buttons {

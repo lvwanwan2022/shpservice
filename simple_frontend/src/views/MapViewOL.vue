@@ -694,7 +694,15 @@ export default {
     const routePlannerSelectedIndex = ref(null)
     const routePlannerSelectedRadius = computed(() => {
       if (routePlannerSelectedIndex.value === null || routePlannerSelectedIndex.value === undefined) return null
-      const nodes = mapViewerRef.value?.routeNodes || []
+      
+      let nodes = []
+      if (mapViewerRef.value?.routeNodes) {
+        // 处理 routeNodes 可能是 Ref 的情况
+        nodes = Array.isArray(mapViewerRef.value.routeNodes) 
+          ? mapViewerRef.value.routeNodes 
+          : (mapViewerRef.value.routeNodes.value || [])
+      }
+
       if (Array.isArray(nodes) && routePlannerSelectedIndex.value >= 0 && routePlannerSelectedIndex.value < nodes.length) {
         const node = nodes[routePlannerSelectedIndex.value]
         // 如果节点没有radius，使用默认半径
@@ -707,7 +715,15 @@ export default {
     })
     const routePlannerSelectedSpiralLen = computed(() => {
       if (routePlannerSelectedIndex.value === null || routePlannerSelectedIndex.value === undefined) return null
-      const nodes = mapViewerRef.value?.routeNodes || []
+      
+      let nodes = []
+      if (mapViewerRef.value?.routeNodes) {
+        // 处理 routeNodes 可能是 Ref 的情况
+        nodes = Array.isArray(mapViewerRef.value.routeNodes) 
+          ? mapViewerRef.value.routeNodes 
+          : (mapViewerRef.value.routeNodes.value || [])
+      }
+      
       if (Array.isArray(nodes) && routePlannerSelectedIndex.value >= 0 && routePlannerSelectedIndex.value < nodes.length) {
         const node = nodes[routePlannerSelectedIndex.value]
         // 如果节点没有spiralLength，使用默认值
