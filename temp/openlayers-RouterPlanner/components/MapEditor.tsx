@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef } from 'react';
 import Map from 'ol/Map';
 import View from 'ol/View';
@@ -12,25 +13,29 @@ import Feature from 'ol/Feature';
 import LineString from 'ol/geom/LineString';
 import Point from 'ol/geom/Point';
 import Overlay from 'ol/Overlay';
-import { Coordinate, InteractionMode, RouteNode, RouteSegment } from '../types';
+import { Coordinate, InteractionMode, RouteNode, RouteSegment, IndustryMode } from '../types';
 import { generateFilletedSegments } from '../utils/geometry';
 
 interface MapEditorProps {
   mode: InteractionMode;
+  industryMode: IndustryMode;
   nodes: RouteNode[];
   onNodesChange: (nodes: RouteNode[]) => void;
   selectedNodeIndex: number | null;
   onNodeSelect: (index: number | null) => void;
   defaultRadius: number;
+  defaultSpiralLen: number;
 }
 
 const MapEditor: React.FC<MapEditorProps> = ({ 
   mode, 
+  industryMode,
   nodes, 
   onNodesChange, 
   selectedNodeIndex,
   onNodeSelect,
-  defaultRadius 
+  defaultRadius,
+  defaultSpiralLen
 }) => {
   const mapElement = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
@@ -38,6 +43,7 @@ const MapEditor: React.FC<MapEditorProps> = ({
   // Layer Sources
   const controlSourceRef = useRef(new VectorSource()); // The polyline user edits
   const arcSourceRef = useRef(new VectorSource());     // Generated arcs
+  const spiralSourceRef = useRef(new VectorSource());  // Generated spirals
   const lineSourceRef = useRef(new VectorSource());    // Generated straight lines
   const pointSourceRef = useRef(new VectorSource());   // Control points visualization
 
@@ -53,10 +59,9 @@ const MapEditor: React.FC<MapEditorProps> = ({
   const isDrawingRef = useRef(false);
   const sketchFeatureRef = useRef<Feature | null>(null);
 
-  // We use a ref for nodes to access the latest state inside OpenLayers event callbacks
+  // Refs for current state inside event handlers
   const nodesRef = useRef(nodes);
-  const modeRef = useRef(mode); // Track mode for event handlers
-  // Store generated segments for distance calculation
+  const modeRef = useRef(mode);
   const segmentsRef = useRef<RouteSegment[]>([]);
 
   useEffect(() => {
@@ -119,6 +124,14 @@ const MapEditor: React.FC<MapEditorProps> = ({
       }),
     });
 
+    // Style for spirals (Highway Mode)
+    const spiralStyle = new Style({
+      stroke: new Stroke({
+        color: '#9333ea', // Purple-600
+        width: 3,
+      }),
+    });
+
     // Style function for control points
     const pointStyleFunc = (feature: any) => {
       const isSelected = feature.get('isSelected');
@@ -136,6 +149,7 @@ const MapEditor: React.FC<MapEditorProps> = ({
       layers: [
         new TileLayer({ source: new OSM() }),
         new VectorLayer({ source: lineSourceRef.current, style: lineStyle }),
+        new VectorLayer({ source: spiralSourceRef.current, style: spiralStyle }),
         new VectorLayer({ source: arcSourceRef.current, style: arcStyle }),
         new VectorLayer({ source: controlSourceRef.current, style: controlStyle }),
         new VectorLayer({ source: pointSourceRef.current, style: pointStyleFunc as any }),
@@ -149,9 +163,6 @@ const MapEditor: React.FC<MapEditorProps> = ({
 
     // Click handler for node selection
     map.on('click', (e) => {
-      // Don't deselect if we are in the middle of double-clicking (handled by dblclick)
-      // But standard click fires anyway. 
-      // We check for feature hit.
       const pixel = e.pixel;
       const feature = map.forEachFeatureAtPixel(pixel, (feat) => feat, {
         layerFilter: (layer) => layer.getSource() === pointSourceRef.current,
@@ -162,9 +173,6 @@ const MapEditor: React.FC<MapEditorProps> = ({
         const index = feature.get('index');
         onNodeSelect(index);
       } else {
-        // Only deselect if we are NOT Double Clicking.
-        // But we don't know yet. 
-        // Deselecting is safe, as dblclick will do its thing.
         onNodeSelect(null);
       }
     });
@@ -198,7 +206,6 @@ const MapEditor: React.FC<MapEditorProps> = ({
         };
       };
 
-      // Check distance to each control line segment
       for (let i = 0; i < nodes.length - 1; i++) {
          const p1 = nodes[i];
          const p2 = nodes[i+1];
@@ -216,8 +223,6 @@ const MapEditor: React.FC<MapEditorProps> = ({
           const newNodes = [...nodes];
           newNodes.splice(insertIndex, 0, { ...insertPoint, radius: defaultRadius });
           onNodesChange(newNodes);
-          
-          // Prevent zoom
           return false;
       }
     });
@@ -225,11 +230,10 @@ const MapEditor: React.FC<MapEditorProps> = ({
     // Pointer move for distance tooltip
     map.on('pointermove', (e) => {
       if (tooltipElementRef.current && tooltipOverlayRef.current) {
-         // Basic distance calculation
          const mapResolution = map.getView().getResolution() || 1;
          const segments = segmentsRef.current;
          const coordinate = e.coordinate;
-         const threshold = 15 * mapResolution; // px tolerance
+         const threshold = 15 * mapResolution; 
 
          let closestDist = Infinity;
          let distanceAtCursor = -1;
@@ -242,15 +246,12 @@ const MapEditor: React.FC<MapEditorProps> = ({
             
             const line = new LineString(coords);
             const closestPoint = line.getClosestPoint(coordinate);
-            
-            // Distance from cursor to line
             const dist = Math.sqrt((closestPoint[0]-coordinate[0])**2 + (closestPoint[1]-coordinate[1])**2);
             
             if (dist < closestDist) {
               closestDist = dist;
               bestPosition = closestPoint;
               
-              // Calculate length along this segment to the closest point
               let lengthAlongSegment = 0;
               for (let i = 0; i < coords.length - 1; i++) {
                  const p1 = coords[i];
@@ -292,13 +293,13 @@ const MapEditor: React.FC<MapEditorProps> = ({
       }
       map.setTarget(undefined);
     };
-  }, []); // Run once on mount
+  }, []); 
 
   // -----------------------------
-  // Render Logic: State -> Map
+  // Render Logic
   // -----------------------------
   useEffect(() => {
-    // 1. Update Control Line
+    // 1. Control Line
     const coords = nodes.map(n => [n.x, n.y]);
     const features = controlSourceRef.current.getFeatures();
     
@@ -316,7 +317,7 @@ const MapEditor: React.FC<MapEditorProps> = ({
       controlSourceRef.current.clear();
     }
 
-    // 2. Update Control Points (Interactive)
+    // 2. Control Points
     pointSourceRef.current.clear();
     nodes.forEach((node, idx) => {
       const feat = new Feature(new Point([node.x, node.y]));
@@ -325,24 +326,27 @@ const MapEditor: React.FC<MapEditorProps> = ({
       pointSourceRef.current.addFeature(feat);
     });
 
-    // 3. Generate and Render Segments (Arcs + Lines)
-    const segments = generateFilletedSegments(nodes);
+    // 3. Generate Segments
+    const segments = generateFilletedSegments(nodes, industryMode, defaultSpiralLen);
     segmentsRef.current = segments;
     
     arcSourceRef.current.clear();
     lineSourceRef.current.clear();
+    spiralSourceRef.current.clear();
 
     segments.forEach(seg => {
       const geom = new LineString(seg.coordinates.map(c => [c.x, c.y]));
       const feat = new Feature(geom);
       if (seg.type === 'arc') {
         arcSourceRef.current.addFeature(feat);
+      } else if (seg.type === 'spiral') {
+        spiralSourceRef.current.addFeature(feat);
       } else {
         lineSourceRef.current.addFeature(feat);
       }
     });
 
-  }, [nodes, selectedNodeIndex]);
+  }, [nodes, selectedNodeIndex, industryMode, defaultRadius, defaultSpiralLen]);
 
 
   // -----------------------------
@@ -352,7 +356,6 @@ const MapEditor: React.FC<MapEditorProps> = ({
     if (!mapRef.current) return;
     const map = mapRef.current;
 
-    // Clear old interactions
     [drawInteractionRef.current, modifyInteractionRef.current, snapInteractionRef.current].forEach(i => {
       if (i) map.removeInteraction(i);
     });
@@ -364,15 +367,12 @@ const MapEditor: React.FC<MapEditorProps> = ({
       const draw = new Draw({
         source: controlSourceRef.current,
         type: 'LineString',
-        // Optional: stopClick true to maybe help with event handling? 
-        // stopClick: true 
       });
 
       draw.on('drawstart', (e) => {
          isDrawingRef.current = true;
          sketchFeatureRef.current = e.feature;
          const currentNodes = nodesRef.current;
-         // Validation checks... (kept same as before)
          if (currentNodes.length > 2) {
           const geom = e.feature.getGeometry();
           if (geom instanceof LineString) {
@@ -384,9 +384,7 @@ const MapEditor: React.FC<MapEditorProps> = ({
                  const d = Math.sqrt(Math.pow(n.x - startX, 2) + Math.pow(n.y - startY, 2));
                  return d < 0.1; 
                });
-               if (isIntermediate) {
-                 draw.abortDrawing();
-               }
+               if (isIntermediate) draw.abortDrawing();
             }
           }
         }
@@ -404,40 +402,42 @@ const MapEditor: React.FC<MapEditorProps> = ({
           let updatedNodes = [...currentNodes];
           
           if (updatedNodes.length > 0) {
-            const lastNode = updatedNodes[updatedNodes.length - 1];
-            const firstNode = updatedNodes[0];
-            const newFirst = newCoords[0];
-            const newLast = newCoords[newCoords.length - 1];
+             // Basic merging logic for drawing extension
+             const lastNode = updatedNodes[updatedNodes.length - 1];
+             const firstNode = updatedNodes[0];
+             const newFirst = newCoords[0];
+             const newLast = newCoords[newCoords.length - 1];
+             const dist = (a: Coordinate, b: Coordinate) => Math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2);
+             const TOLERANCE = 100;
 
-            const dist = (a: Coordinate, b: Coordinate) => Math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2);
-            const TOLERANCE = 100;
+             // Helper to add nodes with default properties
+             const mapToNodes = (coords: Coordinate[]) => coords.map(c => ({ 
+                 ...c, 
+                 radius: defaultRadius,
+                 spiralLength: defaultSpiralLen 
+             }));
 
-            if (dist(lastNode, newFirst) < TOLERANCE) {
-              const toAdd = newCoords.slice(1).map(c => ({ ...c, radius: defaultRadius }));
-              updatedNodes = [...updatedNodes, ...toAdd];
-            } else if (dist(firstNode, newLast) < TOLERANCE) {
-               const toAdd = newCoords.slice(0, newCoords.length - 1).map(c => ({ ...c, radius: defaultRadius }));
-               updatedNodes = [...toAdd, ...updatedNodes];
-            } else if (dist(lastNode, newLast) < TOLERANCE) {
-                const reversed = [...newCoords].reverse();
-                const toAdd = reversed.slice(1).map(c => ({ ...c, radius: defaultRadius }));
-                updatedNodes = [...updatedNodes, ...toAdd];
-            } else if (dist(firstNode, newFirst) < TOLERANCE) {
-                const reversed = [...newCoords].reverse();
-                const toAdd = reversed.slice(0, reversed.length - 1).map(c => ({ ...c, radius: defaultRadius }));
-                updatedNodes = [...toAdd, ...updatedNodes];
-            } else {
-               updatedNodes = newCoords.map(c => ({ ...c, radius: defaultRadius }));
-            }
+             if (dist(lastNode, newFirst) < TOLERANCE) {
+                updatedNodes = [...updatedNodes, ...mapToNodes(newCoords.slice(1))];
+             } else if (dist(firstNode, newLast) < TOLERANCE) {
+                updatedNodes = [...mapToNodes(newCoords.slice(0, -1)), ...updatedNodes];
+             } else if (dist(lastNode, newLast) < TOLERANCE) {
+                 updatedNodes = [...updatedNodes, ...mapToNodes([...newCoords].reverse().slice(1))];
+             } else if (dist(firstNode, newFirst) < TOLERANCE) {
+                 updatedNodes = [...mapToNodes([...newCoords].reverse().slice(0, -1)), ...updatedNodes];
+             } else {
+                 updatedNodes = mapToNodes(newCoords);
+             }
           } else {
-             updatedNodes = newCoords.map(c => ({ ...c, radius: defaultRadius }));
+             updatedNodes = newCoords.map(c => ({ 
+                 ...c, 
+                 radius: defaultRadius,
+                 spiralLength: defaultSpiralLen 
+             }));
           }
 
           onNodesChange(updatedNodes);
-          
-          setTimeout(() => {
-             controlSourceRef.current.clear(); 
-          }, 0);
+          setTimeout(() => { controlSourceRef.current.clear(); }, 0);
         }
       });
 
@@ -449,26 +449,20 @@ const MapEditor: React.FC<MapEditorProps> = ({
       map.addInteraction(draw);
       drawInteractionRef.current = draw;
     } else if (mode === InteractionMode.EDIT) {
-       const modify = new Modify({ 
-         source: pointSourceRef.current,
-       });
-       
+       const modify = new Modify({ source: pointSourceRef.current });
        modify.on('modifyend', (e) => {
          const features = pointSourceRef.current.getFeatures();
          const newNodes = [...nodesRef.current];
          features.forEach(f => {
            const idx = f.get('index');
            const geom = f.getGeometry();
-           if (geom instanceof Point && typeof idx === 'number') {
+           if (geom instanceof Point && typeof idx === 'number' && newNodes[idx]) {
              const coords = geom.getCoordinates();
-             if (newNodes[idx]) {
-               newNodes[idx] = { ...newNodes[idx], x: coords[0], y: coords[1] };
-             }
+             newNodes[idx] = { ...newNodes[idx], x: coords[0], y: coords[1] };
            }
          });
          onNodesChange(newNodes);
        });
-
        map.addInteraction(modify);
        modifyInteractionRef.current = modify;
     }
@@ -484,58 +478,38 @@ const MapEditor: React.FC<MapEditorProps> = ({
       if (modifyInteractionRef.current) map.removeInteraction(modifyInteractionRef.current);
     };
 
-  }, [mode, defaultRadius, onNodesChange, onNodeSelect]);
+  }, [mode, defaultRadius, defaultSpiralLen, onNodesChange, onNodeSelect]);
 
   // Handle ESC for Undo
   useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
          if (e.key === 'Escape') {
              if (mode === InteractionMode.DRAW) {
-                 // Prevent default browser/OL behavior (like losing focus or standard abort)
-                 // to ensure we handle the logic sequentially
                  e.preventDefault();
                  e.stopPropagation();
-
                  if (isDrawingRef.current && drawInteractionRef.current) {
-                     // Check sketch length
                      const sketch = sketchFeatureRef.current;
                      if (sketch) {
                          const geom = sketch.getGeometry();
-                         if (geom instanceof LineString) {
-                             const coords = geom.getCoordinates();
-                             // coords includes cursor position?
-                             // Standard OL LineString draw: 
-                             // Click 1: 2 coords (start, cursor)
-                             // Click 2: 3 coords (start, p2, cursor)
-                             // So if > 2, we have at least 1 segment finished
-                             
-                             if (coords.length > 2) {
-                                 drawInteractionRef.current.removeLastPoint();
-                             } else {
-                                 // Abort drawing
-                                 drawInteractionRef.current.abortDrawing();
-                             }
+                         if (geom instanceof LineString && geom.getCoordinates().length > 2) {
+                             drawInteractionRef.current.removeLastPoint();
+                         } else {
+                             drawInteractionRef.current.abortDrawing();
                          }
                      }
                  } else {
-                     // Not drawing, remove last committed node
                      if (nodesRef.current.length > 0) {
-                         const newNodes = nodesRef.current.slice(0, -1);
-                         onNodesChange(newNodes);
+                         onNodesChange(nodesRef.current.slice(0, -1));
                      }
                  }
              }
          }
       };
-      
-      // Use capture to intercept before OL
       document.addEventListener('keydown', handleKeyDown, { capture: true });
       return () => document.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, [mode, onNodesChange]);
 
-  return (
-    <div ref={mapElement} className="w-full h-full" />
-  );
+  return <div ref={mapElement} className="w-full h-full" />;
 };
 
 export default MapEditor;

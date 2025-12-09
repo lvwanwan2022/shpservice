@@ -1,13 +1,14 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Menu, PanelLeftOpen } from 'lucide-react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { PanelLeftOpen } from 'lucide-react';
 import MapEditor from './components/MapEditor';
 import ControlPanel from './components/ControlPanel';
-import { InteractionMode, RouteNode } from './types';
-import { getCornerData } from './utils/geometry';
+import { InteractionMode, RouteNode, IndustryMode } from './types';
+import { getCornerData, getSpiralCornerData } from './utils/geometry';
 
 function App() {
-  const [isPanelOpen, setIsPanelOpen] = useState(false); // Default closed per request implication
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [mode, setMode] = useState<InteractionMode>(InteractionMode.DRAW);
+  const [industryMode, setIndustryMode] = useState<IndustryMode>(IndustryMode.WATER);
   
   // State for the route
   const [routeNodes, setRouteNodes] = useState<RouteNode[]>([]);
@@ -15,8 +16,9 @@ function App() {
   // State for selection
   const [selectedNodeIndex, setSelectedNodeIndex] = useState<number | null>(null);
   
-  // Default radius for NEW points
-  const [defaultRadius, setDefaultRadius] = useState<number>(5000); 
+  // Defaults
+  const [defaultRadius, setDefaultRadius] = useState<number>(500); 
+  const [defaultSpiralLen, setDefaultSpiralLen] = useState<number>(100);
 
   // Handle Delete Key
   useEffect(() => {
@@ -26,10 +28,9 @@ function App() {
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedNodeIndex !== null) {
           const newNodes = [...routeNodes];
-          // Remove the selected node
           newNodes.splice(selectedNodeIndex, 1);
           setRouteNodes(newNodes);
-          setSelectedNodeIndex(null); // Deselect
+          setSelectedNodeIndex(null); 
         }
       }
     };
@@ -38,35 +39,47 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isPanelOpen, mode, selectedNodeIndex, routeNodes]);
 
-  // Ref to track latest routeNodes for export
-  const routeNodesRef = useRef(routeNodes);
-  useEffect(() => {
-    routeNodesRef.current = routeNodes;
-  }, [routeNodes]);
-
   // Handle CSV Export
   const handleExport = useCallback(() => {
-    const currentNodes = routeNodesRef.current;
-    if (!currentNodes || currentNodes.length === 0) {
+    if (routeNodes.length === 0) {
       alert("没有可导出的路径。");
       return;
     }
     
-    // Extended Header
-    let csvContent = "data:text/csv;charset=utf-8,x,y,radius,arc_center_x,arc_center_y,arc_start_x,arc_start_y,arc_end_x,arc_end_y\n";
+    const isHighway = industryMode === IndustryMode.HIGHWAY;
+
+    // Define headers dynamically
+    let headers = ["x", "y", "radius"];
+    if (isHighway) {
+      headers.push("spiral_length");
+    }
+    headers.push("arc_center_x", "arc_center_y", "arc_start_x", "arc_start_y", "arc_end_x", "arc_end_y");
+
+    let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n";
     
-    currentNodes.forEach((node, i) => {
+    routeNodes.forEach((node, i) => {
         let arcData = { 
           cx: '', cy: '', 
           sx: '', sy: '', 
           ex: '', ey: '' 
         };
 
-        // Calculate arc geometry for intermediate nodes
-        if (i > 0 && i < currentNodes.length - 1) {
-          const pPrev = currentNodes[i - 1];
-          const pNext = currentNodes[i + 1];
-          const corner = getCornerData(pPrev, node, pNext);
+        // Calculate arc geometry for intermediate nodes based on current industry mode
+        if (i > 0 && i < routeNodes.length - 1) {
+          const pPrev = routeNodes[i - 1];
+          const pNext = routeNodes[i + 1];
+          
+          let corner;
+          const processingNode = {
+             ...node,
+             spiralLength: node.spiralLength !== undefined ? node.spiralLength : defaultSpiralLen
+          };
+
+          if (isHighway) {
+              corner = getSpiralCornerData(pPrev, processingNode, pNext);
+          } else {
+              corner = getCornerData(pPrev, processingNode, pNext);
+          }
           
           if (corner) {
             arcData = {
@@ -79,18 +92,30 @@ function App() {
             };
           }
         }
+        
+        const r = node.radius;
+        
+        // Construct row
+        let row: (number | string)[] = [node.x, node.y, r];
+        
+        if (isHighway) {
+             const l = node.spiralLength !== undefined ? node.spiralLength : defaultSpiralLen;
+             row.push(l);
+        }
 
-        csvContent += `${node.x},${node.y},${node.radius},${arcData.cx},${arcData.cy},${arcData.sx},${arcData.sy},${arcData.ex},${arcData.ey}\n`;
+        row.push(arcData.cx, arcData.cy, arcData.sx, arcData.sy, arcData.ex, arcData.ey);
+
+        csvContent += row.join(",") + "\n";
     });
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "route_data.csv");
+    link.setAttribute("download", `route_data_${industryMode.toLowerCase()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  }, []);
+  }, [routeNodes, industryMode, defaultSpiralLen]);
 
   // Handle CSV Import
   const handleImport = useCallback((file: File) => {
@@ -100,23 +125,33 @@ function App() {
         if (!text) return;
 
         const lines = text.split('\n');
+        if (lines.length < 2) return;
+
+        // Check header for column existence
+        const header = lines[0].toLowerCase();
+        const hasSpiral = header.includes('spiral_length');
+
         const newNodes: RouteNode[] = [];
 
-        // Skip header (index 0)
         for(let i = 1; i < lines.length; i++) {
             const line = lines[i].trim();
             if(!line) continue;
             
-            // Read first 3 columns, ignore the rest if they exist
             const parts = line.split(',');
             const x = Number(parts[0]);
             const y = Number(parts[1]);
             const r = Number(parts[2]);
+            
+            // If spiral exists in CSV, read it (index 3), otherwise default
+            let spiralLength = defaultSpiralLen;
+            if (hasSpiral) {
+                const l = Number(parts[3]);
+                if (!isNaN(l)) spiralLength = l;
+            }
 
             if (!isNaN(x) && !isNaN(y)) {
-                // If radius is missing or invalid, use default
                 const radius = !isNaN(r) ? r : defaultRadius;
-                newNodes.push({ x, y, radius });
+                newNodes.push({ x, y, radius, spiralLength });
             }
         }
 
@@ -124,16 +159,23 @@ function App() {
             setRouteNodes(newNodes);
             setMode(InteractionMode.EDIT); 
             setSelectedNodeIndex(null);
+            
+            // Auto-switch mode based on CSV content if possible?
+            // For now, we respect the user's current choice, but data is loaded correctly.
+            if (hasSpiral) {
+                setIndustryMode(IndustryMode.HIGHWAY);
+            } else {
+                setIndustryMode(IndustryMode.WATER);
+            }
         } else {
             alert("CSV 解析失败或文件为空。");
         }
     };
     reader.readAsText(file);
-  }, [defaultRadius]);
+  }, [defaultRadius, defaultSpiralLen]);
 
   const handleSelectedRadiusChange = (newRadius: number) => {
     if (selectedNodeIndex === null) return;
-    
     const updated = [...routeNodes];
     if (updated[selectedNodeIndex]) {
         updated[selectedNodeIndex] = { ...updated[selectedNodeIndex], radius: newRadius };
@@ -141,7 +183,15 @@ function App() {
     }
   };
 
-  // If panel is closed, force NONE mode (Browse only)
+  const handleSelectedSpiralLenChange = (newLen: number) => {
+    if (selectedNodeIndex === null) return;
+    const updated = [...routeNodes];
+    if (updated[selectedNodeIndex]) {
+        updated[selectedNodeIndex] = { ...updated[selectedNodeIndex], spiralLength: newLen };
+        setRouteNodes(updated);
+    }
+  };
+
   const currentMapMode = isPanelOpen ? mode : InteractionMode.NONE;
 
   return (
@@ -151,15 +201,17 @@ function App() {
       <div className="absolute inset-0 z-0">
         <MapEditor 
             mode={currentMapMode} 
+            industryMode={industryMode}
             nodes={routeNodes}
             onNodesChange={setRouteNodes}
             selectedNodeIndex={selectedNodeIndex}
             onNodeSelect={setSelectedNodeIndex}
             defaultRadius={defaultRadius}
+            defaultSpiralLen={defaultSpiralLen}
         />
       </div>
 
-      {/* Toggle Button (Top Right) */}
+      {/* Toggle Button */}
       {!isPanelOpen && (
         <button
           onClick={() => setIsPanelOpen(true)}
@@ -170,25 +222,31 @@ function App() {
         </button>
       )}
 
-      {/* Control Panel (Left Side) */}
+      {/* Control Panel */}
       <ControlPanel
         isOpen={isPanelOpen}
         onClose={() => setIsPanelOpen(false)}
         mode={mode}
         setMode={setMode}
+        industryMode={industryMode}
+        setIndustryMode={setIndustryMode}
         defaultRadius={defaultRadius}
         setDefaultRadius={setDefaultRadius}
-        selectedRadius={selectedNodeIndex !== null && selectedNodeIndex >= 0 && selectedNodeIndex < routeNodes.length ? routeNodes[selectedNodeIndex].radius : null}
+        defaultSpiralLen={defaultSpiralLen}
+        setDefaultSpiralLen={setDefaultSpiralLen}
+        selectedRadius={selectedNodeIndex !== null && routeNodes[selectedNodeIndex] ? routeNodes[selectedNodeIndex].radius : null}
         onSelectedRadiusChange={handleSelectedRadiusChange}
+        selectedSpiralLen={selectedNodeIndex !== null && routeNodes[selectedNodeIndex] ? (routeNodes[selectedNodeIndex].spiralLength ?? defaultSpiralLen) : null}
+        onSelectedSpiralLenChange={handleSelectedSpiralLenChange}
         hasSelection={selectedNodeIndex !== null}
         onExport={handleExport}
         onImport={handleImport}
       />
 
-      {/* Info Legend Overlay (Bottom Right) - Visible when panel is open or when there are routes */}
-      {(isPanelOpen || routeNodes.length > 0) && (
+      {/* Legend */}
+      {isPanelOpen && (
         <div className="absolute bottom-6 right-6 z-10 bg-white/90 backdrop-blur-sm px-5 py-3 rounded-xl shadow-lg border border-slate-200 text-xs text-slate-600 pointer-events-none select-none flex flex-col gap-2">
-          <h4 className="font-bold text-slate-800 uppercase tracking-wider text-[10px]">图例</h4>
+          <h4 className="font-bold text-slate-800 uppercase tracking-wider text-[10px]">图例 ({industryMode === IndustryMode.WATER ? '水利' : '公路'})</h4>
           <div className="flex items-center gap-3">
               <span className="w-6 h-0.5 bg-blue-400 border-dashed border-b border-blue-400 block"></span>
               <span>控制路径</span>
@@ -197,6 +255,12 @@ function App() {
               <span className="w-6 h-1 bg-blue-600 block rounded-full"></span>
               <span>直线段</span>
           </div>
+          {industryMode === IndustryMode.HIGHWAY && (
+             <div className="flex items-center gap-3">
+               <span className="w-6 h-1 bg-purple-600 block rounded-full"></span>
+               <span>缓和曲线</span>
+             </div>
+          )}
           <div className="flex items-center gap-3">
               <span className="w-6 h-1 bg-red-500 block rounded-full"></span>
               <span>圆弧段</span>
