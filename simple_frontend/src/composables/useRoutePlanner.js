@@ -7,7 +7,7 @@ import LineString from 'ol/geom/LineString'
 import Point from 'ol/geom/Point'
 import { Style, Stroke, Circle as CircleStyle, Fill } from 'ol/style'
 import Overlay from 'ol/Overlay'
-import { generateFilletedSegments, getCornerData } from '@/utils/routeGeometry'
+import { generateFilletedSegments } from '@/utils/routeGeometry'
 
 /**
  * 路径规划功能 Composable
@@ -367,7 +367,7 @@ export function useRoutePlanner(map, mode, defaultRadius) {
         source: pointSource.value,
       })
       
-      modify.on('modifyend', (e) => {
+      modify.on('modifyend', () => {
         const features = pointSource.value.getFeatures()
         const newNodes = [...routeNodes.value]
         features.forEach(f => {

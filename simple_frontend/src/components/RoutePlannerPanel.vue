@@ -50,20 +50,18 @@
           
           <div class="radius-input-group">
             <el-slider
-              v-model="selectedRadius"
+              v-model="localSelectedRadius"
               :min="0"
               :max="50000"
               :step="50"
-              @change="onSelectedRadiusChange"
               class="radius-slider"
             />
             <div class="radius-input-wrapper">
               <el-input-number
-                v-model="selectedRadius"
+                v-model="localSelectedRadius"
                 :min="0"
                 :max="50000"
                 :step="50"
-                @change="onSelectedRadiusChange"
                 class="radius-input"
               />
               <span class="radius-unit">m</span>
@@ -84,11 +82,10 @@
             <span class="default-radius-value">{{ defaultRadius }} m</span>
           </div>
           <el-slider
-            v-model="defaultRadius"
+            v-model="localDefaultRadius"
             :min="0"
             :max="50000"
             :step="50"
-            @change="onDefaultRadiusChange"
             class="default-radius-slider"
           />
         </div>
@@ -130,7 +127,7 @@
 </template>
 
 <script>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { Close, EditPen, Edit, Download, Upload } from '@element-plus/icons-vue'
 
 export default {
@@ -168,20 +165,22 @@ export default {
   setup(props, { emit }) {
     const fileInputRef = ref(null)
 
+    const localSelectedRadius = computed({
+      get: () => props.selectedRadius,
+      set: (val) => emit('selected-radius-change', val)
+    })
+
+    const localDefaultRadius = computed({
+      get: () => props.defaultRadius,
+      set: (val) => emit('default-radius-change', val)
+    })
+
     const onClose = () => {
       emit('close')
     }
 
     const setMode = (newMode) => {
       emit('mode-change', newMode)
-    }
-
-    const onDefaultRadiusChange = (value) => {
-      emit('default-radius-change', value)
-    }
-
-    const onSelectedRadiusChange = (value) => {
-      emit('selected-radius-change', value)
     }
 
     const onExport = () => {
@@ -203,10 +202,10 @@ export default {
 
     return {
       fileInputRef,
+      localSelectedRadius,
+      localDefaultRadius,
       onClose,
       setMode,
-      onDefaultRadiusChange,
-      onSelectedRadiusChange,
       onExport,
       triggerImport,
       handleFileSelect
