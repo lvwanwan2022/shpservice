@@ -207,15 +207,52 @@ export function useRoutePlanner(map, mode, defaultRadius) {
   let handleMapClickRef = null
   let handleMapDblClickRef = null
   let handleKeyDownRef = null
+  let handleMapPointerDownRef = null
+  
+  // 🔥 用于跟踪是否刚刚点击了控制点，用于防止 Modify 交互立即开始修改
+  let justClickedPoint = false
+  let pointerDownTime = 0
+  let pointerDownPixel = null
+  
+  // pointerdown 事件处理 - 用于检测点击控制点
+  const handleMapPointerDown = (e) => {
+    if (mode.value !== 'EDIT') return
+    
+    pointerDownTime = Date.now()
+    pointerDownPixel = e.pixel
+    
+    // 检查是否点击了控制点
+    const feature = map.value.forEachFeatureAtPixel(e.pixel, (feat) => feat, {
+      layerFilter: (layer) => {
+        const source = layer.getSource()
+        return source === pointSource.value
+      },
+      hitTolerance: 15
+    })
+    
+    if (feature) {
+      // 标记刚刚点击了控制点
+      justClickedPoint = true
+      // 短暂延迟后重置标志，允许后续的拖拽操作
+      setTimeout(() => {
+        justClickedPoint = false
+      }, 200)
+    }
+  }
   
   // 点击选择节点
   const handleMapClick = (e) => {
     if (mode.value !== 'EDIT') return
     
     const pixel = e.pixel
-    const feature = map.value.forEachFeatureAtPixel(pixel, (feat) => feat, {
+    // 🔥 优先检查是否点击了控制点
+    const feature = map.value.forEachFeatureAtPixel(pixel, (feat) => {
+      // 只选择控制点图层中的要素
+      return feat
+    }, {
       layerFilter: (layer) => {
         const source = layer.getSource()
+        // 只检查控制点图层
         return source === pointSource.value
       },
       hitTolerance: 15 // 增加点击容差，更容易选中
@@ -223,7 +260,8 @@ export function useRoutePlanner(map, mode, defaultRadius) {
     
     if (feature) {
       const index = feature.get('index')
-      if (index !== undefined && index !== null && index !== selectedNodeIndex.value) {
+      if (index !== undefined && index !== null) {
+        // 🔥 无论是否已选中，都更新选中状态，确保UI刷新
         selectedNodeIndex.value = index
         // 确保节点有radius属性
         const nodes = [...routeNodes.value]
@@ -234,9 +272,9 @@ export function useRoutePlanner(map, mode, defaultRadius) {
           // 即使radius已存在，也要触发更新以刷新UI
           updateRouteRender()
         }
-      } else if (index === selectedNodeIndex.value) {
-        // 如果点击的是已选中的点，保持选中状态
-        updateRouteRender()
+        // 🔥 阻止事件继续传播，避免被其他处理器拦截
+        e.stopPropagation?.()
+        return false
       }
     } else {
       // 点击空白处，取消选择
@@ -326,6 +364,9 @@ export function useRoutePlanner(map, mode, defaultRadius) {
     if (handleMapDblClickRef) {
       map.value.un('dblclick', handleMapDblClickRef)
     }
+    if (handleMapPointerDownRef) {
+      map.value.un('pointerdown', handleMapPointerDownRef)
+    }
     if (handleKeyDownRef) {
       window.removeEventListener('keydown', handleKeyDownRef)
     }
@@ -399,8 +440,20 @@ export function useRoutePlanner(map, mode, defaultRadius) {
       map.value.addInteraction(draw)
       drawInteraction.value = draw
     } else if (mode.value === 'EDIT') {
+      // 🔥 配置 Modify 交互
+      // 使用 condition 函数，在刚刚点击控制点时阻止立即开始修改
+      // 这样可以让点击选择功能正常工作，同时仍然允许拖拽移动控制点
       const modify = new Modify({
         source: pointSource.value,
+        condition: (e) => {
+          // 如果刚刚点击了控制点，不立即开始修改（允许点击选择）
+          // 否则，允许正常的修改操作（拖拽移动）
+          if (justClickedPoint) {
+            return false
+          }
+          // 默认行为：允许修改
+          return true
+        }
       })
       
       // 在修改开始前，确保节点有radius属性
@@ -450,15 +503,20 @@ export function useRoutePlanner(map, mode, defaultRadius) {
     if (mode.value === 'EDIT') {
       handleMapClickRef = handleMapClick
       handleMapDblClickRef = handleMapDblClick
+      handleMapPointerDownRef = handleMapPointerDown
       handleKeyDownRef = handleKeyDown
-      // 使用 once: false 和 capture: false，确保事件能正确传播
-      // 但需要在点击时检查是否点击的是控制点
+      // 🔥 使用 once: false，确保事件能正确传播
+      // 🔥 路径规划的点击事件需要优先处理，所以先添加监听器
+      // 在 MapViewerOL.vue 中已经添加了检查，如果路径规划处于编辑模式会跳过处理
+      // 🔥 先监听 pointerdown，用于检测点击控制点
+      map.value.on('pointerdown', handleMapPointerDownRef)
       map.value.on('click', handleMapClickRef)
       map.value.on('dblclick', handleMapDblClickRef)
       window.addEventListener('keydown', handleKeyDownRef)
     } else {
       handleMapClickRef = null
       handleMapDblClickRef = null
+      handleMapPointerDownRef = null
       handleKeyDownRef = null
     }
   }
@@ -494,6 +552,9 @@ export function useRoutePlanner(map, mode, defaultRadius) {
       }
       if (handleMapDblClickRef) {
         map.value.un('dblclick', handleMapDblClickRef)
+      }
+      if (handleMapPointerDownRef) {
+        map.value.un('pointerdown', handleMapPointerDownRef)
       }
       if (drawInteraction.value) map.value.removeInteraction(drawInteraction.value)
       if (modifyInteraction.value) map.value.removeInteraction(modifyInteraction.value)
