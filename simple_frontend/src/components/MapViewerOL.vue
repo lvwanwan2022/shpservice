@@ -960,6 +960,11 @@ export default {
       
       // 地图点击事件
       map.value.on('click', function (evt) {
+        // 🔥 如果路径规划处于编辑模式，跳过此事件处理，让路径规划功能处理点击
+        if (routePlannerEnabled.value && routePlannerMode.value === 'EDIT') {
+          return
+        }
+        
         const coordinate = evt.coordinate
         const pixel = evt.pixel
         
@@ -996,6 +1001,11 @@ export default {
       
       map.value.on('pointermove', function (evt) {
         if (evt.dragging) return
+        
+        // 🔥 如果路径规划处于编辑模式，跳过此事件处理
+        if (routePlannerEnabled.value && routePlannerMode.value === 'EDIT') {
+          return
+        }
         
         // 清除之前的定时器
         if (hoverTimeout) {
