@@ -3085,27 +3085,30 @@ export default {
     
     const updateRouteNodeRadius = (index, radius) => {
       if (routePlanner.value && routePlanner.value.routeNodes) {
-        const nodes = [...routePlanner.value.routeNodes.value]
+        // routeNodes 已被 reactive 自动解包，直接访问
+        const nodes = [...routePlanner.value.routeNodes]
         if (nodes[index]) {
           nodes[index] = { ...nodes[index], radius }
-          routePlanner.value.routeNodes.value = nodes
+          routePlanner.value.routeNodes = nodes
         }
       }
     }
     
     const updateRouteNodeSpiralLen = (index, len) => {
       if (routePlanner.value && routePlanner.value.routeNodes) {
-        const nodes = [...routePlanner.value.routeNodes.value]
+        // routeNodes 已被 reactive 自动解包，直接访问
+        const nodes = [...routePlanner.value.routeNodes]
         if (nodes[index]) {
           nodes[index] = { ...nodes[index], spiralLength: len }
-          routePlanner.value.routeNodes.value = nodes
+          routePlanner.value.routeNodes = nodes
         }
       }
     }
     
     const setRouteNodes = (nodes) => {
       if (routePlanner.value && routePlanner.value.routeNodes) {
-        routePlanner.value.routeNodes.value = nodes
+        // routeNodes 已被 reactive 自动解包，直接赋值
+        routePlanner.value.routeNodes = nodes
       }
     }
     
@@ -3277,7 +3280,11 @@ export default {
       updateRouteNodeRadius,
       updateRouteNodeSpiralLen,
       setRouteNodes,
-      routeNodes: computed(() => routePlanner.value?.routeNodes?.value || []),
+      routeNodes: computed(() => {
+        const nodes = routePlanner.value?.routeNodes || []
+        // routeNodes 已被 reactive 自动解包，直接返回
+        return Array.isArray(nodes) ? nodes : (nodes.value || [])
+      }),
       routePlanner: computed(() => routePlanner.value)
     }
   },

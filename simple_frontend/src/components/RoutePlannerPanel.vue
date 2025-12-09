@@ -80,45 +80,52 @@
           
           <!-- 半径编辑（编辑模式和绘制模式都可以编辑） -->
           <div class="radius-input-group">
-            <div class="param-label">圆曲线半径 (R)</div>
-            <el-slider
-              v-model="localSelectedRadius"
-              :min="0"
-              :max="50000"
-              :step="50"
-              class="radius-slider"
-            />
-            <div class="radius-input-wrapper">
-              <el-input-number
-                v-model="localSelectedRadius"
+            <div class="param-header">
+              <span class="param-label">圆曲线半径 (R)</span>
+              <span class="param-value">{{ localSelectedRadius }} m</span>
+            </div>
+            <div class="slider-input-row">
+              <input
+                type="range"
+                v-model.number="localSelectedRadius"
                 :min="0"
                 :max="50000"
                 :step="50"
-                class="radius-input"
+                class="custom-range"
+                :class="{ 'highway': industryMode === 'HIGHWAY' }"
               />
-              <span class="radius-unit">m</span>
+              <input
+                type="number"
+                v-model.number="localSelectedRadius"
+                :min="0"
+                :max="50000"
+                class="custom-number-input"
+              />
             </div>
           </div>
 
           <!-- 缓和曲线长度（仅公路模式） -->
           <div v-if="industryMode === 'HIGHWAY' && selectedSpiralLen !== null && selectedSpiralLen !== undefined" class="spiral-input-group">
-            <div class="param-label">缓和曲线长 (Ls)</div>
-            <el-slider
-              v-model="localSelectedSpiralLen"
-              :min="0"
-              :max="2000"
-              :step="10"
-              class="spiral-slider"
-            />
-            <div class="spiral-input-wrapper">
-              <el-input-number
-                v-model="localSelectedSpiralLen"
+            <div class="param-header">
+              <span class="param-label">缓和曲线长 (Ls)</span>
+              <span class="param-value">{{ localSelectedSpiralLen }} m</span>
+            </div>
+            <div class="slider-input-row">
+              <input
+                type="range"
+                v-model.number="localSelectedSpiralLen"
                 :min="0"
                 :max="2000"
                 :step="10"
-                class="spiral-input"
+                class="custom-range highway"
               />
-              <span class="spiral-unit">m</span>
+              <input
+                type="number"
+                v-model.number="localSelectedSpiralLen"
+                :min="0"
+                :max="2000"
+                class="custom-number-input"
+              />
             </div>
           </div>
         </div>
@@ -134,12 +141,13 @@
               <span>默认半径 (R)</span>
               <span class="default-param-value">{{ defaultRadius }} m</span>
             </div>
-            <el-slider
-              v-model="localDefaultRadius"
+            <input
+              type="range"
+              v-model.number="localDefaultRadius"
               :min="0"
               :max="50000"
               :step="50"
-              class="default-param-slider"
+              class="custom-range default-range"
             />
           </div>
           
@@ -148,12 +156,13 @@
               <span>默认缓和曲线 (Ls)</span>
               <span class="default-param-value">{{ defaultSpiralLen }} m</span>
             </div>
-            <el-slider
-              v-model="localDefaultSpiralLen"
+            <input
+              type="range"
+              v-model.number="localDefaultSpiralLen"
               :min="0"
               :max="2000"
               :step="10"
-              class="default-param-slider"
+              class="custom-range default-range"
             />
           </div>
         </div>
@@ -224,11 +233,11 @@ export default {
     },
     defaultRadius: {
       type: Number,
-      default: 5000
+      default: 500
     },
     defaultSpiralLen: {
       type: Number,
-      default: 0
+      default: 200
     },
     selectedRadius: {
       type: Number,
@@ -460,29 +469,89 @@ export default {
   margin-bottom: 8px;
 }
 
-.radius-input-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.radius-input-group,
+.spiral-input-group {
   margin-bottom: 8px;
 }
 
-.radius-slider {
-  flex: 1;
+.param-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #606266;
 }
 
-.radius-input-wrapper {
+.slider-input-row {
   display: flex;
   align-items: center;
-  gap: 4px;
-  width: 100px;
+  gap: 8px;
 }
 
-.radius-input {
+/* 自定义原生 range input 样式 */
+.custom-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: #dcdfe6;
+  outline: none;
   flex: 1;
 }
 
-.radius-unit {
+.custom-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #409eff;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.custom-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #409eff;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.custom-range.highway::-webkit-slider-thumb {
+  background: #9333ea;
+}
+
+.custom-range.highway::-moz-range-thumb {
+  background: #9333ea;
+}
+
+.custom-range.default-range::-webkit-slider-thumb {
+  background: #909399;
+}
+
+.custom-number-input {
+  width: 80px;
+  padding: 4px 8px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  text-align: right;
+  font-size: 13px;
+  color: #606266;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.custom-number-input:focus {
+  border-color: #409eff;
+}
+
+.radius-unit, .spiral-unit {
   font-size: 12px;
   color: #909399;
 }
@@ -509,21 +578,8 @@ export default {
   border-top: 1px solid rgba(147, 51, 234, 0.2);
 }
 
-.spiral-slider {
-  flex: 1;
-}
-
-.spiral-input-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  width: 100px;
-  margin-top: 8px;
-}
-
-.spiral-input {
-  flex: 1;
-}
+/* 移除旧的 element-plus slider 相关样式 */
+/* .spiral-slider, .spiral-input-wrapper, .spiral-input ... */
 
 .spiral-unit {
   font-size: 12px;
@@ -558,7 +614,8 @@ export default {
 }
 
 .default-param-slider {
-  width: 100%;
+  /* 占位，避免空规则警告 */
+  display: block;
 }
 
 .data-actions {

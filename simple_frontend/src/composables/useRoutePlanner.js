@@ -244,43 +244,10 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
   let handleMapClickRef = null
   let handleMapDblClickRef = null
   let handleKeyDownRef = null
-  let handleMapPointerDownRef = null
-  let handleMapPointerMoveRef = null
-  
-  // 用于跟踪是否刚刚点击了控制点，用于防止 Modify 交互立即开始修改
-  let pointerDownPixel = null
-  let isDragging = false
 
-  // pointerdown 事件处理 - 用于检测点击控制点
-  const handleMapPointerDown = (e) => {
-    if (mode.value !== 'EDIT') return
-    
-    // 记录按下时的像素位置
-    pointerDownPixel = e.pixel
-    isDragging = false
-  }
-  
-  // pointermove 事件处理 - 用于检测拖拽操作
-  const handleMapPointerMove = (e) => {
-    if (mode.value !== 'EDIT' || !pointerDownPixel) return
-    
-    // 检查是否有明显的移动（拖拽）
-    const dx = e.pixel[0] - pointerDownPixel[0]
-    const dy = e.pixel[1] - pointerDownPixel[1]
-    const distance = Math.sqrt(dx * dx + dy * dy)
-    
-    // 如果移动距离超过5像素，认为是拖拽操作
-    if (distance > 5) {
-      isDragging = true
-    }
-  }
-  
   // 点击选择节点
   const handleMapClick = (e) => {
     if (mode.value !== 'EDIT') return
-
-    // 如果发生了拖拽，不进行选择
-    if (isDragging) return
     
     const pixel = e.pixel
     // 优先检查是否点击了控制点
@@ -293,13 +260,13 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
         // 只检查控制点图层
         return source === pointSource.value
       },
-      hitTolerance: 15 // 增加点击容差，更容易选中
+      hitTolerance: 10 // 点击容差
     })
     
     if (feature) {
       const index = feature.get('index')
       if (index !== undefined && index !== null) {
-        // 无论是否已选中，都更新选中状态，确保UI刷新
+        // 更新选中状态
         selectedNodeIndex.value = index
         // 确保节点有radius属性
         const nodes = [...routeNodes.value]
@@ -312,18 +279,10 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
           nodes[index] = { ...nodes[index], spiralLength: defaultSpiralLenRef.value || 0 }
           routeNodes.value = nodes
         }
-        // 触发更新以刷新UI
-        updateRouteRender()
-        // 阻止事件继续传播，避免被其他处理器拦截
-        e.stopPropagation?.()
-        return false
       }
     } else {
       // 点击空白处，取消选择
-      if (selectedNodeIndex.value !== null) {
-        selectedNodeIndex.value = null
-        updateRouteRender()
-      }
+      selectedNodeIndex.value = null
     }
   }
   
@@ -450,12 +409,6 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
     if (handleMapDblClickRef) {
       map.value.un('dblclick', handleMapDblClickRef)
     }
-    if (handleMapPointerDownRef) {
-      map.value.un('pointerdown', handleMapPointerDownRef)
-    }
-    if (handleMapPointerMoveRef) {
-      map.value.un('pointermove', handleMapPointerMoveRef)
-    }
     if (handleKeyDownRef) {
       window.removeEventListener('keydown', handleKeyDownRef)
     }
@@ -553,42 +506,13 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
       map.value.addInteraction(draw)
       drawInteraction.value = draw
     } else if (mode.value === 'EDIT') {
-      // 配置 Modify 交互
+      // 配置 Modify 交互 - 参考 openlayers-RouterPlanner 的简单实现
       const modify = new Modify({
         source: pointSource.value,
-        // 移除 condition，允许 Modify 交互始终响应，解决拖拽不动的问题
         pixelTolerance: 10
       })
       
-      // 监听修改开始
-      modify.on('modifystart', () => {
-        isDragging = true
-      })
-      
-      // 监听修改结束，重置状态
-      modify.on('modifyend', () => {
-        // 使用 setTimeout 确保 click 事件处理完成后再重置
-        setTimeout(() => {
-          pointerDownPixel = null
-          isDragging = false
-        }, 0)
-      })
-      
-      // 在修改开始前，确保节点有radius属性
-      modify.on('modifystart', () => {
-        const features = pointSource.value.getFeatures()
-        const newNodes = [...routeNodes.value]
-        features.forEach(f => {
-          const idx = f.get('index')
-          if (typeof idx === 'number' && newNodes[idx] && (newNodes[idx].radius === undefined || newNodes[idx].radius === null)) {
-            newNodes[idx] = { ...newNodes[idx], radius: defaultRadius.value }
-          }
-        })
-        if (newNodes.some((node, idx) => node !== routeNodes.value[idx])) {
-          routeNodes.value = newNodes
-        }
-      })
-      
+      // 修改结束，更新节点位置
       modify.on('modifyend', () => {
         const features = pointSource.value.getFeatures()
         const newNodes = [...routeNodes.value]
@@ -610,9 +534,6 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
           }
         })
         routeNodes.value = newNodes
-        // 重置拖拽状态
-        pointerDownPixel = null
-        isDragging = false
       })
       
       map.value.addInteraction(modify)
@@ -627,21 +548,12 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
     if (mode.value === 'EDIT') {
       handleMapClickRef = handleMapClick
       handleMapDblClickRef = handleMapDblClick
-      handleMapPointerDownRef = handleMapPointerDown
-      handleMapPointerMoveRef = handleMapPointerMove
-      // 使用 once: false，确保事件能正确传播
-      // 路径规划的点击事件需要优先处理，所以先添加监听器
-      // 在 MapViewerOL.vue 中已经添加了检查，如果路径规划处于编辑模式会跳过处理
-      // 先监听 pointerdown，用于检测点击控制点
-      map.value.on('pointerdown', handleMapPointerDownRef)
-      map.value.on('pointermove', handleMapPointerMoveRef)
+      // 添加点击和双击监听
       map.value.on('click', handleMapClickRef)
       map.value.on('dblclick', handleMapDblClickRef)
     } else {
       handleMapClickRef = null
       handleMapDblClickRef = null
-      handleMapPointerDownRef = null
-      handleMapPointerMoveRef = null
     }
     
     // 键盘事件在所有模式下都需要监听（用于ESC和Delete）
@@ -680,12 +592,6 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
       }
       if (handleMapDblClickRef) {
         map.value.un('dblclick', handleMapDblClickRef)
-      }
-      if (handleMapPointerDownRef) {
-        map.value.un('pointerdown', handleMapPointerDownRef)
-      }
-      if (handleMapPointerMoveRef) {
-        map.value.un('pointermove', handleMapPointerMoveRef)
       }
       if (drawInteraction.value) map.value.removeInteraction(drawInteraction.value)
       if (modifyInteraction.value) map.value.removeInteraction(modifyInteraction.value)

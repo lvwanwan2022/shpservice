@@ -689,19 +689,16 @@ export default {
     const routePlannerOpen = ref(false)
     const routePlannerMode = ref('DRAW') // 'DRAW' | 'EDIT' | 'NONE'
     const routePlannerIndustryMode = ref('WATER') // 'WATER' | 'HIGHWAY'
-    const routePlannerDefaultRadius = ref(5000)
-    const routePlannerDefaultSpiralLen = ref(0)
+    const routePlannerDefaultRadius = ref(500)
+    const routePlannerDefaultSpiralLen = ref(200)
     const routePlannerSelectedIndex = ref(null)
     const routePlannerSelectedRadius = computed(() => {
-      if (routePlannerSelectedIndex.value === null || routePlannerSelectedIndex.value === undefined) return null
-      
-      let nodes = []
-      if (mapViewerRef.value?.routeNodes) {
-        // 处理 routeNodes 可能是 Ref 的情况
-        nodes = Array.isArray(mapViewerRef.value.routeNodes) 
-          ? mapViewerRef.value.routeNodes 
-          : (mapViewerRef.value.routeNodes.value || [])
+      if (routePlannerSelectedIndex.value === null || routePlannerSelectedIndex.value === undefined) {
+        return null
       }
+      
+      // routeNodes 已经是一个数组（通过 computed 返回的），不是 ref
+      const nodes = mapViewerRef.value?.routeNodes || []
 
       if (Array.isArray(nodes) && routePlannerSelectedIndex.value >= 0 && routePlannerSelectedIndex.value < nodes.length) {
         const node = nodes[routePlannerSelectedIndex.value]
@@ -709,20 +706,16 @@ export default {
         if (node && (node.radius === undefined || node.radius === null)) {
           return routePlannerDefaultRadius.value
         }
-        return node && node.radius !== undefined && node.radius !== null ? node.radius : null
+        const radius = node && node.radius !== undefined && node.radius !== null ? node.radius : null
+        return radius
       }
       return null
     })
     const routePlannerSelectedSpiralLen = computed(() => {
       if (routePlannerSelectedIndex.value === null || routePlannerSelectedIndex.value === undefined) return null
       
-      let nodes = []
-      if (mapViewerRef.value?.routeNodes) {
-        // 处理 routeNodes 可能是 Ref 的情况
-        nodes = Array.isArray(mapViewerRef.value.routeNodes) 
-          ? mapViewerRef.value.routeNodes 
-          : (mapViewerRef.value.routeNodes.value || [])
-      }
+      // routeNodes 已经是一个数组（通过 computed 返回的），不是 ref
+      const nodes = mapViewerRef.value?.routeNodes || []
       
       if (Array.isArray(nodes) && routePlannerSelectedIndex.value >= 0 && routePlannerSelectedIndex.value < nodes.length) {
         const node = nodes[routePlannerSelectedIndex.value]
@@ -735,24 +728,12 @@ export default {
       return null
     })
     
-    // 监听路径规划节点选择变化 - 使用更可靠的方式
-    watch(() => {
-      const routePlanner = mapViewerRef.value?.routePlanner
-      if (routePlanner && routePlanner.selectedNodeIndex) {
-        return routePlanner.selectedNodeIndex.value
-      }
-      return null
-    }, (newIndex) => {
-      routePlannerSelectedIndex.value = newIndex
-    }, { immediate: true, deep: true })
-    
-    // 同时监听routePlanner对象本身的变化
-    watch(() => mapViewerRef.value?.routePlanner, (routePlanner) => {
-      if (routePlanner && routePlanner.selectedNodeIndex) {
-        // 使用watch监听selectedNodeIndex的变化
-        watch(() => routePlanner.selectedNodeIndex.value, (newIndex) => {
-          routePlannerSelectedIndex.value = newIndex
-        }, { immediate: true })
+    // 监听路径规划节点选择变化 - selectedNodeIndex 已被 reactive 自动解包
+    watch(() => mapViewerRef.value?.routePlanner?.selectedNodeIndex, (newIndex) => {
+      if (newIndex !== undefined && newIndex !== null) {
+        routePlannerSelectedIndex.value = newIndex
+      } else if (newIndex === null) {
+        routePlannerSelectedIndex.value = null
       }
     }, { immediate: true })
     
