@@ -89,6 +89,34 @@
   /* 当面板展开时不需要额外的margin */
 }
 
+.map-container-wrapper.with-route-panel {
+  /* 当路径规划面板打开时，地图容器需要留出空间 */
+}
+
+/* 🔥 路径规划切换按钮 */
+.route-planner-toggle-btn {
+  position: absolute;
+  top: 80px;
+  right: 20px;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 🔥 路径规划面板样式 */
+.route-planner-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 320px;
+  height: 100%;
+  background: white;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #e4e7ed;
+}
+
 .panel-header {
   padding: 15px;
   background: #fff;
