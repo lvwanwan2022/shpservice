@@ -74,15 +74,8 @@
             <span>选中角点</span>
           </div>
           
-          <!-- 半径显示（编辑模式下只显示，不编辑） -->
-          <div v-if="mode === 'EDIT'" class="readonly-param">
-            <div class="param-label">圆曲线半径 (R)</div>
-            <div class="param-value">{{ selectedRadius }} m</div>
-            <p class="hint-text">编辑模式下不能修改半径，请在绘制时设置默认半径。</p>
-          </div>
-          
-          <!-- 半径编辑（仅在绘制模式下） -->
-          <div v-else class="radius-input-group">
+          <!-- 半径编辑（编辑模式和绘制模式都可以编辑） -->
+          <div class="radius-input-group">
             <div class="param-label">圆曲线半径 (R)</div>
             <el-slider
               v-model="localSelectedRadius"

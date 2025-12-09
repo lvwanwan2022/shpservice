@@ -245,13 +245,27 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
   let handleMapDblClickRef = null
   let handleKeyDownRef = null
   let handleMapPointerDownRef = null
+  let handleMapPointerMoveRef = null
   
-  // 🔥 用于跟踪是否刚刚点击了控制点，用于防止 Modify 交互立即开始修改
+  // 用于跟踪是否刚刚点击了控制点，用于防止 Modify 交互立即开始修改
   let justClickedPoint = false
+  let clickTimeout = null
+  let pointerDownPixel = null
+  let isDragging = false
 
   // pointerdown 事件处理 - 用于检测点击控制点
   const handleMapPointerDown = (e) => {
     if (mode.value !== 'EDIT') return
+    
+    // 清除之前的定时器
+    if (clickTimeout) {
+      clearTimeout(clickTimeout)
+      clickTimeout = null
+    }
+    
+    // 记录按下时的像素位置
+    pointerDownPixel = e.pixel
+    isDragging = false
     
     // 检查是否点击了控制点
     const feature = map.value.forEachFeatureAtPixel(e.pixel, (feat) => feat, {
@@ -266,9 +280,33 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
       // 标记刚刚点击了控制点
       justClickedPoint = true
       // 短暂延迟后重置标志，允许后续的拖拽操作
-      setTimeout(() => {
+      clickTimeout = setTimeout(() => {
         justClickedPoint = false
-      }, 200)
+        clickTimeout = null
+      }, 200) // 延迟时间，确保点击选择功能优先
+    } else {
+      justClickedPoint = false
+    }
+  }
+  
+  // pointermove 事件处理 - 用于检测拖拽操作
+  const handleMapPointerMove = (e) => {
+    if (mode.value !== 'EDIT' || !pointerDownPixel) return
+    
+    // 检查是否有明显的移动（拖拽）
+    const dx = e.pixel[0] - pointerDownPixel[0]
+    const dy = e.pixel[1] - pointerDownPixel[1]
+    const distance = Math.sqrt(dx * dx + dy * dy)
+    
+    // 如果移动距离超过5像素，认为是拖拽操作
+    if (distance > 5) {
+      isDragging = true
+      // 如果是拖拽，清除点击标志，允许Modify交互
+      if (clickTimeout) {
+        clearTimeout(clickTimeout)
+        clickTimeout = null
+      }
+      justClickedPoint = false
     }
   }
   
@@ -277,7 +315,7 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
     if (mode.value !== 'EDIT') return
     
     const pixel = e.pixel
-    // 🔥 优先检查是否点击了控制点
+    // 优先检查是否点击了控制点
     const feature = map.value.forEachFeatureAtPixel(pixel, (feat) => {
       // 只选择控制点图层中的要素
       return feat
@@ -293,18 +331,22 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
     if (feature) {
       const index = feature.get('index')
       if (index !== undefined && index !== null) {
-        // 🔥 无论是否已选中，都更新选中状态，确保UI刷新
+        // 无论是否已选中，都更新选中状态，确保UI刷新
         selectedNodeIndex.value = index
         // 确保节点有radius属性
         const nodes = [...routeNodes.value]
         if (nodes[index] && (nodes[index].radius === undefined || nodes[index].radius === null)) {
           nodes[index] = { ...nodes[index], radius: defaultRadius.value }
           routeNodes.value = nodes
-        } else {
-          // 即使radius已存在，也要触发更新以刷新UI
-          updateRouteRender()
         }
-        // 🔥 阻止事件继续传播，避免被其他处理器拦截
+        // 确保节点有spiralLength属性（如果是公路模式）
+        if (industryModeRef.value === 'HIGHWAY' && nodes[index] && (nodes[index].spiralLength === undefined || nodes[index].spiralLength === null)) {
+          nodes[index] = { ...nodes[index], spiralLength: defaultSpiralLenRef.value || 0 }
+          routeNodes.value = nodes
+        }
+        // 触发更新以刷新UI
+        updateRouteRender()
+        // 阻止事件继续传播，避免被其他处理器拦截
         e.stopPropagation?.()
         return false
       }
@@ -383,12 +425,13 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
           selectedNodeIndex.value = null
           e.preventDefault()
           e.stopPropagation()
+          return false
         }
       }
     }
     
     // ESC键撤销操作
-    if (e.key === 'Escape') {
+    if (e.key === 'Escape' || e.key === 'Esc') {
       if (mode.value === 'DRAW') {
         e.preventDefault()
         e.stopPropagation()
@@ -410,12 +453,14 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
             routeNodes.value = routeNodes.value.slice(0, -1)
           }
         }
+        return false
       } else if (mode.value === 'EDIT') {
         // 编辑模式下，ESC取消选择
         if (selectedNodeIndex.value !== null) {
           selectedNodeIndex.value = null
           e.preventDefault()
           e.stopPropagation()
+          return false
         }
       }
     }
@@ -439,6 +484,9 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
     }
     if (handleMapPointerDownRef) {
       map.value.un('pointerdown', handleMapPointerDownRef)
+    }
+    if (handleMapPointerMoveRef) {
+      map.value.un('pointermove', handleMapPointerMoveRef)
     }
     if (handleKeyDownRef) {
       window.removeEventListener('keydown', handleKeyDownRef)
@@ -537,20 +585,39 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
       map.value.addInteraction(draw)
       drawInteraction.value = draw
     } else if (mode.value === 'EDIT') {
-      // 🔥 配置 Modify 交互
+      // 配置 Modify 交互
       // 使用 condition 函数，在刚刚点击控制点时阻止立即开始修改
       // 这样可以让点击选择功能正常工作，同时仍然允许拖拽移动控制点
       const modify = new Modify({
         source: pointSource.value,
-        condition: () => {
-          // 如果刚刚点击了控制点，不立即开始修改（允许点击选择）
-          // 否则，允许正常的修改操作（拖拽移动）
-          if (justClickedPoint) {
+        condition: (e) => {
+          // 如果正在拖拽，允许修改
+          if (isDragging) {
+            return true
+          }
+          // 如果刚刚点击了控制点且没有拖拽，不立即开始修改（允许点击选择）
+          if (justClickedPoint && !isDragging) {
             return false
           }
-          // 默认行为：允许修改
+          // 默认行为：允许修改（拖拽）
           return true
         }
+      })
+      
+      // 监听修改开始，清除点击标志
+      modify.on('modifystart', () => {
+        justClickedPoint = false
+        isDragging = true
+        if (clickTimeout) {
+          clearTimeout(clickTimeout)
+          clickTimeout = null
+        }
+      })
+      
+      // 监听修改结束，重置状态
+      modify.on('modifyend', () => {
+        pointerDownPixel = null
+        isDragging = false
       })
       
       // 在修改开始前，确保节点有radius属性
@@ -577,15 +644,21 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
           if (geom instanceof Point && typeof idx === 'number') {
             const coords = geom.getCoordinates()
             if (newNodes[idx]) {
-              // 保持原有的radius属性，如果没有则使用默认值
+              // 保持原有的radius和spiralLength属性，如果没有则使用默认值
               const radius = newNodes[idx].radius !== undefined && newNodes[idx].radius !== null 
                 ? newNodes[idx].radius 
                 : defaultRadius.value
-              newNodes[idx] = { ...newNodes[idx], x: coords[0], y: coords[1], radius }
+              const spiralLength = newNodes[idx].spiralLength !== undefined && newNodes[idx].spiralLength !== null
+                ? newNodes[idx].spiralLength
+                : (defaultSpiralLenRef.value || 0)
+              newNodes[idx] = { ...newNodes[idx], x: coords[0], y: coords[1], radius, spiralLength }
             }
           }
         })
         routeNodes.value = newNodes
+        // 重置拖拽状态
+        pointerDownPixel = null
+        isDragging = false
       })
       
       map.value.addInteraction(modify)
@@ -601,17 +674,20 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
       handleMapClickRef = handleMapClick
       handleMapDblClickRef = handleMapDblClick
       handleMapPointerDownRef = handleMapPointerDown
-      // 🔥 使用 once: false，确保事件能正确传播
-      // 🔥 路径规划的点击事件需要优先处理，所以先添加监听器
+      handleMapPointerMoveRef = handleMapPointerMove
+      // 使用 once: false，确保事件能正确传播
+      // 路径规划的点击事件需要优先处理，所以先添加监听器
       // 在 MapViewerOL.vue 中已经添加了检查，如果路径规划处于编辑模式会跳过处理
-      // 🔥 先监听 pointerdown，用于检测点击控制点
+      // 先监听 pointerdown，用于检测点击控制点
       map.value.on('pointerdown', handleMapPointerDownRef)
+      map.value.on('pointermove', handleMapPointerMoveRef)
       map.value.on('click', handleMapClickRef)
       map.value.on('dblclick', handleMapDblClickRef)
     } else {
       handleMapClickRef = null
       handleMapDblClickRef = null
       handleMapPointerDownRef = null
+      handleMapPointerMoveRef = null
     }
     
     // 键盘事件在所有模式下都需要监听（用于ESC和Delete）
@@ -641,6 +717,10 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
   
   // 清理
   const cleanup = () => {
+    if (clickTimeout) {
+      clearTimeout(clickTimeout)
+      clickTimeout = null
+    }
     if (tooltipElement.value && tooltipElement.value.parentNode) {
       tooltipElement.value.parentNode.removeChild(tooltipElement.value)
     }
@@ -653,6 +733,9 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
       }
       if (handleMapPointerDownRef) {
         map.value.un('pointerdown', handleMapPointerDownRef)
+      }
+      if (handleMapPointerMoveRef) {
+        map.value.un('pointermove', handleMapPointerMoveRef)
       }
       if (drawInteraction.value) map.value.removeInteraction(drawInteraction.value)
       if (modifyInteraction.value) map.value.removeInteraction(modifyInteraction.value)
