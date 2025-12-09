@@ -183,6 +183,26 @@ export function useRoutePlanner(map, mode, defaultRadius) {
     })
   }
   
+  // 确保所有节点都有radius属性的辅助函数
+  const ensureNodesHaveRadius = () => {
+    const nodesWithRadius = routeNodes.value.map(node => {
+      if (node.radius === undefined || node.radius === null) {
+        return { ...node, radius: defaultRadius.value }
+      }
+      return node
+    })
+    
+    // 检查是否有节点需要更新radius
+    const needsUpdate = nodesWithRadius.some((node, idx) => {
+      const oldNode = routeNodes.value[idx]
+      return !oldNode || node.radius !== oldNode.radius
+    })
+    
+    if (needsUpdate) {
+      routeNodes.value = nodesWithRadius
+    }
+  }
+  
   // 事件处理器引用
   let handleMapClickRef = null
   let handleMapDblClickRef = null
@@ -198,16 +218,32 @@ export function useRoutePlanner(map, mode, defaultRadius) {
         const source = layer.getSource()
         return source === pointSource.value
       },
-      hitTolerance: 10
+      hitTolerance: 15 // 增加点击容差，更容易选中
     })
     
     if (feature) {
       const index = feature.get('index')
-      selectedNodeIndex.value = index
-      updateRouteRender()
+      if (index !== undefined && index !== null && index !== selectedNodeIndex.value) {
+        selectedNodeIndex.value = index
+        // 确保节点有radius属性
+        const nodes = [...routeNodes.value]
+        if (nodes[index] && (nodes[index].radius === undefined || nodes[index].radius === null)) {
+          nodes[index] = { ...nodes[index], radius: defaultRadius.value }
+          routeNodes.value = nodes
+        } else {
+          // 即使radius已存在，也要触发更新以刷新UI
+          updateRouteRender()
+        }
+      } else if (index === selectedNodeIndex.value) {
+        // 如果点击的是已选中的点，保持选中状态
+        updateRouteRender()
+      }
     } else {
-      selectedNodeIndex.value = null
-      updateRouteRender()
+      // 点击空白处，取消选择
+      if (selectedNodeIndex.value !== null) {
+        selectedNodeIndex.value = null
+        updateRouteRender()
+      }
     }
   }
   
@@ -367,6 +403,21 @@ export function useRoutePlanner(map, mode, defaultRadius) {
         source: pointSource.value,
       })
       
+      // 在修改开始前，确保节点有radius属性
+      modify.on('modifystart', () => {
+        const features = pointSource.value.getFeatures()
+        const newNodes = [...routeNodes.value]
+        features.forEach(f => {
+          const idx = f.get('index')
+          if (typeof idx === 'number' && newNodes[idx] && (newNodes[idx].radius === undefined || newNodes[idx].radius === null)) {
+            newNodes[idx] = { ...newNodes[idx], radius: defaultRadius.value }
+          }
+        })
+        if (newNodes.some((node, idx) => node !== routeNodes.value[idx])) {
+          routeNodes.value = newNodes
+        }
+      })
+      
       modify.on('modifyend', () => {
         const features = pointSource.value.getFeatures()
         const newNodes = [...routeNodes.value]
@@ -376,7 +427,11 @@ export function useRoutePlanner(map, mode, defaultRadius) {
           if (geom instanceof Point && typeof idx === 'number') {
             const coords = geom.getCoordinates()
             if (newNodes[idx]) {
-              newNodes[idx] = { ...newNodes[idx], x: coords[0], y: coords[1] }
+              // 保持原有的radius属性，如果没有则使用默认值
+              const radius = newNodes[idx].radius !== undefined && newNodes[idx].radius !== null 
+                ? newNodes[idx].radius 
+                : defaultRadius.value
+              newNodes[idx] = { ...newNodes[idx], x: coords[0], y: coords[1], radius }
             }
           }
         })
@@ -396,6 +451,8 @@ export function useRoutePlanner(map, mode, defaultRadius) {
       handleMapClickRef = handleMapClick
       handleMapDblClickRef = handleMapDblClick
       handleKeyDownRef = handleKeyDown
+      // 使用 once: false 和 capture: false，确保事件能正确传播
+      // 但需要在点击时检查是否点击的是控制点
       map.value.on('click', handleMapClickRef)
       map.value.on('dblclick', handleMapDblClickRef)
       window.addEventListener('keydown', handleKeyDownRef)
@@ -408,6 +465,8 @@ export function useRoutePlanner(map, mode, defaultRadius) {
   
   // 监听节点变化，更新渲染
   watch([routeNodes, selectedNodeIndex], () => {
+    // 确保所有节点都有radius属性
+    ensureNodesHaveRadius()
     updateRouteRender()
   }, { deep: true })
   
