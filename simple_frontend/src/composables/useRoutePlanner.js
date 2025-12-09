@@ -7,23 +7,38 @@ import LineString from 'ol/geom/LineString'
 import Point from 'ol/geom/Point'
 import { Style, Stroke, Circle as CircleStyle, Fill } from 'ol/style'
 import Overlay from 'ol/Overlay'
-import { generateFilletedSegments } from '@/utils/routeGeometry'
+import { generateFilletedSegments, IndustryMode } from '@/utils/routeGeometry'
 
 /**
  * 路径规划功能 Composable
  * @param {Object} map - OpenLayers 地图实例
  * @param {String} mode - 交互模式 'DRAW' | 'EDIT' | 'NONE'
  * @param {Number} defaultRadius - 默认转弯半径
+ * @param {String} industryMode - 行业模式 'WATER' | 'HIGHWAY'，默认'WATER'
+ * @param {Number} defaultSpiralLen - 默认缓和曲线长度，默认0
  */
-export function useRoutePlanner(map, mode, defaultRadius) {
+export function useRoutePlanner(map, mode, defaultRadius, industryMode = IndustryMode.WATER, defaultSpiralLen = 0) {
   // 路径节点
   const routeNodes = ref([])
   const selectedNodeIndex = ref(null)
+  
+  // 行业模式和默认缓和曲线长度（如果传入的是ref，直接使用；否则创建ref）
+  const industryModeRef = ref(industryMode)
+  const defaultSpiralLenRef = ref(defaultSpiralLen)
+  
+  // 如果传入的是ref，同步更新
+  if (industryMode && typeof industryMode === 'object' && 'value' in industryMode) {
+    watch(industryMode, (val) => { industryModeRef.value = val }, { immediate: true })
+  }
+  if (defaultSpiralLen && typeof defaultSpiralLen === 'object' && 'value' in defaultSpiralLen) {
+    watch(defaultSpiralLen, (val) => { defaultSpiralLenRef.value = val }, { immediate: true })
+  }
   
   // 图层引用
   const controlSource = ref(new VectorSource()) // 控制线
   const arcSource = ref(new VectorSource())     // 圆弧
   const lineSource = ref(new VectorSource())    // 直线
+  const spiralSource = ref(new VectorSource())  // 缓和曲线（公路模式）
   const pointSource = ref(new VectorSource())   // 控制点
   
   // 交互引用
@@ -63,6 +78,14 @@ export function useRoutePlanner(map, mode, defaultRadius) {
     }),
   })
   
+  // 缓和曲线样式（公路模式）
+  const spiralStyle = new Style({
+    stroke: new Stroke({
+      color: '#9333ea', // 紫色
+      width: 3,
+    }),
+  })
+  
   const pointStyleFunc = (feature) => {
     const isSelected = feature.get('isSelected')
     return new Style({
@@ -90,6 +113,12 @@ export function useRoutePlanner(map, mode, defaultRadius) {
       zIndex: 101
     })
     
+    const spiralLayer = new VectorLayer({
+      source: spiralSource.value,
+      style: spiralStyle,
+      zIndex: 101.5
+    })
+    
     const arcLayer = new VectorLayer({
       source: arcSource.value,
       style: arcStyle,
@@ -104,6 +133,7 @@ export function useRoutePlanner(map, mode, defaultRadius) {
     
     map.value.addLayer(controlLayer)
     map.value.addLayer(lineLayer)
+    map.value.addLayer(spiralLayer)
     map.value.addLayer(arcLayer)
     map.value.addLayer(pointLayer)
   }
@@ -166,17 +196,24 @@ export function useRoutePlanner(map, mode, defaultRadius) {
     })
     
     // 生成并渲染路径段
-    const generatedSegments = generateFilletedSegments(routeNodes.value)
+    const generatedSegments = generateFilletedSegments(
+      routeNodes.value, 
+      industryModeRef.value || IndustryMode.WATER,
+      defaultSpiralLenRef.value || 0
+    )
     segments.value = generatedSegments
     
     arcSource.value.clear()
     lineSource.value.clear()
+    spiralSource.value.clear()
     
     generatedSegments.forEach(seg => {
       const geom = new LineString(seg.coordinates.map(c => [c.x, c.y]))
       const feat = new Feature(geom)
       if (seg.type === 'arc') {
         arcSource.value.addFeature(feat)
+      } else if (seg.type === 'spiral') {
+        spiralSource.value.addFeature(feat)
       } else {
         lineSource.value.addFeature(feat)
       }
@@ -323,23 +360,64 @@ export function useRoutePlanner(map, mode, defaultRadius) {
     
     if (insertIndex !== -1 && minDistance < threshold) {
       const newNodes = [...nodes]
-      newNodes.splice(insertIndex, 0, { ...insertPoint, radius: defaultRadius.value })
+      newNodes.splice(insertIndex, 0, { 
+        ...insertPoint, 
+        radius: defaultRadius.value,
+        spiralLength: defaultSpiralLenRef.value || 0
+      })
       routeNodes.value = newNodes
       e.preventDefault()
       return false
     }
   }
   
-  // 键盘事件处理（删除节点）
+  // 键盘事件处理（删除节点和ESC撤销）
   const handleKeyDown = (e) => {
-    if (mode.value !== 'EDIT' || selectedNodeIndex.value === null) return
+    // Delete键删除节点（仅在编辑模式且有选中节点时）
+    if (mode.value === 'EDIT' && selectedNodeIndex.value !== null) {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const newNodes = [...routeNodes.value]
+        if (newNodes.length > 0 && selectedNodeIndex.value >= 0 && selectedNodeIndex.value < newNodes.length) {
+          newNodes.splice(selectedNodeIndex.value, 1)
+          routeNodes.value = newNodes
+          selectedNodeIndex.value = null
+          e.preventDefault()
+          e.stopPropagation()
+        }
+      }
+    }
     
-    if (e.key === 'Delete' || e.key === 'Backspace') {
-      const newNodes = [...routeNodes.value]
-      newNodes.splice(selectedNodeIndex.value, 1)
-      routeNodes.value = newNodes
-      selectedNodeIndex.value = null
-      e.preventDefault()
+    // ESC键撤销操作
+    if (e.key === 'Escape') {
+      if (mode.value === 'DRAW') {
+        e.preventDefault()
+        e.stopPropagation()
+        if (isDrawing.value && drawInteraction.value) {
+          const sketch = sketchFeature.value
+          if (sketch) {
+            const geom = sketch.getGeometry()
+            if (geom instanceof LineString && geom.getCoordinates().length > 2) {
+              // 撤销最后一个点
+              drawInteraction.value.removeLastPoint()
+            } else {
+              // 取消绘制
+              drawInteraction.value.abortDrawing()
+            }
+          }
+        } else {
+          // 如果没有正在绘制，删除最后一个节点
+          if (routeNodes.value.length > 0) {
+            routeNodes.value = routeNodes.value.slice(0, -1)
+          }
+        }
+      } else if (mode.value === 'EDIT') {
+        // 编辑模式下，ESC取消选择
+        if (selectedNodeIndex.value !== null) {
+          selectedNodeIndex.value = null
+          e.preventDefault()
+          e.stopPropagation()
+        }
+      }
     }
   }
   
@@ -399,24 +477,48 @@ export function useRoutePlanner(map, mode, defaultRadius) {
             const TOLERANCE = 100
             
             if (dist(lastNode, newFirst) < TOLERANCE) {
-              const toAdd = newCoords.slice(1).map(c => ({ ...c, radius: defaultRadius.value }))
+              const toAdd = newCoords.slice(1).map(c => ({ 
+                ...c, 
+                radius: defaultRadius.value,
+                spiralLength: defaultSpiralLenRef.value || 0
+              }))
               updatedNodes = [...updatedNodes, ...toAdd]
             } else if (dist(firstNode, newLast) < TOLERANCE) {
-              const toAdd = newCoords.slice(0, newCoords.length - 1).map(c => ({ ...c, radius: defaultRadius.value }))
+              const toAdd = newCoords.slice(0, newCoords.length - 1).map(c => ({ 
+                ...c, 
+                radius: defaultRadius.value,
+                spiralLength: defaultSpiralLenRef.value || 0
+              }))
               updatedNodes = [...toAdd, ...updatedNodes]
             } else if (dist(lastNode, newLast) < TOLERANCE) {
               const reversed = [...newCoords].reverse()
-              const toAdd = reversed.slice(1).map(c => ({ ...c, radius: defaultRadius.value }))
+              const toAdd = reversed.slice(1).map(c => ({ 
+                ...c, 
+                radius: defaultRadius.value,
+                spiralLength: defaultSpiralLenRef.value || 0
+              }))
               updatedNodes = [...updatedNodes, ...toAdd]
             } else if (dist(firstNode, newFirst) < TOLERANCE) {
               const reversed = [...newCoords].reverse()
-              const toAdd = reversed.slice(0, reversed.length - 1).map(c => ({ ...c, radius: defaultRadius.value }))
+              const toAdd = reversed.slice(0, reversed.length - 1).map(c => ({ 
+                ...c, 
+                radius: defaultRadius.value,
+                spiralLength: defaultSpiralLenRef.value || 0
+              }))
               updatedNodes = [...toAdd, ...updatedNodes]
             } else {
-              updatedNodes = newCoords.map(c => ({ ...c, radius: defaultRadius.value }))
+              updatedNodes = newCoords.map(c => ({ 
+                ...c, 
+                radius: defaultRadius.value,
+                spiralLength: defaultSpiralLenRef.value || 0
+              }))
             }
           } else {
-            updatedNodes = newCoords.map(c => ({ ...c, radius: defaultRadius.value }))
+            updatedNodes = newCoords.map(c => ({ 
+              ...c, 
+              radius: defaultRadius.value,
+              spiralLength: defaultSpiralLenRef.value || 0
+            }))
           }
           
           routeNodes.value = updatedNodes
@@ -499,7 +601,6 @@ export function useRoutePlanner(map, mode, defaultRadius) {
       handleMapClickRef = handleMapClick
       handleMapDblClickRef = handleMapDblClick
       handleMapPointerDownRef = handleMapPointerDown
-      handleKeyDownRef = handleKeyDown
       // 🔥 使用 once: false，确保事件能正确传播
       // 🔥 路径规划的点击事件需要优先处理，所以先添加监听器
       // 在 MapViewerOL.vue 中已经添加了检查，如果路径规划处于编辑模式会跳过处理
@@ -507,17 +608,19 @@ export function useRoutePlanner(map, mode, defaultRadius) {
       map.value.on('pointerdown', handleMapPointerDownRef)
       map.value.on('click', handleMapClickRef)
       map.value.on('dblclick', handleMapDblClickRef)
-      window.addEventListener('keydown', handleKeyDownRef)
     } else {
       handleMapClickRef = null
       handleMapDblClickRef = null
       handleMapPointerDownRef = null
-      handleKeyDownRef = null
     }
+    
+    // 键盘事件在所有模式下都需要监听（用于ESC和Delete）
+    handleKeyDownRef = handleKeyDown
+    window.addEventListener('keydown', handleKeyDownRef, { capture: true })
   }
   
   // 监听节点变化，更新渲染
-  watch([routeNodes, selectedNodeIndex], () => {
+  watch([routeNodes, selectedNodeIndex, industryModeRef, defaultSpiralLenRef], () => {
     // 确保所有节点都有radius属性
     ensureNodesHaveRadius()
     updateRouteRender()
@@ -556,7 +659,7 @@ export function useRoutePlanner(map, mode, defaultRadius) {
       if (snapInteraction.value) map.value.removeInteraction(snapInteraction.value)
     }
     if (handleKeyDownRef) {
-      window.removeEventListener('keydown', handleKeyDownRef)
+      window.removeEventListener('keydown', handleKeyDownRef, { capture: true })
     }
   }
   

@@ -12,9 +12,35 @@
     </div>
 
     <div class="panel-body">
+      <!-- 行业模式选择 -->
+      <section class="section">
+        <label class="section-label">行业模式</label>
+        <div class="industry-mode-buttons">
+          <el-button 
+            :type="industryMode === 'WATER' ? 'primary' : 'default'"
+            @click="setIndustryMode('WATER')"
+            class="industry-mode-btn"
+          >
+            <el-icon><Water /></el-icon>
+            <span>水利行业</span>
+          </el-button>
+          <el-button 
+            :type="industryMode === 'HIGHWAY' ? 'primary' : 'default'"
+            @click="setIndustryMode('HIGHWAY')"
+            class="industry-mode-btn"
+          >
+            <el-icon><Van /></el-icon>
+            <span>公路行业</span>
+          </el-button>
+        </div>
+        <div v-if="industryMode === 'HIGHWAY'" class="highway-hint">
+          公路模式启用缓和曲线（回旋线）。<br/>连接方式: 直线-回旋线-圆-回旋线-直线。
+        </div>
+      </section>
+
       <!-- 模式选择 -->
       <section class="section">
-        <label class="section-label">模式</label>
+        <label class="section-label">交互模式</label>
         <div class="mode-buttons">
           <el-button 
             :type="mode === 'DRAW' ? 'primary' : 'default'"
@@ -35,20 +61,29 @@
         </div>
         <div class="mode-hint">
           <span v-if="mode === 'DRAW'">点击地图绘制线条。在端点附近绘制可延长路线。</span>
-          <span v-else>拖动点以移动。双击线条插入点。点击白色控制点可编辑其转弯半径。</span>
+          <span v-else>拖动点以移动。双击线条插入点。点击白色控制点可查看其参数。</span>
         </div>
       </section>
 
       <!-- 选中点属性 -->
       <section class="section">
-        <label class="section-label">转弯半径</label>
+        <label class="section-label">参数设置</label>
         
-        <div v-if="hasSelection && selectedRadius !== null && selectedRadius !== undefined" class="selected-radius-control">
+        <div v-if="hasSelection && selectedRadius !== null && selectedRadius !== undefined" class="selected-control">
           <div class="selected-header">
             <span>选中角点</span>
           </div>
           
-          <div class="radius-input-group">
+          <!-- 半径显示（编辑模式下只显示，不编辑） -->
+          <div v-if="mode === 'EDIT'" class="readonly-param">
+            <div class="param-label">圆曲线半径 (R)</div>
+            <div class="param-value">{{ selectedRadius }} m</div>
+            <p class="hint-text">编辑模式下不能修改半径，请在绘制时设置默认半径。</p>
+          </div>
+          
+          <!-- 半径编辑（仅在绘制模式下） -->
+          <div v-else class="radius-input-group">
+            <div class="param-label">圆曲线半径 (R)</div>
             <el-slider
               v-model="localSelectedRadius"
               :min="0"
@@ -68,26 +103,62 @@
             </div>
           </div>
 
-          <p class="hint-text">正在调整选中红点的半径。</p>
+          <!-- 缓和曲线长度（仅公路模式） -->
+          <div v-if="industryMode === 'HIGHWAY' && selectedSpiralLen !== null && selectedSpiralLen !== undefined" class="spiral-input-group">
+            <div class="param-label">缓和曲线长 (Ls)</div>
+            <el-slider
+              v-model="localSelectedSpiralLen"
+              :min="0"
+              :max="2000"
+              :step="10"
+              class="spiral-slider"
+            />
+            <div class="spiral-input-wrapper">
+              <el-input-number
+                v-model="localSelectedSpiralLen"
+                :min="0"
+                :max="2000"
+                :step="10"
+                class="spiral-input"
+              />
+              <span class="spiral-unit">m</span>
+            </div>
+          </div>
         </div>
         
         <div v-else class="no-selection">
-          在地图上选择一个控制点以编辑其半径。
+          在地图上选择一个控制点以查看其参数。
         </div>
 
-        <!-- 默认半径配置 -->
-        <div class="default-radius-control">
-          <div class="default-radius-header">
-            <span>默认半径 (新点)</span>
-            <span class="default-radius-value">{{ defaultRadius }} m</span>
+        <!-- 默认参数配置 -->
+        <div class="default-control">
+          <div class="default-param">
+            <div class="default-param-header">
+              <span>默认半径 (R)</span>
+              <span class="default-param-value">{{ defaultRadius }} m</span>
+            </div>
+            <el-slider
+              v-model="localDefaultRadius"
+              :min="0"
+              :max="50000"
+              :step="50"
+              class="default-param-slider"
+            />
           </div>
-          <el-slider
-            v-model="localDefaultRadius"
-            :min="0"
-            :max="50000"
-            :step="50"
-            class="default-radius-slider"
-          />
+          
+          <div v-if="industryMode === 'HIGHWAY'" class="default-param">
+            <div class="default-param-header">
+              <span>默认缓和曲线 (Ls)</span>
+              <span class="default-param-value">{{ defaultSpiralLen }} m</span>
+            </div>
+            <el-slider
+              v-model="localDefaultSpiralLen"
+              :min="0"
+              :max="2000"
+              :step="10"
+              class="default-param-slider"
+            />
+          </div>
         </div>
       </section>
 
@@ -128,7 +199,7 @@
 
 <script>
 import { ref, computed } from 'vue'
-import { Close, EditPen, Edit, Download, Upload } from '@element-plus/icons-vue'
+import { Close, EditPen, Edit, Download, Upload, Water, Van } from '@element-plus/icons-vue'
 
 export default {
   name: 'RoutePlannerPanel',
@@ -137,7 +208,9 @@ export default {
     EditPen,
     Edit,
     Download,
-    Upload
+    Upload,
+    Water,
+    Van
   },
   props: {
     isOpen: {
@@ -148,11 +221,23 @@ export default {
       type: String,
       default: 'DRAW' // 'DRAW' | 'EDIT' | 'NONE'
     },
+    industryMode: {
+      type: String,
+      default: 'WATER' // 'WATER' | 'HIGHWAY'
+    },
     defaultRadius: {
       type: Number,
       default: 5000
     },
+    defaultSpiralLen: {
+      type: Number,
+      default: 0
+    },
     selectedRadius: {
+      type: Number,
+      default: null
+    },
+    selectedSpiralLen: {
       type: Number,
       default: null
     },
@@ -161,7 +246,7 @@ export default {
       default: false
     }
   },
-  emits: ['close', 'mode-change', 'default-radius-change', 'selected-radius-change', 'export', 'import'],
+  emits: ['close', 'mode-change', 'industry-mode-change', 'default-radius-change', 'default-spiral-len-change', 'selected-radius-change', 'selected-spiral-len-change', 'export', 'import'],
   setup(props, { emit }) {
     const fileInputRef = ref(null)
 
@@ -175,12 +260,26 @@ export default {
       set: (val) => emit('default-radius-change', val)
     })
 
+    const localDefaultSpiralLen = computed({
+      get: () => props.defaultSpiralLen,
+      set: (val) => emit('default-spiral-len-change', val)
+    })
+
+    const localSelectedSpiralLen = computed({
+      get: () => props.selectedSpiralLen,
+      set: (val) => emit('selected-spiral-len-change', val)
+    })
+
     const onClose = () => {
       emit('close')
     }
 
     const setMode = (newMode) => {
       emit('mode-change', newMode)
+    }
+
+    const setIndustryMode = (newMode) => {
+      emit('industry-mode-change', newMode)
     }
 
     const onExport = () => {
@@ -203,9 +302,12 @@ export default {
     return {
       fileInputRef,
       localSelectedRadius,
+      localSelectedSpiralLen,
       localDefaultRadius,
+      localDefaultSpiralLen,
       onClose,
       setMode,
+      setIndustryMode,
       onExport,
       triggerImport,
       handleFileSelect
@@ -295,12 +397,53 @@ export default {
   line-height: 1.5;
 }
 
-.selected-radius-control {
+.industry-mode-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.industry-mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.highway-hint {
+  font-size: 11px;
+  color: #9333ea;
+  background: #f3e8ff;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #e9d5ff;
+  line-height: 1.5;
+}
+
+.selected-control {
   background: #ecf5ff;
   padding: 12px;
   border-radius: 8px;
   border: 1px solid #b3d8ff;
   margin-bottom: 16px;
+}
+
+.readonly-param {
+  margin-bottom: 12px;
+}
+
+.param-label {
+  font-size: 12px;
+  color: #606266;
+  margin-bottom: 4px;
+}
+
+.param-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 8px;
 }
 
 .selected-header {
@@ -353,12 +496,47 @@ export default {
   margin-bottom: 16px;
 }
 
-.default-radius-control {
+.spiral-input-group {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(147, 51, 234, 0.2);
+}
+
+.spiral-slider {
+  flex: 1;
+}
+
+.spiral-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100px;
+  margin-top: 8px;
+}
+
+.spiral-input {
+  flex: 1;
+}
+
+.spiral-unit {
+  font-size: 12px;
+  color: #909399;
+}
+
+.default-control {
   padding-top: 16px;
   border-top: 1px solid #e4e7ed;
 }
 
-.default-radius-header {
+.default-param {
+  margin-bottom: 16px;
+}
+
+.default-param:last-child {
+  margin-bottom: 0;
+}
+
+.default-param-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -367,12 +545,12 @@ export default {
   color: #606266;
 }
 
-.default-radius-value {
+.default-param-value {
   font-family: monospace;
   color: #909399;
 }
 
-.default-radius-slider {
+.default-param-slider {
   width: 100%;
 }
 

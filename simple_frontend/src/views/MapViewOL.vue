@@ -316,13 +316,19 @@
         <RoutePlannerPanel
           :is-open="routePlannerOpen"
           :mode="routePlannerMode"
+          :industry-mode="routePlannerIndustryMode"
           :default-radius="routePlannerDefaultRadius"
+          :default-spiral-len="routePlannerDefaultSpiralLen"
           :selected-radius="routePlannerSelectedRadius"
+          :selected-spiral-len="routePlannerSelectedSpiralLen"
           :has-selection="routePlannerSelectedIndex !== null"
           @close="closeRoutePlanner"
           @mode-change="onRoutePlannerModeChange"
+          @industry-mode-change="onRoutePlannerIndustryModeChange"
           @default-radius-change="onRoutePlannerDefaultRadiusChange"
+          @default-spiral-len-change="onRoutePlannerDefaultSpiralLenChange"
           @selected-radius-change="onRoutePlannerSelectedRadiusChange"
+          @selected-spiral-len-change="onRoutePlannerSelectedSpiralLenChange"
           @export="onRoutePlannerExport"
           @import="onRoutePlannerImport"
         />
@@ -352,6 +358,10 @@
           <div class="legend-item">
             <span class="legend-line legend-arc"></span>
             <span class="legend-text">圆弧段</span>
+          </div>
+          <div v-if="routePlannerIndustryMode === 'HIGHWAY'" class="legend-item">
+            <span class="legend-line legend-spiral"></span>
+            <span class="legend-text">缓和曲线</span>
           </div>
           <div class="legend-item">
             <div class="legend-point"></div>
@@ -678,7 +688,9 @@ export default {
     // 🔥 路径规划相关状态
     const routePlannerOpen = ref(false)
     const routePlannerMode = ref('DRAW') // 'DRAW' | 'EDIT' | 'NONE'
+    const routePlannerIndustryMode = ref('WATER') // 'WATER' | 'HIGHWAY'
     const routePlannerDefaultRadius = ref(5000)
+    const routePlannerDefaultSpiralLen = ref(0)
     const routePlannerSelectedIndex = ref(null)
     const routePlannerSelectedRadius = computed(() => {
       if (routePlannerSelectedIndex.value === null || routePlannerSelectedIndex.value === undefined) return null
@@ -690,6 +702,19 @@ export default {
           return routePlannerDefaultRadius.value
         }
         return node && node.radius !== undefined && node.radius !== null ? node.radius : null
+      }
+      return null
+    })
+    const routePlannerSelectedSpiralLen = computed(() => {
+      if (routePlannerSelectedIndex.value === null || routePlannerSelectedIndex.value === undefined) return null
+      const nodes = mapViewerRef.value?.routeNodes || []
+      if (Array.isArray(nodes) && routePlannerSelectedIndex.value >= 0 && routePlannerSelectedIndex.value < nodes.length) {
+        const node = nodes[routePlannerSelectedIndex.value]
+        // 如果节点没有spiralLength，使用默认值
+        if (node && (node.spiralLength === undefined || node.spiralLength === null)) {
+          return routePlannerDefaultSpiralLen.value
+        }
+        return node && node.spiralLength !== undefined && node.spiralLength !== null ? node.spiralLength : null
       }
       return null
     })
@@ -719,7 +744,12 @@ export default {
     const openRoutePlanner = () => {
       routePlannerOpen.value = true
       if (mapViewerRef.value && mapViewerRef.value.enableRoutePlanner) {
-        mapViewerRef.value.enableRoutePlanner(routePlannerMode.value, routePlannerDefaultRadius.value)
+        mapViewerRef.value.enableRoutePlanner(
+          routePlannerMode.value, 
+          routePlannerDefaultRadius.value,
+          routePlannerIndustryMode.value,
+          routePlannerDefaultSpiralLen.value
+        )
       }
     }
     
@@ -738,6 +768,13 @@ export default {
       }
     }
     
+    const onRoutePlannerIndustryModeChange = (mode) => {
+      routePlannerIndustryMode.value = mode
+      if (mapViewerRef.value && mapViewerRef.value.setRoutePlannerIndustryMode) {
+        mapViewerRef.value.setRoutePlannerIndustryMode(mode)
+      }
+    }
+    
     const onRoutePlannerDefaultRadiusChange = (radius) => {
       routePlannerDefaultRadius.value = radius
       if (mapViewerRef.value && mapViewerRef.value.setRoutePlannerDefaultRadius) {
@@ -745,10 +782,24 @@ export default {
       }
     }
     
+    const onRoutePlannerDefaultSpiralLenChange = (len) => {
+      routePlannerDefaultSpiralLen.value = len
+      if (mapViewerRef.value && mapViewerRef.value.setRoutePlannerDefaultSpiralLen) {
+        mapViewerRef.value.setRoutePlannerDefaultSpiralLen(len)
+      }
+    }
+    
     const onRoutePlannerSelectedRadiusChange = (radius) => {
       if (routePlannerSelectedIndex.value === null) return
       if (mapViewerRef.value && mapViewerRef.value.updateRouteNodeRadius) {
         mapViewerRef.value.updateRouteNodeRadius(routePlannerSelectedIndex.value, radius)
+      }
+    }
+    
+    const onRoutePlannerSelectedSpiralLenChange = (len) => {
+      if (routePlannerSelectedIndex.value === null) return
+      if (mapViewerRef.value && mapViewerRef.value.updateRouteNodeSpiralLen) {
+        mapViewerRef.value.updateRouteNodeSpiralLen(routePlannerSelectedIndex.value, len)
       }
     }
     
@@ -788,7 +839,20 @@ export default {
         return
       }
       
-      let csvContent = "data:text/csv;charset=utf-8,x,y,radius,arc_center_x,arc_center_y,arc_start_x,arc_start_y,arc_end_x,arc_end_y\n"
+      const isHighway = routePlannerIndustryMode.value === 'HIGHWAY'
+      
+      // 动态定义表头
+      let headers = ["x", "y", "radius"]
+      if (isHighway) {
+        headers.push("spiral_length")
+      }
+      headers.push("arc_center_x", "arc_center_y", "arc_start_x", "arc_start_y", "arc_end_x", "arc_end_y")
+      
+      let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n"
+      
+      // 导入几何计算函数
+      const routeGeometry = await import('@/utils/routeGeometry')
+      const { getCornerData, getSpiralCornerData } = routeGeometry
       
       currentNodes.forEach((node, i) => {
         let arcData = { 
@@ -801,7 +865,18 @@ export default {
         if (i > 0 && i < currentNodes.length - 1) {
           const pPrev = currentNodes[i - 1]
           const pNext = currentNodes[i + 1]
-          const corner = getCornerData(pPrev, node, pNext)
+          
+          const processingNode = {
+            ...node,
+            spiralLength: node.spiralLength !== undefined ? node.spiralLength : routePlannerDefaultSpiralLen.value
+          }
+          
+          let corner = null
+          if (isHighway) {
+            corner = getSpiralCornerData(pPrev, processingNode, pNext)
+          } else {
+            corner = getCornerData(pPrev, processingNode, pNext)
+          }
           
           if (corner) {
             arcData = {
@@ -815,13 +890,21 @@ export default {
           }
         }
         
-        csvContent += `${node.x},${node.y},${node.radius},${arcData.cx},${arcData.cy},${arcData.sx},${arcData.sy},${arcData.ex},${arcData.ey}\n`
+        // 构建行数据
+        let row = [node.x, node.y, node.radius]
+        if (isHighway) {
+          const l = node.spiralLength !== undefined ? node.spiralLength : routePlannerDefaultSpiralLen.value
+          row.push(l)
+        }
+        row.push(arcData.cx, arcData.cy, arcData.sx, arcData.sy, arcData.ex, arcData.ey)
+        
+        csvContent += row.join(",") + "\n"
       })
       
       const encodedUri = encodeURI(csvContent)
       const link = document.createElement("a")
       link.setAttribute("href", encodedUri)
-      link.setAttribute("download", "route_data.csv")
+      link.setAttribute("download", `route_data_${routePlannerIndustryMode.value.toLowerCase()}.csv`)
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -836,22 +919,33 @@ export default {
         if (!text) return
         
         const lines = text.split('\n')
+        if (lines.length < 2) return
+        
+        // 检查表头是否有spiral_length列
+        const header = lines[0].toLowerCase()
+        const hasSpiral = header.includes('spiral_length')
+        
         const newNodes = []
         
-        // 跳过表头（索引0）
         for (let i = 1; i < lines.length; i++) {
           const line = lines[i].trim()
           if (!line) continue
           
-          // 读取前3列，忽略其余列
           const parts = line.split(',')
           const x = Number(parts[0])
           const y = Number(parts[1])
           const r = Number(parts[2])
           
+          // 如果CSV中有spiral_length列，读取它（索引3），否则使用默认值
+          let spiralLength = routePlannerDefaultSpiralLen.value
+          if (hasSpiral) {
+            const l = Number(parts[3])
+            if (!isNaN(l)) spiralLength = l
+          }
+          
           if (!isNaN(x) && !isNaN(y)) {
             const radius = !isNaN(r) ? r : routePlannerDefaultRadius.value
-            newNodes.push({ x, y, radius })
+            newNodes.push({ x, y, radius, spiralLength })
           }
         }
         
@@ -860,6 +954,14 @@ export default {
             mapViewerRef.value.setRouteNodes(newNodes)
             routePlannerMode.value = 'EDIT'
             routePlannerSelectedIndex.value = null
+            
+            // 根据CSV内容自动切换行业模式
+            if (hasSpiral) {
+              routePlannerIndustryMode.value = 'HIGHWAY'
+            } else {
+              routePlannerIndustryMode.value = 'WATER'
+            }
+            
             ElMessage.success('路径数据导入成功')
           }
         } else {
@@ -2058,14 +2160,20 @@ export default {
       // 🔥 路径规划相关
       routePlannerOpen,
       routePlannerMode,
+      routePlannerIndustryMode,
       routePlannerDefaultRadius,
+      routePlannerDefaultSpiralLen,
       routePlannerSelectedIndex,
       routePlannerSelectedRadius,
+      routePlannerSelectedSpiralLen,
       openRoutePlanner,
       closeRoutePlanner,
       onRoutePlannerModeChange,
+      onRoutePlannerIndustryModeChange,
       onRoutePlannerDefaultRadiusChange,
+      onRoutePlannerDefaultSpiralLenChange,
       onRoutePlannerSelectedRadiusChange,
+      onRoutePlannerSelectedSpiralLenChange,
       onRoutePlannerExport,
       onRoutePlannerImport
     }

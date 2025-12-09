@@ -1970,6 +1970,12 @@
   border-radius: 2px;
 }
 
+.legend-spiral {
+  background: #9333ea;
+  height: 3px;
+  border-radius: 2px;
+}
+
 .legend-point {
   width: 10px;
   height: 10px;
