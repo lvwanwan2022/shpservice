@@ -685,14 +685,34 @@ export default {
       const nodes = mapViewerRef.value?.routeNodes || []
       if (Array.isArray(nodes) && routePlannerSelectedIndex.value >= 0 && routePlannerSelectedIndex.value < nodes.length) {
         const node = nodes[routePlannerSelectedIndex.value]
+        // 如果节点没有radius，使用默认半径
+        if (node && (node.radius === undefined || node.radius === null)) {
+          return routePlannerDefaultRadius.value
+        }
         return node && node.radius !== undefined && node.radius !== null ? node.radius : null
       }
       return null
     })
     
-    // 监听路径规划节点选择变化
-    watch(() => mapViewerRef.value?.routePlanner?.selectedNodeIndex?.value, (newIndex) => {
+    // 监听路径规划节点选择变化 - 使用更可靠的方式
+    watch(() => {
+      const routePlanner = mapViewerRef.value?.routePlanner
+      if (routePlanner && routePlanner.selectedNodeIndex) {
+        return routePlanner.selectedNodeIndex.value
+      }
+      return null
+    }, (newIndex) => {
       routePlannerSelectedIndex.value = newIndex
+    }, { immediate: true, deep: true })
+    
+    // 同时监听routePlanner对象本身的变化
+    watch(() => mapViewerRef.value?.routePlanner, (routePlanner) => {
+      if (routePlanner && routePlanner.selectedNodeIndex) {
+        // 使用watch监听selectedNodeIndex的变化
+        watch(() => routePlanner.selectedNodeIndex.value, (newIndex) => {
+          routePlannerSelectedIndex.value = newIndex
+        }, { immediate: true })
+      }
     }, { immediate: true })
     
     // 🔥 路径规划方法
@@ -738,10 +758,30 @@ export default {
         return
       }
       
-      // 使用计算属性获取最新的 routeNodes，确保获取到最新数据
-      const nodes = mapViewerRef.value.routeNodes || []
-      // 如果 routeNodes 是计算属性，需要确保它返回的是数组
-      const currentNodes = Array.isArray(nodes) ? nodes : []
+      // 尝试多种方式获取 routeNodes
+      let currentNodes = []
+      
+      // 方式1: 从计算属性获取
+      if (mapViewerRef.value.routeNodes) {
+        const nodes = mapViewerRef.value.routeNodes
+        currentNodes = Array.isArray(nodes) ? nodes : (Array.isArray(nodes.value) ? nodes.value : [])
+      }
+      
+      // 方式2: 从 routePlanner 对象获取
+      if (currentNodes.length === 0 && mapViewerRef.value.routePlanner) {
+        const routePlanner = mapViewerRef.value.routePlanner
+        if (routePlanner.routeNodes) {
+          const nodes = routePlanner.routeNodes
+          currentNodes = Array.isArray(nodes) ? nodes : (Array.isArray(nodes.value) ? nodes.value : [])
+        }
+      }
+      
+      // 方式3: 直接从 routePlanner 的 routeNodes ref 获取
+      if (currentNodes.length === 0 && mapViewerRef.value.routePlanner?.routeNodes?.value) {
+        currentNodes = Array.isArray(mapViewerRef.value.routePlanner.routeNodes.value) 
+          ? mapViewerRef.value.routePlanner.routeNodes.value 
+          : []
+      }
       
       if (currentNodes.length === 0) {
         ElMessage.warning('没有可导出的路径')
