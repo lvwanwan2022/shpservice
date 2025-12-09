@@ -303,13 +303,39 @@
       </div>
 
       <!-- 右侧地图容器 -->
-      <div class="map-container-wrapper" :class="{ 'with-panel': !layerPanelCollapsed }">
+      <div class="map-container-wrapper" :class="{ 'with-panel': !layerPanelCollapsed, 'with-route-panel': routePlannerOpen }">
         <MapViewerOL 
           :scene-id="selectedSceneId" 
           :readonly="false"
           ref="mapViewerRef"
           @layer-added="onLayerAdded"
           @layer-selected="onLayerSelected"
+        />
+        
+        <!-- 路径规划面板 -->
+        <RoutePlannerPanel
+          :is-open="routePlannerOpen"
+          :mode="routePlannerMode"
+          :default-radius="routePlannerDefaultRadius"
+          :selected-radius="routePlannerSelectedRadius"
+          :has-selection="routePlannerSelectedIndex !== null"
+          @close="closeRoutePlanner"
+          @mode-change="onRoutePlannerModeChange"
+          @default-radius-change="onRoutePlannerDefaultRadiusChange"
+          @selected-radius-change="onRoutePlannerSelectedRadiusChange"
+          @export="onRoutePlannerExport"
+          @import="onRoutePlannerImport"
+        />
+        
+        <!-- 路径规划切换按钮 -->
+        <el-button
+          v-if="!routePlannerOpen"
+          @click="openRoutePlanner"
+          class="route-planner-toggle-btn"
+          type="primary"
+          circle
+          :icon="Route"
+          title="打开路径规划"
         />
         
         <!-- 🔥 手机端底部浮动按钮 -->
@@ -567,11 +593,14 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import gisApi from '@/api/gis'
 import MapViewerOL from '@/components/MapViewerOL.vue'
+import RoutePlannerPanel from '@/components/RoutePlannerPanel.vue'
+import { Route } from '@element-plus/icons-vue'
 import { transformExtent } from 'ol/proj'
+import { getCornerData } from '@/utils/routeGeometry'
 
 export default {
   name: 'MapViewOL',
-  components: { MapViewerOL },
+  components: { MapViewerOL, RoutePlannerPanel, Route },
   setup() {
     const route = useRoute()
     const router = useRouter()
@@ -624,6 +653,155 @@ export default {
     
     // 设置场景范围加载状态
     const settingBbox = ref(false)
+    
+    // 🔥 路径规划相关状态
+    const routePlannerOpen = ref(false)
+    const routePlannerMode = ref('DRAW') // 'DRAW' | 'EDIT' | 'NONE'
+    const routePlannerDefaultRadius = ref(5000)
+    const routePlannerSelectedIndex = ref(null)
+    const routePlannerSelectedRadius = computed(() => {
+      if (routePlannerSelectedIndex.value === null) return null
+      const nodes = mapViewerRef.value?.routeNodes || []
+      if (Array.isArray(nodes) && nodes[routePlannerSelectedIndex.value]) {
+        return nodes[routePlannerSelectedIndex.value].radius || null
+      }
+      return null
+    })
+    
+    // 监听路径规划节点选择变化
+    watch(() => mapViewerRef.value?.routePlanner?.selectedNodeIndex, (newIndex) => {
+      routePlannerSelectedIndex.value = newIndex
+    })
+    
+    // 🔥 路径规划方法
+    const openRoutePlanner = () => {
+      routePlannerOpen.value = true
+      if (mapViewerRef.value && mapViewerRef.value.enableRoutePlanner) {
+        mapViewerRef.value.enableRoutePlanner(routePlannerMode.value, routePlannerDefaultRadius.value)
+      }
+    }
+    
+    const closeRoutePlanner = () => {
+      routePlannerOpen.value = false
+      routePlannerMode.value = 'NONE'
+      if (mapViewerRef.value && mapViewerRef.value.disableRoutePlanner) {
+        mapViewerRef.value.disableRoutePlanner()
+      }
+    }
+    
+    const onRoutePlannerModeChange = (mode) => {
+      routePlannerMode.value = mode
+      if (mapViewerRef.value && mapViewerRef.value.setRoutePlannerMode) {
+        mapViewerRef.value.setRoutePlannerMode(mode)
+      }
+    }
+    
+    const onRoutePlannerDefaultRadiusChange = (radius) => {
+      routePlannerDefaultRadius.value = radius
+      if (mapViewerRef.value && mapViewerRef.value.setRoutePlannerDefaultRadius) {
+        mapViewerRef.value.setRoutePlannerDefaultRadius(radius)
+      }
+    }
+    
+    const onRoutePlannerSelectedRadiusChange = (radius) => {
+      if (routePlannerSelectedIndex.value === null) return
+      if (mapViewerRef.value && mapViewerRef.value.updateRouteNodeRadius) {
+        mapViewerRef.value.updateRouteNodeRadius(routePlannerSelectedIndex.value, radius)
+      }
+    }
+    
+    const onRoutePlannerExport = () => {
+      if (!mapViewerRef.value) {
+        ElMessage.warning('地图未初始化')
+        return
+      }
+      
+      const nodes = mapViewerRef.value.routeNodes || []
+      if (!Array.isArray(nodes) || nodes.length === 0) {
+        ElMessage.warning('没有可导出的路径')
+        return
+      }
+      
+      let csvContent = "data:text/csv;charset=utf-8,x,y,radius,arc_center_x,arc_center_y,arc_start_x,arc_start_y,arc_end_x,arc_end_y\n"
+      
+      nodes.forEach((node, i) => {
+        let arcData = { 
+          cx: '', cy: '', 
+          sx: '', sy: '', 
+          ex: '', ey: '' 
+        }
+        
+        // 计算圆弧几何数据
+        if (i > 0 && i < nodes.length - 1) {
+          const pPrev = nodes[i - 1]
+          const pNext = nodes[i + 1]
+          const corner = getCornerData(pPrev, node, pNext)
+          
+          if (corner) {
+            arcData = {
+              cx: corner.center.x.toFixed(3),
+              cy: corner.center.y.toFixed(3),
+              sx: corner.t1.x.toFixed(3),
+              sy: corner.t1.y.toFixed(3),
+              ex: corner.t2.x.toFixed(3),
+              ey: corner.t2.y.toFixed(3)
+            }
+          }
+        }
+        
+        csvContent += `${node.x},${node.y},${node.radius},${arcData.cx},${arcData.cy},${arcData.sx},${arcData.sy},${arcData.ex},${arcData.ey}\n`
+      })
+      
+      const encodedUri = encodeURI(csvContent)
+      const link = document.createElement("a")
+      link.setAttribute("href", encodedUri)
+      link.setAttribute("download", "route_data.csv")
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      ElMessage.success('路径数据导出成功')
+    }
+    
+    const onRoutePlannerImport = (file) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const text = e.target?.result
+        if (!text) return
+        
+        const lines = text.split('\n')
+        const newNodes = []
+        
+        // 跳过表头（索引0）
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i].trim()
+          if (!line) continue
+          
+          // 读取前3列，忽略其余列
+          const parts = line.split(',')
+          const x = Number(parts[0])
+          const y = Number(parts[1])
+          const r = Number(parts[2])
+          
+          if (!isNaN(x) && !isNaN(y)) {
+            const radius = !isNaN(r) ? r : routePlannerDefaultRadius.value
+            newNodes.push({ x, y, radius })
+          }
+        }
+        
+        if (newNodes.length > 0) {
+          if (mapViewerRef.value && mapViewerRef.value.setRouteNodes) {
+            mapViewerRef.value.setRouteNodes(newNodes)
+            routePlannerMode.value = 'EDIT'
+            routePlannerSelectedIndex.value = null
+            ElMessage.success('路径数据导入成功')
+          }
+        } else {
+          ElMessage.warning('CSV解析失败或文件为空')
+        }
+      }
+      reader.readAsText(file)
+    }
     
     // 🔥 设置场景范围
     const setSceneBbox = async () => {
@@ -1809,7 +1987,21 @@ export default {
       
       // 🔥 设置场景范围相关
       settingBbox,
-      setSceneBbox
+      setSceneBbox,
+      
+      // 🔥 路径规划相关
+      routePlannerOpen,
+      routePlannerMode,
+      routePlannerDefaultRadius,
+      routePlannerSelectedIndex,
+      routePlannerSelectedRadius,
+      openRoutePlanner,
+      closeRoutePlanner,
+      onRoutePlannerModeChange,
+      onRoutePlannerDefaultRadiusChange,
+      onRoutePlannerSelectedRadiusChange,
+      onRoutePlannerExport,
+      onRoutePlannerImport
     }
   }
 }

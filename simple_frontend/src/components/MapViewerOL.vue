@@ -369,6 +369,7 @@ import {
   createMvtTileLoadFunction
 } from '@/services/tileCache/tileLoadFunctions.js';
 import { TileCacheService, getGlobalSceneDataCacheService } from '@/services/tileCache';
+import { useRoutePlanner } from '@/composables/useRoutePlanner';
 
 export default {
   name: 'MapViewerOL',
@@ -407,6 +408,12 @@ export default {
     const locationLoading = ref(false)
     const userLocationLayer = ref(null)
     const userLocationFeature = ref(null)
+    
+    // 🔥 路径规划相关
+    const routePlannerMode = ref('NONE')
+    const routePlannerDefaultRadius = ref(5000)
+    const routePlannerEnabled = ref(false)
+    const routePlanner = ref(null)
     
     // 异步初始化坐标系
     const initializeProjections = async () => {
@@ -3018,6 +3025,62 @@ export default {
       }
     }
     
+    // 🔥 路径规划方法
+    const enableRoutePlanner = (mode, defaultRadius) => {
+      if (!map.value) return
+      
+      routePlannerMode.value = mode
+      routePlannerDefaultRadius.value = defaultRadius
+      routePlannerEnabled.value = true
+      
+      // 初始化路径规划功能
+      if (!routePlanner.value) {
+        routePlanner.value = useRoutePlanner(map, routePlannerMode, routePlannerDefaultRadius)
+        routePlanner.value.init()
+      }
+    }
+    
+    const disableRoutePlanner = () => {
+      routePlannerEnabled.value = false
+      routePlannerMode.value = 'NONE'
+      if (routePlanner.value) {
+        routePlanner.value.cleanup()
+        routePlanner.value = null
+      }
+    }
+    
+    const setRoutePlannerMode = (mode) => {
+      routePlannerMode.value = mode
+    }
+    
+    const setRoutePlannerDefaultRadius = (radius) => {
+      routePlannerDefaultRadius.value = radius
+    }
+    
+    const updateRouteNodeRadius = (index, radius) => {
+      if (routePlanner.value && routePlanner.value.routeNodes) {
+        const nodes = [...routePlanner.value.routeNodes.value]
+        if (nodes[index]) {
+          nodes[index] = { ...nodes[index], radius }
+          routePlanner.value.routeNodes.value = nodes
+        }
+      }
+    }
+    
+    const setRouteNodes = (nodes) => {
+      if (routePlanner.value && routePlanner.value.routeNodes) {
+        routePlanner.value.routeNodes.value = nodes
+      }
+    }
+    
+    // 监听地图初始化，如果路径规划已启用，则初始化路径规划功能
+    watch(() => map.value, (newMap) => {
+      if (newMap && routePlannerEnabled.value && !routePlanner.value) {
+        routePlanner.value = useRoutePlanner(map, routePlannerMode, routePlannerDefaultRadius)
+        routePlanner.value.init()
+      }
+    })
+    
     onMounted(() => {
       initCacheService();
       nextTick(async () => {
@@ -3161,10 +3224,18 @@ export default {
       resetLayerSearch,
       formatFileSize,
       formatDate,
-      ArrowDown
+      ArrowDown,
+      // 🔥 路径规划相关
+      enableRoutePlanner,
+      disableRoutePlanner,
+      setRoutePlannerMode,
+      setRoutePlannerDefaultRadius,
+      updateRouteNodeRadius,
+      setRouteNodes,
+      routeNodes: computed(() => routePlanner.value?.routeNodes?.value || [])
     }
   },
-  expose: ['showStyleDialog', 'showAddLayerDialog', 'toggleLayerVisibility', 'updateLayerOpacity', 'map', 'bringLayerToTop', 'setActiveLayer', 'currentActiveLayer', 'getLayerCRSInfo', 'transformCoordinates', 'initializeProjections', 'registerProjection', 'projectionsInitialized', 'applyDxfStylesToLayer']
+  expose: ['showStyleDialog', 'showAddLayerDialog', 'toggleLayerVisibility', 'updateLayerOpacity', 'map', 'bringLayerToTop', 'setActiveLayer', 'currentActiveLayer', 'getLayerCRSInfo', 'transformCoordinates', 'initializeProjections', 'registerProjection', 'projectionsInitialized', 'applyDxfStylesToLayer', 'enableRoutePlanner', 'disableRoutePlanner', 'setRoutePlannerMode', 'setRoutePlannerDefaultRadius', 'updateRouteNodeRadius', 'setRouteNodes', 'routeNodes']
 }
 </script>
 
