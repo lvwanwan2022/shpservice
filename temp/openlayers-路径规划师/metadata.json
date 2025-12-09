@@ -1,0 +1,5 @@
+{
+  "name": "OpenLayers 路径规划师",
+  "description": "基于 React 和 OpenLayers 的地图应用，支持绘制、编辑路径及自动生成圆角，支持 CSV 导入/导出。",
+  "requestFramePermissions": []
+}
