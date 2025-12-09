@@ -338,6 +338,27 @@
           title="打开路径规划"
         />
         
+        <!-- 路径规划图例 - 当有路线或面板打开时显示 -->
+        <div v-if="routePlannerOpen || (mapViewerRef && mapViewerRef.routeNodes && mapViewerRef.routeNodes.length > 0)" class="route-legend">
+          <div class="legend-header">图例</div>
+          <div class="legend-item">
+            <span class="legend-line legend-control"></span>
+            <span class="legend-text">控制路径</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-line legend-straight"></span>
+            <span class="legend-text">直线段</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-line legend-arc"></span>
+            <span class="legend-text">圆弧段</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-point"></div>
+            <span class="legend-text">控制点</span>
+          </div>
+        </div>
+        
         <!-- 🔥 手机端底部浮动按钮 -->
         <div class="mobile-layer-fab" @click="toggleMobileDrawer">
           <div class="fab-content">
@@ -660,18 +681,19 @@ export default {
     const routePlannerDefaultRadius = ref(5000)
     const routePlannerSelectedIndex = ref(null)
     const routePlannerSelectedRadius = computed(() => {
-      if (routePlannerSelectedIndex.value === null) return null
+      if (routePlannerSelectedIndex.value === null || routePlannerSelectedIndex.value === undefined) return null
       const nodes = mapViewerRef.value?.routeNodes || []
-      if (Array.isArray(nodes) && nodes[routePlannerSelectedIndex.value]) {
-        return nodes[routePlannerSelectedIndex.value].radius || null
+      if (Array.isArray(nodes) && routePlannerSelectedIndex.value >= 0 && routePlannerSelectedIndex.value < nodes.length) {
+        const node = nodes[routePlannerSelectedIndex.value]
+        return node && node.radius !== undefined && node.radius !== null ? node.radius : null
       }
       return null
     })
     
     // 监听路径规划节点选择变化
-    watch(() => mapViewerRef.value?.routePlanner?.selectedNodeIndex, (newIndex) => {
+    watch(() => mapViewerRef.value?.routePlanner?.selectedNodeIndex?.value, (newIndex) => {
       routePlannerSelectedIndex.value = newIndex
-    })
+    }, { immediate: true })
     
     // 🔥 路径规划方法
     const openRoutePlanner = () => {
@@ -716,15 +738,19 @@ export default {
         return
       }
       
+      // 使用计算属性获取最新的 routeNodes，确保获取到最新数据
       const nodes = mapViewerRef.value.routeNodes || []
-      if (!Array.isArray(nodes) || nodes.length === 0) {
+      // 如果 routeNodes 是计算属性，需要确保它返回的是数组
+      const currentNodes = Array.isArray(nodes) ? nodes : []
+      
+      if (currentNodes.length === 0) {
         ElMessage.warning('没有可导出的路径')
         return
       }
       
       let csvContent = "data:text/csv;charset=utf-8,x,y,radius,arc_center_x,arc_center_y,arc_start_x,arc_start_y,arc_end_x,arc_end_y\n"
       
-      nodes.forEach((node, i) => {
+      currentNodes.forEach((node, i) => {
         let arcData = { 
           cx: '', cy: '', 
           sx: '', sy: '', 
@@ -732,9 +758,9 @@ export default {
         }
         
         // 计算圆弧几何数据
-        if (i > 0 && i < nodes.length - 1) {
-          const pPrev = nodes[i - 1]
-          const pNext = nodes[i + 1]
+        if (i > 0 && i < currentNodes.length - 1) {
+          const pPrev = currentNodes[i - 1]
+          const pNext = currentNodes[i + 1]
           const corner = getCornerData(pPrev, node, pNext)
           
           if (corner) {

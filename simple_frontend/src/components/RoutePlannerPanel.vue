@@ -43,7 +43,7 @@
       <section class="section">
         <label class="section-label">转弯半径</label>
         
-        <div v-if="hasSelection && selectedRadius !== null" class="selected-radius-control">
+        <div v-if="hasSelection && selectedRadius !== null && selectedRadius !== undefined" class="selected-radius-control">
           <div class="selected-header">
             <span>选中角点</span>
           </div>
