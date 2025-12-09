@@ -3232,10 +3232,11 @@ export default {
       setRoutePlannerDefaultRadius,
       updateRouteNodeRadius,
       setRouteNodes,
-      routeNodes: computed(() => routePlanner.value?.routeNodes?.value || [])
+      routeNodes: computed(() => routePlanner.value?.routeNodes?.value || []),
+      routePlanner: computed(() => routePlanner.value)
     }
   },
-  expose: ['showStyleDialog', 'showAddLayerDialog', 'toggleLayerVisibility', 'updateLayerOpacity', 'map', 'bringLayerToTop', 'setActiveLayer', 'currentActiveLayer', 'getLayerCRSInfo', 'transformCoordinates', 'initializeProjections', 'registerProjection', 'projectionsInitialized', 'applyDxfStylesToLayer', 'enableRoutePlanner', 'disableRoutePlanner', 'setRoutePlannerMode', 'setRoutePlannerDefaultRadius', 'updateRouteNodeRadius', 'setRouteNodes', 'routeNodes']
+  expose: ['showStyleDialog', 'showAddLayerDialog', 'toggleLayerVisibility', 'updateLayerOpacity', 'map', 'bringLayerToTop', 'setActiveLayer', 'currentActiveLayer', 'getLayerCRSInfo', 'transformCoordinates', 'initializeProjections', 'registerProjection', 'projectionsInitialized', 'applyDxfStylesToLayer', 'enableRoutePlanner', 'disableRoutePlanner', 'setRoutePlannerMode', 'setRoutePlannerDefaultRadius', 'updateRouteNodeRadius', 'setRouteNodes', 'routeNodes', 'routePlanner']
 }
 </script>
 
