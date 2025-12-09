@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Menu, PanelLeftOpen } from 'lucide-react';
 import MapEditor from './components/MapEditor';
 import ControlPanel from './components/ControlPanel';
@@ -38,9 +38,16 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isPanelOpen, mode, selectedNodeIndex, routeNodes]);
 
+  // Ref to track latest routeNodes for export
+  const routeNodesRef = useRef(routeNodes);
+  useEffect(() => {
+    routeNodesRef.current = routeNodes;
+  }, [routeNodes]);
+
   // Handle CSV Export
   const handleExport = useCallback(() => {
-    if (routeNodes.length === 0) {
+    const currentNodes = routeNodesRef.current;
+    if (!currentNodes || currentNodes.length === 0) {
       alert("没有可导出的路径。");
       return;
     }
@@ -48,7 +55,7 @@ function App() {
     // Extended Header
     let csvContent = "data:text/csv;charset=utf-8,x,y,radius,arc_center_x,arc_center_y,arc_start_x,arc_start_y,arc_end_x,arc_end_y\n";
     
-    routeNodes.forEach((node, i) => {
+    currentNodes.forEach((node, i) => {
         let arcData = { 
           cx: '', cy: '', 
           sx: '', sy: '', 
@@ -56,9 +63,9 @@ function App() {
         };
 
         // Calculate arc geometry for intermediate nodes
-        if (i > 0 && i < routeNodes.length - 1) {
-          const pPrev = routeNodes[i - 1];
-          const pNext = routeNodes[i + 1];
+        if (i > 0 && i < currentNodes.length - 1) {
+          const pPrev = currentNodes[i - 1];
+          const pNext = currentNodes[i + 1];
           const corner = getCornerData(pPrev, node, pNext);
           
           if (corner) {
@@ -83,7 +90,7 @@ function App() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  }, [routeNodes]);
+  }, []);
 
   // Handle CSV Import
   const handleImport = useCallback((file: File) => {
@@ -171,15 +178,15 @@ function App() {
         setMode={setMode}
         defaultRadius={defaultRadius}
         setDefaultRadius={setDefaultRadius}
-        selectedRadius={selectedNodeIndex !== null && routeNodes[selectedNodeIndex] ? routeNodes[selectedNodeIndex].radius : null}
+        selectedRadius={selectedNodeIndex !== null && selectedNodeIndex >= 0 && selectedNodeIndex < routeNodes.length ? routeNodes[selectedNodeIndex].radius : null}
         onSelectedRadiusChange={handleSelectedRadiusChange}
         hasSelection={selectedNodeIndex !== null}
         onExport={handleExport}
         onImport={handleImport}
       />
 
-      {/* Info Legend Overlay (Bottom Right) - Only visible when panel is open */}
-      {isPanelOpen && (
+      {/* Info Legend Overlay (Bottom Right) - Visible when panel is open or when there are routes */}
+      {(isPanelOpen || routeNodes.length > 0) && (
         <div className="absolute bottom-6 right-6 z-10 bg-white/90 backdrop-blur-sm px-5 py-3 rounded-xl shadow-lg border border-slate-200 text-xs text-slate-600 pointer-events-none select-none flex flex-col gap-2">
           <h4 className="font-bold text-slate-800 uppercase tracking-wider text-[10px]">图例</h4>
           <div className="flex items-center gap-3">

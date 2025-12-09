@@ -95,7 +95,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             <CornerUpLeft size={12} /> 转弯半径
           </label>
           
-          {hasSelection && selectedRadius !== null ? (
+          {hasSelection && selectedRadius !== null && selectedRadius !== undefined ? (
             <div className="space-y-3 bg-blue-50/50 p-4 rounded-xl border border-blue-100 transition-all">
               <div className="flex justify-between items-center mb-1">
                  <span className="text-sm font-semibold text-slate-700">选中角点</span>
