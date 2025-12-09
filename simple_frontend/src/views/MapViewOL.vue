@@ -627,7 +627,7 @@ import MapViewerOL from '@/components/MapViewerOL.vue'
 import RoutePlannerPanel from '@/components/RoutePlannerPanel.vue'
 import { Route } from '@element-plus/icons-vue'
 import { transformExtent } from 'ol/proj'
-import { getCornerData } from '@/utils/routeGeometry'
+import { getCornerData, getSpiralCornerData } from '@/utils/routeGeometry'
 
 export default {
   name: 'MapViewOL',
@@ -850,9 +850,6 @@ export default {
       
       let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n"
       
-      // 导入几何计算函数
-      const routeGeometry = await import('@/utils/routeGeometry')
-      const { getCornerData, getSpiralCornerData } = routeGeometry
       
       currentNodes.forEach((node, i) => {
         let arcData = { 

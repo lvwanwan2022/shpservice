@@ -590,7 +590,7 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
       // 这样可以让点击选择功能正常工作，同时仍然允许拖拽移动控制点
       const modify = new Modify({
         source: pointSource.value,
-        condition: (e) => {
+        condition: () => {
           // 如果正在拖拽，允许修改
           if (isDragging) {
             return true
