@@ -58,9 +58,9 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
   // 样式
   const controlStyle = new Style({
     stroke: new Stroke({
-      color: 'rgba(59, 130, 246, 0.3)',
-      width: 1,
-      lineDash: [5, 5],
+      color: 'rgba(59, 130, 246, 0.6)', // 提高不透明度，从 0.3 改为 0.6
+      width: 2, // 加粗线宽，从 1 改为 2
+      lineDash: [8, 6], // 调整虚线样式，从 [5, 5] 改为 [8, 6]
     }),
   })
   
