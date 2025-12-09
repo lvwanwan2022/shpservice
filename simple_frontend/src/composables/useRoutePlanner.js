@@ -211,15 +211,10 @@ export function useRoutePlanner(map, mode, defaultRadius) {
   
   // 🔥 用于跟踪是否刚刚点击了控制点，用于防止 Modify 交互立即开始修改
   let justClickedPoint = false
-  let pointerDownTime = 0
-  let pointerDownPixel = null
-  
+
   // pointerdown 事件处理 - 用于检测点击控制点
   const handleMapPointerDown = (e) => {
     if (mode.value !== 'EDIT') return
-    
-    pointerDownTime = Date.now()
-    pointerDownPixel = e.pixel
     
     // 检查是否点击了控制点
     const feature = map.value.forEachFeatureAtPixel(e.pixel, (feat) => feat, {
@@ -445,7 +440,7 @@ export function useRoutePlanner(map, mode, defaultRadius) {
       // 这样可以让点击选择功能正常工作，同时仍然允许拖拽移动控制点
       const modify = new Modify({
         source: pointSource.value,
-        condition: (e) => {
+        condition: () => {
           // 如果刚刚点击了控制点，不立即开始修改（允许点击选择）
           // 否则，允许正常的修改操作（拖拽移动）
           if (justClickedPoint) {
