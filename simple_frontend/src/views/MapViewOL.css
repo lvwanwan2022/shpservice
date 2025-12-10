@@ -631,6 +631,7 @@
   position: relative;
   overflow: hidden;
   max-height: 48px; /* Limit default height to one line */
+  line-height: 1; /* 确保卡片本身没有额外的行高 */
 }
 
 /* Expand height when settings are open */
@@ -679,6 +680,7 @@
   background: white;
   border-radius: var(--layer-card-border-radius);
   gap: 6px; /* 减小元素间距 */
+  line-height: 1; /* 确保header本身没有额外的行高 */
 }
 
 .layer-title {
@@ -690,6 +692,21 @@
   min-width: 0; /* 允许flex子项收缩 */
 }
 
+/* 修复checkbox的默认margin，消除文字上方空白 */
+.layer-title :deep(.el-checkbox) {
+  margin: 0;
+  line-height: 1;
+}
+
+.layer-title :deep(.el-checkbox__input) {
+  line-height: 1;
+  vertical-align: top;
+}
+
+.layer-title :deep(.el-checkbox__inner) {
+  vertical-align: top;
+}
+
 .layer-name {
   font-weight: 500;
   color: #303133;
@@ -697,15 +714,20 @@
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.2; /* 减小行高，消除文字上方空白 */
   max-width: 220px;
+  margin: 0; /* 确保没有margin */
+  padding: 0; /* 确保没有padding */
 }
 
 .active-indicator {
   color: #409eff;
   font-size: 12px;
-  margin-right: 2px;
+  margin: 0 2px 0 0; /* 只保留右边距，其他方向为0 */
+  padding: 0; /* 确保没有padding */
   flex-shrink: 0;
+  line-height: 1; /* 确保图标没有额外的行高 */
+  vertical-align: middle; /* 垂直居中对齐 */
 }
 
 /* 🔥 拖拽手柄样式 */
@@ -735,6 +757,7 @@
   font-weight: 500;
   flex: 1;
   min-width: 0; /* 允许flex子项收缩 */
+  line-height: 1; /* 确保wrapper本身没有额外的行高 */
 }
 
 .layer-actions {
