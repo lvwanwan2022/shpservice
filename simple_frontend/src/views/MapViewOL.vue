@@ -310,6 +310,7 @@
           ref="mapViewerRef"
           @layer-added="onLayerAdded"
           @layer-selected="onLayerSelected"
+          @toggle-route-planner="toggleRoutePlanner"
         />
         
         <!-- 路径规划面板 -->
@@ -331,17 +332,7 @@
           @selected-spiral-len-change="onRoutePlannerSelectedSpiralLenChange"
           @export="onRoutePlannerExport"
           @import="onRoutePlannerImport"
-        />
-        
-        <!-- 路径规划切换按钮 -->
-        <el-button
-          v-if="!routePlannerOpen"
-          @click="openRoutePlanner"
-          class="route-planner-toggle-btn"
-          type="primary"
-          circle
-          :icon="Route"
-          title="打开路径规划"
+          @clear="onRoutePlannerClear"
         />
         
         <!-- 路径规划图例 - 当有路线或面板打开时显示 -->
@@ -625,13 +616,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import gisApi from '@/api/gis'
 import MapViewerOL from '@/components/MapViewerOL.vue'
 import RoutePlannerPanel from '@/components/RoutePlannerPanel.vue'
-import { Route } from '@element-plus/icons-vue'
 import { transformExtent } from 'ol/proj'
 import { getCornerData, getSpiralCornerData } from '@/utils/routeGeometry'
 
 export default {
   name: 'MapViewOL',
-  components: { MapViewerOL, RoutePlannerPanel, Route },
+  components: { MapViewerOL, RoutePlannerPanel },
   setup() {
     const route = useRoute()
     const router = useRouter()
@@ -740,6 +730,8 @@ export default {
     // 🔥 路径规划方法
     const openRoutePlanner = () => {
       routePlannerOpen.value = true
+      // 设置为绘制模式
+      routePlannerMode.value = 'DRAW'
       if (mapViewerRef.value && mapViewerRef.value.enableRoutePlanner) {
         mapViewerRef.value.enableRoutePlanner(
           routePlannerMode.value, 
@@ -747,14 +739,26 @@ export default {
           routePlannerIndustryMode.value,
           routePlannerDefaultSpiralLen.value
         )
+      } else if (mapViewerRef.value && mapViewerRef.value.setRoutePlannerMode) {
+        // 如果路径规划已经初始化，只需要设置模式
+        mapViewerRef.value.setRoutePlannerMode('DRAW')
       }
     }
     
     const closeRoutePlanner = () => {
       routePlannerOpen.value = false
+      // 关闭面板时只设置模式为NONE，不清理路径规划（保留线路显示）
       routePlannerMode.value = 'NONE'
-      if (mapViewerRef.value && mapViewerRef.value.disableRoutePlanner) {
-        mapViewerRef.value.disableRoutePlanner()
+      if (mapViewerRef.value && mapViewerRef.value.setRoutePlannerMode) {
+        mapViewerRef.value.setRoutePlannerMode('NONE')
+      }
+    }
+    
+    const toggleRoutePlanner = () => {
+      if (routePlannerOpen.value) {
+        closeRoutePlanner()
+      } else {
+        openRoutePlanner()
       }
     }
     
@@ -963,6 +967,41 @@ export default {
         }
       }
       reader.readAsText(file)
+    }
+    
+    const onRoutePlannerClear = () => {
+      // 检查路径规划是否已初始化
+      if (!mapViewerRef.value || !mapViewerRef.value.setRouteNodes) {
+        ElMessage.warning('路径规划未初始化')
+        return
+      }
+      
+      ElMessageBox.confirm(
+        '确定要清除当前的路径规划线路吗？此操作不可恢复。',
+        '确认清除',
+        {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        }
+      ).then(() => {
+        console.log('开始清除路径规划线路...')
+        mapViewerRef.value.setRouteNodes([])
+        routePlannerSelectedIndex.value = null
+        
+        // 清除后如果面板打开，设置为绘制模式以便继续绘制
+        if (routePlannerOpen.value) {
+          routePlannerMode.value = 'DRAW'
+          if (mapViewerRef.value.setRoutePlannerMode) {
+            mapViewerRef.value.setRoutePlannerMode('DRAW')
+          }
+        }
+        
+        ElMessage.success('已清除路径规划线路')
+      }).catch(() => {
+        // 用户取消操作
+        console.log('用户取消清除操作')
+      })
     }
     
     // 🔥 设置场景范围
@@ -2162,6 +2201,7 @@ export default {
       routePlannerSelectedSpiralLen,
       openRoutePlanner,
       closeRoutePlanner,
+      toggleRoutePlanner,
       onRoutePlannerModeChange,
       onRoutePlannerIndustryModeChange,
       onRoutePlannerDefaultRadiusChange,
@@ -2169,7 +2209,8 @@ export default {
       onRoutePlannerSelectedRadiusChange,
       onRoutePlannerSelectedSpiralLenChange,
       onRoutePlannerExport,
-      onRoutePlannerImport
+      onRoutePlannerImport,
+      onRoutePlannerClear
     }
   }
 }

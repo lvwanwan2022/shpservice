@@ -1,7 +1,7 @@
 <template>
   <div v-if="isOpen" class="route-planner-panel">
     <div class="panel-header">
-      <h3>路径规划师</h3>
+      <h3>路径规划</h3>
       <el-button 
         link 
         @click="onClose"
@@ -22,7 +22,7 @@
           <el-tab-pane label="水利行业" name="WATER">
             <template #label>
               <span class="custom-tab-label">
-                <el-icon><Water /></el-icon>
+                <span style="font-size: 16px; margin-right: 4px;">💧</span>
                 <span>水利行业</span>
               </span>
             </template>
@@ -30,7 +30,7 @@
           <el-tab-pane label="公路行业" name="HIGHWAY">
             <template #label>
               <span class="custom-tab-label">
-                <el-icon><Van /></el-icon>
+                <span style="font-size: 16px; margin-right: 4px;">🚗</span>
                 <span>公路行业</span>
               </span>
             </template>
@@ -187,6 +187,17 @@
             <span>导入</span>
           </el-button>
         </div>
+        <div class="data-actions" style="margin-top: 8px;">
+          <el-button 
+            @click="onClear"
+            class="action-btn clear-btn"
+            type="danger"
+            plain
+          >
+            <el-icon><Delete /></el-icon>
+            <span>清除线路</span>
+          </el-button>
+        </div>
         <input 
           type="file" 
           accept=".csv"
@@ -205,7 +216,7 @@
 
 <script>
 import { ref, computed } from 'vue'
-import { Close, EditPen, Edit, Download, Upload, Water, Van } from '@element-plus/icons-vue'
+import { Close, EditPen, Edit, Download, Upload, Delete } from '@element-plus/icons-vue'
 
 export default {
   name: 'RoutePlannerPanel',
@@ -215,8 +226,7 @@ export default {
     Edit,
     Download,
     Upload,
-    Water,
-    Van
+    Delete
   },
   props: {
     isOpen: {
@@ -252,7 +262,7 @@ export default {
       default: false
     }
   },
-  emits: ['close', 'mode-change', 'industry-mode-change', 'default-radius-change', 'default-spiral-len-change', 'selected-radius-change', 'selected-spiral-len-change', 'export', 'import'],
+  emits: ['close', 'mode-change', 'industry-mode-change', 'default-radius-change', 'default-spiral-len-change', 'selected-radius-change', 'selected-spiral-len-change', 'export', 'import', 'clear'],
   setup(props, { emit }) {
     const fileInputRef = ref(null)
 
@@ -305,6 +315,10 @@ export default {
       }
     }
 
+    const onClear = () => {
+      emit('clear')
+    }
+
     return {
       fileInputRef,
       localSelectedRadius,
@@ -316,7 +330,8 @@ export default {
       setIndustryMode,
       onExport,
       triggerImport,
-      handleFileSelect
+      handleFileSelect,
+      onClear
     }
   }
 }
@@ -629,6 +644,11 @@ export default {
   align-items: center;
   justify-content: center;
   gap: 4px;
+}
+
+.clear-btn {
+  width: 100%;
+  grid-column: 1 / -1;
 }
 
 .file-input-hidden {

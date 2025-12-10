@@ -41,6 +41,13 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
   const spiralSource = ref(new VectorSource())  // 缓和曲线（公路模式）
   const pointSource = ref(new VectorSource())   // 控制点
   
+  // 图层对象引用（用于cleanup时移除）
+  const controlLayer = ref(null)
+  const lineLayer = ref(null)
+  const spiralLayer = ref(null)
+  const arcLayer = ref(null)
+  const pointLayer = ref(null)
+  
   // 交互引用
   const drawInteraction = ref(null)
   const modifyInteraction = ref(null)
@@ -101,41 +108,48 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
   const initLayers = () => {
     if (!map.value) return
     
-    const controlLayer = new VectorLayer({
+    // 如果图层已经存在，先移除旧的图层
+    if (controlLayer.value) map.value.removeLayer(controlLayer.value)
+    if (lineLayer.value) map.value.removeLayer(lineLayer.value)
+    if (spiralLayer.value) map.value.removeLayer(spiralLayer.value)
+    if (arcLayer.value) map.value.removeLayer(arcLayer.value)
+    if (pointLayer.value) map.value.removeLayer(pointLayer.value)
+    
+    controlLayer.value = new VectorLayer({
       source: controlSource.value,
       style: controlStyle,
       zIndex: 100
     })
     
-    const lineLayer = new VectorLayer({
+    lineLayer.value = new VectorLayer({
       source: lineSource.value,
       style: lineStyle,
       zIndex: 101
     })
     
-    const spiralLayer = new VectorLayer({
+    spiralLayer.value = new VectorLayer({
       source: spiralSource.value,
       style: spiralStyle,
       zIndex: 101.5
     })
     
-    const arcLayer = new VectorLayer({
+    arcLayer.value = new VectorLayer({
       source: arcSource.value,
       style: arcStyle,
       zIndex: 102
     })
     
-    const pointLayer = new VectorLayer({
+    pointLayer.value = new VectorLayer({
       source: pointSource.value,
       style: pointStyleFunc,
       zIndex: 103
     })
     
-    map.value.addLayer(controlLayer)
-    map.value.addLayer(lineLayer)
-    map.value.addLayer(spiralLayer)
-    map.value.addLayer(arcLayer)
-    map.value.addLayer(pointLayer)
+    map.value.addLayer(controlLayer.value)
+    map.value.addLayer(lineLayer.value)
+    map.value.addLayer(spiralLayer.value)
+    map.value.addLayer(arcLayer.value)
+    map.value.addLayer(pointLayer.value)
   }
   
   // 初始化工具提示
@@ -540,9 +554,12 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
       modifyInteraction.value = modify
     }
     
-    map.value.addInteraction(snap)
-    map.value.addInteraction(snapPoints)
-    snapInteraction.value = snap
+    // 只在DRAW或EDIT模式下添加Snap交互
+    if (mode.value === 'DRAW' || mode.value === 'EDIT') {
+      map.value.addInteraction(snap)
+      map.value.addInteraction(snapPoints)
+      snapInteraction.value = snap
+    }
     
     // 添加事件监听
     if (mode.value === 'EDIT') {
@@ -556,9 +573,13 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
       handleMapDblClickRef = null
     }
     
-    // 键盘事件在所有模式下都需要监听（用于ESC和Delete）
-    handleKeyDownRef = handleKeyDown
-    window.addEventListener('keydown', handleKeyDownRef, { capture: true })
+    // 键盘事件只在DRAW或EDIT模式下监听
+    if (mode.value === 'DRAW' || mode.value === 'EDIT') {
+      handleKeyDownRef = handleKeyDown
+      window.addEventListener('keydown', handleKeyDownRef, { capture: true })
+    } else {
+      handleKeyDownRef = null
+    }
   }
   
   // 监听节点变化，更新渲染
@@ -596,10 +617,24 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
       if (drawInteraction.value) map.value.removeInteraction(drawInteraction.value)
       if (modifyInteraction.value) map.value.removeInteraction(modifyInteraction.value)
       if (snapInteraction.value) map.value.removeInteraction(snapInteraction.value)
+      
+      // 移除图层
+      if (controlLayer.value) map.value.removeLayer(controlLayer.value)
+      if (lineLayer.value) map.value.removeLayer(lineLayer.value)
+      if (spiralLayer.value) map.value.removeLayer(spiralLayer.value)
+      if (arcLayer.value) map.value.removeLayer(arcLayer.value)
+      if (pointLayer.value) map.value.removeLayer(pointLayer.value)
     }
     if (handleKeyDownRef) {
       window.removeEventListener('keydown', handleKeyDownRef, { capture: true })
     }
+    
+    // 清空图层引用
+    controlLayer.value = null
+    lineLayer.value = null
+    spiralLayer.value = null
+    arcLayer.value = null
+    pointLayer.value = null
   }
   
   return {

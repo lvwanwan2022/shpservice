@@ -31,6 +31,19 @@
           </svg>
         </el-button>
       </el-tooltip>
+      <el-tooltip v-if="map" content="路径规划" placement="left" :show-after="500" :hide-after="1000">
+        <el-button 
+          type="warning" 
+          circle 
+          size="small" 
+          @click="toggleRoutePlanner"
+          class="route-planner-button"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M12,2L4.5,6.5V17.5L12,22L19.5,17.5V6.5L12,2M12,4.15L17.5,7.5V10.81L13,13.41V19.78L12,20.3L11,19.78V13.41L6.5,10.81V7.5L12,4.15M12,5.69L8.25,7.84L12,10L15.75,7.84L12,5.69M7.5,9.03L11,11.17V15.28L7.5,13.14V9.03M16.5,9.03V13.14L13,15.28V11.17L16.5,9.03Z"/>
+          </svg>
+        </el-button>
+      </el-tooltip>
     </div>
 
     <!-- 右下角信息面板 -->
@@ -378,7 +391,7 @@ export default {
     sceneId: { type: [Number, String], default: null },
     readonly: { type: Boolean, default: false }
   },
-  emits: ['layerAdded', 'layer-selected'],
+  emits: ['layerAdded', 'layer-selected', 'toggle-route-planner'],
   setup(props, { emit }) {
     const route = useRoute()
     const mapContainer = ref(null)
@@ -3037,6 +3050,11 @@ export default {
       }
     }
     
+    // 切换路径规划面板
+    const toggleRoutePlanner = () => {
+      emit('toggle-route-planner')
+    }
+    
     // 🔥 路径规划方法
     const enableRoutePlanner = (mode, defaultRadius) => {
       if (!map.value) return
@@ -3085,30 +3103,79 @@ export default {
     
     const updateRouteNodeRadius = (index, radius) => {
       if (routePlanner.value && routePlanner.value.routeNodes) {
-        // routeNodes 已被 reactive 自动解包，直接访问
-        const nodes = [...routePlanner.value.routeNodes]
+        // routeNodes 是一个 ref，需要通过 .value 访问
+        const routeNodesRef = routePlanner.value.routeNodes
+        const currentNodes = 'value' in routeNodesRef ? routeNodesRef.value : routeNodesRef
+        const nodes = [...currentNodes]
         if (nodes[index]) {
           nodes[index] = { ...nodes[index], radius }
-          routePlanner.value.routeNodes = nodes
+          if ('value' in routeNodesRef) {
+            routeNodesRef.value = nodes
+          } else {
+            routePlanner.value.routeNodes = nodes
+          }
         }
       }
     }
     
     const updateRouteNodeSpiralLen = (index, len) => {
       if (routePlanner.value && routePlanner.value.routeNodes) {
-        // routeNodes 已被 reactive 自动解包，直接访问
-        const nodes = [...routePlanner.value.routeNodes]
+        // routeNodes 是一个 ref，需要通过 .value 访问
+        const routeNodesRef = routePlanner.value.routeNodes
+        const currentNodes = 'value' in routeNodesRef ? routeNodesRef.value : routeNodesRef
+        const nodes = [...currentNodes]
         if (nodes[index]) {
           nodes[index] = { ...nodes[index], spiralLength: len }
-          routePlanner.value.routeNodes = nodes
+          if ('value' in routeNodesRef) {
+            routeNodesRef.value = nodes
+          } else {
+            routePlanner.value.routeNodes = nodes
+          }
         }
       }
     }
     
     const setRouteNodes = (nodes) => {
-      if (routePlanner.value && routePlanner.value.routeNodes) {
-        // routeNodes 已被 reactive 自动解包，直接赋值
-        routePlanner.value.routeNodes = nodes
+      if (!routePlanner.value) {
+        console.warn('路径规划未初始化')
+        return
+      }
+      
+      try {
+        const routeNodesRef = routePlanner.value.routeNodes
+        
+        if (!routeNodesRef) {
+          console.error('routeNodes 引用不存在')
+          return
+        }
+        
+        const newNodes = Array.isArray(nodes) ? nodes : []
+        console.log('准备设置路径节点，节点数量:', newNodes.length)
+        
+        // 检查是否是 ref（有 value 属性）
+        if (typeof routeNodesRef === 'object' && 'value' in routeNodesRef) {
+          // 是 ref，设置 .value
+          routeNodesRef.value = newNodes
+          console.log('✓ 已设置路径节点 (ref)，当前节点数:', routeNodesRef.value.length)
+        } else if (Array.isArray(routeNodesRef)) {
+          // 已经是数组，直接替换
+          routePlanner.value.routeNodes = newNodes
+          console.log('✓ 已设置路径节点 (array)，当前节点数:', newNodes.length)
+        } else {
+          console.error('未知的 routeNodes 类型:', typeof routeNodesRef)
+        }
+        
+        // 使用 nextTick 确保 Vue 完成响应式更新后再触发渲染
+        nextTick(() => {
+          if (typeof routePlanner.value.updateRouteRender === 'function') {
+            routePlanner.value.updateRouteRender()
+            console.log('✓ 已触发渲染更新')
+          } else {
+            console.error('updateRouteRender 方法不存在')
+          }
+        })
+      } catch (error) {
+        console.error('设置路径节点时出错:', error)
       }
     }
     
@@ -3260,6 +3327,7 @@ export default {
       userLocationVisible,
       locationLoading,
       toggleUserLocation,
+      toggleRoutePlanner,
       // 移动端图层搜索相关
       mobileLayerSearchExpanded,
       isMobile,
@@ -3525,6 +3593,13 @@ export default {
     min-height: 32px !important;
   }
   
+  .map-controls .route-planner-button {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+  }
+  
   .map-controls .base-map-switcher {
     width: 32px !important;
     height: 32px !important;
@@ -3568,6 +3643,16 @@ export default {
 .location-button.is-loading {
   background-color: #66b1ff;
   border-color: #66b1ff;
+}
+
+.route-planner-button {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border: 1px solid #E6A23C;
+}
+
+.route-planner-button:hover {
+  background-color: #ebb563;
+  border-color: #ebb563;
 }
 
 .loading-placeholder {
