@@ -335,8 +335,8 @@
           @clear="onRoutePlannerClear"
         />
         
-        <!-- 路径规划图例 - 当有路线或面板打开时显示 -->
-        <div v-if="routePlannerOpen || (mapViewerRef && mapViewerRef.routeNodes && mapViewerRef.routeNodes.length > 0)" class="route-legend">
+        <!-- 路径规划图例 - 仅当面板打开时显示 -->
+        <div v-if="routePlannerOpen" class="route-legend">
           <div class="legend-header">图例</div>
           <div class="legend-item">
             <span class="legend-line legend-control"></span>
