@@ -45,7 +45,7 @@
           
           <div class="panel-body">
             <!-- 新的图层卡片列表 -->
-            <div class="layer-cards" v-if="layersList && layersList.length > 0">
+            <div class="layer-cards" ref="layerCardsContainer" v-if="layersList && layersList.length > 0">
               <div 
                 v-for="(layer, index) in sortedLayersList" 
                 :key="layer.id" 
@@ -53,17 +53,18 @@
                 :class="{ 
                   'active': currentActiveLayer && currentActiveLayer.scene_layer_id === layer.scene_layer_id,
                   'invisible': !layer.visibility,
-                  'dragging': draggingLayerId === layer.id,
                   'settings-open': expandedSettings.has(layer.id)
                 }"
-                draggable="true"
+                :data-layer-id="layer.scene_layer_id || layer.id"
                 @click="selectLayer(layer)"
-                @dragstart="handleDragStart($event, layer, index)"
-                @dragend="handleDragEnd"
-                @dragover="handleDragOver($event, index)"
-                @drop="handleDrop($event, index)"
               >
-                <div class="layer-card-header">
+                <div class="layer-card-header" :class="{ 'invisible': !layer.visibility }">
+                  <!-- 拖拽手柄 -->
+                  <div class="drag-handle" @mousedown.stop>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                      <path d="M9 5h2v2H9V5zm0 6h2v2H9v-2zm0 6h2v2H9v-2zm4-12h2v2h-2V5zm0 6h2v2h-2v-2zm0 6h2v2h-2v-2z"/>
+                    </svg>
+                  </div>
                   <div class="layer-title">
                     <!-- 可见性控制checkbox -->
                     <el-checkbox 
@@ -75,10 +76,11 @@
                     <i v-if="currentActiveLayer && currentActiveLayer.scene_layer_id === layer.scene_layer_id" 
                        class="el-icon-location active-indicator" 
                        title="当前活动图层"></i>
-                    <span class="layer-name" :title="layer.layer_name">{{ layer.layer_name }}</span>
-                  </div>
-                  <div class="layer-drag-handle">
-                    <i class="el-icon-rank"></i>
+                    <div class="layer-name-wrapper">
+                      <span class="layer-name" :title="layer.layer_name || layer.name || '未命名图层'">
+                        {{ layer.layer_name || layer.name || '未命名图层' }}
+                      </span>
+                    </div>
                   </div>
                   <div class="layer-actions">
                     <!-- 缩放到图层范围 -->
@@ -618,6 +620,8 @@ import MapViewerOL from '@/components/MapViewerOL.vue'
 import RoutePlannerPanel from '@/components/RoutePlannerPanel.vue'
 import { transformExtent } from 'ol/proj'
 import { getCornerData, getSpiralCornerData } from '@/utils/routeGeometry'
+// 🔥 添加拖拽排序库
+import Sortable from 'sortablejs'
 
 export default {
   name: 'MapViewOL',
@@ -647,9 +651,11 @@ export default {
     const currentLayerInfo = ref(null)
     
     // 拖拽相关状态
-    const draggingLayerId = ref(null)
-    const dragStartIndex = ref(-1)
     const currentActiveLayer = ref(null)
+    
+    // 🔥 图层卡片容器引用（用于拖拽排序）
+    const layerCardsContainer = ref(null)
+    let sortableInstance = null
     
     // 🔥 手机端抽屉相关状态
     const mobileDrawerVisible = ref(false)
@@ -1684,11 +1690,34 @@ export default {
     // 组件挂载时获取数据
     onMounted(() => {
       fetchSceneList()
+      // 延迟初始化拖拽，确保 DOM 已渲染
+      nextTick(() => {
+        initSortable()
+      })
     })
     
     // 组件卸载时清理资源
     onUnmounted(() => {
-      // 清理资源逻辑
+      if (sortableInstance) {
+        sortableInstance.destroy()
+        sortableInstance = null
+      }
+    })
+    
+    // 监听图层列表变化，重新初始化拖拽
+    watch(() => layersList.value.length, () => {
+      nextTick(() => {
+        initSortable()
+      })
+    })
+    
+    // 监听面板展开/收起状态，重新初始化拖拽
+    watch(() => layerPanelCollapsed.value, () => {
+      if (!layerPanelCollapsed.value) {
+        nextTick(() => {
+          initSortable()
+        })
+      }
     })
     
     // 选择图层
@@ -1802,132 +1831,131 @@ export default {
       return count === 0 ? '暂无图层' : `${count} 个图层`
     }
 
-    // 拖拽开始
-    const handleDragStart = (event, layer, index) => {
-      draggingLayerId.value = String(layer.id)  // 🔥 确保为字符串
-      dragStartIndex.value = index
-      event.dataTransfer.effectAllowed = 'move'
-      event.dataTransfer.setData('text/plain', String(layer.id))  // 🔥 确保为字符串
+    // 🔥 初始化拖拽排序
+    const initSortable = () => {
+      if (!layerCardsContainer.value) return
       
-      // 🔥 创建优化的拖拽图像
-      createOptimizedDragImage(event, layer)
-    }
-
-    // 🔥 创建优化的拖拽图像
-    const createOptimizedDragImage = (event, layer) => {
-      // 创建一个小巧精美的拖拽图像
-      const dragImage = document.createElement('div')
+      // 如果已存在实例，先销毁
+      if (sortableInstance) {
+        sortableInstance.destroy()
+        sortableInstance = null
+      }
       
-      // 限制图层名称长度
-      const displayName = layer.layer_name.length > 20 ? 
-        layer.layer_name.substring(0, 20) + '...' : 
-        layer.layer_name
-      
-      dragImage.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 6px;">
-          <i class="el-icon-rank" style="font-size: 14px;"></i>
-          <span style="font-size: 12px; font-weight: 500;">${displayName}</span>
-        </div>
-      `
-      
-      // 设置简洁的样式
-      dragImage.style.cssText = `
-        position: absolute;
-        top: -1000px;
-        left: -1000px;
-        background: linear-gradient(135deg, #409EFF, #36A3F7);
-        color: white;
-        padding: 6px 10px;
-        border-radius: 16px;
-        font-size: 12px;
-        box-shadow: 0 4px 15px rgba(64, 158, 255, 0.3);
-        opacity: 0.95;
-        max-width: 180px;
-        white-space: nowrap;
-        z-index: 9999;
-        pointer-events: none;
-        transform: rotate(1deg) scale(0.9);
-        border: 2px solid rgba(255,255,255,0.3);
-      `
-      
-      // 添加到body
-      document.body.appendChild(dragImage)
-      
-      // 设置拖拽图像，调整偏移位置
-      event.dataTransfer.setDragImage(dragImage, 15, 8)
-      
-      // 立即清理
-      setTimeout(() => {
-        if (dragImage.parentNode) {
-          document.body.removeChild(dragImage)
+      // 创建新的 sortable 实例
+      sortableInstance = Sortable.create(layerCardsContainer.value, {
+        handle: '.drag-handle', // 指定拖拽手柄
+        animation: 150, // 动画时长
+        ghostClass: 'sortable-ghost', // 拖拽时的占位符样式
+        chosenClass: 'sortable-chosen', // 选中时的样式
+        dragClass: 'sortable-drag', // 拖拽时的样式
+        onEnd: async (evt) => {
+          const { oldIndex, newIndex } = evt
+          
+          // 检查索引是否有效
+          if (oldIndex === null || oldIndex === undefined || 
+              newIndex === null || newIndex === undefined) {
+            console.warn('拖拽排序索引无效:', { oldIndex, newIndex })
+            return
+          }
+          
+          if (oldIndex === newIndex) return
+          
+          // 检查场景ID是否存在
+          if (!selectedSceneId.value) {
+            console.warn('场景ID不存在，无法更新图层顺序')
+            ElMessage.warning('请先选择场景')
+            return
+          }
+          
+          // 检查图层列表是否存在
+          if (!sortedLayersList.value || sortedLayersList.value.length === 0) {
+            console.warn('图层列表为空，无法更新图层顺序')
+            return
+          }
+          
+          try {
+            console.log('开始更新图层顺序:', { oldIndex, newIndex, sceneId: selectedSceneId.value })
+            
+            // 计算新的图层顺序
+            const newOrders = calculateNewLayersOrder(oldIndex, newIndex)
+            console.log('计算得到的新顺序:', newOrders)
+            
+            // 检查新顺序是否有效
+            if (!newOrders || Object.keys(newOrders).length === 0) {
+              console.warn('计算得到的新顺序为空')
+              ElMessage.warning('无法计算新的图层顺序')
+              return
+            }
+            
+            // 更新到后端
+            await updateLayersOrder(newOrders)
+            console.log('后端接口调用成功')
+            
+            // 重新获取图层列表
+            await fetchSceneLayers(selectedSceneId.value)
+            ElMessage.success('图层顺序已更新')
+            
+            // 🔥 立即刷新UI和地图图层顺序
+            await refreshLayersAfterReorder()
+          } catch (error) {
+            console.error('更新图层顺序失败:', error)
+            ElMessage.error('更新图层顺序失败: ' + (error.message || '未知错误'))
+            // 如果失败，重新获取图层列表恢复原状
+            try {
+              await fetchSceneLayers(selectedSceneId.value)
+            } catch (fetchError) {
+              console.error('重新获取图层列表失败:', fetchError)
+            }
+          }
         }
-      }, 0)
-    }
-
-    // 拖拽结束
-    const handleDragEnd = () => {
-      draggingLayerId.value = null
-      dragStartIndex.value = -1
-      //console.log('拖拽操作结束')
-    }
-
-    // 拖拽悬停
-    const handleDragOver = (event, index) => {
-      event.preventDefault()
-      event.dataTransfer.dropEffect = 'move'
-    }
-
-    // 拖拽放置
-    const handleDrop = async (event, dropIndex) => {
-      event.preventDefault()
-      
-      const draggedLayerId = parseInt(event.dataTransfer.getData('text/plain'))
-      const startIndex = dragStartIndex.value
-      
-      if (startIndex === dropIndex || startIndex === -1) {
-        return
-      }
-
-      try {
-        // 计算新的图层顺序
-        const newLayersOrder = calculateNewLayersOrder(startIndex, dropIndex)
-        
-        // 批量更新图层顺序
-        await updateLayersOrder(newLayersOrder)
-        
-        ElMessage.success('图层顺序更新成功')
-        
-        // 🔥 立即刷新UI和地图图层顺序
-        await refreshLayersAfterReorder()
-        
-      } catch (error) {
-        // console.error('更新图层顺序失败:', error)
-        ElMessage.error('更新图层顺序失败')
-      }
+      })
     }
 
     // 计算新的图层顺序
     const calculateNewLayersOrder = (fromIndex, toIndex) => {
+      // 使用排序后的图层列表（sortedLayersList）来进行顺序调整
+      // 因为拖拽是基于显示顺序进行的
       const sortedLayers = [...sortedLayersList.value]
+      
+      // 检查索引有效性
+      if (fromIndex < 0 || fromIndex >= sortedLayers.length ||
+          toIndex < 0 || toIndex >= sortedLayers.length) {
+        console.warn('索引超出范围:', { fromIndex, toIndex, length: sortedLayers.length })
+        return {}
+      }
+      
       const movedLayer = sortedLayers[fromIndex]
       
-      // 移除被拖拽的图层
+      if (!movedLayer) {
+        console.warn('无法找到要移动的图层:', { fromIndex, sortedLayers })
+        return {}
+      }
+      
+      // 移除被移动的图层
       sortedLayers.splice(fromIndex, 1)
+      
+      // 调整目标索引：如果向下移动（toIndex > fromIndex），需要减1
+      const adjustedToIndex = toIndex > fromIndex ? toIndex - 1 : toIndex
+      
       // 插入到新位置
-      sortedLayers.splice(toIndex, 0, movedLayer)
+      sortedLayers.splice(adjustedToIndex, 0, movedLayer)
       
-      // 重新分配layer_order（从大到小，因为显示时是从大到小排序）
+      // 重新分配layer_order值
       const newOrders = {}
-      const maxOrder = sortedLayers.length
+      const totalLayers = sortedLayers.length
       
+      // 从1开始分配，值越大越在上面（与sortedLayersList的排序逻辑一致）
       sortedLayers.forEach((layer, index) => {
-        const newOrder = maxOrder - index // 第一个（index=0）获得最大order
-        // 🔥 保持layer_id为字符串，避免大整数精度丢失
-        const layerId = String(layer.id)
-        newOrders[layerId] = newOrder
+        const newOrder = totalLayers - index
+        // 使用 scene_layer_id 或 id 作为键
+        const layerId = layer.scene_layer_id || layer.id
+        if (layerId) {
+          newOrders[layerId] = newOrder
+        } else {
+          console.warn('图层缺少ID:', layer)
+        }
       })
       
-      //console.log('计算的新图层顺序:', newOrders)
       return newOrders
     }
 
@@ -2164,11 +2192,7 @@ export default {
       getLayerCountText,
       
       // 拖拽相关
-      draggingLayerId,
-      handleDragStart,
-      handleDragEnd,
-      handleDragOver,
-      handleDrop,
+      layerCardsContainer,
       
       // 🔥 手机端抽屉相关
       mobileDrawerVisible,
