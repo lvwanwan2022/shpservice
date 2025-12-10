@@ -61,6 +61,7 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
   const tooltipElement = ref(null)
   const tooltipOverlay = ref(null)
   const segments = ref([])
+  let pointerMoveHandler = null
   
   // 样式
   const controlStyle = new Style({
@@ -178,6 +179,178 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
     })
     tooltipOverlay.value = overlay
     map.value.addOverlay(overlay)
+    
+    // 添加鼠标移动事件监听
+    setupPointerMoveHandler()
+  }
+  
+  // 计算两点之间的距离
+  const calculateDistance = (p1, p2) => {
+    const dx = p2.x - p1.x
+    const dy = p2.y - p1.y
+    return Math.sqrt(dx * dx + dy * dy)
+  }
+  
+  // 计算点到线段的最近距离和最近点
+  const getClosestPointOnSegment = (point, segStart, segEnd) => {
+    const dx = segEnd.x - segStart.x
+    const dy = segEnd.y - segStart.y
+    const lenSq = dx * dx + dy * dy
+    
+    if (lenSq === 0) return { point: segStart, distance: calculateDistance(point, segStart) }
+    
+    const t = Math.max(0, Math.min(1, ((point.x - segStart.x) * dx + (point.y - segStart.y) * dy) / lenSq))
+    const closestPoint = {
+      x: segStart.x + t * dx,
+      y: segStart.y + t * dy
+    }
+    const distance = calculateDistance(point, closestPoint)
+    return { point: closestPoint, distance, t }
+  }
+  
+  // 计算从起点到指定点的累计距离
+  const calculateCumulativeDistance = (targetPoint) => {
+    if (!segments.value || segments.value.length === 0 || routeNodes.value.length === 0) {
+      return 0
+    }
+    
+    let totalDistance = 0
+    let found = false
+    let minDistance = Infinity
+    let bestSegmentIndex = -1
+    let bestPointInSegment = null
+    
+    // 首先找到距离目标点最近的路径段
+    segments.value.forEach((seg, segIndex) => {
+      if (!seg.coordinates || seg.coordinates.length < 2) return
+      
+      for (let i = 0; i < seg.coordinates.length - 1; i++) {
+        const segStart = seg.coordinates[i]
+        const segEnd = seg.coordinates[i + 1]
+        const closest = getClosestPointOnSegment(targetPoint, segStart, segEnd)
+        
+        if (closest.distance < minDistance) {
+          minDistance = closest.distance
+          bestSegmentIndex = segIndex
+          bestPointInSegment = { segmentIndex: segIndex, pointIndex: i, closestPoint: closest.point, t: closest.t }
+        }
+      }
+    })
+    
+    // 如果找到了最近的段（在容差范围内）
+    const TOLERANCE = 100 // 容差，单位与坐标单位相同
+    if (minDistance < TOLERANCE && bestSegmentIndex >= 0) {
+      // 计算到找到的段之前的累计距离
+      for (let segIndex = 0; segIndex < bestSegmentIndex; segIndex++) {
+        const seg = segments.value[segIndex]
+        if (!seg.coordinates || seg.coordinates.length < 2) continue
+        
+        for (let i = 0; i < seg.coordinates.length - 1; i++) {
+          totalDistance += calculateDistance(seg.coordinates[i], seg.coordinates[i + 1])
+        }
+      }
+      
+      // 计算在当前段中到目标点的距离
+      const bestSeg = segments.value[bestSegmentIndex]
+      if (bestSeg && bestSeg.coordinates && bestSeg.coordinates.length >= 2) {
+        for (let i = 0; i < bestPointInSegment.pointIndex; i++) {
+          totalDistance += calculateDistance(bestSeg.coordinates[i], bestSeg.coordinates[i + 1])
+        }
+        // 加上到最近点的距离
+        totalDistance += calculateDistance(
+          bestSeg.coordinates[bestPointInSegment.pointIndex],
+          bestPointInSegment.closestPoint
+        )
+      }
+    }
+    
+    return totalDistance
+  }
+  
+  // 设置鼠标移动事件处理器
+  const setupPointerMoveHandler = () => {
+    if (!map.value) return
+    
+    // 移除旧的事件处理器
+    if (pointerMoveHandler) {
+      map.value.un('pointermove', pointerMoveHandler)
+    }
+    
+    // 创建新的事件处理器
+    pointerMoveHandler = (evt) => {
+      if (evt.dragging) {
+        hideTooltip()
+        return
+      }
+      
+      // 检查是否有路径节点
+      if (!routeNodes.value || routeNodes.value.length < 2) {
+        hideTooltip()
+        return
+      }
+      
+      // 检查鼠标是否在路径上
+      const pixel = evt.pixel
+      const coordinate = evt.coordinate
+      const mousePoint = { x: coordinate[0], y: coordinate[1] }
+      
+      // 检查是否点击了路径图层（直线、圆弧、缓和曲线）
+      let hitFeature = null
+      map.value.forEachFeatureAtPixel(pixel, (feat) => {
+        const source = feat.getSource()
+        if (source === lineSource.value || source === arcSource.value || source === spiralSource.value) {
+          hitFeature = feat
+          return true // 停止遍历
+        }
+        return false
+      }, {
+        layerFilter: (layer) => {
+          return layer === lineLayer.value || layer === arcLayer.value || layer === spiralLayer.value
+        },
+        hitTolerance: 10
+      })
+      
+      if (hitFeature) {
+        // 计算从起点到当前点的距离
+        const distance = calculateCumulativeDistance(mousePoint)
+        
+        // 格式化距离显示（如果距离大于1000米，显示为公里）
+        let distanceText = ''
+        if (distance >= 1000) {
+          distanceText = `${(distance / 1000).toFixed(2)} km`
+        } else {
+          distanceText = `${distance.toFixed(2)} m`
+        }
+        
+        showTooltip(evt.coordinate, `距离起点: ${distanceText}`)
+      } else {
+        hideTooltip()
+      }
+    }
+    
+    map.value.on('pointermove', pointerMoveHandler)
+    
+    // 鼠标离开地图时隐藏提示
+    map.value.on('pointerleave', () => {
+      hideTooltip()
+    })
+  }
+  
+  // 显示工具提示
+  const showTooltip = (coordinate, text) => {
+    if (!tooltipElement.value || !tooltipOverlay.value) return
+    
+    tooltipElement.value.textContent = text
+    tooltipElement.value.style.display = 'block'
+    tooltipOverlay.value.setPosition(coordinate)
+  }
+  
+  // 隐藏工具提示
+  const hideTooltip = () => {
+    if (!tooltipElement.value || !tooltipOverlay.value) return
+    
+    tooltipElement.value.style.display = 'none'
+    tooltipOverlay.value.setPosition(undefined)
   }
   
   // 更新路径渲染
@@ -224,6 +397,8 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
     generatedSegments.forEach(seg => {
       const geom = new LineString(seg.coordinates.map(c => [c.x, c.y]))
       const feat = new Feature(geom)
+      // 为要素添加source标识，方便后续识别
+      feat.set('source', seg.type === 'arc' ? arcSource.value : (seg.type === 'spiral' ? spiralSource.value : lineSource.value))
       if (seg.type === 'arc') {
         arcSource.value.addFeature(feat)
       } else if (seg.type === 'spiral') {
@@ -604,9 +779,26 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
   
   // 清理
   const cleanup = () => {
+    // 移除鼠标移动事件处理器
+    if (map.value && pointerMoveHandler) {
+      map.value.un('pointermove', pointerMoveHandler)
+      pointerMoveHandler = null
+    }
+    
+    // 隐藏工具提示
+    hideTooltip()
+    
+    // 移除工具提示overlay
+    if (map.value && tooltipOverlay.value) {
+      map.value.removeOverlay(tooltipOverlay.value)
+      tooltipOverlay.value = null
+    }
+    
     if (tooltipElement.value && tooltipElement.value.parentNode) {
       tooltipElement.value.parentNode.removeChild(tooltipElement.value)
+      tooltipElement.value = null
     }
+    
     if (map.value) {
       if (handleMapClickRef) {
         map.value.un('click', handleMapClickRef)
