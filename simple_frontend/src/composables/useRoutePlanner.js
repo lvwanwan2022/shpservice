@@ -258,6 +258,83 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
   let handleMapClickRef = null
   let handleMapDblClickRef = null
   let handleKeyDownRef = null
+  let handlePointerMoveRef = null
+
+  // 计算点到线段的最近点和距离
+  const getClosestPointOnSegment = (p, p1, p2) => {
+    const x = p.x, y = p.y
+    const x1 = p1.x, y1 = p1.y
+    const x2 = p2.x, y2 = p2.y
+    
+    const dx = x2 - x1
+    const dy = y2 - y1
+    const lenSq = dx * dx + dy * dy
+    
+    if (lenSq === 0) return { x: x1, y: y1, t: 0, distSq: (x-x1)**2 + (y-y1)**2 }
+    
+    let t = ((x - x1) * dx + (y - y1) * dy) / lenSq
+    t = Math.max(0, Math.min(1, t))
+    
+    const projX = x1 + t * dx
+    const projY = y1 + t * dy
+    const distSq = (x - projX) ** 2 + (y - projY) ** 2
+    
+    return { x: projX, y: projY, t, distSq }
+  }
+
+  // 鼠标移动处理：显示距离提示
+  const handlePointerMove = (e) => {
+    if (segments.value.length === 0 || !tooltipElement.value) {
+      if (tooltipElement.value) tooltipElement.value.style.display = 'none'
+      return
+    }
+
+    const mapResolution = map.value.getView().getResolution()
+    const threshold = 15 * mapResolution // 15像素容差
+    const clickCoords = e.coordinate
+    const p = { x: clickCoords[0], y: clickCoords[1] }
+
+    let minDistSq = Infinity
+    let currentAccumulatedDistance = 0
+    let bestPoint = null
+    let distanceAtBestPoint = 0
+
+    // 遍历所有线段寻找最近点
+    for (const segment of segments.value) {
+      const coords = segment.coordinates
+      for (let i = 0; i < coords.length - 1; i++) {
+        const p1 = coords[i]
+        const p2 = coords[i+1]
+        
+        const { distSq, x, y } = getClosestPointOnSegment(p, p1, p2)
+        
+        // 计算p1到投影点的距离
+        const distP1Proj = Math.sqrt((x - p1.x)**2 + (y - p1.y)**2)
+        
+        if (distSq < minDistSq) {
+          minDistSq = distSq
+          bestPoint = { x, y }
+          distanceAtBestPoint = currentAccumulatedDistance + distP1Proj
+        }
+        
+        // 累加当前小段长度
+        const segLen = Math.sqrt((p2.x - p1.x)**2 + (p2.y - p1.y)**2)
+        currentAccumulatedDistance += segLen
+      }
+    }
+
+    if (bestPoint && minDistSq < threshold * threshold) {
+      // 显示提示
+      tooltipElement.value.innerHTML = `距离起点: ${Math.round(distanceAtBestPoint)} m`
+      tooltipElement.value.style.display = 'block'
+      if (tooltipOverlay.value) {
+        tooltipOverlay.value.setPosition([bestPoint.x, bestPoint.y])
+      }
+    } else {
+      // 隐藏提示
+      tooltipElement.value.style.display = 'none'
+    }
+  }
 
   // 点击选择节点
   const handleMapClick = (e) => {
@@ -356,6 +433,12 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
   
   // 键盘事件处理（删除节点和ESC撤销）
   const handleKeyDown = (e) => {
+    // 如果焦点在输入框中，不处理快捷键
+    const target = e.target
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      return
+    }
+
     // Delete键删除节点（仅在编辑模式且有选中节点时）
     if (mode.value === 'EDIT' && selectedNodeIndex.value !== null) {
       if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -600,6 +683,10 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
     initLayers()
     initTooltip()
     setupInteractions()
+    
+    // 添加鼠标移动监听
+    handlePointerMoveRef = handlePointerMove
+    map.value.on('pointermove', handlePointerMoveRef)
   }
   
   // 清理
@@ -613,6 +700,10 @@ export function useRoutePlanner(map, mode, defaultRadius, industryMode = Industr
       }
       if (handleMapDblClickRef) {
         map.value.un('dblclick', handleMapDblClickRef)
+      }
+      if (handlePointerMoveRef) {
+        map.value.un('pointermove', handlePointerMoveRef)
+        handlePointerMoveRef = null
       }
       if (drawInteraction.value) map.value.removeInteraction(drawInteraction.value)
       if (modifyInteraction.value) map.value.removeInteraction(modifyInteraction.value)

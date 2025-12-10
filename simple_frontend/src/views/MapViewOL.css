@@ -614,7 +614,7 @@
   max-height: 100%;
   /* CSS变量定义 - 紧凑模式 */
   --layer-card-spacing: 0px;
-  --layer-card-padding: 6px 10px;
+  --layer-card-padding: 2px 8px;
   --layer-card-border-radius: 6px;
   --layer-info-spacing: 2px;
   --tag-padding: 0px 4px;
@@ -782,10 +782,10 @@
 
 .layer-actions .el-button {
   padding: 0px;
-  width: 22px;
-  height: 22px;
-  min-width: 22px;
-  min-height: 22px;
+  width: 20px;
+  height: 0px;
+  min-width: 20px;
+  min-height: 0px;
   border: none;
   /* 🔥 移除边框，更紧凑 */
   background: transparent;
